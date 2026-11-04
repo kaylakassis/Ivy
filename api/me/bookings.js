@@ -27,7 +27,7 @@ export default async function handler(req, res) {
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               b.video_room_url, b.location_address, b.tip_amount,
               b.completion_log, b.booking_total, b.deposit_paid,
-              b.gift_card_credit_cents, b.recurrence_rule,
+              b.gift_card_credit_cents, b.recurrence_rule, b.client_package_id,
               b.created_at, b.updated_at,
               s.name AS service_name,
               s.location_type, s.location_label,
@@ -35,11 +35,14 @@ export default async function handler(req, res) {
               s.location_type AS service_location_type,
               s.cancellation_fee_amount, s.cancellation_window_hours,
               cs.slug AS biz_slug, cs.timezone AS biz_timezone, cs.timezone, cs.biz_name,
-              ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
+              ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount,
+              cs.address_label AS biz_address,
+              (c.stripe_customer_id IS NOT NULL AND c.payment_method_id IS NOT NULL) AS card_on_file
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
        LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
+       LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,
@@ -110,6 +113,16 @@ export default async function handler(req, res) {
         payment: computeBookingPayment(r),
         // One-tap add-to-calendar: Google deep link + signed .ics URL.
         calendar: (!r.cancelled_at && dateISO >= today) ? safeCalendarLinks(r) : null,
+        // Added for the 1.0.5 portal (older builds ignore them):
+        // where to go (the service's venue, else the business address
+        // the booking page already shows; mobile sessions use
+        // locationAddress above), and whether a late-cancel fee would
+        // actually be charged (only with a saved card at that business).
+        locationLabel: r.location_label || null,
+        businessAddress: (r.service_location_type || 'in_person') === 'in_person' ? (r.biz_address || null) : null,
+        cardOnFile: !!r.card_on_file,
+        // Paid with a package session (cancelling gives the session back).
+        fromPackage: !!r.client_package_id,
       };
       if (r.cancelled_at) cancelled.push(item);
       else if (dateISO >= today) upcoming.push(item);

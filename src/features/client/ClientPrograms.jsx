@@ -10,6 +10,7 @@ import LessonView, { useCourse } from '../programs/LessonView.jsx';
 import { ProgressBar } from '../programs/courseUi.jsx';
 import { useProgramExtras, memberTabs, TabBar, ProgramTabBody } from '../programs/ProgramTabs.jsx';
 import { BadgeCelebration, EngagementStrip, useEngagement } from '../programs/Engagement.jsx';
+import { SkelCards, EmptyCard } from './portalUi.jsx';
 
 // "Access until <date>" for a fixed window or a subscription the member has
 // already cancelled, "Renews <date>" while a subscription is still live,
@@ -28,13 +29,14 @@ export default function ClientPrograms() {
   useEffect(() => { api.get('/me/programs').then((r) => setPrograms(r.programs || [])).catch((e) => { setErr(e.message); setPrograms([]); }); }, []);
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 28 }}>Programs</h2>
-        <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Courses, plans and communities you're part of.</div>
-      </div>
+      <div style={{ color: 'var(--muted)', fontSize: 13.5 }}>Courses, plans and communities you're part of.</div>
       {err && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{err}</div>}
-      {programs === null ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
-        : programs.length === 0 ? <EmptyNote icon="Gift" title="No programs yet" hint="When a business you work with gives you access to a program, it shows up here."/>
+      {programs === null ? <SkelCards rows={2}/>
+        : programs.length === 0 ? (
+          <EmptyCard icon="Trophy" title="No programs yet"
+            hint="When a business gives you a course, plan or community, it shows up here."
+            action={<Link className="btn btn-outline" to="/me">Back to home</Link>}/>
+        )
         : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
             {programs.map((p) => (
@@ -76,7 +78,7 @@ export function ClientProgram() {
     } catch (e) { setCancelMsg(e.message); }
   };
   if (err) return <div className="page-pad"><EmptyNote icon="Lock" title="No access" hint={err} action={<Link className="btn btn-outline" to="/me/programs">Back to programs</Link>}/></div>;
-  if (!data) return <div className="page-pad" style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
+  if (!data) return <div className="page-pad"><SkelCards rows={2}/></div>;
   const { program } = data;
   const lessons = data.lessons || data.items || [];
   return (
@@ -113,7 +115,7 @@ export function ClientLesson() {
   const navigate = useNavigate();
   const { data, err, setDone } = useCourse(id);
   if (err) return <div className="page-pad"><EmptyNote icon="Lock" title="No access" hint={err} action={<Link className="btn btn-outline" to="/me/programs">Back to programs</Link>}/></div>;
-  if (!data) return <div className="page-pad" style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
+  if (!data) return <div className="page-pad"><SkelCards rows={2}/></div>;
   return (
     <div className="page-pad">
       <LessonView data={data} itemId={itemId} setDone={setDone}

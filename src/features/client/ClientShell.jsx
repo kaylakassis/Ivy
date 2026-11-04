@@ -1,37 +1,53 @@
 // Layout shell for the /me/* client portal. Mirrors AppShell but with a
-// pared-down sidebar (5 tabs, no business actions) and a tinted "for clients"
-// brand mark so users always know which view they're in.
+// pared-down sidebar and a tinted "for clients" brand mark so people always
+// know which view they're in.
 //
-// On mobile: same hamburger drawer + bottom-nav pattern as the business shell.
-import React, { useEffect, useState } from 'react';
-import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+// On phones (and inside the iPhone app) the four things clients use most
+// sit in a bottom tab bar (Home, Bookings, Messages, Payments) with a fifth
+// "More" tab that opens a sheet with everything else. Messages and
+// Payments carry badges for unread messages and unpaid invoices.
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import VerifyEmailBanner from '../../components/VerifyEmailBanner.jsx';
 import TermsAcceptModal from '../../components/TermsAcceptModal.jsx';
-import { SkelLine, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
+import { SkelLine, SkelBlock, SkelRowList } from '../../components/Skeleton.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useAuth } from '../../lib/auth.jsx';
+import { isNative } from '../../lib/platform.js';
 import { useClientPortal, ClientPortalProvider } from './clientContext.jsx';
 import { ViewSwitch } from '../../components/ViewToggle.jsx';
-import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 import { initNative } from '../../lib/native.js';
 import PullToRefresh from '../../components/PullToRefresh.jsx';
 import OfflineBanner from '../../components/OfflineBanner.jsx';
 
-// Sections mirror the business sidebar's RUN / MONEY / GROW grouping so
-// toggling between views feels like the same product, not two apps.
-const NAV = [
-  { to: '/me',           label: 'Home',      icon: 'Home',     end: true },
-  { to: '/me/messages',  label: 'Messages',  icon: 'Chat',     section: 'Activity' },
-  { to: '/me/bookings',  label: 'Bookings',  icon: 'Calendar', section: 'Activity' },
-  { to: '/me/orders',    label: 'Orders',    icon: 'Gift',     section: 'Activity' },
-  { to: '/me/invoices',  label: 'Payments',  icon: 'Dollar',   section: 'Money' },
-  { to: '/me/billing',   label: 'Billing',   icon: 'Lock',     section: 'Money' },
-  { to: '/me/programs',  label: 'Programs',  icon: 'Gift',     section: 'Tools' },
-  { to: '/me/documents', label: 'Documents', icon: 'Doc',      section: 'Tools' },
-  { to: '/me/discover',  label: 'Discover',  icon: 'Globe',    section: 'Tools' },
+// Primary destinations (tab bar on phones, top of the sidebar on desktop).
+const PRIMARY = [
+  { to: '/me',          label: 'Home',     icon: 'Home',     end: true },
+  { to: '/me/bookings', label: 'Bookings', icon: 'Calendar' },
+  { to: '/me/messages', label: 'Messages', icon: 'Chat',     badge: 'unread' },
+  { to: '/me/invoices', label: 'Payments', icon: 'Dollar',   badge: 'invoices' },
 ];
+// Everything else: under "More" on phones, a second group on desktop.
+const SECONDARY = [
+  { to: '/me/programs',      label: 'Programs',      icon: 'Trophy', hint: 'Courses and plans you have joined' },
+  { to: '/me/documents',     label: 'Documents',     icon: 'Doc',    hint: 'Forms and agreements to sign', badge: 'docs' },
+  { to: '/me/discover',      label: 'Discover',      icon: 'Globe',  hint: 'Find businesses on Ivy' },
+  { to: '/me/notifications', label: 'Notifications', icon: 'Bell',   hint: 'Choose what we email or text you' },
+  { to: '/me/profile',       label: 'Profile',       icon: 'Users',  hint: 'Your details, sign-in and privacy' },
+];
+// Old addresses that now live inside another page (titles only).
+const TITLES = { '/me/billing': 'Payments', '/me/orders': 'Payments' };
+
+function badgeCount(kind, summary) {
+  if (!summary) return 0;
+  if (kind === 'unread') return summary.unreadMessages || 0;
+  if (kind === 'invoices') return summary.openInvoices || 0;
+  if (kind === 'docs') return summary.pendingDocs || 0;
+  return 0;
+}
+const isActive = (item, pathname) => (item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(item.to + '/'));
 
 export default function ClientShell() {
   return (
@@ -46,10 +62,8 @@ function ClientShellInner() {
   const viewport = useViewport();
   const { data, loading, refresh } = useClientPortal();
   useEffect(() => { initNative(); }, []);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
-  // Keep the drawer mounted for its 140ms slide-out (.is-closing).
-  const drawerExit = useExitAnimation(viewport.isMobile && drawerOpen);
 
   useEffect(() => {
     document.body.classList.remove('dir-calm', 'dir-bold');
@@ -63,14 +77,22 @@ function ClientShellInner() {
     return () => document.body.classList.remove('has-mobile-nav');
   }, [viewport.isMobile]);
 
-  useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+  useEffect(() => { setMoreOpen(false); }, [location.pathname]);
+
+  // Badges go stale after paying or reading; refresh them on navigation
+  // (cheap: one /api/me) so the tab bar does not keep showing old counts.
+  const firstPath = useRef(true);
+  useEffect(() => {
+    if (firstPath.current) { firstPath.current = false; return; }
+    refresh?.().catch(() => {});
+  }, [location.pathname, refresh]);
 
   if (loading) {
     return <ClientShellSkeleton tweaks={tweaks} viewport={viewport}/>;
   }
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`}>
+    <div className={`app-root client-portal dir-${tweaks.direction}`}>
       <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
         {!viewport.isMobile && (
           <ClientSidebar variant={viewport.isTablet ? 'compact' : 'full'}
@@ -83,7 +105,7 @@ function ClientShellInner() {
           minHeight: '100vh',
         }}>
           <VerifyEmailBanner/>
-          <ClientTopbar isMobile={viewport.isMobile} onMenuClick={() => setDrawerOpen(true)} data={data}/>
+          <ClientTopbar isMobile={viewport.isMobile}/>
           {/* Keyed on the path so each portal page fades in while rising
               (.page-enter in global.css). Enter-only: no exit animation, so
               pages that fetch on mount never double-render. */}
@@ -95,19 +117,41 @@ function ClientShellInner() {
         </main>
       </div>
 
-      {viewport.isMobile && <ClientMobileNav/>}
-      {drawerExit.mounted && (
-        <ClientMobileDrawer direction={tweaks.direction} data={data} closing={drawerExit.closing}
-          onClose={() => setDrawerOpen(false)}/>
+      {viewport.isMobile && <ClientMobileNav summary={data?.summary} onMore={() => setMoreOpen(true)} moreOpen={moreOpen}/>}
+      {viewport.isMobile && moreOpen && (
+        <MoreSheet data={data} summary={data?.summary} onClose={() => setMoreOpen(false)}/>
       )}
       <TermsAcceptModal/>
     </div>
   );
 }
 
+function Badge({ n, compact }) {
+  if (!n) return null;
+  return <span className={compact ? 'portal-tab-badge' : 'nav-badge'} aria-label={`${n} new`}>{n > 99 ? '99+' : n}</span>;
+}
+
 // ----- desktop / tablet sidebar -----
 function ClientSidebar({ variant, data, direction }) {
   const compact = variant === 'compact';
+  const summary = data?.summary;
+  const renderItem = (item) => {
+    const Icon = Icons[item.icon] || Icons.Home;
+    const n = badgeCount(item.badge, summary);
+    return (
+      <NavLink key={item.to} to={item.to} end={item.end} title={item.label}
+        className={({ isActive: a }) => `nav-item ${a ? 'active' : ''}`}
+        style={compact ? { justifyContent: 'center', padding: 10, position: 'relative' } : null}>
+        {({ isActive: a }) => (
+          <>
+            <Icon size={compact ? 19 : 17} sw={a ? 1.9 : 1.5}/>
+            {!compact && <span>{item.label}</span>}
+            {compact ? (n > 0 && <span className="portal-dot" aria-label={`${n} new`}/>) : <Badge n={n}/>}
+          </>
+        )}
+      </NavLink>
+    );
+  };
   return (
     <aside style={{
       width: compact ? 64 : 248, minWidth: compact ? 64 : 248,
@@ -118,52 +162,28 @@ function ClientSidebar({ variant, data, direction }) {
       height: '100vh', position: 'sticky', top: 0,
     }}>
       <BrandMark direction={direction} compact={compact}/>
-
-      {/* Business ↔ Client switch, inline under the brand - same spot as
-          the business sidebar so the two views read as one product. */}
       {!compact && <ViewSwitch showHelper={!!data?.isHelper}/>}
-
       <nav style={{
         display: 'flex', flexDirection: 'column', gap: compact ? 4 : 2,
         flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
       }}>
-        {NAV.map((item, i) => {
-          const Icon = Icons[item.icon] || Icons.Home;
-          const showHeader = !compact && item.section && item.section !== NAV[i - 1]?.section;
-          return (
-            <React.Fragment key={item.to}>
-              {showHeader && (
-                <div style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                  textTransform: 'uppercase', color: 'var(--muted)',
-                  padding: '12px 12px 4px', opacity: 0.75,
-                }}>{item.section}</div>
-              )}
-              <NavLink to={item.to} end={item.end} title={item.label}
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                style={compact ? { justifyContent: 'center', padding: 10 } : null}
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon size={compact ? 19 : 17} sw={isActive ? 1.9 : 1.5}/>
-                    {!compact && <span>{item.label}</span>}
-                    {!compact && item.to === '/me/messages' && data?.summary?.unreadMessages > 0 && (
-                      <span className="nav-badge">{data.summary.unreadMessages}</span>
-                    )}
-                  </>
-                )}
-              </NavLink>
-            </React.Fragment>
-          );
-        })}
+        {PRIMARY.map(renderItem)}
+        {!compact && (
+          <div style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+            textTransform: 'uppercase', color: 'var(--muted)',
+            padding: '14px 12px 4px', opacity: 0.75,
+          }}>More</div>
+        )}
+        {compact && <div style={{ height: 1, background: 'var(--border)', margin: '6px 4px' }}/>}
+        {SECONDARY.map(renderItem)}
       </nav>
-
       <UserBlock data={data} compact={compact}/>
     </aside>
   );
 }
 
-function BrandMark({ direction, compact }) {
+function BrandMark({ compact }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: compact ? 0 : '4px 6px',
       justifyContent: compact ? 'center' : 'flex-start' }}>
@@ -190,25 +210,28 @@ function BrandMark({ direction, compact }) {
   );
 }
 
+function initialsOf(user) {
+  return (user?.name || user?.email || '?')
+    .split(/[\s@.]+/).filter(Boolean).slice(0, 2)
+    .map((p) => p[0].toUpperCase()).join('');
+}
+
 function UserBlock({ data, compact }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
-  const initials = (user?.name || user?.email || '?')
-    .split(/[\s@.]+/).filter(Boolean).slice(0, 2)
-    .map((p) => p[0].toUpperCase()).join('');
+  const initials = initialsOf(user);
   const doSignOut = async () => { await signOut(); nav('/signin', { replace: true }); };
-  const goBusiness = () => nav('/');
 
   if (compact) {
     return (
-      <button onClick={doSignOut} title="Sign out"
+      <Link to="/me/profile" title="Your profile"
         style={{
           width: 36, height: 36, margin: '0 auto', borderRadius: 99,
           background: 'var(--accent)', color: 'var(--accent-ink)',
-          fontSize: 12, fontWeight: 600,
+          fontSize: 12, fontWeight: 600, textDecoration: 'none',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>{initials}</button>
+        }}>{initials}</Link>
     );
   }
 
@@ -223,7 +246,7 @@ function UserBlock({ data, compact }) {
           display: 'flex', flexDirection: 'column', gap: 2,
         }}>
           {data?.isOwner && (
-            <button onClick={goBusiness} style={menuBtn}>
+            <button onClick={() => nav('/')} style={menuBtn}>
               <Icons.Trending size={13}/> Switch to business view
             </button>
           )}
@@ -235,12 +258,6 @@ function UserBlock({ data, compact }) {
           <NavLink to="/me/profile" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
             <Icons.Edit size={13}/> Your profile
           </NavLink>
-          <NavLink to="/me/notifications" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
-            <Icons.Bell size={13}/> Email preferences
-          </NavLink>
-          {/* /account renders inside the AppShell + RoleRouter, which
-              redirects client-only users back to /me. Only show the
-              link when the user is actually an owner. */}
           {data?.isOwner && (
             <NavLink to="/account" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
               <Icons.Settings size={13}/> Account settings
@@ -286,27 +303,21 @@ const menuBtn = {
   fontSize: 13, color: 'var(--fg)', cursor: 'pointer',
 };
 
-// ----- topbar (mobile shows hamburger) -----
-function ClientTopbar({ isMobile, onMenuClick, data }) {
+// ----- topbar -----
+function ClientTopbar({ isMobile }) {
   const { pathname } = useLocation();
-  const EXTRA_TITLES = { '/me/profile': 'Profile', '/me/notifications': 'Notifications' };
-  const current = NAV.find((n) => n.end ? pathname === n.to : pathname.startsWith(n.to))
-    || (EXTRA_TITLES[pathname] ? { label: EXTRA_TITLES[pathname] } : NAV[0]);
+  const { user } = useAuth();
+  const all = [...PRIMARY, ...SECONDARY];
+  const current = all.find((n) => isActive(n, pathname))
+    || (TITLES[pathname] ? { label: TITLES[pathname] } : PRIMARY[0]);
   return (
     <header style={{
       display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 16,
-      padding: isMobile ? '12px 14px' : '22px 32px 18px',
+      padding: isMobile ? '12px 16px' : '22px 32px 18px',
       borderBottom: '1px solid var(--border)',
       background: 'var(--page)',
       position: 'sticky', top: 0, zIndex: 40,
     }}>
-      {isMobile && (
-        <button onClick={onMenuClick} aria-label="Open menu"
-          style={{ padding: 8, borderRadius: 8, color: 'var(--fg-2)',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icons.Menu size={20} sw={1.8}/>
-        </button>
-      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         {!isMobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>
@@ -315,144 +326,156 @@ function ClientTopbar({ isMobile, onMenuClick, data }) {
             <span style={{ color: 'var(--fg-2)' }}>{current.label}</span>
           </div>
         )}
-        <h1 className="page-title" style={{ margin: 0, fontSize: isMobile ? 20 : 28, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <h1 className="page-title" style={{ margin: 0, fontSize: isMobile ? 21 : 28, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {current.label}
         </h1>
       </div>
+      {isMobile && pathname !== '/me/profile' && (
+        <Link to="/me/profile" aria-label="Your profile" style={{
+          width: 36, height: 36, borderRadius: 99, flexShrink: 0,
+          background: 'var(--accent)', color: 'var(--accent-ink)',
+          fontSize: 13, fontWeight: 600, textDecoration: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>{initialsOf(user)}</Link>
+      )}
     </header>
   );
 }
 
-// ----- mobile bottom nav + drawer -----
-// Cap the bottom bar at the 5 highest-traffic tabs (matching the business
-// app's MobileBottomNav). All 8 items crammed into 375px left ~47px per
-// slot with truncated labels; the rest (Documents, Billing, Discover) stay
-// one tap away in the hamburger drawer, which already lists everything.
-const MOBILE_NAV_PRIMARY = new Set(['/me', '/me/messages', '/me/bookings', '/me/orders', '/me/invoices']);
-
-function ClientMobileNav() {
+// ----- phone tab bar + More sheet -----
+function ClientMobileNav({ summary, onMore, moreOpen }) {
+  const { pathname } = useLocation();
+  const native = isNative();
+  const navRef = useRef(null);
+  // Publish the bar's real height (home-indicator inset included) so the
+  // page can reserve exactly that much and nothing hides under it.
+  useLayoutEffect(() => {
+    const el = navRef.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty('--mobile-nav-h', `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    publish();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty('--mobile-nav-h'); };
+  }, []);
+  const onSecondary = SECONDARY.some((i) => isActive(i, pathname));
+  const moreBadge = SECONDARY.reduce((s, i) => s + badgeCount(i.badge, summary), 0);
+  const iconSize = native ? 24 : 21;
   return (
-    <nav className="mobile-nav" aria-label="Primary">
-      {NAV.filter((item) => MOBILE_NAV_PRIMARY.has(item.to)).map((item) => {
+    <nav ref={navRef} className={native ? 'mobile-nav native' : 'mobile-nav'} aria-label="Primary">
+      {PRIMARY.map((item) => {
         const Icon = Icons[item.icon];
+        const n = badgeCount(item.badge, summary);
         return (
           <NavLink key={item.to} to={item.to} end={item.end}
-            className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
-          >
-            {({ isActive }) => (
+            className={({ isActive: a }) => `mobile-nav-item ${a ? 'active' : ''}`}>
+            {({ isActive: a }) => (
               <>
-                <Icon size={20} sw={isActive ? 1.9 : 1.6}/>
+                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                  <Icon size={iconSize} sw={a ? 1.9 : 1.6}/>
+                  <Badge n={n} compact/>
+                </span>
                 <span>{item.label}</span>
               </>
             )}
           </NavLink>
         );
       })}
+      <button type="button" onClick={onMore} aria-expanded={moreOpen} aria-haspopup="dialog"
+        aria-label={moreBadge ? `More, ${moreBadge} new` : 'More'}
+        className={`mobile-nav-item ${onSecondary || moreOpen ? 'active' : ''}`}
+        style={{ background: (onSecondary || moreOpen) && !native ? 'var(--surface-2)' : 'none', border: 0, cursor: 'pointer', font: 'inherit' }}>
+        <span style={{ position: 'relative', display: 'inline-flex' }}>
+          <Icons.More size={iconSize} sw={1.6}/>
+          <Badge n={moreBadge} compact/>
+        </span>
+        <span style={{ fontSize: native ? 10 : 10.5 }}>More</span>
+      </button>
     </nav>
   );
 }
 
-function ClientMobileDrawer({ direction, data, onClose, closing = false }) {
+function MoreSheet({ data, summary, onClose }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; };
+    return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
   const doSignOut = async () => { await signOut(); nav('/signin', { replace: true }); };
-  const initials = (user?.name || user?.email || '?')
-    .split(/[\s@.]+/).filter(Boolean).slice(0, 2)
-    .map((p) => p[0].toUpperCase()).join('');
-
+  const row = {
+    display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 12,
+    textDecoration: 'none', color: 'var(--fg)', background: 'transparent', border: 0,
+    width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit',
+  };
+  const iconBox = {
+    width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+    background: 'var(--accent-soft)', color: 'var(--accent)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  };
   return (
-    <>
-      <div className={`mobile-drawer-backdrop${closing ? ' is-closing' : ''}`} onClick={onClose}/>
-      <aside className={`mobile-drawer${closing ? ' is-closing' : ''}`}>
-        <div style={{ padding: '18px 16px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <BrandMark direction={direction} compact={false}/>
-          <button onClick={onClose} aria-label="Close menu"
-            style={{ padding: 8, borderRadius: 8, color: 'var(--muted)',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="portal-sheet-backdrop" onClick={onClose}>
+      <div className="portal-sheet card" role="dialog" aria-modal="true" aria-label="More"
+        onClick={(e) => e.stopPropagation()} style={{ gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '2px 4px 10px', borderBottom: '1px solid var(--border)', marginBottom: 6 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 99, background: 'var(--accent)', color: 'var(--accent-ink)',
+            fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>{initialsOf(user)}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {user?.name || user?.email?.split('@')[0]}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="btn btn-ghost" style={{ padding: 8 }}>
             <Icons.X size={18}/>
           </button>
         </div>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px' }}>
-          {NAV.map((item) => {
-            const Icon = Icons[item.icon];
-            return (
-              <NavLink key={item.to} to={item.to} end={item.end}
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon size={18} sw={isActive ? 1.8 : 1.5}/>
-                    <span>{item.label}</span>
-                  </>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
-        <div style={{ flex: 1 }}/>
-        <div style={{ padding: 12, borderTop: '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {SECONDARY.map((item) => {
+          const Icon = Icons[item.icon] || Icons.Home;
+          const n = badgeCount(item.badge, summary);
+          return (
+            <Link key={item.to} to={item.to} style={row} onClick={onClose}>
+              <span style={iconBox}><Icon size={18} sw={1.7}/></span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 15, fontWeight: 600 }}>{item.label}</span>
+                <span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)', marginTop: 1 }}>{item.hint}</span>
+              </span>
+              {n > 0 && <span className="nav-badge" style={{ marginLeft: 0 }}>{n}</span>}
+              <Icons.Arrow size={14} stroke="var(--muted)"/>
+            </Link>
+          );
+        })}
+        <div style={{ borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {data?.isOwner && (
-            <NavLink to="/" className="nav-item" style={{ padding: '10px 12px' }}>
-              <Icons.Trending size={16} sw={1.6}/> Switch to business view
-            </NavLink>
+            <Link to="/" style={row} onClick={onClose}>
+              <span style={{ ...iconBox, background: 'var(--surface-2)', color: 'var(--fg-2)' }}><Icons.Trending size={18}/></span>
+              <span style={{ fontSize: 15, fontWeight: 550 }}>Switch to business view</span>
+            </Link>
           )}
           {data?.isHelper && (
-            <NavLink to="/helper" className="nav-item" style={{ padding: '10px 12px' }}>
-              <Icons.Calendar size={16} sw={1.6}/> Switch to helper view
-            </NavLink>
+            <Link to="/helper" style={row} onClick={onClose}>
+              <span style={{ ...iconBox, background: 'var(--surface-2)', color: 'var(--fg-2)' }}><Icons.Calendar size={18}/></span>
+              <span style={{ fontSize: 15, fontWeight: 550 }}>Switch to helper view</span>
+            </Link>
           )}
-          <NavLink to="/me/profile" className="nav-item" style={{ padding: '10px 12px' }}>
-            <Icons.Edit size={16} sw={1.6}/> Your profile
-          </NavLink>
-          <NavLink to="/me/notifications" className="nav-item" style={{ padding: '10px 12px' }}>
-            <Icons.Bell size={16} sw={1.6}/> Email preferences
-          </NavLink>
-          {/* /account redirects client-only users via RoleRouter - only
-              expose the link to owners. */}
-          {data?.isOwner && (
-            <NavLink to="/account" className="nav-item" style={{ padding: '10px 12px' }}>
-              <Icons.Settings size={16} sw={1.6}/> Account settings
-            </NavLink>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10,
-            paddingTop: 4, borderTop: '1px solid var(--border)' }}>
-            <div style={{
-              width: 34, height: 34, borderRadius: 99,
-              background: 'var(--accent)', color: 'var(--accent-ink)',
-              fontSize: 12, fontWeight: 600,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>{initials}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--sidebar-fg)',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user?.name || user?.email?.split('@')[0]}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user?.email || ''}
-              </div>
-            </div>
-            <button onClick={doSignOut} className="btn btn-ghost"
-              style={{ padding: '6px 10px', fontSize: 12.5 }}>Sign out</button>
-          </div>
+          <button type="button" style={row} onClick={doSignOut}>
+            <span style={{ ...iconBox, background: 'var(--surface-2)', color: 'var(--fg-2)' }}><Icons.Arrow size={18}/></span>
+            <span style={{ fontSize: 15, fontWeight: 550 }}>Sign out</span>
+          </button>
         </div>
-      </aside>
-    </>
+      </div>
+    </div>
   );
 }
 
-// Renders the shell chrome (sidebar + topbar shape) with skeleton placeholders
-// for the page body. Avoids the dead "Loading…" flash on first paint.
+// Renders the shell chrome with skeleton placeholders for the page body.
 function ClientShellSkeleton({ tweaks, viewport }) {
   return (
-    <div className={`app-root dir-${tweaks.direction}`}>
+    <div className={`app-root client-portal dir-${tweaks.direction}`}>
       <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
         {!viewport.isMobile && (
           <aside style={{
@@ -476,9 +499,9 @@ function ClientShellSkeleton({ tweaks, viewport }) {
           }}>
             <SkelLine width={140} height={16} style={{ borderRadius: 6 }}/>
           </div>
-          <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 760, width: '100%' }}>
             <SkelLine width={220} height={26} style={{ borderRadius: 8 }}/>
-            <SkelStatGrid count={4}/>
+            <SkelBlock height={150} radius={16}/>
             <SkelRowList rows={3} withAvatar/>
           </div>
         </main>

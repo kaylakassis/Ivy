@@ -124,7 +124,7 @@ async function handler(req, res) {
                 payload: {
                   title: 'Invoice overdue',
                   body: `Invoice ${r.number} is ${days} day${days === 1 ? '' : 's'} past due.`,
-                  url: '/me/billing',
+                  url: '/me/invoices',
                   tag: `inv-overdue-${r.id}`,
                 },
               });

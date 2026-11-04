@@ -20,7 +20,29 @@ import { requireUser } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { normalizePhone } from '../_lib/sms.js';
+import { blobPathnameForUser, isBlobHost } from '../_lib/blobScope.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+
+// The photo URL arrives from the browser, so it is never trusted as-is:
+//   • unchanged (already on one of my client rows, e.g. a photo the
+//     business uploaded for me): fine, re-saving the form must not fail;
+//   • a file in our upload storage: only from MY folder (user/<myId>/),
+//     the one /api/me/photo-token signs uploads into;
+//   • any other link (the older app's "Photo URL" field): https only.
+// Returns an error string, or null when the URL is acceptable.
+export async function checkPhotoUrl(url, userId) {
+  let parsed;
+  try { parsed = new URL(url); } catch { return 'Photo link must be a full https:// address'; }
+  const { rows } = await sql`
+    SELECT 1 FROM clients WHERE user_id = ${userId} AND photo_url = ${url} LIMIT 1
+  `.catch(() => ({ rows: [] }));
+  if (rows.length) return null;
+  if (parsed.protocol !== 'https:') return 'Photo link must start with https://';
+  if (isBlobHost(parsed.hostname)) {
+    return blobPathnameForUser(url, userId) ? null : 'That photo could not be used. Please upload it again.';
+  }
+  return null;
+}
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -105,9 +127,11 @@ export default async function handler(req, res) {
         } else {
           const u = String(body.photoUrl).trim();
           if (u.length > 1000) errors.push('Photo URL is too long');
-          // No protocol whitelist - caller already uploaded to Vercel
-          // Blob and got an https:// URL.
-          else photoUrlToSet = u;
+          else {
+            const verdict = await checkPhotoUrl(u, user.id);
+            if (verdict) errors.push(verdict);
+            else photoUrlToSet = u;
+          }
         }
       }
 

@@ -51,9 +51,7 @@ const ClientHome      = lazy(() => import('./features/client/ClientHome.jsx'));
 const ClientMessages  = lazy(() => import('./features/client/ClientMessages.jsx'));
 const ClientBookings  = lazy(() => import('./features/client/ClientBookings.jsx'));
 const ClientInvoices  = lazy(() => import('./features/client/ClientInvoices.jsx'));
-const ClientOrders    = lazy(() => import('./features/client/ClientOrders.jsx'));
 const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx'));
-const ClientBilling   = lazy(() => import('./features/client/ClientBilling.jsx'));
 const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
 const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
 const ClientProfile   = lazy(() => import('./features/client/ClientProfile.jsx'));
@@ -239,6 +237,18 @@ function GoalsRedirect() {
   return <Navigate to={`/dashboard${q}#goals`} replace/>;
 }
 
+// Client portal: /me/billing (saved cards, memberships) and /me/orders
+// (shop orders) now live on the Payments page. Old links from emails, the
+// card-saving return URL (?save=ok) and app 1.0.4 keep working.
+function PortalPaymentsRedirect({ hash }) {
+  const { search } = useLocation();
+  // /me/billing held both cards and memberships: the card-saving return
+  // (?save=) goes to the cards, anything else (membership emails) to
+  // memberships.
+  const to = hash || (new URLSearchParams(search).has('save') ? '#cards' : '#memberships');
+  return <Navigate to={{ pathname: '/me/invoices', search, hash: to }} replace/>;
+}
+
 // /projects?id=X → /clients?folder=X (Clients opens that folder; there is
 // no separate folders view, so no `view` param to carry).
 function ProjectsRedirect() {
@@ -374,10 +384,10 @@ export default function App() {
           <Route path="/me"           element={<ClientHome />} />
           <Route path="/me/messages"  element={<ClientMessages />} />
           <Route path="/me/bookings"  element={<ClientBookings />} />
-          <Route path="/me/orders"    element={<ClientOrders />} />
+          <Route path="/me/orders"    element={<PortalPaymentsRedirect hash="#receipts" />} />
           <Route path="/me/invoices"  element={<ClientInvoices />} />
           <Route path="/me/documents" element={<ClientDocuments />} />
-          <Route path="/me/billing"   element={<ClientBilling />} />
+          <Route path="/me/billing"   element={<PortalPaymentsRedirect />} />
           <Route path="/me/discover"  element={<ClientDiscover />} />
           <Route path="/me/notifications" element={<ClientNotifications />} />
           <Route path="/me/profile"       element={<ClientProfile />} />

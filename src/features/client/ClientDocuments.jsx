@@ -2,6 +2,7 @@
 // "Open & sign" mints a fresh signing token then opens the existing
 // public /sign/:token page in a new tab.
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
@@ -57,47 +58,41 @@ export default function ClientDocuments() {
     </div>
   );
   if (error) return (
-    <div style={{ padding: 48 }}>
-      <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Doc" title="Couldn't load documents"
-          hint={error.message || 'Try refreshing.'}
-          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
+    <div className="page-pad"><div className="portal-page">
+      <div className="card" style={{ padding: 28 }}>
+        <EmptyNote icon="Doc" title="We couldn't load your documents"
+          hint="Check your connection and try again."
+          action={<button className="btn btn-primary" onClick={() => setReloadKey((n) => n + 1)}>Try again</button>}/>
       </div>
-    </div>
+    </div></div>
   );
 
   const pending  = docs.filter((d) => d.status === 'sent');
   const finished = docs.filter((d) => d.status !== 'sent');
 
   return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div>
-        <h2 style={{
-          fontFamily: 'var(--font-display)', fontWeight: 500,
-          fontSize: 'clamp(26px, 4vw, 32px)',
-          letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05,
-        }}>Documents</h2>
-        <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
-          Forms and agreements from every business you work with - sign once, kept forever.
-        </p>
-      </div>
+    <div className="page-pad"><div className="portal-page">
+      <p style={{ color: 'var(--muted)', fontSize: 13.5, margin: 0, lineHeight: 1.5 }}>
+        Forms and agreements from the businesses you see. Once signed, they are kept here.
+      </p>
 
       {docs.length === 0 ? (
-        <div className="card" style={{ padding: 40 }}>
+        <div className="card" style={{ padding: 28 }}>
           <EmptyNote icon="Doc" title="No documents yet"
-            hint="Waivers, agreements, or intake forms a business sends you will appear here."/>
+            hint="Waivers, agreements or intake forms a business sends you will show up here."
+            action={<Link className="btn btn-outline" to="/me">Back to home</Link>}/>
         </div>
       ) : (
         <>
           {pending.length > 0 && (
-            <Section title="Action needed" docs={pending} onOpen={open} opening={opening} accent/>
+            <Section title="To sign" docs={pending} onOpen={open} opening={opening} accent/>
           )}
           {finished.length > 0 && (
-            <Section title="Signed & filed" docs={finished} onOpen={open} opening={opening}/>
+            <Section title="Done" docs={finished} onOpen={open} opening={opening}/>
           )}
         </>
       )}
-    </div>
+    </div></div>
   );
 }
 
@@ -181,7 +176,7 @@ function Section({ title, docs, onOpen, opening, accent }) {
                   : (d.totalSigners > 1 && d.mySigner?.status === 'pending')
                     ? 'Waiting'
                     : d.status === 'sent' && d.mySigner?.status !== 'completed'
-                      ? 'Open & sign'
+                      ? 'Open and sign'
                       : 'View'}
                 <Icons.Arrow size={11} sw={2}/>
               </button>

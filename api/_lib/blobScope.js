@@ -105,5 +105,64 @@ export function assertUploadPathname(pathname, workspaceId) {
   const p = raw.replace(/^\/+/, '');
   if (p.includes('\0') || p.split('/').some((seg) => seg === '..' || seg === '')) throw new UploadScopeError();
   if (p === UPLOAD_ROOT || p.startsWith(`${UPLOAD_ROOT}/`)) throw new UploadScopeError();
+  // The per-user folder (below) belongs to client-portal uploads only.
+  if (p === USER_UPLOAD_ROOT || p.startsWith(`${USER_UPLOAD_ROOT}/`)) throw new UploadScopeError();
   return p;
+}
+
+// ── Per-user scope (client portal) ──────────────────────────────────────
+// A client of a business has no workspace of their own, so their uploads
+// (today: the profile photo) live under `user/<userId>/`. Same rules as the
+// workspace prefix: the token route only signs pathnames under the
+// signed-in user's own prefix, and anything that binds a stored URL checks
+// it against that prefix rather than trusting a client-sent path. The
+// workspace guard above refuses `user/` so a workspace token can never
+// plant a file in someone's user folder.
+export const USER_UPLOAD_ROOT = 'user';
+
+function validUserId(userId) {
+  return typeof userId === 'string' && /^[A-Za-z0-9-]{8,64}$/.test(userId);
+}
+
+export function userUploadPrefix(userId) {
+  if (!validUserId(userId)) throw new UploadScopeError('Unknown user');
+  return `${USER_UPLOAD_ROOT}/${userId}/`;
+}
+
+// Resolve a stored URL or bare pathname to its Blob pathname IF it sits
+// under `user/<userId>/`; null otherwise (other host, other user, legacy,
+// traversal, garbage).
+export function blobPathnameForUser(urlOrPathname, userId) {
+  if (typeof urlOrPathname !== 'string' || !urlOrPathname) return null;
+  if (!validUserId(userId)) return null;
+  let pathname;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(urlOrPathname)) {
+    let u;
+    try { u = new URL(urlOrPathname); } catch { return null; }
+    if (u.protocol !== 'https:') return null;
+    if (!isBlobHost(u.hostname)) return null;
+    try { pathname = decodeURIComponent(u.pathname); } catch { return null; }
+    pathname = pathname.replace(/^\/+/, '');
+  } else {
+    if (/^\/\//.test(urlOrPathname)) return null;
+    pathname = urlOrPathname.replace(/^\/+/, '');
+  }
+  if (!pathname || pathname.length > 1024) return null;
+  if (pathname.includes('\0') || pathname.split('/').some((seg) => seg === '..' || seg === '')) return null;
+  const prefix = `${USER_UPLOAD_ROOT}/${userId}/`;
+  if (!pathname.startsWith(prefix) || pathname.length === prefix.length) return null;
+  return pathname;
+}
+
+// Token-route guard for a user-scoped upload: the pathname MUST be under
+// the signed-in user's own prefix. No legacy exception (the route is new,
+// so no older app build uploads through it).
+export function assertUserUploadPathname(pathname, userId) {
+  const raw = String(pathname || '');
+  if (!raw || raw.length > 1024 || /^[a-z][a-z0-9+.-]*:/i.test(raw) || /^\/\//.test(raw)) {
+    throw new UploadScopeError('Upload path must be inside your own folder');
+  }
+  const ok = blobPathnameForUser(raw, userId);
+  if (!ok) throw new UploadScopeError('Upload path must be inside your own folder');
+  return ok;
 }

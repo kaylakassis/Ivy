@@ -1118,3 +1118,45 @@ html body.ivy-fill.keyboard-open.has-mobile-nav .app-root > .app-frame { padding
   body.print-invoice-only .invoice-print-host { display: block !important; position: static; }
   body.print-invoice-only .invoice-doc { box-shadow: none !important; border-radius: 0 !important; }
 }
+
+/* ── Client portal (/me/*) ── */
+/* Reserve the tab bar's measured height (it includes the home-indicator
+   inset; ClientShell publishes --mobile-nav-h) plus breathing room, so
+   the end of a long page never hides under the bar. */
+@media (max-width: 720px) {
+  body.has-mobile-nav .app-root.client-portal > div {
+    padding-bottom: calc(var(--mobile-nav-h, calc(64px + env(safe-area-inset-bottom, 0px))) + 12px);
+  }
+  .client-portal .page-pad { padding-bottom: 32px; }
+}
+html.native body.has-mobile-nav .app-root.client-portal > div {
+  padding-bottom: calc(var(--mobile-nav-h, calc(72px + env(safe-area-inset-bottom, 0px))) + 12px);
+}
+.client-portal .portal-page { max-width: 760px; width: 100%; display: flex; flex-direction: column; gap: 22px; }
+.portal-tab-badge {
+  position: absolute; top: -5px; right: -9px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 999px; background: var(--danger, #c0392b); color: #fff;
+  font-size: 10px; font-weight: 700; line-height: 17px; text-align: center;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.portal-dot {
+  position: absolute; top: 7px; right: 9px; width: 8px; height: 8px; border-radius: 99px;
+  background: var(--danger, #c0392b);
+}
+.portal-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 120; background: rgba(20,18,14,0.5);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+  animation: m-fade-in var(--dur-slow) var(--ease-out) backwards;
+}
+.portal-sheet {
+  width: 100%; padding: 22px; display: flex; flex-direction: column; gap: 14px;
+  max-height: calc(100vh - 32px); overflow-y: auto; overscroll-behavior: contain;
+}
+@media (max-width: 720px) {
+  .portal-sheet-backdrop { align-items: flex-end; padding: 0; }
+  .portal-sheet {
+    max-width: none !important; border-radius: 18px 18px 0 0;
+    padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    max-height: 90vh;
+  }
+}

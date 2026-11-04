@@ -1,87 +1,91 @@
 // /me/bookings - every appointment across all the user's businesses,
 // grouped Upcoming / Past / Cancelled with a tab picker.
-import React, { useEffect, useRef, useState } from 'react';
+//
+// Each booking is its own card: date badge + what / who / when / price on
+// stacked lines, then a row of actions underneath that wraps cleanly on a
+// 390px phone. Upcoming: Join (video), Add to calendar (one menu),
+// Reschedule, Cancel. Past: Book again, Leave a review, Session notes.
+//
+// Deep links: ?tab=past|cancelled, ?reschedule=<id>, ?cancel=<id> (Home's
+// next-appointment card uses the last two).
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { safeHref } from '../../lib/safeHref.js';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import EmptyNote from '../../components/EmptyNote.jsx';
-import { SkelRowList } from '../../components/Skeleton.jsx';
-import Loader from '../../components/motion/Loader.jsx';
 import { api } from '../../lib/api.js';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { slotsForDate } from '../calendar/utils.js';
-
-function fmtDay(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-function fmtTime(min) {
-  const h = Math.floor(min / 60), m = min % 60;
-  const ampm = h >= 12 ? 'pm' : 'am';
-  const h12 = ((h + 11) % 12) + 1;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
+import {
+  fmtDay, fmtDate, fmtTime, fmtTimeRange, fmtMoney, bookHref,
+  AddToCalendarMenu, Sheet, ErrorNote, SkelCards, EmptyCard, actionBtn, actionRow,
+} from './portalUi.jsx';
 
 const TABS = [
   { id: 'upcoming',  label: 'Upcoming' },
   { id: 'past',      label: 'Past' },
   { id: 'cancelled', label: 'Cancelled' },
 ];
-
-// Tab IDs we accept from a ?tab= deep link. Anything else falls back
-// to 'upcoming' - guards against a copy-pasted typo opening an empty
-// pane.
 const VALID_TAB_PARAMS = new Set(['upcoming', 'past', 'cancelled']);
+
+// Kept for older imports: the two-link version of "add to calendar".
+export function AddToCalendar({ links }) {
+  return <AddToCalendarMenu links={links}/>;
+}
 
 export default function ClientBookings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData]       = useState({ upcoming: [], past: [], cancelled: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-  // Honour ?tab= deep links from ClientHome ("Reviews to leave" stat
-  // card points us at past, etc.). Strip the param after first read so
-  // a refresh after the user clicks a different tab doesn't snap them
-  // back. Lazy init so we read searchParams just once.
   const [tab, setTab] = useState(() => {
     const t = searchParams.get('tab');
     return t && VALID_TAB_PARAMS.has(t) ? t : 'upcoming';
   });
-  const tabParamConsumedRef = useRef(false);
-  useEffect(() => {
-    if (tabParamConsumedRef.current) return;
-    if (!searchParams.get('tab')) return;
-    tabParamConsumedRef.current = true;
-    const next = new URLSearchParams(searchParams);
-    next.delete('tab');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
-  const [confirming, setConfirming] = useState(null); // booking object pending cancel
+  const [confirming, setConfirming] = useState(null);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelErr, setCancelErr]   = useState(null);
-  const [rescheduling, setRescheduling] = useState(null); // booking pending reschedule
-  // Bookings the user can review - fetched server-side so we know which
-  // past rows haven't been reviewed yet without a per-row probe.
+  const [rescheduling, setRescheduling] = useState(null);
   const [pendingReviewIds, setPendingReviewIds] = useState(new Set());
-  const [reviewing, setReviewing]   = useState(null); // booking pending review
+  const [reviewing, setReviewing]   = useState(null);
+  const [notice, setNotice] = useState(null); // { tone, text }
+
+  const load = useCallback(async () => {
+    const [b, p] = await Promise.all([
+      api.get('/me/bookings'),
+      api.get('/me/pending-reviews').catch(() => ({ bookings: [] })),
+    ]);
+    setData({ upcoming: b.upcoming || [], past: b.past || [], cancelled: b.cancelled || [] });
+    setPendingReviewIds(new Set((p.bookings || []).map((x) => x.id)));
+    return b;
+  }, []);
 
   const [reloadKey, setReloadKey] = useState(0);
-  const [feeNotice, setFeeNotice] = useState(null); // late-cancel fee charge confirmation
-
   useEffect(() => {
     let live = true;
     setLoading(true); setError(null);
-    Promise.all([
-      api.get('/me/bookings'),
-      api.get('/me/pending-reviews').catch(() => ({ bookings: [] })),
-    ])
-      .then(([b, p]) => {
-        if (!live) return;
-        setData(b);
-        setPendingReviewIds(new Set((p.bookings || []).map((x) => x.id)));
-      })
+    load()
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, [reloadKey]);
+  }, [reloadKey, load]);
+  usePullRefresh(() => load().catch(() => {}));
+
+  // One-shot deep links (?tab, ?reschedule, ?cancel), consumed once the
+  // bookings are in so a refresh does not reopen a dialog.
+  const consumed = useRef(false);
+  useEffect(() => {
+    if (consumed.current || loading) return;
+    const r = searchParams.get('reschedule');
+    const c = searchParams.get('cancel');
+    if (!searchParams.get('tab') && !r && !c) return;
+    consumed.current = true;
+    const find = (id) => data.upcoming.find((b) => b.id === id);
+    if (r && find(r)) setRescheduling(find(r));
+    if (c && find(c)) { setCancelErr(null); setConfirming(find(c)); }
+    const next = new URLSearchParams(searchParams);
+    next.delete('tab'); next.delete('reschedule'); next.delete('cancel');
+    setSearchParams(next, { replace: true });
+  }, [loading, data, searchParams, setSearchParams]);
 
   async function doCancel() {
     if (!confirming) return;
@@ -89,15 +93,12 @@ export default function ClientBookings() {
     setCancelErr(null);
     try {
       const r = await api.del('/me/bookings/' + confirming.id);
-      // Refetch so upcoming/past/cancelled buckets are correct.
-      const fresh = await api.get('/me/bookings');
-      setData(fresh);
+      await load();
       setConfirming(null);
-      // Surface a late-cancel fee that was actually charged - the client
-      // must know money left their card. (The endpoint returns feeCharged
-      // for exactly this; it used to be silently discarded.)
       if (r && Number(r.feeCharged) > 0) {
-        setFeeNotice(`Your booking was cancelled. A $${Number(r.feeCharged).toFixed(2)} late-cancellation fee was charged to your card on file.`);
+        setNotice({ tone: 'warn', text: `Your booking is cancelled. A ${fmtMoney(r.feeCharged)} late-cancellation fee was charged to your saved card.` });
+      } else {
+        setNotice({ tone: 'ok', text: 'Your booking is cancelled. The business has been told.' });
       }
     } catch (e) {
       setCancelErr(e.message || 'Could not cancel');
@@ -107,74 +108,81 @@ export default function ClientBookings() {
   }
 
   if (loading) return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <SkelRowList rows={5}/>
-      <Loader set="client"/>
-    </div>
+    <div className="page-pad"><div className="portal-page">
+      <div style={{ height: 40 }}/>
+      <SkelCards rows={3}/>
+    </div></div>
   );
   if (error) return (
-    <div style={{ padding: 48 }}>
-      <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Calendar" title="Couldn't load bookings"
-          hint={error.message || 'Try refreshing.'}
-          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
-      </div>
-    </div>
+    <div className="page-pad"><div className="portal-page">
+      <EmptyCard icon="Calendar" title="We couldn't load your bookings"
+        hint="Check your connection and try again."
+        action={<button className="btn btn-primary" onClick={() => setReloadKey((n) => n + 1)}>Try again</button>}/>
+    </div></div>
   );
 
   const rows = data[tab] || [];
   const counts = { upcoming: data.upcoming.length, past: data.past.length, cancelled: data.cancelled.length };
+  // Most recent business to suggest in the empty state.
+  const lastPast = data.past.find((b) => b.bizSlug && !b.archived);
 
   return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {feeNotice && (
-        <div style={{
+    <div className="page-pad"><div className="portal-page" style={{ gap: 16 }}>
+      {notice && (
+        <div role="status" style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
-          padding: '12px 14px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
-          background: 'color-mix(in srgb, var(--warn) 12%, var(--surface))',
-          border: '1px solid color-mix(in srgb, var(--warn) 35%, var(--border))',
+          padding: '12px 14px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.5,
+          background: `color-mix(in srgb, var(--${notice.tone === 'warn' ? 'warn' : 'ok'}) 12%, var(--surface))`,
+          border: `1px solid color-mix(in srgb, var(--${notice.tone === 'warn' ? 'warn' : 'ok'}) 35%, var(--border))`,
         }}>
-          <Icons.Receipt size={15} sw={1.8} stroke="var(--warn)"/>
-          <span style={{ flex: 1 }}>{feeNotice}</span>
-          <button onClick={() => setFeeNotice(null)} className="btn btn-ghost"
-            style={{ padding: 2, color: 'var(--muted)' }} title="Dismiss"><Icons.X size={13}/></button>
+          <span style={{ flex: 1 }}>{notice.text}</span>
+          <button onClick={() => setNotice(null)} className="btn btn-ghost"
+            style={{ padding: 4, color: 'var(--muted)' }} aria-label="Dismiss"><Icons.X size={14}/></button>
         </div>
       )}
-      <div className="tab-row">
+
+      <div className="tab-row" role="tablist">
         {TABS.map((t) => {
           const on = tab === t.id;
           return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
+            <button key={t.id} role="tab" aria-selected={on} onClick={() => setTab(t.id)} style={{
+              padding: '8px 14px', borderRadius: 8, border: 0, fontSize: 13, fontWeight: 550, cursor: 'pointer',
               background: on ? 'var(--surface)' : 'transparent',
               color: on ? 'var(--fg)' : 'var(--muted)',
               boxShadow: on ? 'var(--shadow-sm)' : 'none',
               display: 'inline-flex', alignItems: 'center', gap: 6,
             }}>
               {t.label}
-              <span style={{
-                fontSize: 10.5, padding: '1px 6px', borderRadius: 99,
-                background: on ? 'var(--surface-2)' : 'var(--surface)',
-                color: 'var(--muted)', fontWeight: 600,
-              }}>{counts[t.id]}</span>
+              {counts[t.id] > 0 && (
+                <span style={{
+                  fontSize: 11, padding: '1px 7px', borderRadius: 99,
+                  background: on ? 'var(--surface-2)' : 'var(--surface)',
+                  color: 'var(--muted)', fontWeight: 600,
+                }}>{counts[t.id]}</span>
+              )}
             </button>
           );
         })}
       </div>
 
       {rows.length === 0 ? (
-        <div className="card" style={{ padding: 40 }}>
-          <EmptyNote icon="Calendar"
-            title={tab === 'upcoming' ? 'No upcoming bookings' : tab === 'past' ? 'No past bookings yet' : 'Nothing cancelled'}
-            hint={tab === 'upcoming' ? 'When you book a session, it\'ll show up here.' : ''}/>
-        </div>
+        tab === 'upcoming' ? (
+          <EmptyCard icon="Calendar" title="Nothing booked right now"
+            hint={lastPast ? `Ready for your next visit with ${lastPast.businessName}?` : 'When you book a session, it will show up here.'}
+            action={lastPast
+              ? <Link className="btn btn-primary" to={bookHref(lastPast.bizSlug, lastPast.serviceId)} style={actionBtn}>Book again</Link>
+              : <Link className="btn btn-primary" to="/me/discover" style={actionBtn}>Find a business</Link>}/>
+        ) : tab === 'past' ? (
+          <EmptyCard icon="Clock" title="No past visits yet" hint="Once you have been to an appointment, it will be listed here."
+            action={<button className="btn btn-outline" onClick={() => setTab('upcoming')} style={actionBtn}>See upcoming</button>}/>
+        ) : (
+          <EmptyCard icon="Check" title="Nothing cancelled" hint="Bookings you or the business cancel will show here."/>
+        )
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {rows.map((b, i) => (
-            <BookingRow key={b.id} booking={b} first={i === 0}
-              cancellable={tab === 'upcoming' && !b.cancelledAt}
-              reschedulable={tab === 'upcoming' && !b.cancelledAt && !!b.bizSlug && !!b.serviceId && !b.recurrenceRule && !b.archived}
-              reviewable={tab === 'past' && pendingReviewIds.has(b.id)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {rows.map((b) => (
+            <BookingCard key={b.id} booking={b} tab={tab}
+              reviewable={tab === 'past' && pendingReviewIds.has(b.id) && !b.archived}
               onCancel={() => { setCancelErr(null); setConfirming(b); }}
               onReschedule={() => setRescheduling(b)}
               onReview={() => setReviewing(b)}/>
@@ -183,326 +191,329 @@ export default function ClientBookings() {
       )}
 
       {confirming && (
-        <CancelConfirmDialog
-          booking={confirming}
-          busy={cancelBusy}
-          error={cancelErr}
-          onClose={() => !cancelBusy && setConfirming(null)}
-          onConfirm={doCancel}/>
+        <CancelConfirmDialog booking={confirming} busy={cancelBusy} error={cancelErr}
+          onClose={() => !cancelBusy && setConfirming(null)} onConfirm={doCancel}/>
       )}
 
       {reviewing && (
-        <ReviewDialog
-          booking={reviewing}
-          onClose={() => setReviewing(null)}
+        <ReviewDialog booking={reviewing} onClose={() => setReviewing(null)}
           onSubmitted={() => {
-            setPendingReviewIds((prev) => {
-              const next = new Set(prev);
-              next.delete(reviewing.id);
-              return next;
-            });
+            setPendingReviewIds((prev) => { const next = new Set(prev); next.delete(reviewing.id); return next; });
             setReviewing(null);
-          }}
-        />
+            setNotice({ tone: 'ok', text: `Thank you! Your review of ${reviewing.businessName} is posted.` });
+          }}/>
       )}
 
       {rescheduling && (
-        <RescheduleDialog
-          booking={rescheduling}
-          onClose={() => setRescheduling(null)}
+        <RescheduleDialog booking={rescheduling} onClose={() => setRescheduling(null)}
           onRescheduled={async () => {
-            const fresh = await api.get('/me/bookings');
-            setData(fresh);
+            await load().catch(() => {});
             setRescheduling(null);
+            setNotice({ tone: 'ok', text: 'Your booking has a new time. The business has been told.' });
           }}/>
       )}
-    </div>
+    </div></div>
   );
 }
 
-function BookingRow({ booking, first, cancellable, reschedulable, reviewable, onCancel, onReschedule, onReview }) {
-  const d = new Date(booking.date + 'T00:00:00');
-  const [showCompletion, setShowCompletion] = useState(false);
-  const hasCompletion = !!booking.completionNotes
-    || (Array.isArray(booking.completionAttachments) && booking.completionAttachments.length > 0);
+function canReschedule(b) {
+  return !b.cancelledAt && !!b.bizSlug && !!b.serviceId && !b.recurrenceRule && !b.archived;
+}
+
+function paymentLine(p) {
+  if (!p) return null;
+  if (p.fullyPaid) return { text: `Paid in full, ${fmtMoney(p.total)}`, color: 'var(--ok)' };
+  if (!(p.balanceDue > 0)) return null;
+  const bits = [`${fmtMoney(p.balanceDue)} left to pay`];
+  if (p.depositPaid > 0) bits.push(`${fmtMoney(p.depositPaid)} deposit paid`);
+  if (p.giftCardCredit > 0) bits.push(`${fmtMoney(p.giftCardCredit)} gift card used`);
+  return { text: bits.join(' · '), color: 'var(--accent)' };
+}
+
+export function whereLine(b) {
+  if (b.serviceLocationType === 'virtual' || b.videoRoomUrl) return 'Video call';
+  if (b.serviceLocationType === 'mobile') return b.locationAddress ? `At ${b.locationAddress}` : 'At your place';
+  return b.locationLabel || b.businessAddress || null;
+}
+
+function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onReview }) {
+  const d = new Date(b.date + 'T00:00:00');
+  const [showNotes, setShowNotes] = useState(false);
+  const hasCompletion = !!b.completionNotes
+    || (Array.isArray(b.completionAttachments) && b.completionAttachments.length > 0);
+  const cancelled = !!b.cancelledAt;
+  const pay = !cancelled ? paymentLine(b.payment) : null;
+  const where = !cancelled ? whereLine(b) : null;
+  const upcoming = tab === 'upcoming' && !cancelled;
+  const again = !upcoming && b.bizSlug && !b.archived ? bookHref(b.bizSlug, b.serviceId) : null;
+
+  const actions = [];
+  if (upcoming && b.videoRoomUrl) {
+    actions.push(
+      <a key="join" href={safeHref(b.videoRoomUrl)} target="_blank" rel="noopener noreferrer"
+        className="btn btn-primary" style={actionBtn}>
+        <Icons.Globe size={14} sw={1.8}/> Join video call
+      </a>,
+    );
+  }
+  if (upcoming && b.calendar) actions.push(<AddToCalendarMenu key="cal" links={b.calendar}/>);
+  if (upcoming && canReschedule(b)) {
+    actions.push(
+      <button key="move" onClick={onReschedule} className="btn btn-outline" style={actionBtn}>
+        <Icons.Clock size={14} sw={1.8}/> Reschedule
+      </button>,
+    );
+  }
+  if (upcoming) {
+    actions.push(
+      <button key="cancel" onClick={onCancel} className="btn btn-ghost"
+        style={{ ...actionBtn, color: 'var(--danger)' }}>
+        Cancel
+      </button>,
+    );
+  }
+  if (again) {
+    actions.push(
+      <Link key="again" to={again} className="btn btn-primary" style={actionBtn}>
+        <Icons.Repeat size={14} sw={1.8}/> Book again
+      </Link>,
+    );
+  }
+  if (reviewable) {
+    actions.push(
+      <button key="review" onClick={onReview} className="btn btn-outline" style={actionBtn}>
+        <Icons.Star size={14} sw={1.8}/> Leave a review
+      </button>,
+    );
+  }
+  if (hasCompletion) {
+    actions.push(
+      <button key="notes" onClick={() => setShowNotes((x) => !x)} className="btn btn-outline" style={actionBtn}
+        aria-expanded={showNotes}>
+        <Icons.Doc size={14} sw={1.8}/> {showNotes ? 'Hide session notes' : 'Session notes'}
+      </button>,
+    );
+  }
+
   return (
-    <div style={{
-      borderTop: first ? 'none' : '1px solid var(--border)',
-    }}>
-    <div style={{
-      padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
-    }}>
-      <div style={{
-        width: 48, height: 52, borderRadius: 10,
-        background: booking.cancelledAt ? 'var(--surface-2)' : 'var(--accent-soft)',
-        color: booking.cancelledAt ? 'var(--muted)' : 'var(--accent)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        lineHeight: 1.1, fontWeight: 600, flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-          {d.toLocaleDateString('en-US', { month: 'short' })}
-        </span>
-        <span style={{ fontSize: 18, fontFamily: 'var(--font-display)' }}>{d.getDate()}</span>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>
-            {booking.serviceName || 'Session'}
+    <article className="card" style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <div style={{
+          width: 52, minHeight: 56, borderRadius: 12, flexShrink: 0,
+          background: cancelled ? 'var(--surface-2)' : 'var(--accent-soft)',
+          color: cancelled ? 'var(--muted)' : 'var(--accent)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          lineHeight: 1.1, fontWeight: 600, padding: '6px 0',
+        }} aria-hidden="true">
+          <span style={{ fontSize: 10.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            {d.toLocaleDateString('en-US', { month: 'short' })}
           </span>
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>·</span>
-          <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{booking.businessName}</span>
+          <span style={{ fontSize: 21, fontFamily: 'var(--font-display)' }}>{d.getDate()}</span>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
-          {fmtDay(booking.date)} · {fmtTime(booking.startMin)} – {fmtTime(booking.endMin)}
-          {booking.price != null && <> · ${Number(booking.price).toFixed(0)}</>}
-        </div>
-        {booking.payment && !booking.cancelledAt && (
-          <div style={{ fontSize: 12, marginTop: 4, fontWeight: 600,
-            color: booking.payment.fullyPaid ? 'var(--ok)' : 'var(--accent)' }}>
-            {booking.payment.fullyPaid
-              ? `Paid in full · $${booking.payment.total.toFixed(2)}`
-              : `$${booking.payment.balanceDue.toFixed(2)} balance due · $${booking.payment.total.toFixed(2)} total${booking.payment.depositPaid > 0 ? ` (deposit $${booking.payment.depositPaid.toFixed(2)} paid)` : ''}${booking.payment.giftCardCredit > 0 ? ` (gift card $${booking.payment.giftCardCredit.toFixed(2)} applied)` : ''}`}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <div style={{ fontSize: 15.5, fontWeight: 650, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
+            {b.serviceName || 'Appointment'}
+            {cancelled && (
+              <span style={{
+                marginLeft: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                color: 'var(--muted)', verticalAlign: 'middle',
+              }}>Cancelled</span>
+            )}
           </div>
-        )}
-        {booking.notes && (
-          <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 4 }}>{booking.notes}</div>
-        )}
-      </div>
-      {booking.cancelledAt && (
-        <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Cancelled
-        </div>
-      )}
-      {booking.videoRoomUrl && !booking.cancelledAt && (
-        <a href={booking.videoRoomUrl} target="_blank" rel="noopener noreferrer"
-          className="btn btn-primary"
-          style={{ fontSize: 12, padding: '6px 12px' }}
-          title="Join your meeting">
-          <Icons.Globe size={12} sw={1.8}/> Join
-        </a>
-      )}
-      {booking.calendar && !booking.cancelledAt && (
-        <AddToCalendar links={booking.calendar}/>
-      )}
-      {reviewable && (
-        <button onClick={onReview} className="btn btn-outline"
-          style={{ fontSize: 12, padding: '6px 12px' }}
-          title="Leave a review of this session">
-          <Icons.Check size={12} sw={2}/> Leave review
-        </button>
-      )}
-      {reschedulable && (
-        <button onClick={onReschedule} className="btn btn-outline"
-          style={{ fontSize: 12, padding: '6px 12px' }}
-          title="Move this booking to a different time">
-          <Icons.Calendar size={12} sw={2}/> Reschedule
-        </button>
-      )}
-      {cancellable && (
-        <button onClick={onCancel} className="btn btn-ghost"
-          style={{ fontSize: 12, padding: '6px 10px', color: 'var(--muted)' }}
-          title="Cancel this booking">
-          Cancel
-        </button>
-      )}
-      {hasCompletion && (
-        <button onClick={() => setShowCompletion((x) => !x)} className="btn btn-outline"
-          style={{ fontSize: 12, padding: '6px 12px' }}
-          title="View session notes from your provider">
-          <Icons.Doc size={12} sw={1.8}/> {showCompletion ? 'Hide notes' : 'Session notes'}
-        </button>
-      )}
-    </div>
-    {hasCompletion && showCompletion && (
-      <div style={{
-        margin: '0 18px 14px 76px', padding: 12, borderRadius: 10,
-        background: 'color-mix(in srgb, var(--accent-soft) 35%, var(--surface-2))',
-        border: '1px solid var(--border)',
-      }}>
-        <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600,
-          letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
-          Notes from your session
-          {booking.completedAt && (
-            <span style={{ marginLeft: 8, color: 'var(--muted)', fontWeight: 400,
-              letterSpacing: 0, textTransform: 'none' }}>
-              · {new Date(booking.completedAt).toLocaleDateString()}
-            </span>
+          <div style={{ fontSize: 13.5, color: 'var(--fg-2)', overflowWrap: 'anywhere' }}>{b.businessName}</div>
+          <div style={{ fontSize: 13.5, color: 'var(--fg-2)' }}>
+            {fmtDay(b.date)} · {fmtTimeRange(b.startMin, b.endMin)}
+          </div>
+          {where && (
+            <div style={{ fontSize: 13, color: 'var(--muted)', overflowWrap: 'anywhere' }}>{where}</div>
+          )}
+          {b.price != null && !pay && !cancelled && Number(b.price) > 0 && (
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>{fmtMoney(b.price)}</div>
+          )}
+          {pay && (
+            <div style={{ fontSize: 13, fontWeight: 600, color: pay.color }}>{pay.text}</div>
+          )}
+          {b.fromPackage && !cancelled && (
+            <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Uses a session from your package</div>
+          )}
+          {b.recurrenceRule && !cancelled && (
+            <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Repeats</div>
+          )}
+          {b.notes && (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 2, overflowWrap: 'anywhere' }}>
+              <span style={{ color: 'var(--muted)' }}>Note: </span>{b.notes}
+            </div>
           )}
         </div>
-        {booking.completionNotes && (
-          <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.55,
-            whiteSpace: 'pre-wrap', marginBottom: 8 }}>
-            {booking.completionNotes}
-          </div>
-        )}
-        {Array.isArray(booking.completionAttachments) && booking.completionAttachments.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {booking.completionAttachments.map((a, i) => {
-              const isImage = (a.mimeType || '').startsWith('image/');
-              return (
-                <a key={a.url + i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
-                  style={{ textDecoration: 'none' }}>
-                  {isImage ? (
-                    <img src={a.url} alt={a.filename || ''}
-                      style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover',
-                        border: '1px solid var(--border)' }}/>
-                  ) : (
-                    <div style={{
-                      width: 64, height: 64, borderRadius: 8,
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      gap: 4, padding: 4,
-                      background: 'var(--surface)', border: '1px solid var(--border)',
-                      color: 'var(--muted)', fontSize: 9, textAlign: 'center',
-                    }}>
-                      <Icons.FileIcon size={18} sw={1.6}/>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap', maxWidth: 56 }}>
-                        {a.filename || ''}
-                      </span>
-                    </div>
-                  )}
-                </a>
-              );
-            })}
-          </div>
+      </div>
+
+      {actions.length > 0 && <div style={actionRow}>{actions}</div>}
+
+      {hasCompletion && showNotes && <CompletionNotes booking={b}/>}
+    </article>
+  );
+}
+
+function CompletionNotes({ booking }) {
+  return (
+    <div style={{
+      marginTop: 12, padding: 12, borderRadius: 12,
+      background: 'color-mix(in srgb, var(--accent-soft) 35%, var(--surface-2))',
+      border: '1px solid var(--border)',
+    }}>
+      <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 650, marginBottom: 8 }}>
+        Notes from your session
+        {booking.completedAt && (
+          <span style={{ marginLeft: 6, color: 'var(--muted)', fontWeight: 400 }}>
+            · {fmtDate(booking.completedAt)}
+          </span>
         )}
       </div>
-    )}
+      {booking.completionNotes && (
+        <div style={{ fontSize: 13.5, color: 'var(--fg)', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 8, overflowWrap: 'anywhere' }}>
+          {booking.completionNotes}
+        </div>
+      )}
+      {Array.isArray(booking.completionAttachments) && booking.completionAttachments.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {booking.completionAttachments.map((a, i) => {
+            const isImage = (a.mimeType || '').startsWith('image/');
+            return (
+              <a key={(a.url || '') + i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
+                style={{ textDecoration: 'none' }}>
+                {isImage ? (
+                  <img src={safeHref(a.url)} alt={a.filename || ''}
+                    style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover', border: '1px solid var(--border)' }}/>
+                ) : (
+                  <div style={{
+                    width: 64, height: 64, borderRadius: 8,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    gap: 4, padding: 4, background: 'var(--surface)', border: '1px solid var(--border)',
+                    color: 'var(--muted)', fontSize: 9, textAlign: 'center',
+                  }}>
+                    <Icons.FileIcon size={18} sw={1.6}/>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 56 }}>
+                      {a.filename || ''}
+                    </span>
+                  </div>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-// One-tap "add to calendar": a Google Calendar deep link and a signed .ics
-// download for Apple Calendar / Outlook. Both come from the server so the
-// event lands at the right instant in the business's timezone.
-export function AddToCalendar({ links, compact = true }) {
-  if (!links?.google || !links?.ics) return null;
-  const style = compact
-    ? { fontSize: 12, padding: '6px 12px', textDecoration: 'none' }
-    : { fontSize: 13, padding: '9px 14px', textDecoration: 'none' };
+function DialogHead({ icon = 'Calendar', tone = 'accent', title, sub, onClose, busy, id }) {
+  const I = Icons[icon] || Icons.Calendar;
   return (
-    <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-      <a href={links.google} target="_blank" rel="noopener noreferrer"
-        className="btn btn-outline" style={style} title="Add to Google Calendar">
-        <Icons.Calendar size={12} sw={2}/> Google Calendar
-      </a>
-      <a href={links.ics} className="btn btn-outline" style={style}
-        title="Download an .ics file for Apple Calendar or Outlook">
-        <Icons.Calendar size={12} sw={2}/> Apple/Outlook (.ics)
-      </a>
-    </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        background: tone === 'danger' ? 'rgba(155,44,44,0.12)' : 'var(--accent-soft)',
+        color: tone === 'danger' ? 'var(--danger)' : 'var(--accent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}><I size={18} sw={2}/></div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div id={id} style={{ fontSize: 16, fontWeight: 650 }}>{title}</div>
+        {sub && <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>}
+      </div>
+      <button type="button" onClick={() => !busy && onClose()} aria-label="Close"
+        className="btn btn-ghost" style={{ padding: 8 }}>
+        <Icons.X size={16}/>
+      </button>
+    </div>
   );
+}
+
+// What cancelling means for this booking, from what the business has set
+// up: the free-cancellation window, any late fee (and whether it would be
+// charged automatically, which needs a saved card at that business), and
+// what happens to a deposit, gift card or package session.
+export function cancelPolicy(b, now = Date.now()) {
+  const fee = Number(b.cancellationFeeAmount || 0);
+  const windowH = Number(b.cancellationWindowHours || 0);
+  const startMs = Number(b.startEpochMs)
+    || (Date.parse(`${b.date}T00:00:00Z`) + (b.startMin || 0) * 60000);
+  const late = windowH > 0 && startMs < now + windowH * 3600 * 1000;
+  const lines = [];
+  let tone = 'calm';
+  if (fee > 0 && windowH > 0) {
+    lines.push(`${b.businessName} lets you cancel for free up to ${windowH} hours before. After that there is a ${fmtMoney(fee)} late-cancellation fee.`);
+    if (late) {
+      tone = 'warn';
+      lines.push(b.cardOnFile
+        ? `This appointment starts in less than ${windowH} hours, so ${fmtMoney(fee)} will be charged to the card you saved with them.`
+        : `This appointment starts in less than ${windowH} hours, so they may ask you to pay the ${fmtMoney(fee)} fee.`);
+    } else {
+      lines.push('You are cancelling in time, so there is no fee.');
+    }
+  } else {
+    lines.push(`There is no cancellation fee for this appointment.`);
+  }
+  const p = b.payment || {};
+  if (p.depositPaid > 0) {
+    lines.push(`Your ${fmtMoney(p.depositPaid)} deposit is not refunded automatically. Message ${b.businessName} if you would like it back.`);
+  }
+  if (p.giftCardCredit > 0) lines.push(`The ${fmtMoney(p.giftCardCredit)} you used from a gift card goes back on the card.`);
+  if (b.fromPackage) lines.push('The session goes back into your package.');
+  return { lines, tone, late, fee };
 }
 
 function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
+  const policy = cancelPolicy(booking);
   return (
-    <div onClick={onClose} style={{
-      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 100, padding: 16,
-    }}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{
-          background: 'var(--surface)', border: '1px solid var(--border-strong)',
-          borderRadius: 14, boxShadow: 'var(--shadow-lg, var(--shadow))',
-          width: '100%', maxWidth: 420, padding: 22,
-          display: 'flex', flexDirection: 'column', gap: 14,
-        }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(155,44,44,0.12)', color: 'var(--danger)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <Icons.X size={18} sw={2}/>
-          </div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Cancel this booking?</div>
-        </div>
-        <div style={{
-          padding: 12, borderRadius: 10, background: 'var(--surface-2)',
-          border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.6,
-        }}>
-          <div style={{ fontWeight: 600 }}>{booking.serviceName || 'Session'}</div>
-          <div style={{ color: 'var(--muted)', marginTop: 2 }}>{booking.businessName}</div>
-          <div style={{ color: 'var(--muted)', marginTop: 4 }}>
-            {fmtDay(booking.date)} · {fmtTime(booking.startMin)} – {fmtTime(booking.endMin)}
-          </div>
-        </div>
-        {(() => {
-          const fee = Number(booking.cancellationFeeAmount || 0);
-          const windowH = Number(booking.cancellationWindowHours || 0);
-          // startEpochMs is computed server-side in the WORKSPACE timezone -
-          // the same clock the fee charge uses. The old client-side UTC
-          // parse disagreed by the tz offset (charged-with-no-warning /
-          // warned-when-free).
-          const startMs = Number(booking.startEpochMs)
-            || (Date.parse(`${booking.date}T00:00:00Z`) + (booking.startMin || 0) * 60000);
-          const insideWindow = fee > 0 && windowH > 0 && startMs < Date.now() + windowH * 3600 * 1000;
-          if (!insideWindow) return null;
-          return (
-            <div style={{
-              padding: '10px 12px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.55,
-              background: 'color-mix(in srgb, var(--warn) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--warn) 35%, var(--border))',
-              color: 'var(--fg-2)',
-            }}>
-              <strong>Late-cancellation fee:</strong> this is within {windowH}h of your appointment, so a
-              ${fee.toFixed(2)} fee may be charged to your card on file.
-            </div>
-          );
-        })()}
-        {(booking.payment?.depositPaid > 0 || booking.payment?.giftCardCredit > 0) && (
-          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            {booking.payment.giftCardCredit > 0 && (
-              <div>Your ${booking.payment.giftCardCredit.toFixed(2)} gift-card credit goes back on your card.</div>
-            )}
-            {booking.payment.depositPaid > 0 && (
-              <div>You paid a ${booking.payment.depositPaid.toFixed(2)} deposit - contact the business about their refund policy.</div>
-            )}
-          </div>
-        )}
-        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-          The business will be notified through your message thread. This can't be undone - you'd need
-          to book again from scratch.
-        </div>
-        {error && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-            color: 'var(--danger)', fontSize: 12.5,
-          }}>{error}</div>
-        )}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
-            Keep booking
-          </button>
-          <button className="btn btn-primary" onClick={onConfirm} disabled={busy}
-            style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}>
-            {busy ? 'Cancelling…' : 'Cancel booking'}
-          </button>
-        </div>
+    <Sheet onClose={onClose} busy={busy} labelledBy="cancel-title" maxWidth={440}>
+      <DialogHead id="cancel-title" icon="X" tone="danger" title="Cancel this booking?" onClose={onClose} busy={busy}/>
+      <div style={{
+        padding: 12, borderRadius: 12, background: 'var(--surface-2)',
+        border: '1px solid var(--border)', fontSize: 14, lineHeight: 1.55,
+      }}>
+        <div style={{ fontWeight: 650 }}>{booking.serviceName || 'Appointment'}</div>
+        <div style={{ color: 'var(--fg-2)' }}>{booking.businessName}</div>
+        <div style={{ color: 'var(--fg-2)' }}>{fmtDay(booking.date)} · {fmtTimeRange(booking.startMin, booking.endMin)}</div>
       </div>
-    </div>
+      <div style={{
+        padding: '12px 14px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.55,
+        background: policy.tone === 'warn' ? 'color-mix(in srgb, var(--warn) 12%, var(--surface))' : 'var(--surface)',
+        border: `1px solid ${policy.tone === 'warn' ? 'color-mix(in srgb, var(--warn) 40%, var(--border))' : 'var(--border)'}`,
+        display: 'flex', flexDirection: 'column', gap: 6,
+      }}>
+        <div style={{ fontWeight: 650, fontSize: 13 }}>Cancellation policy</div>
+        {policy.lines.map((l) => <div key={l}>{l}</div>)}
+      </div>
+      <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.55 }}>
+        We will let {booking.businessName} know. This can't be undone, but you can always book again.
+      </div>
+      <ErrorNote>{error}</ErrorNote>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button className="btn btn-outline" onClick={onClose} disabled={busy} style={{ ...actionBtn, flex: '1 1 140px' }}>
+          Keep booking
+        </button>
+        <button className="btn btn-primary" onClick={onConfirm} disabled={busy}
+          style={{ ...actionBtn, flex: '1 1 140px', background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}>
+          {busy ? 'Cancelling…' : (policy.late && policy.fee > 0 && booking.cardOnFile ? `Cancel and pay ${fmtMoney(policy.fee)}` : 'Cancel booking')}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
-// Star-rating + freeform-text dialog. Posts to /api/me/reviews.
 function ReviewDialog({ booking, onClose, onSubmitted }) {
   const [rating, setRating] = useState(0);
   const [hover, setHover]   = useState(0);
   const [text, setText]     = useState('');
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState(null);
+  const labels = ['', 'Not good', 'Could be better', 'Good', 'Great', 'Loved it'];
 
   const submit = async () => {
-    if (rating < 1) { setErr('Pick a star rating from 1 to 5'); return; }
+    if (rating < 1) { setErr('Tap a star to rate your visit'); return; }
     setBusy(true); setErr(null);
     try {
-      await api.post('/me/reviews', {
-        bookingId: booking.id,
-        rating,
-        text: text.trim() || null,
-      });
+      await api.post('/me/reviews', { bookingId: booking.id, rating, text: text.trim() || null });
       onSubmitted?.();
     } catch (e) {
       setErr(e.message || 'Could not post your review');
@@ -511,99 +522,58 @@ function ReviewDialog({ booking, onClose, onSubmitted }) {
   };
 
   return (
-    <div onClick={() => !busy && onClose()} style={{
-      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 100, padding: 16,
-    }}>
-      <div onClick={(e) => e.stopPropagation()} className="card"
-        style={{ width: '100%', maxWidth: 460, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'var(--accent-soft)', color: 'var(--accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icons.Check size={18} sw={2}/></div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>Review your session</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-              {booking.serviceName || 'Session'} · {booking.businessName}
-            </div>
-          </div>
-          <button type="button" onClick={() => !busy && onClose()}
-            className="btn btn-ghost" style={{ padding: 6 }}>
-            <Icons.X size={14}/>
+    <Sheet onClose={onClose} busy={busy} labelledBy="review-title">
+      <DialogHead id="review-title" icon="Star" title="How was your visit?"
+        sub={`${booking.serviceName || 'Appointment'} · ${booking.businessName}`} onClose={onClose} busy={busy}/>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button"
+            onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)}
+            onClick={() => setRating(n)}
+            aria-label={`${n} star${n === 1 ? '' : 's'}`} aria-pressed={rating === n}
+            style={{
+              background: 'transparent', border: 0, padding: 6, cursor: 'pointer',
+              color: (hover || rating) >= n ? 'var(--accent)' : 'var(--border-strong)',
+            }}>
+            <Star filled={(hover || rating) >= n}/>
           </button>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} type="button"
-              onMouseEnter={() => setHover(n)}
-              onMouseLeave={() => setHover(0)}
-              onClick={() => setRating(n)}
-              aria-label={`${n} star${n === 1 ? '' : 's'}`}
-              style={{
-                background: 'transparent', border: 0, padding: 4, cursor: 'pointer',
-                color: (hover || rating) >= n ? 'var(--accent)' : 'var(--border-strong)',
-                transition: 'color 0.1s ease',
-              }}>
-              <Star filled={(hover || rating) >= n}/>
-            </button>
-          ))}
-          <span style={{ marginLeft: 8, fontSize: 12.5, color: 'var(--muted)' }}>
-            {rating ? `${rating} / 5` : 'Tap to rate'}
-          </span>
-        </div>
-
-        <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))}
-          placeholder="Anything you'd like the business - and other clients - to know? (optional)"
-          rows={5}
-          style={{
-            width: '100%', resize: 'vertical', padding: '10px 12px', borderRadius: 10,
-            border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
-            color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit', lineHeight: 1.5,
-            outline: 'none',
-          }}/>
-        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: -8, textAlign: 'right' }}>
-          {text.length}/2000
-        </div>
-
-        {err && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-            color: 'var(--danger)', fontSize: 12.5,
-          }}>{err}</div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => !busy && onClose()}
-            className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} disabled={busy}>
-            Cancel
-          </button>
-          <button onClick={submit} disabled={busy || rating < 1}
-            className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }}>
-            {busy ? 'Posting…' : 'Post review'}
-          </button>
-        </div>
+        ))}
+        <span style={{ marginLeft: 6, fontSize: 13, color: 'var(--muted)' }}>
+          {labels[hover || rating] || 'Tap to rate'}
+        </span>
       </div>
-    </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))}
+        placeholder="Anything you'd like to share? (optional)"
+        rows={4} className="input"
+        style={{ width: '100%', resize: 'vertical', padding: '10px 12px', fontSize: 15, lineHeight: 1.5 }}/>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -8 }}>
+        Your review and name can be shown on {booking.businessName}'s booking page.
+      </div>
+      <ErrorNote>{err}</ErrorNote>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button onClick={() => !busy && onClose()} className="btn btn-outline" style={{ ...actionBtn, flex: 1 }} disabled={busy}>
+          Not now
+        </button>
+        <button onClick={submit} disabled={busy || rating < 1} className="btn btn-primary" style={{ ...actionBtn, flex: 2 }}>
+          {busy ? 'Posting…' : 'Post review'}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
 function Star({ filled }) {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
-      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>
   );
 }
 
-// Reschedule modal: fetches the workspace's public calendar by slug,
-// renders a date picker + computed slot grid for the booking's
-// service. Submit PATCHes /api/me/bookings/:id with rescheduleTo.
+// Reschedule: fetches the business's public calendar by slug and shows the
+// open times for the booking's service on a picked date. PATCHes
+// /api/me/bookings/:id with rescheduleTo; the server re-checks everything.
 function RescheduleDialog({ booking, onClose, onRescheduled }) {
   const [cal, setCal]         = useState(null);
   const [calErr, setCalErr]   = useState(null);
@@ -620,28 +590,13 @@ function RescheduleDialog({ booking, onClose, onRescheduled }) {
     return () => { live = false; };
   }, [booking.bizSlug]);
 
-  const svc = cal?.services.find((s) => s.id === booking.serviceId)
+  const svc = cal?.services?.find((s) => s.id === booking.serviceId)
     || (booking.durationMinutes ? { id: booking.serviceId, durationMinutes: booking.durationMinutes } : null);
-
-  // slotsForDate is from the calendar utils - same logic the public
-  // booking page uses, so the slot grid here matches what a fresh
-  // booking would show. Reuses the same conflict / availability rules.
-  const dateObj = (() => {
-    try { return new Date(date + 'T00:00:00'); }
-    catch { return new Date(); }
-  })();
+  const dateObj = new Date(date + 'T00:00:00');
   let slots = [];
-  if (cal && svc) {
-    try {
-      slots = slotsForDate(cal, dateObj, svc) || [];
-    } catch {
-      // Defensive: malformed availability shouldn't crash the modal.
-    }
+  if (cal && svc && !Number.isNaN(dateObj.getTime())) {
+    try { slots = (slotsForDate(cal, dateObj, svc) || []).filter((s) => s.available); } catch { slots = []; }
   }
-
-  // Same-slot-as-current is allowed (server self-excludes). Past
-  // dates filtered client-side; server will refuse anyway.
-  const today = new Date(); today.setHours(0, 0, 0, 0);
 
   const submit = async () => {
     if (!pick) { setSubmitErr('Pick a new time first.'); return; }
@@ -652,132 +607,72 @@ function RescheduleDialog({ booking, onClose, onRescheduled }) {
       });
       onRescheduled?.();
     } catch (e) {
-      setSubmitErr(e.message || 'Could not reschedule. Try a different slot.');
+      setSubmitErr(e.message || 'Could not move your booking. Try another time.');
       setBusy(false);
     }
   };
 
   return (
-    <div onClick={() => !busy && onClose()} style={{
-      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.5)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      zIndex: 100, padding: 16,
-    }}>
-      <div onClick={(e) => e.stopPropagation()} className="card"
-        style={{ width: '100%', maxWidth: 540, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'var(--accent-soft)', color: 'var(--accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icons.Calendar size={18} sw={2}/></div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>Reschedule booking</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-              {booking.serviceName || 'Session'} · {booking.businessName}
-            </div>
-          </div>
-          <button type="button" onClick={() => !busy && onClose()}
-            className="btn btn-ghost" style={{ padding: 6 }}>
-            <Icons.X size={14}/>
-          </button>
-        </div>
-
-        <div style={{
-          padding: 10, borderRadius: 10,
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-          fontSize: 12.5, color: 'var(--muted)',
-        }}>
-          Currently <b style={{ color: 'var(--fg-2)' }}>
-            {fmtDay(booking.date)} at {fmtTime(booking.startMin)}
-          </b>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>
-            Pick a new date
-          </div>
-          <input type="date" value={date}
-            min={new Date().toISOString().slice(0, 10)}
-            onChange={(e) => { setDate(e.target.value); setPick(null); }}
-            style={{
-              padding: '10px 12px', borderRadius: 10,
-              background: 'var(--surface)', border: '1px solid var(--border-strong)',
-              color: 'var(--fg)', fontSize: 14, outline: 'none',
-            }}/>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 500 }}>
-            Available times
-          </div>
-          {calErr ? (
-            <div style={{
-              padding: 10, borderRadius: 10,
-              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-              color: 'var(--danger)', fontSize: 12.5,
-            }}>Couldn't load availability: {calErr.message}</div>
-          ) : !cal ? (
-            <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>Loading availability…</div>
-          ) : slots.filter((s) => s.available).length === 0 ? (
-            <div style={{
-              padding: 16, borderRadius: 10,
-              background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
-              color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
-            }}>
-              No openings on that date - try another day.
-            </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-              gap: 6, maxHeight: 260, overflowY: 'auto',
-            }}>
-              {slots.filter((s) => s.available).map((s) => {
-                const selected = pick?.start === s.start;
-                const isCurrent = date === booking.date && s.start === booking.startMin;
-                return (
-                  <button key={s.start} type="button"
-                    onClick={() => setPick(s)}
-                    style={{
-                      padding: '8px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
-                      cursor: 'pointer',
-                      background: selected ? 'var(--accent)' : 'var(--surface-2)',
-                      color: selected ? 'var(--accent-ink)' : 'var(--fg-2)',
-                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
-                    }}>
-                    {fmtTime(s.start)}
-                    {isCurrent && (
-                      <div style={{ fontSize: 9.5, fontWeight: 600, color: selected ? 'var(--accent-ink)' : 'var(--muted)', marginTop: 2 }}>
-                        current
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {submitErr && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-            color: 'var(--danger)', fontSize: 12.5,
-          }}>{submitErr}</div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => !busy && onClose()}
-            className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} disabled={busy}>
-            Cancel
-          </button>
-          <button onClick={submit} disabled={busy || !pick}
-            className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }}>
-            {busy ? 'Moving…' : 'Confirm reschedule'}
-          </button>
-        </div>
+    <Sheet onClose={onClose} busy={busy} labelledBy="move-title" maxWidth={540}>
+      <DialogHead id="move-title" icon="Clock" title="Pick a new time"
+        sub={`${booking.serviceName || 'Appointment'} · ${booking.businessName}`} onClose={onClose} busy={busy}/>
+      <div style={{
+        padding: '10px 12px', borderRadius: 12, background: 'var(--surface-2)', border: '1px solid var(--border)',
+        fontSize: 13.5, color: 'var(--muted)',
+      }}>
+        Now: <b style={{ color: 'var(--fg)' }}>{fmtDay(booking.date)} at {fmtTime(booking.startMin)}</b>
       </div>
-    </div>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span style={{ fontSize: 13, color: 'var(--fg-2)', fontWeight: 550 }}>Day</span>
+        <input type="date" value={date} className="input"
+          min={new Date().toISOString().slice(0, 10)}
+          onChange={(e) => { setDate(e.target.value); setPick(null); }}
+          style={{ padding: '10px 12px', fontSize: 15, maxWidth: 260 }}/>
+      </label>
+      <div>
+        <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 8, fontWeight: 550 }}>Open times</div>
+        {calErr ? (
+          <ErrorNote>We couldn't load open times. Please try again in a moment.</ErrorNote>
+        ) : !cal ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading open times…</div>
+        ) : slots.length === 0 ? (
+          <div style={{
+            padding: 16, borderRadius: 12, background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
+            color: 'var(--muted)', fontSize: 13.5, textAlign: 'center',
+          }}>No open times that day. Try another day.</div>
+        ) : (
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))',
+            gap: 8, maxHeight: 260, overflowY: 'auto',
+          }}>
+            {slots.map((s) => {
+              const selected = pick?.start === s.start;
+              const isCurrent = date === booking.date && s.start === booking.startMin;
+              return (
+                <button key={s.start} type="button" onClick={() => setPick(s)} aria-pressed={selected}
+                  style={{
+                    padding: '10px 8px', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    background: selected ? 'var(--accent)' : 'var(--surface-2)',
+                    color: selected ? 'var(--accent-ink)' : 'var(--fg-2)',
+                    border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                  }}>
+                  {fmtTime(s.start)}
+                  {isCurrent && <div style={{ fontSize: 10.5, fontWeight: 600, opacity: 0.8, marginTop: 2 }}>your time now</div>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <ErrorNote>{submitErr}</ErrorNote>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button onClick={() => !busy && onClose()} className="btn btn-outline" style={{ ...actionBtn, flex: 1 }} disabled={busy}>
+          Keep current time
+        </button>
+        <button onClick={submit} disabled={busy || !pick} className="btn btn-primary" style={{ ...actionBtn, flex: 1 }}>
+          {busy ? 'Moving…' : 'Move booking'}
+        </button>
+      </div>
+    </Sheet>
   );
 }

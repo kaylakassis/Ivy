@@ -43,7 +43,9 @@ export function scopedPathname(pathname, workspaceId) {
   return workspaceId ? `ws/${workspaceId}/${clean}` : clean;
 }
 
-export async function uploadFile(pathname, body, options = {}) {
+// Native-aware upload() options: absolute API host + Bearer token in the
+// iPhone app, relative route + cookie on the web.
+async function uploadOptions(options) {
   const { handleUploadUrl, headers: extra, ...rest } = options;
   if (!handleUploadUrl) throw new Error('handleUploadUrl is required');
   const headers = { ...(extra || {}) };
@@ -55,7 +57,20 @@ export async function uploadFile(pathname, body, options = {}) {
     headers['X-Client-Platform'] = getPlatform();
     if (url.startsWith('/')) url = `${API_BASE}${url}`;
   }
-  const opts = { ...rest, handleUploadUrl: url, headers };
+  return { ...rest, handleUploadUrl: url, headers };
+}
+
+// Client-portal uploads (a client's own profile photo). These belong to
+// the PERSON, not a workspace: the pathname goes under user/<userId>/ and
+// the token route (/api/me/photo-token) refuses anything else.
+export async function uploadUserFile(userId, name, body, options = {}) {
+  if (!userId) throw new Error('Not signed in');
+  const clean = String(name || 'file').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'file';
+  return upload(`user/${userId}/${clean}`, body, await uploadOptions(options));
+}
+
+export async function uploadFile(pathname, body, options = {}) {
+  const opts = await uploadOptions(options);
   const wsId = await workspaceIdForUploads();
   try {
     return await upload(scopedPathname(pathname, wsId), body, opts);

@@ -2,13 +2,15 @@
 // authenticated user's client memberships. A user who's a client of
 // three businesses sees three independent toggle blocks.
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import { SkelCards } from './portalUi.jsx';
 import { api } from '../../lib/api.js';
 
 const EMAIL_LABELS = {
   bookings:  { label: 'Bookings',     hint: 'Confirmations, reminders, cancellations, reschedules.' },
   invoices:  { label: 'Invoice reminders', hint: 'Quotes, due-date and overdue reminders, payment problems. Invoices and receipts always arrive.' },
-  documents: { label: 'Documents',    hint: 'Signature requests + reminders.' },
+  documents: { label: 'Documents',    hint: 'Requests to sign, and reminders.' },
   messages:  { label: 'Messages',     hint: 'When this business sends you a chat message.' },
   marketing: { label: 'Other emails', hint: 'Review prompts and occasional updates from the business.' },
   billing:   { label: 'Billing',      hint: 'Subscription billing emails (rarely relevant to clients).' },
@@ -73,16 +75,12 @@ export default function ClientNotifications() {
   };
 
   return (
-    <div className="container" style={{ maxWidth: 760, padding: '28px 18px 64px' }}>
-      <header style={{ marginBottom: 18 }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, letterSpacing: '-0.02em', margin: 0 }}>
-          Email preferences
-        </h1>
-        <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.55 }}>
-          Choose which emails you want to receive from each business you're a client of.
-          Account-critical emails (verification, password reset) and your receipts and invoices always send. Turning a category off here tells the business you unsubscribed.
-        </p>
-      </header>
+    <div className="page-pad"><div className="portal-page" style={{ gap: 0 }}>
+      <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: '0 0 16px', lineHeight: 1.55 }}>
+        Choose what each business can email or text you. Sign-in emails, receipts and invoices always arrive.
+      </p>
+
+      <TextMessages/>
 
       {err && (
         <div className="card" style={{
@@ -113,17 +111,15 @@ export default function ClientNotifications() {
       </section>
 
       {memberships === null && !err && (
-        <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13.5 }}>
-          Loading…
-        </div>
+        <SkelCards rows={2}/>
       )}
 
       {memberships && memberships.length === 0 && (
         <div className="card" style={{ padding: 32, textAlign: 'center' }}>
           <Icons.Mail size={28} sw={1.4} style={{ color: 'var(--muted)' }}/>
-          <h3 style={{ margin: '12px 0 4px', fontSize: 16 }}>No client memberships yet</h3>
+          <h3 style={{ margin: '12px 0 4px', fontSize: 16 }}>No businesses yet</h3>
           <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>
-            Once a business adds you as their client, you'll be able to manage which emails they send you here.
+            Once a business adds you as a client, you can choose which emails they send you here.
           </p>
         </div>
       )}
@@ -162,7 +158,54 @@ export default function ClientNotifications() {
           ))}
         </div>
       )}
-    </div>
+    </div></div>
+  );
+}
+
+// Text reminders: one phone + consent for the person, applied to every
+// business they're a client of (api/me/sms-preferences.js).
+function TextMessages() {
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api.get('/me/sms-preferences').then((r) => live && setSt(r)).catch(() => live && setSt({ phone: null, smsConsentAt: null }));
+    return () => { live = false; };
+  }, []);
+  if (!st) return null;
+  const on = !!st.smsConsentAt;
+  const flip = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/me/sms-preferences', { smsConsent: !on });
+      setSt((s) => ({ ...s, smsConsentAt: on ? null : new Date().toISOString() }));
+    } catch (e) {
+      setErr(e.message || 'Could not update');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card" style={{ padding: 18, marginBottom: 16 }}>
+      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Text messages</div>
+      {st.phone ? (
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+          <Switch checked={on} disabled={busy} onChange={flip}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Text me reminders and updates</div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+              To {st.phone}. Reply STOP to any text to stop them. <Link to="/me/profile" style={{ color: 'var(--accent)' }}>Change number</Link>
+            </div>
+          </div>
+        </label>
+      ) : (
+        <div style={{ fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+          Add your phone number in <Link to="/me/profile" style={{ color: 'var(--accent)', fontWeight: 600 }}>Profile</Link> to get text reminders.
+        </div>
+      )}
+      {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 8 }}>{err}</div>}
+    </section>
   );
 }
 
