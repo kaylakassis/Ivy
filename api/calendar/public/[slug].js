@@ -16,7 +16,7 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
   hasConflict, losesBookingRace, withinAvailability, depositFor, videoRoomUrlForService,
-  slotEpochMs, publicContactPhone,
+  slotEpochMs,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
@@ -269,10 +269,12 @@ async function getCalendar(req, res) {
         programs: programsOut,
         businessType,
         websiteHandle,
-        // Added for the 1.0.5 page header (older pages ignore it): a phone
-        // number the owner already prints on invoices, or null. Only the
-        // number is exposed, never the rest of the contact block.
-        contactPhone: publicContactPhone(s.biz_contact),
+        // Header phone (1.0.5 page; older pages ignore it). Deliberately
+        // null: the only phone on file is the invoice contact block, which
+        // owners wrote for clients they bill, not for anyone on the
+        // internet. Fill this only from an explicit "show my phone on my
+        // booking page" choice.
+        contactPhone: null,
       },
     });
   } catch (err) {

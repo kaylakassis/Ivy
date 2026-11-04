@@ -100,10 +100,10 @@ async function run() {
   assert(sA?.photoUrl === 'https://example.com/silk.jpg' && sA?.description === 'Glossy finish', 'service photo + description served');
   assert(Array.isArray(cal.reviews?.recent) && typeof cal.reviews?.count === 'number', 'reviews summary shape unchanged');
 
-  console.log('\n[2] contactPhone: only the phone, only for this business');
-  assert(cal.contactPhone === '(718) 555-0142', `contactPhone from the invoice contact block (${cal.contactPhone})`);
+  console.log('\n[2] contactPhone: the invoice contact block is never public');
+  assert(cal.contactPhone === null, `contactPhone is null without an explicit opt-in (${cal.contactPhone})`);
   const raw = JSON.stringify(r.body);
-  assert(!raw.includes('owner-private@example.com') && !raw.includes('9 Secret Street'), 'the rest of the contact block is never served');
+  assert(!raw.includes('555-0142') && !raw.includes('owner-private@example.com') && !raw.includes('9 Secret Street'), 'nothing from the invoice contact block is served');
   r = await call({ query: { slug: B.slug } });
   assert(r.statusCode === 200 && r.body.calendar.contactPhone === null, 'no contact block = contactPhone null');
 
