@@ -83,6 +83,24 @@ export function serializeSettings(row) {
   };
 }
 
+// A phone number the business chose to show clients, pulled from the
+// free-text contact block they print on invoices (calendar_settings.
+// biz_contact, e.g. "123 Main St\n(512) 555-0100 · hello@x.com"). Returns
+// the first international (+...) or North American shaped number, as
+// written, or null. Input is capped and the patterns are bounded, so
+// hostile text stays cheap.
+export function publicContactPhone(contact) {
+  if (typeof contact !== 'string' || !contact) return null;
+  const text = contact.slice(0, 600);
+  const intl = text.match(/\+\d[\d ().-]{6,20}\d/);
+  if (intl) {
+    const digits = intl[0].replace(/\D/g, '');
+    if (digits.length >= 8 && digits.length <= 15) return intl[0].trim();
+  }
+  const na = text.match(/(?:\b1[ .-]?)?\(?\b\d{3}\)?[ .-]?\d{3}[ .-]?\d{4}\b/);
+  return na ? na[0].trim() : null;
+}
+
 // Categories for Discover. Owners pick one (or none). The set MUST stay
 // in sync with src/lib/categories.js on the client - the server-side
 // list gates which values can be saved on a workspace.
