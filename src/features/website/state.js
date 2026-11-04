@@ -572,6 +572,31 @@ export function useWebsite({ userId = null } = {}) {
     return r;
   }, [flush, setSite, setHistory, persistHistory]);
 
+  // Roll back to a published version from Advanced > History. Any pending
+  // autosave goes out first (so it cannot land after the restore and
+  // overwrite it), then the editor adopts what the server now holds. The
+  // pre-restore draft becomes one undo step.
+  const restoreVersion = useCallback(async (versionId) => {
+    await flush();
+    await api.post('/website/versions', { id: versionId });
+    const r = await api.get('/website');
+    const n = normalize(r.website);
+    const prevSnap = snapRef.current;
+    const next = withHomeMirror(n);
+    setSite(next);
+    snapRef.current = H.snapshotOf(next);
+    if (prevSnap != null && snapRef.current !== prevSnap) {
+      setHistory(H.recordDiscrete(historyRef.current, prevSnap));
+    }
+    setDirty(!!r.website?.hasUnpublishedChanges);
+    if (!next.pages.some((p) => p.id === currentPageIdRef.current)) {
+      const home = next.pages.find((p) => p.slug === '') || next.pages[0];
+      setCurrentPageId(home?.id || null);
+    }
+    persistHistory();
+    return r;
+  }, [flush, setSite, setHistory, persistHistory]);
+
   // Schedule the CURRENT draft to go live at `whenISO`. We snapshot the
   // current pages into scheduled_pages so later draft edits don't change
   // what gets published at the scheduled time; the cron promotes it.
@@ -596,7 +621,7 @@ export function useWebsite({ userId = null } = {}) {
     addPage, removePage, renamePage, movePage, movePageTo,
     set, setSection, addSection, removeSection, moveSection, moveSectionTo, duplicateSection,
     moveSectionToPage, copySectionToPage,
-    reset, publish, flush, discardChanges,
+    reset, publish, flush, discardChanges, restoreVersion,
     undo, redo, canUndo, canRedo,
   };
 }

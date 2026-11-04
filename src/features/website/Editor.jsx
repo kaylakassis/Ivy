@@ -27,7 +27,7 @@ export default function Editor({
   currentPage, currentPageId, setCurrentPageId,
   addPage, removePage, renamePage, movePage,
   reset, publish, saving, saveErr, hasUnpublishedChanges,
-  schedulePublish, cancelSchedule, discardChanges,
+  schedulePublish, cancelSchedule, discardChanges, restoreVersion,
   undo, redo, canUndo, canRedo,
 }) {
   // Sections we're rendering / editing come from the CURRENT page,
@@ -633,7 +633,7 @@ export default function Editor({
         )}
       </div>
       {showAdvanced && (
-        <AdvancedPanel site={site} set={set} onClose={() => setShowAdvanced(false)}/>
+        <AdvancedPanel site={site} set={set} restoreVersion={restoreVersion} onClose={() => setShowAdvanced(false)}/>
       )}
     </div>
   );

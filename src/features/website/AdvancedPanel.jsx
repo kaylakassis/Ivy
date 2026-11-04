@@ -21,7 +21,7 @@ const TABS = [
   { id: 'traffic',   label: 'Traffic',   icon: 'Trending' },
 ];
 
-export default function AdvancedPanel({ site, set, onClose }) {
+export default function AdvancedPanel({ site, set, onClose, restoreVersion }) {
   const [tab, setTab] = useState('domain');
   return (
     <div onClick={onClose} style={{
@@ -69,7 +69,7 @@ export default function AdvancedPanel({ site, set, onClose }) {
           {tab === 'forms'     && <FormsTab     site={site} set={set}/>}
           {tab === 'redirects' && <RedirectsTab site={site} set={set}/>}
           {tab === 'popups'    && <PopupsTab    site={site} set={set}/>}
-          {tab === 'history'   && <HistoryTab   site={site}/>}
+          {tab === 'history'   && <HistoryTab   site={site} restoreVersion={restoreVersion}/>}
           {tab === 'traffic'   && <TrafficTab   site={site}/>}
         </div>
       </div>
@@ -279,7 +279,7 @@ function PopupsTab({ site, set }) {
 }
 
 // ---------- History ----------
-function HistoryTab() {
+function HistoryTab({ restoreVersion }) {
   const [versions, setVersions] = useState([]);
   const [busy, setBusy] = useState(false);
   const reload = async () => {
@@ -291,7 +291,12 @@ function HistoryTab() {
   const restore = async (id) => {
     if (!confirm('Roll back to this version? Your current state will be saved as a new version so you can undo.')) return;
     setBusy(true);
-    try { await api.post('/website/versions', { id }); await reload(); }
+    try {
+      // Through the editor so it picks up the restored site (and no pending
+      // autosave can overwrite it). Falls back to the plain call.
+      if (restoreVersion) await restoreVersion(id); else await api.post('/website/versions', { id });
+      await reload();
+    }
     finally { setBusy(false); }
   };
   if (busy && versions.length === 0) return <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
