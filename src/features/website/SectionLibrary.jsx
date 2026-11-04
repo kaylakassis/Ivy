@@ -119,8 +119,10 @@ export default function SectionLibrary({
         padding: '6px 10px 12px',
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6,
         overflowY: 'auto',
-        flex: '0 0 auto',
-        maxHeight: 320,
+        // Shares the column with the page outline below (the editor now
+        // fits the screen), so neither gets squeezed to a sliver.
+        flex: '1 1 0', minHeight: 132,
+        alignContent: 'start',
       }}>
         {filtered.length === 0 && (
           <div style={{
@@ -173,8 +175,8 @@ export default function SectionLibrary({
         ref={outlineRef}
         style={{
           padding: '4px 10px 14px',
-          flex: '1 1 auto',
-          minHeight: 0,
+          flex: '1 1 0',
+          minHeight: 150,
           overflowY: 'auto',
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>

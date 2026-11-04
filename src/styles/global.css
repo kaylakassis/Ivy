@@ -1160,3 +1160,8 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
     max-height: 90vh;
   }
 }
+
+/* Website editor panes scroll independently; a scroll that reaches the end
+   of one pane stops there instead of dragging the other along. */
+.website-editor .scroll,
+.website-editor [data-pane-scroll] { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }

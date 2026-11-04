@@ -7,7 +7,7 @@
 //   • Mobile  (≤ 720px):  one pane at a time, switched by a tab bar.
 //     Toolbar collapses to a single row of icon buttons + a "More" sheet
 //     so it never overflows the viewport.
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { PagePicker, ConfirmDialog, ActionToast } from './EditorOverlays.jsx';
 import { findSectionPage } from './pageTransforms.js';
@@ -203,9 +203,20 @@ export default function Editor({
   // the platform /site/<handle> URL. The "Published - live at", Copy
   // button, and QR all read from this.
   const publicUrl = siteShareUrl(site);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const showSecondary = !isMobile || moreOpen;
+
+  // The editor fits the screen: the page itself never scrolls, so the
+  // preview, the section list and the inspector each scroll on their own
+  // (body.ivy-fill in global.css gives the shell a definite height, the
+  // same mode the Ivy screen uses).
+  useLayoutEffect(() => {
+    document.body.classList.add('ivy-fill');
+    return () => document.body.classList.remove('ivy-fill');
+  }, []);
 
   return (
-    <div style={{
+    <div className="ivy-fill-page website-editor" style={{
       display: 'flex', flexDirection: 'column',
       flex: 1, minHeight: 0,
     }}>
@@ -217,7 +228,7 @@ export default function Editor({
         borderBottom: '1px solid var(--border)',
         flexWrap: 'wrap', rowGap: 8,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: isMobile ? '1 1 100%' : '0 1 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: isMobile ? '1 1 0' : '0 1 auto', order: isMobile ? -5 : undefined }}>
           <div style={{
             width: 28, height: 28, borderRadius: 7,
             background: 'var(--accent)', color: 'var(--accent-ink)',
@@ -243,14 +254,14 @@ export default function Editor({
         {/* Visibility selector - Public / Link only / Only me. Mirrors
             the same control on Services + Packages so owners learn one
             mental model for "where does this show up". */}
-        <SiteVisibilityButton
+        {showSecondary && <SiteVisibilityButton
           visibility={site.visibility || 'public'}
           onChange={(v) => set({ visibility: v })}
           isMobile={isMobile}
-        />
+        />}
 
         {/* Template selector */}
-        <div style={{ position: 'relative' }}>
+        {showSecondary && <div style={{ position: 'relative' }}>
           <button className="btn btn-outline" onClick={() => setShowTemplateMenu((v) => !v)}>
             <span style={{
               width: 12, height: 12, borderRadius: 99,
@@ -296,27 +307,31 @@ export default function Editor({
               ))}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Undo / redo - sits next to the template menu so it stays
             on-screen on every viewport (labels on desktop, icons with
             aria-labels on phones). Undo reaches back to the last publish.
             Wired to the keyboard shortcuts above. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, order: isMobile ? -4 : undefined }}>
           <UndoRedo undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} compact={isMobile}/>
-          <DraftStatus saving={saving} saveErr={saveErr} publishErr={publishErr}
-            published={!!site.publishedAt} hasUnpublishedChanges={hasUnpublishedChanges}/>
+          {/* Phones: the status only takes room when it says something
+              that needs attention (or the More row is open). */}
+          {(!isMobile || saveErr || publishErr) && (
+            <DraftStatus saving={saving} saveErr={saveErr} publishErr={publishErr}
+              published={!!site.publishedAt} hasUnpublishedChanges={hasUnpublishedChanges}/>
+          )}
         </div>
 
         {/* Site-style affordances - font pair + custom CSS. Both apply
             site-wide (every page, every section). */}
-        <SiteStyleButton site={site} set={set}/>
+        {showSecondary && <SiteStyleButton site={site} set={set}/>}
 
         {/* Advanced - domain / forms / redirects / popups / history / traffic */}
-        <button className="btn btn-outline" onClick={() => setShowAdvanced(true)}
+        {showSecondary && <button className="btn btn-outline" onClick={() => setShowAdvanced(true)}
           title="Domain, forms, redirects, history, traffic">
           <Icons.Settings size={13}/> Advanced
-        </button>
+        </button>}
 
         {/* Device toggle - hide on phones; the user is already on a phone
             and doesn't need a "preview at desktop width" toggle squeezed
@@ -349,21 +364,21 @@ export default function Editor({
           })}
         </div>}
 
-        <button
+        {(showSecondary || previewMode) && <button
           className="btn btn-outline"
           onClick={() => setPreviewMode((v) => !v)}
           style={{ flexShrink: 0 }}
         >
           <Icons.Eye size={13} />
-          {!isMobile && <span style={{ marginLeft: 6 }}>{previewMode ? 'Exit preview' : 'Preview'}</span>}
-        </button>
+          {(!isMobile || previewMode) && <span style={{ marginLeft: 6 }}>{previewMode ? 'Exit preview' : 'Preview'}</span>}
+        </button>}
 
         <button
           className="btn btn-primary"
           onClick={handlePublish}
           disabled={publishing || !site.handle}
           title={!site.handle ? 'Set a handle first' : (publicUrl ? `Publish to ${publicUrl}` : 'Publish')}
-          style={{ opacity: (publishing || !site.handle) ? 0.6 : 1 }}
+          style={{ opacity: (publishing || !site.handle) ? 0.6 : 1, order: isMobile ? -3 : undefined }}
         >
           <Icons.Arrow size={13} sw={2} />
           {publishing ? 'Publishing…' : site.publishedAt ? 'Republish' : 'Publish'}
@@ -375,9 +390,26 @@ export default function Editor({
           )}
         </button>
 
+        {/* Phones: one row (name, undo/redo, publish, More). Everything
+            else opens under it, so the preview keeps most of the screen. */}
+        {isMobile && (
+          <button className="btn btn-outline" onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen} aria-label={moreOpen ? 'Fewer options' : 'More options'}
+            style={{ flexShrink: 0, minWidth: 40, justifyContent: 'center', order: -2 }}>
+            {moreOpen ? <Icons.X size={14}/> : <Icons.More size={14}/>}
+          </button>
+        )}
+        {isMobile && moreOpen && <div style={{ flexBasis: '100%', height: 0, order: -1 }}/>}
+        {isMobile && moreOpen && !saveErr && !publishErr && (
+          <div style={{ flexBasis: '100%' }}>
+            <DraftStatus saving={saving} saveErr={saveErr} publishErr={publishErr}
+              published={!!site.publishedAt} hasUnpublishedChanges={hasUnpublishedChanges}/>
+          </div>
+        )}
+
         {/* Schedule publish. If already scheduled, show the time + a way to
             cancel; otherwise a popover with a datetime-local picker. */}
-        {site.scheduledPublishAt ? (
+        {!showSecondary ? null : site.scheduledPublishAt ? (
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5,
             padding: '4px 8px', borderRadius: 8,
@@ -419,20 +451,20 @@ export default function Editor({
 
         {/* Destructive - distinct icon + color so it can't be mistaken
             for the Advanced-settings cog next to it. */}
-        <button className="btn btn-ghost" title="Start over (clears all draft content)"
+        {showSecondary && <button className="btn btn-ghost" title="Start over (clears all draft content)"
           style={{ color: 'var(--danger)' }}
           onClick={() => {
             if (confirm('Start over? This clears ALL pages and sections from your draft.\n\nYour published version history is kept (Advanced → History), but the current draft cannot be recovered.')) reset();
           }}>
           <Icons.Trash size={14} />
-        </button>
+        </button>}
       </div>
 
-      {/* Published banner */}
-      {site.publishedAt && publicUrl && (
+      {/* Published banner (phones: inside More, the name row already shows the address) */}
+      {site.publishedAt && publicUrl && showSecondary && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 24px',
+          display: 'flex', alignItems: 'center', gap: isMobile ? 6 : 10, flexWrap: 'wrap',
+          padding: isMobile ? '8px 14px' : '8px 24px',
           background: 'var(--accent-soft)', color: 'var(--accent)',
           borderBottom: '1px solid var(--accent-tint)',
           fontSize: 12,
