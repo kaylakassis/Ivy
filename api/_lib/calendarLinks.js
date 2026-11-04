@@ -14,7 +14,7 @@
 //              A bad or forged signature is a 404.
 import crypto from 'node:crypto';
 import { sql } from './db.js';
-import { buildBookingInvite, buildGoogleCalendarUrl } from './ical.js';
+import { buildBookingInvite, buildGoogleCalendarUrl, buildOutlookCalendarUrl } from './ical.js';
 import { appUrl } from './tokens.js';
 
 function secret() {
@@ -103,13 +103,15 @@ export function buildInviteIcs(row) {
   return buildBookingInvite(inviteFieldsFor(row));
 }
 
-// { google, ics } for one booking row. Pure (no I/O) so list endpoints can
-// call it per row.
+// { google, ics, outlook } for one booking row. Pure (no I/O) so list
+// endpoints can call it per row. `outlook` (Outlook on the web) was added
+// later; older clients only read google + ics.
 export function calendarLinksFor(row) {
   const f = inviteFieldsFor(row);
   return {
     google: buildGoogleCalendarUrl(f),
     ics: inviteUrlFor(row.id),
+    outlook: buildOutlookCalendarUrl(f),
   };
 }
 

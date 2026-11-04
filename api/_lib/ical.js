@@ -193,6 +193,33 @@ export function buildGoogleCalendarUrl({
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+// Outlook on the web "add event" link. Outlook reads ISO date-times; with a
+// workspace zone we send the absolute UTC instant ("...Z") so the event lands
+// at the same moment as the .ics and the Google link.
+function isoDT(dateStr, mins, tz) {
+  if (tz) return new Date(zonedTimeToUtcMs(dateStr, mins, tz)).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${y}-${pad(m)}-${pad(d)}T${pad(Math.floor(mins / 60))}:${pad(mins % 60)}:00`;
+}
+
+export function buildOutlookCalendarUrl({
+  bizName, serviceName, date, startMin, endMin, timezone, locationAddress, description,
+}) {
+  const subject = serviceName
+    ? `${serviceName}${bizName ? ` with ${bizName}` : ''}`
+    : (bizName ? `Appointment with ${bizName}` : 'Appointment');
+  const params = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject,
+    startdt: isoDT(date, startMin, timezone),
+    enddt: isoDT(date, endMin, timezone),
+  });
+  if (description) params.set('body', description);
+  if (locationAddress) params.set('location', locationAddress);
+  return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+}
+
 export function buildICalFeed({ bizName, bookings, services, timezone }) {
   const serviceById = new Map((services || []).map((s) => [s.id, s]));
   const stamp = fmtUtcStamp();

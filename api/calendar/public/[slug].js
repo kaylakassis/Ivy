@@ -1,6 +1,10 @@
 // /api/calendar/public/:slug
 //   GET  → public calendar state (settings + services + blocks + bookings,
 //          client identities redacted on bookings)
+//          plus contactPhone (1.0.5). Slots are computed on the page from
+//          this one payload (availability + current bookings + blocks), so
+//          there is no date range parameter: every day up to the owner's
+//          booking horizon can be shown without another request.
 //   POST → create a booking via the public link. Body:
 //          { serviceId, date, startMin, endMin, clientName, clientEmail, notes? }
 
@@ -12,7 +16,7 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
   hasConflict, losesBookingRace, withinAvailability, depositFor, videoRoomUrlForService,
-  slotEpochMs,
+  slotEpochMs, publicContactPhone,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
@@ -265,6 +269,10 @@ async function getCalendar(req, res) {
         programs: programsOut,
         businessType,
         websiteHandle,
+        // Added for the 1.0.5 page header (older pages ignore it): a phone
+        // number the owner already prints on invoices, or null. Only the
+        // number is exposed, never the rest of the contact block.
+        contactPhone: publicContactPhone(s.biz_contact),
       },
     });
   } catch (err) {
