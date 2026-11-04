@@ -10,14 +10,21 @@
 // Interactions:
 //   • Catalog has a search filter + category pills (`All`, `Header`,
 //     `Social proof`, etc.) so 20+ types stay scannable.
-//   • Outline supports HTML5 drag-and-drop in addition to the arrow
-//     buttons. Drag a row to reorder; arrow buttons still work for
-//     keyboard / non-pointer users.
-import React, { useMemo, useState } from 'react';
+//   • Outline rows reorder by dragging the grip (pointer events, so mouse,
+//     touch and pen all work; see usePointerReorder.js), by the up/down
+//     buttons (44px tap targets on phones, so no drag is needed), or with
+//     Alt+Up / Alt+Down on a focused grip. Each row's "..." menu moves or
+//     copies the section to another page.
+import React, { useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_LIST, SECTION_TYPES, SECTION_CATEGORIES } from './sections.js';
+import { usePointerReorder, gripKeyDown } from './usePointerReorder.js';
+import { dropGapToIndex } from './pageTransforms.js';
+import { ActionMenu } from './EditorOverlays.jsx';
 
-export default function SectionLibrary({ site, sections, selectedId, onSelect, onAdd, onMove, onMoveTo, mobile = false }) {
+export default function SectionLibrary({
+  site, sections, selectedId, onSelect, onAdd, onMove, onMoveTo, onPagePicker, onDropOnPage, mobile = false,
+}) {
   // Editor passes the current page's sections in; fall back to legacy
   // site.sections for callers that haven't migrated.
   const list = Array.isArray(sections) ? sections : (site?.sections || []);
@@ -40,38 +47,22 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
     });
   }, [q, category]);
 
-  // Drag state for outline reorder. `dragId` is the section being
-  // dragged; `dropIndex` is the gap-marker position we'll drop it at.
-  const [dragId, setDragId]       = useState(null);
-  const [dropIndex, setDropIndex] = useState(null);
+  // Outline drag-reorder. `drag.gap` is the insertion gap (0..n).
+  const outlineRef = useRef(null);
+  const { drag, start: startDrag } = usePointerReorder({
+    getScroller: () => outlineRef.current,
+    getItems: () => Array.from(outlineRef.current?.querySelectorAll('[data-outline-id]') || [])
+      .map((el, index) => ({ el, index })),
+    onDrop: (id, gap) => {
+      const idx = dropGapToIndex(gap, list.findIndex((s) => s.id === id));
+      if (idx != null && onMoveTo) onMoveTo(id, idx);
+    },
+    onDropOnPage,
+  });
+  const dragId = drag?.id || null;
+  const dropIndex = drag && dropGapToIndex(drag.gap, list.findIndex((s) => s.id === dragId)) != null ? drag.gap : null;
 
-  const handleDragStart = (e, id) => {
-    setDragId(id);
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', id); } catch (_) { /* noop */ }
-  };
-  const handleDragOver = (e, idx) => {
-    if (!dragId) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (dropIndex !== idx) setDropIndex(idx);
-  };
-  const handleDrop = (e) => {
-    e.preventDefault();
-    if (dragId && dropIndex != null && onMoveTo) {
-      // Adjust target index when the dragged item is earlier in the list:
-      // splicing it out first shifts everything after down by one.
-      const srcIdx = list.findIndex((s) => s.id === dragId);
-      const adj = srcIdx >= 0 && srcIdx < dropIndex ? dropIndex - 1 : dropIndex;
-      onMoveTo(dragId, adj);
-    }
-    setDragId(null);
-    setDropIndex(null);
-  };
-  const handleDragEnd = () => {
-    setDragId(null);
-    setDropIndex(null);
-  };
+  const tap = mobile ? 44 : 28; // tap target for row buttons
 
   return (
     <aside style={{
@@ -170,7 +161,7 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
       <div style={{ borderTop: '1px solid var(--border)', padding: '12px 18px 6px' }}>
         <div className="metric-label">Page outline</div>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-          Drag to reorder, or use the arrows.
+          {mobile ? 'Use the arrows or drag the handle to reorder.' : 'Drag the handle to reorder, or use the arrows.'}
         </div>
       </div>
 
@@ -179,13 +170,7 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
           if needed; minHeight: 0 prevents children from forcing the
           parent to overflow. */}
       <div className="scroll"
-        onDragOver={(e) => {
-          if (dragId) {
-            e.preventDefault();
-            if (dropIndex == null) setDropIndex(list.length);
-          }
-        }}
-        onDrop={handleDrop}
+        ref={outlineRef}
         style={{
           padding: '4px 10px 14px',
           flex: '1 1 auto',
@@ -207,64 +192,103 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
           const Icon = Icons[cfg?.icon] || Icons.FileIcon;
           const active = sec.id === selectedId;
           const isDragging = dragId === sec.id;
+          // The drop line is drawn over the gap (absolutely positioned), so
+          // showing it never shifts the rows the pointer is measured against.
           const showDropAbove = dropIndex === i && dragId && dragId !== sec.id;
+          const showDropBelow = dragId && dropIndex === list.length && i === list.length - 1;
+          const label = cfg?.label || sec.type;
+          const rowBtn = {
+            width: tap, height: tap, padding: 0, flexShrink: 0,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          };
           return (
             <React.Fragment key={sec.id}>
-              {showDropAbove && <DropGap/>}
               <div
-                draggable
-                onDragStart={(e) => handleDragStart(e, sec.id)}
-                onDragOver={(e) => handleDragOver(e, i)}
-                onDragEnd={handleDragEnd}
+                data-outline-id={sec.id}
                 onClick={() => onSelect(sec.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 10px', borderRadius: 8, cursor: 'grab',
+                  position: 'relative',
+                  display: 'flex', alignItems: 'center', gap: mobile ? 2 : 4,
+                  minHeight: mobile ? 52 : 38,
+                  padding: mobile ? '4px 4px 4px 0' : '3px 4px 3px 0', borderRadius: 8, cursor: 'pointer',
                   background: active ? 'var(--accent-soft)' : 'transparent',
                   border: `1px solid ${active ? 'var(--accent-tint)' : 'transparent'}`,
                   opacity: sec.visible ? (isDragging ? 0.4 : 1) : 0.5,
                 }}
               >
+                {showDropAbove && <DropGap/>}
+                {showDropBelow && <DropGap below/>}
+                <button
+                  type="button"
+                  data-outline-grip={sec.id}
+                  onPointerDown={(e) => startDrag(e, sec.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => gripKeyDown(e, onMove, sec.id)}
+                  className="btn btn-ghost"
+                  title="Drag to reorder (or Alt+Up / Alt+Down)"
+                  aria-label={`Reorder ${label}. Drag, or press Alt plus Up or Down arrow.`}
+                  style={{ ...rowBtn, width: mobile ? 36 : 24, cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none', color: 'var(--muted)' }}
+                >
+                  <Icons.Drag size={14} />
+                </button>
                 <Icon size={15} stroke={active ? 'var(--accent)' : 'var(--muted)'} sw={1.6} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: active ? 'var(--accent)' : 'var(--fg)' }}>
-                    {cfg?.label || sec.type}
+                <div style={{ flex: 1, minWidth: 0, paddingLeft: 4 }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 500, color: active ? 'var(--accent)' : 'var(--fg)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}>
+                    {label}
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); onMove(sec.id, 'up'); }}
                   disabled={i === 0}
                   className="btn btn-ghost"
-                  style={{ padding: 3, opacity: i === 0 ? 0.25 : 0.6 }}
+                  style={{ ...rowBtn, opacity: i === 0 ? 0.25 : 0.7 }}
                   title="Move up"
+                  aria-label={`Move ${label} up`}
                 >
-                  <Icons.ArrowUp size={12} />
+                  <Icons.ArrowUp size={mobile ? 16 : 12} />
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); onMove(sec.id, 'down'); }}
                   disabled={i === list.length - 1}
                   className="btn btn-ghost"
-                  style={{ padding: 3, opacity: i === list.length - 1 ? 0.25 : 0.6 }}
+                  style={{ ...rowBtn, opacity: i === list.length - 1 ? 0.25 : 0.7 }}
                   title="Move down"
+                  aria-label={`Move ${label} down`}
                 >
-                  <Icons.ArrowDown size={12} />
+                  <Icons.ArrowDown size={mobile ? 16 : 12} />
                 </button>
+                {onPagePicker && (
+                  <ActionMenu label={`More actions for ${label}`} buttonClassName="btn btn-ghost"
+                    buttonStyle={{ ...rowBtn, opacity: 0.8 }}
+                    items={[
+                      { label: 'Move up', icon: 'ArrowUp', disabled: i === 0, onClick: () => onMove(sec.id, 'up') },
+                      { label: 'Move down', icon: 'ArrowDown', disabled: i === list.length - 1, onClick: () => onMove(sec.id, 'down') },
+                      { label: 'Move to page…', icon: 'MoveTo', onClick: () => onPagePicker(sec.id, 'move') },
+                      { label: 'Copy to page…', icon: 'Copy', onClick: () => onPagePicker(sec.id, 'copy') },
+                    ]}>
+                    <Icons.More size={mobile ? 18 : 14}/>
+                  </ActionMenu>
+                )}
               </div>
             </React.Fragment>
           );
         })}
-        {dragId && dropIndex === list.length && <DropGap/>}
       </div>
     </aside>
   );
 }
 
-function DropGap() {
+function DropGap({ below }) {
   return (
-    <div style={{
-      height: 4, borderRadius: 2,
-      background: 'var(--accent)',
-      margin: '2px 0',
+    <div aria-hidden="true" style={{
+      position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 2,
+      background: 'var(--accent)', pointerEvents: 'none', zIndex: 2,
+      ...(below ? { bottom: -4 } : { top: -4 }),
     }}/>
   );
 }

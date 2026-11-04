@@ -3,9 +3,12 @@ import Wizard from './Wizard.jsx';
 import Editor from './Editor.jsx';
 import { useWebsite } from './state.js';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { useAuth } from '../../lib/auth.jsx';
 
 export default function Website() {
-  const store = useWebsite();
+  // Undo history is stored per account + site, so it needs who is signed in.
+  const { user } = useAuth();
+  const store = useWebsite({ userId: user?.id || null });
   const { site, loading, loadErr, set } = store;
 
   if (loading) {

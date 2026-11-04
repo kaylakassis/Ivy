@@ -7,13 +7,15 @@
 //   • Mobile  (≤ 720px):  one pane at a time, switched by a tab bar.
 //     Toolbar collapses to a single row of icon buttons + a "More" sheet
 //     so it never overflows the viewport.
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import { PagePicker, ConfirmDialog, ActionToast } from './EditorOverlays.jsx';
+import { findSectionPage } from './pageTransforms.js';
 import SectionLibrary from './SectionLibrary.jsx';
 import Canvas from './Canvas.jsx';
 import Inspector, { ImageInput } from './Inspector.jsx';
 import AdvancedPanel from './AdvancedPanel.jsx';
-import { mkSection, FONT_PAIRS } from './sections.js';
+import { mkSection, FONT_PAIRS, SECTION_TYPES } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { siteShareUrl } from '../../lib/publicUrl.js';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
@@ -21,11 +23,11 @@ import { useViewport } from '../../lib/viewport.js';
 
 export default function Editor({
   site, set, setSection, addSection, removeSection, moveSection, moveSectionTo,
-  duplicateSection,
+  duplicateSection, moveSectionToPage, copySectionToPage,
   currentPage, currentPageId, setCurrentPageId,
   addPage, removePage, renamePage, movePage,
   reset, publish, saving, saveErr, hasUnpublishedChanges,
-  schedulePublish, cancelSchedule,
+  schedulePublish, cancelSchedule, discardChanges,
   undo, redo, canUndo, canRedo,
 }) {
   // Sections we're rendering / editing come from the CURRENT page,
@@ -34,17 +36,21 @@ export default function Editor({
   // work because state.js seeds pages[0] from the legacy sections.
   const activeSections = currentPage?.sections || site.sections || [];
   const [selectedId, setSelectedId] = useState(activeSections[0]?.id || null);
-  const [pageMenuOpen, setPageMenuOpen] = useState(false);
+  // Set by "View" after a move/copy: the section to select once the editor
+  // has switched to its page.
+  const pendingSelectRef = useRef(null);
   // Reset selection when the active page changes - IDs are per-page so
   // keeping the prior selectedId would mismatch the new section list.
   useEffect(() => {
-    setSelectedId(activeSections[0]?.id || null);
+    const want = pendingSelectRef.current;
+    pendingSelectRef.current = null;
+    setSelectedId(want && activeSections.some((s) => s.id === want) ? want : (activeSections[0]?.id || null));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPageId]);
 
-  // Global Cmd/Ctrl+Z + Shift+Cmd/Ctrl+Z for undo/redo. Skipped when
-  // the user is typing into an input/textarea/contentEditable so the
-  // browser's native undo still works inside text fields (we don't
+  // Global Cmd/Ctrl+Z + Shift+Cmd/Ctrl+Z (and Ctrl+Y) for undo/redo.
+  // Skipped when the user is typing into an input/textarea/contentEditable
+  // so the browser's native undo still works inside text fields (we don't
   // want to yank a section while someone is editing a headline).
   useEffect(() => {
     if (!undo || !redo) return;
@@ -52,12 +58,12 @@ export default function Editor({
       const meta = e.metaKey || e.ctrlKey;
       if (!meta) return;
       const k = e.key.toLowerCase();
-      if (k !== 'z') return;
+      if (k !== 'z' && !(k === 'y' && e.ctrlKey && !e.metaKey)) return;
       const target = e.target;
       const tag = (target && target.tagName) || '';
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (target && target.isContentEditable)) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)) return;
       e.preventDefault();
-      if (e.shiftKey) redo(); else undo();
+      if (k === 'y' || e.shiftKey) redo(); else undo();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -74,6 +80,68 @@ export default function Editor({
   // is only enabled when a section is selected - otherwise tapping it
   // would land on an empty "click a section" placeholder.
   const [mobileTab, setMobileTab] = useState('canvas');
+
+  // ── Move / copy a section to another page ─────────────────────────
+  const [picker, setPicker] = useState(null);   // { sectionId, mode }
+  const [toast, setToast] = useState(null);     // ActionToast payload
+  const closeToast = useCallback(() => setToast(null), []);
+  const sectionLabel = (id) => {
+    const page = findSectionPage(site.pages, id);
+    const sec = page?.sections.find((x) => x.id === id);
+    return SECTION_TYPES[sec?.type]?.label || 'This section';
+  };
+  const pageTitle = (pageId, fallback) => (site.pages.find((p) => p.id === pageId)?.title) || fallback || 'the page';
+  // Switch to a page and select a section on it (the toast's "View").
+  const goToSection = (pageId, sectionId) => {
+    if (pageId === currentPageId) setSelectedId(sectionId);
+    else { pendingSelectRef.current = sectionId; setCurrentPageId(pageId); }
+    if (isMobile) setMobileTab('canvas');
+    setTimeout(() => {
+      const el = document.querySelector(`[data-frame-id="${CSS.escape(sectionId)}"]`);
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 80);
+  };
+  const doMoveOrCopy = ({ sectionId, mode, target, position }) => {
+    const fromTitle = pageTitle(findSectionPage(site.pages, sectionId)?.id, 'this page');
+    const newTitle = target && typeof target === 'object' ? (target.title || 'New page') : null;
+    if (mode === 'copy') {
+      const r = copySectionToPage(sectionId, target, position);
+      if (!r.copied) return;
+      const title = newTitle || pageTitle(r.pageId);
+      setToast({ text: `Copied to ${title}.`, actionLabel: 'View', onAction: () => goToSection(r.pageId, r.newId) });
+      return;
+    }
+    const r = moveSectionToPage(sectionId, target, position);
+    if (!r.moved) return;
+    if (selectedId === sectionId) setSelectedId(null);
+    const title = newTitle || pageTitle(r.pageId);
+    let sub = null;
+    if (r.relinked) sub = `${r.relinked === 1 ? 'A button' : `${r.relinked} buttons`} on ${fromTitle} that pointed to it now ${r.relinked === 1 ? 'opens' : 'open'} the ${title} page.`;
+    else if (r.unlinked) sub = `${r.unlinked === 1 ? 'A button' : `${r.unlinked} buttons`} on ${fromTitle} pointed to it. Check ${r.unlinked === 1 ? 'its' : 'their'} link.`;
+    setToast({ text: `Moved to ${title}.`, sub, actionLabel: 'View', onAction: () => goToSection(r.pageId, sectionId) });
+  };
+  const openPicker = (sectionId, mode) => { setToast(null); setPicker({ sectionId, mode }); };
+  // Dropping a dragged section on a page tab moves it to the end of that page.
+  const dropOnPage = (sectionId, pageId) => doMoveOrCopy({ sectionId, mode: 'move', target: pageId, position: 'bottom' });
+
+  // ── Discard changes (back to the published version) ───────────────
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [discardBusy, setDiscardBusy] = useState(false);
+  const [discardErr, setDiscardErr] = useState(null);
+  const confirmDiscard = async () => {
+    setDiscardBusy(true);
+    setDiscardErr(null);
+    try {
+      await discardChanges();
+      setDiscardOpen(false);
+      setToast({ text: 'Changes discarded.', sub: 'Your draft matches your live site again.', actionLabel: 'Undo', onAction: undo });
+    } catch (e) {
+      setDiscardErr(e.message || 'Could not discard changes. Try again.');
+    } finally {
+      setDiscardBusy(false);
+    }
+  };
+  const canDiscard = !!(site.publishedAt && hasUnpublishedChanges && discardChanges);
 
   const selected = useMemo(
     () => activeSections.find((s) => s.id === selectedId) || null,
@@ -147,7 +215,7 @@ export default function Editor({
         padding: isMobile ? '10px 14px' : '12px 24px',
         background: 'var(--surface)',
         borderBottom: '1px solid var(--border)',
-        flexWrap: isMobile ? 'wrap' : 'nowrap',
+        flexWrap: 'wrap', rowGap: 8,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: isMobile ? '1 1 100%' : '0 1 auto' }}>
           <div style={{
@@ -231,17 +299,13 @@ export default function Editor({
         </div>
 
         {/* Undo / redo - sits next to the template menu so it stays
-            on-screen on every viewport. Wired to global Cmd/Ctrl+Z and
-            Cmd/Ctrl+Shift+Z below via a keyboard listener on document. */}
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button className="btn btn-outline" disabled={!canUndo} onClick={undo}
-            title="Undo (Cmd/Ctrl+Z)" style={{ padding: '6px 8px', opacity: canUndo ? 1 : 0.45 }}>
-            <Icons.ArrowUp size={13} style={{ transform: 'rotate(-90deg)' }}/>
-          </button>
-          <button className="btn btn-outline" disabled={!canRedo} onClick={redo}
-            title="Redo (Cmd/Ctrl+Shift+Z)" style={{ padding: '6px 8px', opacity: canRedo ? 1 : 0.45 }}>
-            <Icons.ArrowUp size={13} style={{ transform: 'rotate(90deg)' }}/>
-          </button>
+            on-screen on every viewport (labels on desktop, icons with
+            aria-labels on phones). Undo reaches back to the last publish.
+            Wired to the keyboard shortcuts above. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <UndoRedo undo={undo} redo={redo} canUndo={canUndo} canRedo={canRedo} compact={isMobile}/>
+          <DraftStatus saving={saving} saveErr={saveErr} publishErr={publishErr}
+            published={!!site.publishedAt} hasUnpublishedChanges={hasUnpublishedChanges}/>
         </div>
 
         {/* Site-style affordances - font pair + custom CSS. Both apply
@@ -352,11 +416,6 @@ export default function Editor({
           </div>
         )}
 
-        {(saving || saveErr || publishErr) && (
-          <span style={{ fontSize: 11, color: saveErr || publishErr ? 'var(--danger)' : 'var(--muted)' }}>
-            {publishErr || (saveErr ? `Save failed: ${saveErr.message}` : 'Saving…')}
-          </span>
-        )}
 
         {/* Destructive - distinct icon + color so it can't be mistaken
             for the Advanced-settings cog next to it. */}
@@ -405,18 +464,51 @@ export default function Editor({
           aren't showing." */}
       {site.publishedAt && hasUnpublishedChanges && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 24px', fontSize: 12,
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          padding: isMobile ? '8px 14px' : '8px 24px', fontSize: 12,
           background: 'color-mix(in srgb, var(--warn) 12%, var(--surface))',
           color: 'var(--warn)',
           borderBottom: '1px solid color-mix(in srgb, var(--warn) 35%, transparent)',
         }}>
           <Icons.Edit size={13}/>
-          <span style={{ color: 'var(--fg-2)' }}>
-            You have unpublished edits - saved as a draft. Click <strong>Republish</strong> to push them live.
+          <span style={{ color: 'var(--fg-2)', flex: '1 1 220px', minWidth: 0 }}>
+            You have unpublished edits, saved as a draft. Click <strong>Republish</strong> to push them live.
           </span>
+          {canDiscard && (
+            <button type="button" className="btn btn-outline" onClick={() => { setToast(null); setDiscardErr(null); setDiscardOpen(true); }}
+              title="Go back to the version that is live now"
+              style={{ padding: '5px 10px', fontSize: 12, minHeight: isMobile ? 36 : undefined }}>
+              <Icons.Undo size={13}/> Discard changes
+            </button>
+          )}
         </div>
       )}
+      {discardOpen && (
+        <ConfirmDialog
+          title="Discard all changes since you last published?"
+          body="Your live site is not affected. You can undo this right after."
+          confirmLabel="Discard changes"
+          danger busy={discardBusy} error={discardErr} mobile={isMobile}
+          onConfirm={confirmDiscard}
+          onCancel={() => setDiscardOpen(false)}
+        />
+      )}
+      {picker && (
+        <PagePicker
+          initialMode={picker.mode}
+          sectionLabel={sectionLabel(picker.sectionId)}
+          pages={site.pages}
+          fromPageId={findSectionPage(site.pages, picker.sectionId)?.id}
+          mobile={isMobile}
+          onClose={() => setPicker(null)}
+          onSubmit={({ mode, target, position }) => {
+            const sectionId = picker.sectionId;
+            setPicker(null);
+            doMoveOrCopy({ sectionId, mode, target, position });
+          }}
+        />
+      )}
+      <ActionToast toast={toast} onClose={closeToast}/>
       {siteQrOpen && publicUrl && (
         <QRCodeModal
           url={publicUrl}
@@ -489,6 +581,8 @@ export default function Editor({
             onAdd={handleAdd}
             onMove={moveSection}
             onMoveTo={moveSectionTo}
+            onPagePicker={moveSectionToPage ? openPicker : null}
+            onDropOnPage={moveSectionToPage ? dropOnPage : null}
             mobile={isMobile}
           />
         )}
@@ -510,6 +604,8 @@ export default function Editor({
             onMoveTo={moveSectionTo}
             onDuplicate={(id) => duplicateSection && duplicateSection(id)}
             onDelete={(id) => { removeSection(id); if (selectedId === id) setSelectedId(null); }}
+            onPagePicker={moveSectionToPage ? openPicker : null}
+            onDropOnPage={moveSectionToPage ? dropOnPage : null}
           />
         )}
         {/* Inspector - desktop: always. Tablet: only when a section is
@@ -528,6 +624,8 @@ export default function Editor({
             onDuplicate={() => selected && duplicateSection && duplicateSection(selected.id)}
             onDelete={handleDelete}
             onToggleVisible={handleToggleVisible}
+            onMoveToPage={moveSectionToPage && selected ? () => openPicker(selected.id, 'move') : null}
+            onCopyToPage={copySectionToPage && selected ? () => openPicker(selected.id, 'copy') : null}
             mobile={isMobile}
             currentPage={currentPage}
             onPageChange={(patch) => currentPage && renamePage(currentPage.id, patch)}
@@ -632,6 +730,50 @@ function SiteVisibilityButton({ visibility, onChange, isMobile }) {
   );
 }
 
+const IS_MAC = typeof navigator !== 'undefined'
+  && /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+const UNDO_KEYS = IS_MAC ? '⌘Z' : 'Ctrl+Z';
+const REDO_KEYS = IS_MAC ? '⇧⌘Z' : 'Ctrl+Shift+Z';
+
+// Undo / Redo buttons. Text labels on desktop; icon-only (with aria-labels)
+// on phones, where the toolbar is tight.
+function UndoRedo({ undo, redo, canUndo, canRedo, compact }) {
+  const btn = (enabled) => ({
+    padding: compact ? '6px 10px' : '6px 11px', minHeight: compact ? 36 : undefined,
+    opacity: enabled ? 1 : 0.45, cursor: enabled ? 'pointer' : 'default',
+  });
+  return (
+    <div role="group" aria-label="Undo and redo" style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+      <button type="button" className="btn btn-outline" disabled={!canUndo} onClick={undo}
+        aria-label="Undo" title={canUndo ? `Undo (${UNDO_KEYS})` : 'Nothing to undo since you last published'}
+        style={btn(canUndo)}>
+        <Icons.Undo size={14} sw={1.8}/>{!compact && <span>Undo</span>}
+      </button>
+      <button type="button" className="btn btn-outline" disabled={!canRedo} onClick={redo}
+        aria-label="Redo" title={`Redo (${REDO_KEYS})`}
+        style={btn(canRedo)}>
+        <Icons.Redo size={14} sw={1.8}/>{!compact && <span>Redo</span>}
+      </button>
+    </div>
+  );
+}
+
+// Where the owner's edits stand: saving, saved as a draft, or all live.
+function DraftStatus({ saving, saveErr, publishErr, published, hasUnpublishedChanges }) {
+  let text; let color = 'var(--muted)'; let icon = null;
+  if (publishErr) { text = publishErr; color = 'var(--danger)'; }
+  else if (saveErr) { text = `Save failed: ${saveErr.message}`; color = 'var(--danger)'; }
+  else if (saving) text = 'Saving…';
+  else if (published && !hasUnpublishedChanges) { text = 'All changes published'; icon = <Icons.Check size={12} sw={2}/>; }
+  else text = 'Saved as draft';
+  return (
+    <span role="status" aria-live="polite" style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 11.5, color, whiteSpace: icon || color === 'var(--muted)' ? 'nowrap' : 'normal', flexShrink: 0,
+    }}>{icon}{text}</span>
+  );
+}
+
 // PageTabs - pill row above the main editor body. Renders the list of
 // pages for the site, lets the owner switch which page is being edited,
 // rename via prompt, reorder, and delete (with home-page protection).
@@ -699,7 +841,9 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onR
             <button
               onClick={() => onSelect(p.id)}
               onDoubleClick={() => startRename(p)}
-              title="Click to switch · double-click to rename"
+              data-page-drop={p.id}
+              data-page-current={active ? '1' : '0'}
+              title="Click to switch · double-click to rename · drop a section here to move it to this page"
               style={{
                 padding: '5px 11px', fontSize: 12.5,
                 borderTopLeftRadius: 999, borderBottomLeftRadius: 999,

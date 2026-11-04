@@ -4,7 +4,7 @@ import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES, ANIMATIONS } from './sections.js';
 
-export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, mobile = false, currentPage = null, onPageChange = null }) {
+export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, onMoveToPage = null, onCopyToPage = null, mobile = false, currentPage = null, onPageChange = null }) {
   if (!section) {
     // No section selected - surface the page-level SEO editor instead
     // of an empty placeholder. This is the spot owners reach for when
@@ -50,6 +50,22 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
           <Icons.Trash size={14} />
         </IconBtn>
       </div>
+      {(onMoveToPage || onCopyToPage) && (
+        <div style={{ padding: '0 14px 14px', display: 'flex', gap: 6 }}>
+          {onMoveToPage && (
+            <button type="button" className="btn btn-outline" onClick={onMoveToPage}
+              style={{ flex: 1, justifyContent: 'center', fontSize: 12.5, padding: '7px 8px', minHeight: mobile ? 44 : undefined }}>
+              <Icons.MoveTo size={14}/> Move to page…
+            </button>
+          )}
+          {onCopyToPage && (
+            <button type="button" className="btn btn-outline" onClick={onCopyToPage}
+              style={{ flex: 1, justifyContent: 'center', fontSize: 12.5, padding: '7px 8px', minHeight: mobile ? 44 : undefined }}>
+              <Icons.Copy size={14}/> Copy to page…
+            </button>
+          )}
+        </div>
+      )}
       <div className="divider" />
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }} className="scroll">
         {variants.length > 0 && (
