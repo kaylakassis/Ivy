@@ -287,27 +287,27 @@ async function run() {
   });
 
   // Unpaid (ACH still settling) grants nothing.
-  r = await fire('checkout.session.completed', session('cs_ach_1', { payment_status: 'unpaid', payment_method_types: ['us_bank_account'] }), A.acct);
+  r = await fire('checkout.session.completed', session(`cs_ach_1_${STAMP}`, { payment_status: 'unpaid', payment_method_types: ['us_bank_account'] }), A.acct);
   assert(r.statusCode === 200 && /awaiting settlement/.test(r.body.ignored || ''), `unpaid completed session is not fulfilled (got ${JSON.stringify(r.body)})`);
   assert(!(await enrollment(oneTime.id, client.id)), 'no enrollment before the money clears');
   // ... and the settlement event grants.
-  r = await fire('checkout.session.async_payment_succeeded', session('cs_ach_1'), A.acct);
+  r = await fire('checkout.session.async_payment_succeeded', session(`cs_ach_1_${STAMP}`), A.acct);
   assert(r.statusCode === 200 && r.body.applied === 'program-purchase' && !r.body.duplicate, `async_payment_succeeded grants access (got ${JSON.stringify(r.body)})`);
   let e = await enrollment(oneTime.id, client.id);
-  assert(e && e.status === 'active' && e.source === 'purchase' && e.stripe_session_id === 'cs_ach_1' && e.stripe_payment_intent === 'pi_cs_ach_1', 'enrollment active, purchase source, session + payment intent recorded');
+  assert(e && e.status === 'active' && e.source === 'purchase' && e.stripe_session_id === `cs_ach_1_${STAMP}` && e.stripe_payment_intent === `pi_cs_ach_1_${STAMP}`, 'enrollment active, purchase source, session + payment intent recorded');
   const daysLeft = (new Date(e.expires_at) - Date.now()) / 86400_000;
   assert(daysLeft > 59.9 && daysLeft < 60.1, `access expires in 60 days (got ${daysLeft.toFixed(2)})`);
   // Redelivered / duplicated event for the same session is a no-op.
-  r = await fire('checkout.session.completed', session('cs_ach_1'), A.acct);
+  r = await fire('checkout.session.completed', session(`cs_ach_1_${STAMP}`), A.acct);
   assert(r.statusCode === 200 && r.body.duplicate === true, 'duplicate webhook for the same session is a no-op');
   assert((await sql`SELECT COUNT(*)::int n FROM program_enrollments WHERE program_id = ${oneTime.id} AND client_id = ${client.id}`).rows[0].n === 1, 'still one enrollment');
   // Metadata for another workspace is refused outright.
-  r = await fire('checkout.session.completed', session('cs_x', { metadata: { workspace_id: B.wid, program_id: oneTime.id, client_id: client.id, purpose: 'program' } }), A.acct);
+  r = await fire('checkout.session.completed', session(`cs_x_${STAMP}`, { metadata: { workspace_id: B.wid, program_id: oneTime.id, client_id: client.id, purpose: 'program' } }), A.acct);
   assert(r.statusCode === 400, 'session whose metadata names another workspace → 400');
   // A program id from another workspace never grants.
   r = await call(programsIndex, req({ method: 'POST', cookie: B.cookie, body: { title: 'B Course', priceCents: 1000 } }));
   const bProgram = r.body.program;
-  r = await fire('checkout.session.completed', session('cs_cross', { metadata: { workspace_id: A.wid, program_id: bProgram.id, client_id: client.id, purpose: 'program' } }), A.acct);
+  r = await fire('checkout.session.completed', session(`cs_cross_${STAMP}`, { metadata: { workspace_id: A.wid, program_id: bProgram.id, client_id: client.id, purpose: 'program' } }), A.acct);
   assert(r.body.ignored === 'program or client not found', "cannot grant another workspace's program through A's account");
 
   // Client portal.
@@ -359,30 +359,30 @@ async function run() {
   assert(r.body.program.members === 0 && r.body.members[0].status === 'cancelled', 'owner sees 0 active members, history kept');
 
   // Buying again re-opens the same enrollment with a fresh window.
-  r = await fire('checkout.session.completed', session('cs_again'), A.acct);
+  r = await fire('checkout.session.completed', session(`cs_again_${STAMP}`), A.acct);
   assert(r.body.applied === 'program-purchase' && !r.body.duplicate, 're-purchase grants again');
   e = await enrollment(oneTime.id, client.id);
-  assert(e.status === 'active' && e.stripe_session_id === 'cs_again' && new Date(e.expires_at) > new Date(Date.now() + 59 * 86400_000), 'fresh 60-day window, new session id');
+  assert(e.status === 'active' && e.stripe_session_id === `cs_again_${STAMP}` && new Date(e.expires_at) > new Date(Date.now() + 59 * 86400_000), 'fresh 60-day window, new session id');
   r = await call(mePrograms, req({ cookie: casey.cookie }));
   assert(r.body.programs.length === 1, 'portal lists it again');
 
   // Dashboard refund: partial keeps access, full closes it.
-  r = await fire('charge.refunded', { id: 'ch_1', payment_intent: 'pi_cs_again', amount: 4900, amount_refunded: 1000 }, A.acct);
+  r = await fire('charge.refunded', { id: 'ch_1', payment_intent: `pi_cs_again_${STAMP}`, amount: 4900, amount_refunded: 1000 }, A.acct);
   assert(r.body.applied === 'program-refund' && r.body.result === 'partial', `partial refund recorded (got ${JSON.stringify(r.body)})`);
   assert((await enrollment(oneTime.id, client.id)).status === 'active', 'partial refund keeps access');
-  r = await fire('charge.refunded', { id: 'ch_1', payment_intent: 'pi_cs_again', amount: 4900, amount_refunded: 4900 }, A.acct);
+  r = await fire('charge.refunded', { id: 'ch_1', payment_intent: `pi_cs_again_${STAMP}`, amount: 4900, amount_refunded: 4900 }, A.acct);
   assert(r.body.applied === 'program-refund' && r.body.result === 'revoked', 'full refund revokes');
   assert((await enrollment(oneTime.id, client.id)).status === 'cancelled', 'enrollment closed by the refund');
-  r = await fire('charge.refunded', { id: 'ch_1', payment_intent: 'pi_cs_again', amount: 4900, amount_refunded: 4900 }, A.acct);
+  r = await fire('charge.refunded', { id: 'ch_1', payment_intent: `pi_cs_again_${STAMP}`, amount: 4900, amount_refunded: 4900 }, A.acct);
   assert(r.body.result === 'already-cancelled', 'refund echo is a no-op');
   r = await call(mePrograms, req({ cookie: casey.cookie }));
   assert(r.body.programs.length === 0, 'portal: refunded purchase is gone');
   // A charge with no stored PI still matches through the metadata Stripe copies onto it.
-  r = await fire('checkout.session.completed', session('cs_md', { payment_intent: null }), A.acct);
+  r = await fire('checkout.session.completed', session(`cs_md_${STAMP}`, { payment_intent: null }), A.acct);
   assert(r.body.applied === 'program-purchase', 'purchase without a PI id still grants');
-  r = await fire('charge.refunded', { id: 'ch_2', payment_intent: 'pi_unknown', amount: 4900, amount_refunded: 4900, metadata: { purpose: 'program', program_id: oneTime.id, client_id: client.id, workspace_id: A.wid } }, A.acct);
+  r = await fire('charge.refunded', { id: 'ch_2', payment_intent: `pi_unknown_${STAMP}`, amount: 4900, amount_refunded: 4900, metadata: { purpose: 'program', program_id: oneTime.id, client_id: client.id, workspace_id: A.wid } }, A.acct);
   assert(r.body.result === 'revoked', 'refund matched through charge metadata');
-  r = await fire('charge.refunded', { id: 'ch_3', payment_intent: 'pi_nothing', amount: 100, amount_refunded: 100 }, A.acct);
+  r = await fire('charge.refunded', { id: 'ch_3', payment_intent: `pi_nothing_${STAMP}`, amount: 100, amount_refunded: 100 }, A.acct);
   assert(r.body.ignored === 'no purchase for payment_intent', 'unrelated refund is acknowledged and ignored');
 
   // Manual grant by the owner (free / paid elsewhere).
@@ -413,7 +413,7 @@ async function run() {
   assert(r.statusCode === 200 && r.body.applied === 'program-subscription' && r.body.result === 'applied', `subscription.created grants (got ${JSON.stringify(r.body)})`);
   e = await enrollment(monthly.id, client.id);
   assert(e && e.status === 'active' && e.source === 'subscription' && e.stripe_subscription_id === subId && Math.abs(new Date(e.current_period_end).getTime() / 1000 - cpe1) < 2, 'enrollment active with the period end');
-  r = await fire('checkout.session.completed', { id: 'cs_sub_1', mode: 'subscription', payment_status: 'paid', subscription: subId, metadata: { ...subMd } }, A.acct);
+  r = await fire('checkout.session.completed', { id: `cs_sub_1_${STAMP}`, mode: 'subscription', payment_status: 'paid', subscription: subId, metadata: { ...subMd } }, A.acct);
   assert(r.statusCode === 200 && (await sql`SELECT COUNT(*)::int n FROM program_enrollments WHERE program_id = ${monthly.id} AND client_id = ${client.id}`).rows[0].n === 1, 'the late checkout.session.completed does not double-grant');
   r = await fire('customer.subscription.created', subObj(subId, { metadata: subMd, current_period_end: cpe1 }), A.acct);
   assert((await sql`SELECT COUNT(*)::int n FROM program_enrollments WHERE stripe_subscription_id = ${subId}`).rows[0].n === 1, 'duplicate subscription.created keeps one row');
@@ -522,7 +522,7 @@ async function run() {
   r = await fire('customer.subscription.deleted', subObj(sub3, { metadata: subMd, status: 'canceled' }), A.acct);
 
   // Cross-workspace subscription metadata is refused.
-  r = await fire('customer.subscription.created', subObj('sub_cross', { metadata: { ...subMd, workspace_id: B.wid } }), A.acct);
+  r = await fire('customer.subscription.created', subObj(`sub_cross_${STAMP}`, { metadata: { ...subMd, workspace_id: B.wid } }), A.acct);
   assert(r.statusCode === 400, 'subscription naming another workspace → 400');
   r = await fire('customer.subscription.created', subObj('sub_cross2', { metadata: { ...subMd, program_id: bProgram.id } }), A.acct);
   assert(r.body.result === 'missing' && !(await enrollment(bProgram.id, client.id)), "cannot grant B's program through A's account");
@@ -534,12 +534,12 @@ async function run() {
   const lProg = r.body.program;
   const lClient = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${L.wid}, 'Lee', ${`pe-lee-${STAMP}@example.com`}, 'lead') RETURNING id`).rows[0].id;
   const lMd = { workspace_id: L.wid, program_id: lProg.id, client_id: lClient, purpose: 'program' };
-  r = await fireLegacy('customer.subscription.created', subObj('sub_legacy_1', { metadata: lMd }), L.wid, L.whSecret);
+  r = await fireLegacy('customer.subscription.created', subObj(`sub_legacy_1_${STAMP}`, { metadata: lMd }), L.wid, L.whSecret);
   assert(r.statusCode === 200 && r.body.applied === 'program-subscription' && r.body.result === 'applied', `legacy webhook grants a program subscription (got ${JSON.stringify(r.body)})`);
   assert((await enrollment(lProg.id, lClient))?.status === 'active', 'legacy: enrollment active');
-  r = await fireLegacy('customer.subscription.deleted', subObj('sub_legacy_1', { metadata: lMd, status: 'canceled' }), L.wid, L.whSecret);
+  r = await fireLegacy('customer.subscription.deleted', subObj(`sub_legacy_1_${STAMP}`, { metadata: lMd, status: 'canceled' }), L.wid, L.whSecret);
   assert((await enrollment(lProg.id, lClient))?.status === 'cancelled', 'legacy: deleted revokes');
-  r = await fireLegacy('checkout.session.completed', { id: 'cs_legacy_1', mode: 'payment', status: 'complete', payment_status: 'paid', amount_total: 1500, payment_intent: 'pi_legacy_1', metadata: { workspace_id: L.wid, program_id: lProg.id, client_id: lClient, purpose: 'program' } }, L.wid, L.whSecret);
+  r = await fireLegacy('checkout.session.completed', { id: `cs_legacy_1_${STAMP}`, mode: 'payment', status: 'complete', payment_status: 'paid', amount_total: 1500, payment_intent: `pi_legacy_1_${STAMP}`, metadata: { workspace_id: L.wid, program_id: lProg.id, client_id: lClient, purpose: 'program' } }, L.wid, L.whSecret);
   assert(r.statusCode === 200 && r.body.applied === 'program-purchase', `legacy webhook fulfils a one-time program purchase (got ${JSON.stringify(r.body)})`);
 
   // ════════════════════════════════════════════════════════════════════
