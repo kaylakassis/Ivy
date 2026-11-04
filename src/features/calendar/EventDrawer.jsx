@@ -119,6 +119,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '-'}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
+      {event.privateNotes && <InfoRow label="Private note (only you see this)" value={event.privateNotes}/>}
 
       {/* Mobile address (from client) + in-person venue (from service)
           + video room URL surfaced for the owner so they know where to

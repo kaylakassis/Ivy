@@ -246,10 +246,10 @@ async function run() {
   res = await call(calendarFile, { userId: A.userId, body: { ics: file, mode: 'import' } });
   assert(res.statusCode === 200 && res.body.created === 5 && res.body.skipped === 1, `default import: 5 created, duplicate skipped, all-day left out (${JSON.stringify(res.body)})`);
   assert(Array.isArray(res.body.missingEmail) && res.body.missingEmail.some((c) => c.name === 'Pat Weekly') && res.body.missingEmail.every((c) => c.clientId && c.name), 'missingEmail lists new clients without an email');
-  const rows = (await sql`SELECT client_id, client_name, client_email, service_id, source, import_uid, google_event_id, notes FROM bookings WHERE workspace_id = ${A.workspaceId} AND import_uid IS NOT NULL ORDER BY date, start_min`).rows;
+  const rows = (await sql`SELECT client_id, client_name, client_email, service_id, source, import_uid, google_event_id, notes, private_notes FROM bookings WHERE workspace_id = ${A.workspaceId} AND import_uid IS NOT NULL ORDER BY date, start_min`).rows;
   assert(rows.length === 5 && rows.every((b) => b.source === 'import' && /^ics:[0-9a-f]{64}$/.test(b.import_uid) && b.google_event_id === null), 'bookings marked as imported');
   assert(rows[0].client_id === existing && rows[0].service_id === svcId, 'existing client matched by name, service linked');
-  assert(rows.every((b) => /Imported from a calendar file/.test(b.notes || '')), 'notes say where it came from');
+  assert(rows.every((b) => /Imported from a calendar file/.test(b.private_notes || '') && !b.notes), 'where it came from is a private owner note, never the client-visible note');
   assert(since(m).length === 0, `no email, text, push or Google call (${since(m).map((c) => c.url).join(', ')})`);
   assert(await n(sql`SELECT COUNT(*)::int AS n FROM workflow_runs WHERE workspace_id = ${A.workspaceId}`) === 0, 'no automation fired for new clients');
   assert(await n(sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${A.workspaceId}`) === clientsBefore + 2, 'two new clients (Sam New, Pat Weekly)');

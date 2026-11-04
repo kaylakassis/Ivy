@@ -1981,7 +1981,7 @@ async function add_bookings_from_list({ workspaceId, args }) {
     // bookings.client_email is required; an empty string means "no email",
     // and reminders, review requests and other client emails skip it.
     const b = await sql`
-      INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone, date, start_min, end_min, notes, source)
+      INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone, date, start_min, end_min, private_notes, source)
       VALUES (${workspaceId}, ${svc?.id || null}, ${client.id}, ${client.name}, ${client.email || ''}, ${r.phone},
               ${r.date}, ${r.startMin}, ${endMin}, ${notes}, 'import')
       RETURNING id, client_id, date, start_min, end_min, client_name`;

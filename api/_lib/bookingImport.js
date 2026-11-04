@@ -108,7 +108,7 @@ export async function insertImportedBooking({
 }) {
   const r = await sql`
     INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone,
-                          date, start_min, end_min, notes, source, import_uid, google_event_id)
+                          date, start_min, end_min, private_notes, source, import_uid, google_event_id)
     VALUES (${workspaceId}, ${serviceId || null}, ${clientId || null}, ${clientName}, ${clientEmail || ''}, ${clientPhone || null},
             ${date}, ${startMin}, ${endMin}, ${notes || null}, ${source}, ${importUid || null}, ${googleEventId || null})
     ON CONFLICT (workspace_id, import_uid) WHERE import_uid IS NOT NULL DO NOTHING

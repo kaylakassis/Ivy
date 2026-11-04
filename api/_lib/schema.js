@@ -4082,4 +4082,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_workspace_import_uid
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS move_announced_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_move_announced
   ON clients(workspace_id, move_announced_at) WHERE move_announced_at IS NOT NULL;
+
+-- Owner-only booking note. bookings.notes is client-facing (portal,
+-- confirmation emails), so anything an owner's own records said (an
+-- imported calendar event's title or description, Ivy's notes from a
+-- screenshot) lives here instead. One-time move for imports made before
+-- this column existed: private_notes IS NULL keeps it from re-running on
+-- rows the owner has since edited.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS private_notes TEXT;
+UPDATE bookings SET private_notes = notes, notes = NULL
+ WHERE source = 'import' AND notes IS NOT NULL AND private_notes IS NULL
+   AND created_at < TIMESTAMPTZ '2026-11-05 00:00:00+00';
 `;

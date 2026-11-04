@@ -264,6 +264,8 @@ export function serializeBooking(row, opts = {}) {
     startMin:            row.start_min,
     endMin:              row.end_min,
     notes:               row.notes,
+    // Owner-only (imports, Ivy). Never sent to helpers or clients.
+    privateNotes:        redactMoney ? null : (row.private_notes || null),
     cancelledAt:         row.cancelled_at,
     recurrenceRule:      row.recurrence_rule || null,
     recurrenceUntil,
