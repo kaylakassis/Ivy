@@ -48,7 +48,7 @@ export async function myClientIds(user) {
       SELECT c.id, c.workspace_id, c.name, c.email,
              w.name AS workspace_name,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
-             cs.biz_name
+             cs.biz_name, cs.slug AS biz_slug, cs.brand_logo_url
       FROM clients c
       JOIN workspaces w ON w.id = c.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = c.workspace_id
@@ -67,6 +67,10 @@ export async function myClientIds(user) {
       // Documents, invoices and history stay readable. Same predicate as
       // the owner paywall, so resubscribing flips this back on its own.
       archived: !isWorkspaceActive(r),
+      // Both already public on the business's booking page: the portal
+      // uses them for the business card (logo) and "Book" (/book/<slug>).
+      bookingSlug:  r.biz_slug || null,
+      logoUrl:      r.brand_logo_url || null,
     }));
   } catch (err) {
     // eslint-disable-next-line no-console

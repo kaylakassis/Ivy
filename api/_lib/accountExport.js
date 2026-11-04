@@ -6,6 +6,7 @@
 import { sql } from './db.js';
 import { ensureWorkspace } from './auth.js';
 import { myClientIds } from './clientPortal.js';
+import { buildClientPortalExport } from './clientExport.js';
 
 // Encrypted-credential blobs and token hashes that must never leave the
 // server in a user-facing export, even encrypted (a leaked key + blob
@@ -95,23 +96,11 @@ export async function buildAccountExport(user) {
   const myIds = myClients.map((c) => c.clientId);
   let clientPortal = null;
   if (myIds.length) {
-    const [cpBookings, cpInvoices, cpDocs, cpThreads, cpMessages] = await Promise.all([
-      sql`SELECT * FROM bookings   WHERE client_id = ANY(${myIds})`,
-      sql`SELECT * FROM invoices   WHERE client_id = ANY(${myIds})`,
-      sql`SELECT * FROM documents  WHERE recipient_client_id = ANY(${myIds})`,
-      sql`SELECT * FROM message_threads WHERE client_id = ANY(${myIds})`,
-      sql`SELECT m.* FROM messages m
-            JOIN message_threads t ON t.id = m.thread_id
-           WHERE t.client_id = ANY(${myIds})`,
-    ]);
-    clientPortal = {
-      businesses:      myClients,
-      bookings:        stripRows(cpBookings.rows),
-      invoices:        stripRows(cpInvoices.rows),
-      documents:       stripRows(cpDocs.rows),
-      message_threads: stripRows(cpThreads.rows),
-      messages:        stripRows(cpMessages.rows),
-    };
+    // Other businesses' rows about this person: only the client-safe view
+    // (explicit columns; never another business's private notes, payment
+    // ids or internal logs). Same builder as the portal's own download.
+    const cp = await buildClientPortalExport(user, { memberships: myClients });
+    clientPortal = { ...cp, businesses: myClients };
   }
 
   return {

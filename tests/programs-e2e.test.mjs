@@ -558,7 +558,7 @@ async function run() {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
   const files = [
     'src/features/programs/ProgramsPage.jsx', 'src/features/programs/ProgramContent.jsx', 'src/features/programs/PublicProgram.jsx',
-    'src/features/client/ClientPrograms.jsx', 'src/features/client/ClientBilling.jsx', 'src/features/finance/Memberships.jsx',
+    'src/features/client/ClientPrograms.jsx', 'src/features/client/ClientInvoices.jsx', 'src/features/finance/Memberships.jsx',
     'api/_lib/programs.js', 'api/_lib/clientSubscriptionNotify.js', 'api/programs/checkout.js', 'api/memberships/checkout.js',
     'api/programs/[id]/items.js', 'api/programs/[id]/members.js', 'api/me/programs/[id]/subscription.js', 'api/me/memberships/[id].js',
   ];

@@ -353,7 +353,7 @@ async function run() {
   // ════════════════════════════════════════════════════════════════════
   console.log('\n[5] user-facing copy');
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-  for (const f of ['src/features/finance/Memberships.jsx', 'src/features/client/ClientBilling.jsx', 'api/_lib/memberships.js', 'api/memberships/index.js', 'api/memberships/[id].js', 'api/memberships/change-plan.js', 'api/me/memberships/index.js']) {
+  for (const f of ['src/features/finance/Memberships.jsx', 'src/features/client/ClientInvoices.jsx', 'api/_lib/memberships.js', 'api/memberships/index.js', 'api/memberships/[id].js', 'api/memberships/change-plan.js', 'api/me/memberships/index.js']) {
     const text = fs.readFileSync(path.join(root, f), 'utf8');
     assert(!text.includes('—') && !/business os/i.test(text) && !/\b(Claude|Anthropic)\b/.test(text), `${f}: no em dashes, no "business OS", no vendor names`);
   }

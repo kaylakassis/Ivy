@@ -91,7 +91,7 @@ async function handler(req, res) {
                 payload: {
                   title: 'Invoice due soon',
                   body: `Invoice ${r.number} is due in ${r.days_until_due} day${r.days_until_due === 1 ? '' : 's'}.`,
-                  url: '/me/billing',
+                  url: '/me/invoices',
                   tag: `inv-due-soon-${r.id}`,
                 },
               });

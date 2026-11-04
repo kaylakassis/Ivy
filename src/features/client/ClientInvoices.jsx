@@ -1,322 +1,399 @@
-// /me/invoices - list of every invoice the user owes or has paid, across
-// businesses. Status chip + amount; click "View / pay" → server issues a
-// fresh view token and we open the existing public /invoice/:token page.
+// /me/invoices - "Payments": everything money-related across every
+// business the person is a client of, in one place.
+//   To pay      open invoices first, each with a Pay button
+//   Packages    sessions left, Book a session
+//   Memberships memberships and program subscriptions, with Cancel/Manage
+//   Saved cards one per business (save, replace, remove)
+//   Receipts    paid invoices and shop orders, newest first
 //
-// Header above the invoice list deliberately avoids spend metrics
-// (lifetime spend, monthly spend). Surfacing money-flowed-out to a
-// client framed them as cost-bearers and primed guilt about coming
-// back. Instead we show forward-looking + value-already-paid-for
-// metrics: next visit, sessions / package / membership remaining,
-// and the genuinely-useful Outstanding tile. "Member since" runs
-// above the tiles as a quiet longevity signal.
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+// The old /me/billing (cards + memberships) and /me/orders (shop orders)
+// pages now redirect here (#cards, #receipts) so links in emails and the
+// 1.0.4 app keep working.
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import EmptyNote from '../../components/EmptyNote.jsx';
-import { SkelRowList } from '../../components/Skeleton.jsx';
-import Loader from '../../components/motion/Loader.jsx';
 import { api } from '../../lib/api.js';
-import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { PackageCard, RedeemPackageModal } from './ClientPackages.jsx';
+import { accessLine } from './ClientPrograms.jsx';
+import {
+  fmtDay, fmtDate, fmtMoney, SectionTitle, BusinessAvatar, ErrorNote, SkelCards, EmptyCard, actionBtn,
+} from './portalUi.jsx';
 
-const STATUS_META = {
-  sent:     { label: 'Awaiting payment', color: 'var(--warn)' },
-  overdue:  { label: 'Overdue',          color: 'var(--danger)' },
-  paid:     { label: 'Paid',             color: 'var(--ok)' },
-  voided:   { label: 'Voided',           color: 'var(--muted)' },
-  refunded: { label: 'Refunded',         color: 'var(--muted)' },
-};
-
-function fmtDate(iso) {
-  if (!iso) return '-';
-  return new Date(iso + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+function intervalLabel(i) {
+  return ({ week: 'a week', month: 'a month', quarter: 'every 3 months', year: 'a year' })[i] || 'a month';
 }
-// Currency-aware wrapper. Client portal shows invoices from many
-// businesses - each invoice carries its own currency. Outstanding tile
-// aggregates across mixed currencies; we show it in the dominant
-// currency, or USD if none.
-function fmtMoney(n, currency = 'USD') {
-  return fmtMoneyShared(n, currency);
-}
-// "Member since" - month + year is the right granularity (specific date
-// feels surveillance-y, year-only feels meaningless).
-function fmtMonthYear(iso) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString([], { month: 'long', year: 'numeric' });
-}
-// Short date for tile hints - e.g. "Thu Jun 12".
-function fmtShortDate(iso) {
-  if (!iso) return null;
-  const d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
-// "2:30 PM" - used in the Next-visit tile so a client at a glance knows
-// not just the day but the time.
-function fmtTime(startMin) {
-  if (startMin == null) return '';
-  const h = Math.floor(startMin / 60);
-  const m = startMin % 60;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = ((h + 11) % 12) + 1;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
+const capitalize = (s) => (s ? String(s).charAt(0).toUpperCase() + String(s).slice(1) : s);
 
 export default function ClientInvoices() {
-  const [data, setData]         = useState(null); // full /me/invoices response
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
-  const [opening, setOpening]   = useState(null); // invoice id currently being opened
-
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const [state, setState] = useState(null); // loaded data
+  const [error, setError] = useState(null);
+  const [opening, setOpening] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [actionErr, setActionErr] = useState(null);
+  const [redeeming, setRedeeming] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  const load = useCallback(async () => {
+    const soft = (p, fb) => p.catch(() => fb);
+    const [inv, pk, ms, progs, pm, orders] = await Promise.all([
+      api.get('/me/invoices'),
+      soft(api.get('/me/packages'), { packages: [] }),
+      soft(api.get('/me/memberships'), { memberships: [] }),
+      soft(api.get('/me/programs'), { programs: [] }),
+      soft(api.get('/me/payment-methods'), { cards: [] }),
+      soft(api.get('/me/orders'), { orders: [] }),
+    ]);
+    setState({
+      invoices: inv.invoices || [],
+      packages: pk.packages || [],
+      memberships: ms.memberships || [],
+      programs: (progs.programs || []).filter((p) => p.enrollmentBilling === 'subscription' || p.canCancel || p.currentPeriodEnd),
+      cards: pm.cards || [],
+      orders: orders.orders || [],
+    });
+  }, []);
 
   useEffect(() => {
     let live = true;
-    setLoading(true); setError(null);
-    api.get('/me/invoices')
-      .then((r) => live && setData(r || {}))
-      .catch((e) => live && setError(e))
-      .finally(() => live && setLoading(false));
+    setError(null);
+    load().catch((e) => live && setError(e));
     return () => { live = false; };
-  }, [reloadKey]);
+  }, [reloadKey, load]);
+  usePullRefresh(() => load().catch(() => {}));
 
-  const open = async (id) => {
-    setOpening(id);
+  // Jump to #packages / #cards / #receipts once the page has content.
+  useEffect(() => {
+    if (!state || !location.hash) return;
+    const el = document.getElementById(location.hash.slice(1));
+    if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  }, [state, location.hash]);
+
+  // Card-saving return (?save=ok|cancel), shown briefly then cleared.
+  const saveStatus = params.get('save');
+  useEffect(() => {
+    if (!saveStatus) return undefined;
+    const t = setTimeout(() => {
+      const next = new URLSearchParams(params);
+      next.delete('save');
+      setParams(next, { replace: true });
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [saveStatus, params, setParams]);
+
+  const openInvoice = async (id) => {
+    setOpening(id); setActionErr(null);
     try {
       const r = await api.post('/me/invoices/' + id + '/access-link');
       window.open(r.url, '_blank', 'noopener');
-    } catch (err) {
-      alert('Could not open invoice: ' + (err.message || 'unknown error'));
+    } catch (e) {
+      setActionErr(e.message || 'Could not open the invoice. Please try again.');
     } finally {
       setOpening(null);
     }
   };
+  const run = async (fn) => {
+    setBusy(true); setActionErr(null);
+    try { await fn(); } catch (e) { setActionErr(e.message || 'Something went wrong. Please try again.'); } finally { setBusy(false); }
+  };
+  const saveCard = (clientId) => run(async () => {
+    const r = await api.post('/me/payment-methods', { clientId });
+    window.location.href = r.url;
+  });
+  const removeCard = (c) => {
+    if (!window.confirm(`Remove the ${capitalize(c.brand) || 'card'} ending in ${c.last4} saved with ${c.businessName}?`)) return;
+    run(async () => { await api.del('/me/payment-methods/' + encodeURIComponent(c.clientId)); await load(); });
+  };
+  const cancelMembership = (m) => {
+    if (!window.confirm(`Cancel your ${m.membershipName} membership with ${m.businessName}? You keep access until the end of the time you have paid for.`)) return;
+    run(async () => { await api.del('/me/memberships/' + encodeURIComponent(m.id)); await load(); });
+  };
 
-  if (loading) return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <SkelRowList rows={4}/>
-      <Loader set="client"/>
-    </div>
+  if (error) {
+    return (
+      <div className="page-pad"><div className="portal-page">
+        <EmptyCard icon="Dollar" title="We couldn't load your payments"
+          hint="Check your connection and try again."
+          action={<button className="btn btn-primary" onClick={() => setReloadKey((n) => n + 1)} style={actionBtn}>Try again</button>}/>
+      </div></div>
+    );
+  }
+  if (!state) {
+    return <div className="page-pad"><div className="portal-page"><SkelCards rows={3}/></div></div>;
+  }
+
+  const open = state.invoices
+    .filter((i) => i.status === 'sent' || i.status === 'overdue')
+    .sort((a, b) => (a.status === 'overdue' ? 0 : 1) - (b.status === 'overdue' ? 0 : 1) || String(a.dueDate || '').localeCompare(String(b.dueDate || '')));
+  const receipts = [
+    ...state.invoices.filter((i) => i.status === 'paid' || i.status === 'refunded' || i.status === 'voided')
+      .map((i) => ({ kind: 'invoice', id: i.id, at: i.paidAt || i.issueDate, inv: i })),
+    ...state.orders.map((o) => ({ kind: 'order', id: o.id, at: o.paidAt || o.createdAt, order: o })),
+  ].sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  const subs = [...state.memberships.map((m) => ({ kind: 'membership', m })), ...state.programs.map((p) => ({ kind: 'program', p }))];
+  const nothingAtAll = state.invoices.length === 0 && state.packages.length === 0 && subs.length === 0 && state.orders.length === 0;
+
+  return (
+    <div className="page-pad"><div className="portal-page">
+      {saveStatus === 'ok' && <Banner tone="ok">Card saved. You're all set.</Banner>}
+      {saveStatus === 'cancel' && <Banner>Card not saved. You can try again any time.</Banner>}
+      <ErrorNote>{actionErr}</ErrorNote>
+
+      {nothingAtAll ? (
+        <EmptyCard icon="Dollar" title="Nothing to pay"
+          hint="When a business sends you an invoice or you buy a package, it will show up here."
+          action={<Link to="/me/bookings" className="btn btn-outline" style={actionBtn}>See your bookings</Link>}/>
+      ) : (
+        <section aria-label="To pay">
+          <SectionTitle>To pay</SectionTitle>
+          {open.length === 0 ? (
+            <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+                background: 'color-mix(in srgb, var(--ok) 14%, var(--surface))', color: 'var(--ok)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}><Icons.Check size={18} sw={2}/></div>
+              <div style={{ fontSize: 14.5, fontWeight: 600 }}>You're all paid up</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {open.map((inv) => <OpenInvoice key={inv.id} inv={inv} opening={opening === inv.id} onPay={() => openInvoice(inv.id)}/>)}
+            </div>
+          )}
+        </section>
+      )}
+
+      {state.packages.length > 0 && (
+        <section aria-label="Packages">
+          <SectionTitle id="packages">Packages</SectionTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {state.packages.map((p) => <PackageCard key={p.id} pkg={p} onBook={setRedeeming}/>)}
+          </div>
+        </section>
+      )}
+
+      {subs.length > 0 && (
+        <section aria-label="Memberships">
+          <SectionTitle id="memberships">Memberships</SectionTitle>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {subs.map((s, i) => (s.kind === 'membership'
+              ? <MembershipRow key={'m' + s.m.id} m={s.m} first={i === 0} busy={busy} onCancel={() => cancelMembership(s.m)}/>
+              : <ProgramSubRow key={'p' + s.p.id} p={s.p} first={i === 0}/>))}
+          </div>
+        </section>
+      )}
+
+      {state.cards.length > 0 && (
+        <section aria-label="Saved cards">
+          <SectionTitle id="cards">Saved cards</SectionTitle>
+          <div style={{ fontSize: 13, color: 'var(--muted)', margin: '-2px 2px 10px', lineHeight: 1.5 }}>
+            Each card is kept with one business only. It pays that business in one tap and covers any late-cancellation fee.
+          </div>
+          <div className="card" style={{ overflow: 'hidden' }}>
+            {state.cards.map((c, i) => (
+              <div key={c.clientId} style={{
+                padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+              }}>
+                <BusinessAvatar name={c.businessName} size={36}/>
+                <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{c.businessName}</div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+                    {c.hasCard
+                      ? `${capitalize(c.brand) || 'Card'} ending in ${c.last4}${c.expMonth ? `, expires ${String(c.expMonth).padStart(2, '0')}/${String(c.expYear).slice(-2)}` : ''}`
+                      : 'No card saved'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {c.hasCard ? (
+                    <>
+                      <button className="btn btn-outline" disabled={busy} onClick={() => saveCard(c.clientId)} style={actionBtn}>Replace</button>
+                      <button className="btn btn-ghost" disabled={busy} onClick={() => removeCard(c)} style={{ ...actionBtn, color: 'var(--danger)' }}>Remove</button>
+                    </>
+                  ) : (
+                    <button className="btn btn-outline" disabled={busy} onClick={() => saveCard(c.clientId)} style={actionBtn}>
+                      <Icons.Plus size={13} sw={2}/> Save a card
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {receipts.length > 0 && (
+        <section aria-label="Receipts">
+          <SectionTitle id="receipts">Receipts</SectionTitle>
+          <Receipts items={receipts} opening={opening} onOpen={openInvoice}/>
+        </section>
+      )}
+
+      {redeeming && (
+        <RedeemPackageModal pkg={redeeming} onClose={() => setRedeeming(null)}
+          onBooked={() => { setRedeeming(null); load().catch(() => {}); }}/>
+      )}
+    </div></div>
   );
-  if (error) return (
-    <div style={{ padding: 48 }}>
-      <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Dollar" title="Couldn't load invoices"
-          hint={error.message || 'Try refreshing.'}
-          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
+}
+
+function Banner({ tone, children }) {
+  return (
+    <div role="status" style={{
+      padding: '11px 14px', borderRadius: 12, fontSize: 13.5,
+      background: tone === 'ok' ? 'color-mix(in srgb, var(--ok) 10%, var(--surface))' : 'var(--surface-2)',
+      border: `1px solid ${tone === 'ok' ? 'color-mix(in srgb, var(--ok) 45%, var(--border))' : 'var(--border)'}`,
+      color: tone === 'ok' ? 'var(--ok)' : 'var(--fg-2)',
+    }}>{children}</div>
+  );
+}
+
+function OpenInvoice({ inv, opening, onPay }) {
+  const overdue = inv.status === 'overdue';
+  const due = inv.amountDue > 0 ? inv.amountDue : inv.total;
+  const partly = inv.paidAmount > 0 && inv.amountDue > 0 && inv.amountDue < inv.total;
+  return (
+    <div className="card" style={{ padding: 16, borderColor: overdue ? 'color-mix(in srgb, var(--danger) 45%, var(--border))' : undefined }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 170px', minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 650, overflowWrap: 'anywhere' }}>{inv.businessName}</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+            Invoice {inv.number}{inv.dueDate ? ` · due ${fmtDay(inv.dueDate)}` : ''}
+          </div>
+          {overdue && <div style={{ fontSize: 13, color: 'var(--danger)', fontWeight: 600, marginTop: 4 }}>Overdue</div>}
+          {partly && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>{fmtMoney(inv.paidAmount, inv.currency)} paid so far</div>}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div className="mono-num" style={{ fontSize: 20, fontWeight: 650 }}>{fmtMoney(due, inv.currency)}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button onClick={onPay} disabled={opening} className="btn btn-primary" style={{ ...actionBtn, flex: '1 1 auto', maxWidth: 260 }}>
+          {opening ? 'Opening…' : `Pay ${fmtMoney(due, inv.currency)}`}
+        </button>
       </div>
     </div>
   );
+}
 
-  const invoices = data?.invoices || [];
-
-  // Pick the dominant currency across the user's invoices for the
-  // Outstanding tile. Cross-currency sums don't strictly make sense,
-  // but most users have a single dominant currency; the alternative
-  // - N tiles per currency - clutters the UI for the 99% case.
-  const currencyCounts = invoices.reduce((m, i) => {
-    const c = (i.currency || 'USD').toUpperCase();
-    m[c] = (m[c] || 0) + 1;
-    return m;
-  }, {});
-  const summaryCurrency = Object.entries(currencyCounts)
-    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'USD';
-
-  const unpaidInvoices = invoices.filter((i) => i.status === 'sent' || i.status === 'overdue');
-  const totalOwed = unpaidInvoices.reduce((s, i) => s + (i.total || 0), 0);
-
+function MembershipRow({ m, first, busy, onCancel }) {
+  let status = '';
+  if (m.status === 'past_due') status = 'Payment did not go through. Please update your card.';
+  else if (m.status === 'incomplete') status = 'Waiting for your first payment';
+  else if (m.cancelAtPeriodEnd && m.currentPeriodEnd) status = `Ends ${fmtDate(m.currentPeriodEnd)}`;
+  else if (m.currentPeriodEnd) status = `Renews ${fmtDate(m.currentPeriodEnd)}`;
   return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      <div>
-        <h2 style={{
-          fontFamily: 'var(--font-display)', fontWeight: 500,
-          fontSize: 'clamp(26px, 4vw, 32px)',
-          letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05,
-        }}>Payments</h2>
-        <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
-          Every invoice across every business that's billed you on Ivy.
-        </p>
-        {data?.joinedAt && (
-          <p style={{
-            color: 'var(--muted)', fontSize: 12, margin: '8px 0 0',
-            fontStyle: 'italic',
-          }}>
-            Member since {fmtMonthYear(data.joinedAt)}
-          </p>
+    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: first ? 'none' : '1px solid var(--border)' }}>
+      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{m.membershipName}</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+          {m.businessName} · {fmtMoney((m.priceCents || 0) / 100)} {intervalLabel(m.interval)}
+        </div>
+        {status && <div style={{ fontSize: 13, color: m.status === 'past_due' ? 'var(--danger)' : 'var(--fg-2)', marginTop: 2 }}>{status}</div>}
+      </div>
+      {!m.cancelAtPeriodEnd && m.status !== 'cancelled' && (
+        <button className="btn btn-ghost" disabled={busy} onClick={onCancel} style={{ ...actionBtn, color: 'var(--danger)' }}>
+          Cancel membership
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ProgramSubRow({ p, first }) {
+  const line = accessLine(p, '');
+  return (
+    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderTop: first ? 'none' : '1px solid var(--border)' }}>
+      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{p.title}</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
+          Program from {p.businessName}{p.priceCents ? ` · ${fmtMoney(p.priceCents / 100)}` : ''}
+        </div>
+        {(line || p.enrollmentStatus === 'past_due') && (
+          <div style={{ fontSize: 13, color: p.enrollmentStatus === 'past_due' ? 'var(--danger)' : 'var(--fg-2)', marginTop: 2 }}>
+            {p.enrollmentStatus === 'past_due' ? 'Payment did not go through' : line}
+          </div>
         )}
       </div>
+      <Link to={`/me/programs/${p.id}`} className="btn btn-outline" style={actionBtn}>Manage</Link>
+    </div>
+  );
+}
 
-      {/* Three tiles - value-framed, not spend-framed. */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12,
-      }}>
-        <NextVisitTile
-          nextBooking={data?.nextBooking}
-          lastBookingBizSlug={data?.lastBookingBizSlug}/>
-        <WhatYouHaveLeftTile
-          pkg={data?.activePackage}
-          membership={data?.activeMembership}
-          sessionsThisYear={data?.sessionsThisYear || 0}/>
-        <SummaryTile
-          label="Outstanding"
-          value={fmtMoney(totalOwed, summaryCurrency)}
-          tone={totalOwed > 0 ? 'warn' : 'ok'}
-          hint={totalOwed > 0
-            ? `${unpaidInvoices.length} unpaid`
-            : "You're all caught up"}/>
-      </div>
+const RECEIPT_STATUS = { paid: 'Paid', refunded: 'Refunded', voided: 'Cancelled' };
 
-      {invoices.length === 0 ? (
-        <div className="card" style={{ padding: 40 }}>
-          <EmptyNote icon="Dollar" title="No invoices yet"
-            hint="When a business sends you an invoice, it'll show up here."/>
-        </div>
-      ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          {invoices.map((inv, i) => {
-            const meta = STATUS_META[inv.status] || STATUS_META.sent;
+function Receipts({ items, opening, onOpen }) {
+  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState({});
+  const shown = showAll ? items : items.slice(0, 8);
+  return (
+    <>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {shown.map((r, i) => {
+          const border = i === 0 ? 'none' : '1px solid var(--border)';
+          if (r.kind === 'invoice') {
+            const inv = r.inv;
             return (
-              <div key={inv.id} style={{
-                padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
-                borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                flexWrap: 'wrap',
-              }}>
-                <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <span className="mono-num" style={{ fontSize: 13, fontWeight: 600 }}>{inv.number}</span>
-                    <span style={{ fontSize: 11, color: 'var(--muted)' }}>·</span>
-                    <span style={{ fontSize: 13, color: 'var(--fg-2)' }}>{inv.businessName}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
-                    Issued {fmtDate(inv.issueDate)}
-                    {inv.dueDate && <> · Due {fmtDate(inv.dueDate)}</>}
+              <div key={'i' + r.id} style={{ padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12, borderTop: border }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{inv.businessName}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
+                    {RECEIPT_STATUS[inv.status] || 'Paid'} · {fmtDate(r.at)} · Invoice {inv.number}
                   </div>
                 </div>
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 99,
-                  background: 'color-mix(in srgb, ' + meta.color + ' 14%, transparent)',
-                  color: meta.color, fontSize: 11, fontWeight: 600,
-                  textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 99, background: meta.color }}/>
-                  {meta.label}
+                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                  <span className="mono-num" style={{ fontSize: 14.5, fontWeight: 600, textDecoration: inv.status === 'voided' ? 'line-through' : 'none' }}>
+                    {fmtMoney(inv.total, inv.currency)}
+                  </span>
+                  <button onClick={() => onOpen(inv.id)} disabled={opening === inv.id}
+                    style={{ background: 'none', border: 0, padding: 0, color: 'var(--accent)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    {opening === inv.id ? 'Opening…' : 'View'}
+                  </button>
                 </div>
-                <div className="mono-num" style={{ fontSize: 16, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>
-                  {fmtMoney(inv.total, inv.currency)}
-                </div>
-                <button onClick={() => open(inv.id)} disabled={opening === inv.id}
-                  className="btn btn-outline" style={{ padding: '6px 12px', fontSize: 12 }}>
-                  {opening === inv.id ? 'Opening…' : (inv.status === 'paid' ? 'View' : 'View & pay')}
-                  <Icons.Arrow size={11} sw={2}/>
-                </button>
               </div>
             );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Tile 1 - Next visit. Shows the soonest upcoming booking when there is
-// one, or a rebook CTA pointing at the last business the client saw
-// when there isn't. Both states render at the same physical size so
-// the row doesn't reflow when the answer changes day-to-day.
-function NextVisitTile({ nextBooking, lastBookingBizSlug }) {
-  if (nextBooking) {
-    const dateBit = fmtShortDate(nextBooking.date) || '';
-    const timeBit = fmtTime(nextBooking.startMin);
-    const hint = [dateBit, timeBit, nextBooking.businessName]
-      .filter(Boolean).join(' · ');
-    return (
-      <SummaryTile
-        label="Next visit"
-        value={nextBooking.serviceName || 'Booked'}
-        tone="ok"
-        hint={hint}/>
-    );
-  }
-  if (lastBookingBizSlug) {
-    return (
-      <SummaryTile
-        label="Next visit"
-        value="Book your next →"
-        hint="Tap to rebook"
-        to={`/book/${lastBookingBizSlug}`}/>
-    );
-  }
-  return (
-    <SummaryTile
-      label="Next visit"
-      value="-"
-      hint="No upcoming session"/>
-  );
-}
-
-// Tile 2 - "What you've got left." Fallback chain: active package (the
-// strongest rebook nudge - surfaces value already paid for) → active
-// membership (reminds them what they're getting) → sessions count this
-// year (frames engagement as activity, not expense).
-function WhatYouHaveLeftTile({ pkg, membership, sessionsThisYear }) {
-  if (pkg) {
-    const expiry = pkg.expiresAt ? ` · expires ${fmtShortDate(pkg.expiresAt)}` : '';
-    return (
-      <SummaryTile
-        label="Sessions left"
-        value={`${pkg.creditsRemaining}`}
-        tone="ok"
-        hint={`${pkg.name || 'Package'}${expiry}`}/>
-    );
-  }
-  if (membership) {
-    const renews = membership.currentPeriodEnd
-      ? ` · renews ${fmtShortDate(membership.currentPeriodEnd)}` : '';
-    return (
-      <SummaryTile
-        label="Membership"
-        value={membership.membershipName || 'Active'}
-        tone="ok"
-        hint={`${membership.businessName || ''}${renews}`}/>
-    );
-  }
-  const year = new Date().getFullYear();
-  return (
-    <SummaryTile
-      label="Sessions"
-      value={`${sessionsThisYear}`}
-      tone="muted"
-      hint={sessionsThisYear === 0 ? 'Let’s get one on the books' : `in ${year}`}/>
-  );
-}
-
-function SummaryTile({ label, value, tone, hint, to }) {
-  const accent = tone === 'warn' ? 'var(--warn)'
-    : tone === 'ok' ? 'var(--ok)'
-    : 'var(--fg)';
-  const content = (
-    <>
-      <div className="metric-label">{label}</div>
-      <div className="mono-num" style={{
-        fontSize: 26, fontWeight: 600, color: accent, letterSpacing: '-0.01em',
-      }}>{value}</div>
-      {hint && (
-        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{hint}</div>
+          }
+          const o = r.order;
+          const isOpen = !!expanded[o.id];
+          return (
+            <div key={'o' + r.id} style={{ padding: '13px 16px', borderTop: border }}>
+              <button onClick={() => setExpanded((p) => ({ ...p, [o.id]: !isOpen }))} aria-expanded={isOpen}
+                style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 12, background: 'transparent', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer', color: 'inherit', font: 'inherit' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 600, overflowWrap: 'anywhere' }}>{o.businessName}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
+                    {o.status === 'refunded' ? 'Refunded' : 'Order'} · {fmtDate(r.at)} · {o.items.length} item{o.items.length === 1 ? '' : 's'}
+                  </div>
+                </div>
+                <span className="mono-num" style={{ fontSize: 14.5, fontWeight: 600 }}>{fmtMoney(o.total)}</span>
+                <Icons.ArrowDown size={13} stroke="var(--muted)" style={{ transform: isOpen ? 'rotate(180deg)' : 'none' }}/>
+              </button>
+              {isOpen && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
+                  {o.items.map((it, j) => (
+                    <div key={j} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13.5, padding: '3px 0', color: 'var(--fg-2)' }}>
+                      <span style={{ overflowWrap: 'anywhere' }}>{it.qty} x {it.name}</span>
+                      <span className="mono-num">{fmtMoney(Number(it.rate || 0) * Number(it.qty || 0))}</span>
+                    </div>
+                  ))}
+                  {o.tax > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5, padding: '3px 0', color: 'var(--muted)' }}>
+                      <span>Tax</span><span className="mono-num">{fmtMoney(o.tax)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {items.length > 8 && (
+        <button className="btn btn-ghost" onClick={() => setShowAll((v) => !v)} style={{ ...actionBtn, marginTop: 8 }}>
+          {showAll ? 'Show fewer' : `Show all ${items.length}`}
+        </button>
       )}
     </>
-  );
-  const baseStyle = { padding: 16, display: 'flex', flexDirection: 'column', gap: 4 };
-  // When `to` is set, the tile becomes a click target. We borrow the
-  // .card class so the link inherits the same visual surface; reset
-  // text-decoration + color so the inner copy doesn't suddenly turn
-  // link-blue.
-  if (to) {
-    return (
-      <Link to={to} className="card" style={{
-        ...baseStyle, textDecoration: 'none', color: 'inherit', cursor: 'pointer',
-      }}>
-        {content}
-      </Link>
-    );
-  }
-  return (
-    <div className="card" style={baseStyle}>
-      {content}
-    </div>
   );
 }

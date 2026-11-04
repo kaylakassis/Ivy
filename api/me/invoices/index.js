@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       `SELECT i.id, i.client_id, i.number, i.status,
               i.issue_date, i.due_date, i.paid_at,
               i.total, i.currency,
-              i.tax_rate, i.discount
+              i.tax_rate, i.discount, i.paid_amount
        FROM invoices i
        WHERE i.client_id = ANY($1)
          AND i.status <> 'draft'
@@ -96,6 +96,12 @@ export default async function handler(req, res) {
         total:     Number(r.total || 0),
         currency:  r.currency || 'USD',
         businessName: m?.businessName || 'Business',
+        // Added for the 1.0.5 portal: part-payments, so the Pay button
+        // shows what is actually left to pay.
+        paidAmount: Number(r.paid_amount || 0),
+        amountDue: (r.status === 'sent' || r.status === 'overdue')
+          ? Math.max(0, Math.round((Number(r.total || 0) - Number(r.paid_amount || 0)) * 100) / 100)
+          : 0,
       };
     });
 

@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     if (!b) return badRequest(res, 'Booking not found');
     if (Number(b.tip_amount) > 0) return badRequest(res, 'A tip has already been recorded');
     if (!b.stripe_customer_id || !b.payment_method_id) {
-      return badRequest(res, 'No card on file - add one in /me/billing first.');
+      return badRequest(res, 'No saved card yet. Save one under Payments first.');
     }
 
     const creds = await loadStripeCreds(b.workspace_id);

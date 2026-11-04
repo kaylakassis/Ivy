@@ -227,7 +227,7 @@ function PriceFilter({ priceMin, priceMax, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useOutsideClick(ref, () => setOpen(false));
-  const label = priceMin != null && priceMax != null ? `$${priceMin}–${priceMax}`
+  const label = priceMin != null && priceMax != null ? `$${priceMin} to $${priceMax}`
     : priceMin != null ? `≥ $${priceMin}`
     : priceMax != null ? `≤ $${priceMax}`
     : 'Price';
@@ -250,11 +250,11 @@ function PriceFilter({ priceMin, priceMax, onChange }) {
           <PopoverTitle>Price range</PopoverTitle>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
             <NumberField placeholder="Min" value={priceMin} onChange={(v) => onChange({ priceMin: v })}/>
-            <span style={{ color: 'var(--muted)' }}>–</span>
+            <span style={{ color: 'var(--muted)' }}>to</span>
             <NumberField placeholder="Max" value={priceMax} onChange={(v) => onChange({ priceMax: v })}/>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-            {[[0, 25, '<$25'], [25, 75, '$25–75'], [75, 200, '$75–200'], [200, null, '$200+']].map(([lo, hi, lab]) => (
+            {[[0, 25, '<$25'], [25, 75, '$25 to $75'], [75, 200, '$75 to $200'], [200, null, '$200+']].map(([lo, hi, lab]) => (
               <button key={lab} onClick={() => onChange({ priceMin: lo, priceMax: hi })}
                 className="btn btn-ghost"
                 style={{
@@ -1035,7 +1035,7 @@ function HoursList({ availability }) {
         const isToday = i === today;
         const text = intervals.length === 0
           ? 'Closed'
-          : intervals.map((iv) => `${minToLabel(iv.start)} – ${minToLabel(iv.end)}`).join(', ');
+          : intervals.map((iv) => `${minToLabel(iv.start)} to ${minToLabel(iv.end)}`).join(', ');
         return (
           <div key={i} style={{
             display: 'flex', justifyContent: 'space-between', gap: 16,
