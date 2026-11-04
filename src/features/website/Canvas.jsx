@@ -1,9 +1,14 @@
 // Live preview canvas. Renders the full page using the template's CSS variables,
 // and makes each section click-to-select with a highlighted outline when selected.
-// Selected sections get a floating action toolbar (reorder / duplicate / delete)
-// and a drag grip, so the canvas is a first-class editing surface - not just a
-// preview you have to leave to rearrange.
+// Selected sections get a floating action toolbar (reorder / duplicate / delete
+// / move or copy to another page) and a drag grip, so the canvas is a
+// first-class editing surface - not just a preview you have to leave to
+// rearrange. Dragging uses pointer events (usePointerReorder) so it works with
+// a mouse, a finger and a pen.
 import React, { useMemo, useRef, useEffect, useState } from 'react';
+import { usePointerReorder, gripKeyDown } from './usePointerReorder.js';
+import { dropGapToIndex } from './pageTransforms.js';
+import { ActionMenu } from './EditorOverlays.jsx';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // These modules only load when a customer site is rendered or edited, so
 // requesting the builder font palette here keeps it off every other page.
@@ -16,7 +21,7 @@ const DEVICE_WIDTHS = { desktop: 1200, tablet: 768, mobile: 390 };
 
 export default function Canvas({
   site, sections, selectedId, onSelect, onSectionUpdate, device = 'desktop', previewMode = false,
-  onMove, onMoveTo, onDuplicate, onDelete,
+  onMove, onMoveTo, onDuplicate, onDelete, onPagePicker, onDropOnPage,
 }) {
   const tpl = TEMPLATES[site.template] || TEMPLATES.clean;
   const width = DEVICE_WIDTHS[device] || DEVICE_WIDTHS.desktop;
@@ -30,11 +35,22 @@ export default function Canvas({
   const [scale, setScale] = useState(1);
   const [innerH, setInnerH] = useState(0);
 
-  // Canvas drag-reorder state. `dropAt` is the FULL-array insertion index
+  // Canvas drag-reorder. `drag.gap` is the FULL-array insertion gap
   // (hidden sections included) so it stays consistent with the outline's
   // drag math in SectionLibrary.jsx and with moveSectionTo().
-  const [dragId, setDragId] = useState(null);
-  const [dropAt, setDropAt] = useState(null);
+  const { drag, start: startDrag } = usePointerReorder({
+    getScroller: () => wrapRef.current,
+    getItems: () => Array.from(innerRef.current?.querySelectorAll('[data-frame-id]') || [])
+      .map((el) => ({ el, index: Number(el.getAttribute('data-full-index')) })),
+    onDrop: (id, gap) => {
+      const idx = dropGapToIndex(gap, sourceSections.findIndex((s) => s.id === id));
+      if (idx != null && onMoveTo) onMoveTo(id, idx);
+    },
+    onDropOnPage,
+  });
+  const dragId = drag?.id || null;
+  const dragSrcIdx = dragId ? sourceSections.findIndex((s) => s.id === dragId) : -1;
+  const dropAt = drag && dropGapToIndex(drag.gap, dragSrcIdx) != null ? drag.gap : null;
 
   useEffect(() => {
     if (!wrapRef.current || !innerRef.current) return;
@@ -65,18 +81,6 @@ export default function Canvas({
   }, [tpl, site.fontPair]);
   const visibleSections = sourceSections.filter((s) => s.visible);
 
-  const endDrag = () => { setDragId(null); setDropAt(null); };
-  const handleDrop = (e) => {
-    e.preventDefault();
-    if (dragId && dropAt != null && onMoveTo) {
-      // Splicing the dragged item out first shifts later indexes down one.
-      const srcIdx = sourceSections.findIndex((s) => s.id === dragId);
-      const adj = srcIdx >= 0 && srcIdx < dropAt ? dropAt - 1 : dropAt;
-      onMoveTo(dragId, adj);
-    }
-    endDrag();
-  };
-
   return (
     <div
       ref={wrapRef}
@@ -106,8 +110,6 @@ export default function Canvas({
           }}
         >
           <div
-            onDrop={handleDrop}
-            onDragOver={(e) => { if (dragId) e.preventDefault(); }}
             style={{
               ...tplStyle,
               background: 'var(--site-bg)',
@@ -135,25 +137,14 @@ export default function Canvas({
                     onSectionUpdate={onSectionUpdate}
                     isFirst={vi === 0}
                     isLast={vi === visibleSections.length - 1}
-                    actions={previewMode ? null : { onMove, onDuplicate, onDelete }}
+                    fullIndex={fullIdx}
+                    scale={scale}
+                    actions={previewMode ? null : { onMove, onDuplicate, onDelete, onPagePicker }}
                     drag={previewMode ? null : {
                       dragging: dragId === section.id,
-                      showLineAbove: dragId && dragId !== section.id && dropAt === fullIdx,
-                      showLineBelow: dragId && dragId !== section.id && dropAt === fullIdx + 1,
-                      onGripStart: (e) => {
-                        e.dataTransfer.effectAllowed = 'move';
-                        try { e.dataTransfer.setData('text/plain', section.id); } catch { /* IE-ish */ }
-                        setDragId(section.id);
-                      },
-                      onGripEnd: endDrag,
-                      onFrameOver: (e) => {
-                        if (!dragId || dragId === section.id) return;
-                        e.preventDefault();
-                        const r = e.currentTarget.getBoundingClientRect();
-                        const before = (e.clientY - r.top) < r.height / 2;
-                        const next = before ? fullIdx : fullIdx + 1;
-                        setDropAt((d) => (d === next ? d : next));
-                      },
+                      showLineAbove: dropAt != null && dragId !== section.id && dropAt === fullIdx,
+                      showLineBelow: dropAt != null && dragId !== section.id && dropAt === fullIdx + 1,
+                      onGripDown: (e) => startDrag(e, section.id),
                     }}
                   />
                 );
@@ -172,7 +163,7 @@ export default function Canvas({
 
 function SectionFrame({
   section, selected, onSelect, previewMode, handle, onSectionUpdate,
-  isFirst, isLast, actions, drag,
+  isFirst, isLast, actions, drag, fullIndex, scale = 1,
 }) {
   const handleClick = (e) => {
     if (!onSelect) return;
@@ -184,10 +175,15 @@ function SectionFrame({
   // contentEditable handling on this `editable` flag.
   const editable = selected && !previewMode && !!onSectionUpdate;
   const showToolbar = selected && !previewMode && actions;
+  // The canvas is scaled to fit (a 1200px page on a phone is ~0.3x). The
+  // label and toolbar are scaled back up so they stay real-size and
+  // tappable at any zoom.
+  const unscale = scale > 0 && scale < 1 ? 1 / scale : 1;
   return (
     <div
       onClick={handleClick}
-      onDragOver={drag?.onFrameOver}
+      data-frame-id={section.id}
+      data-full-index={fullIndex}
       style={{
         position: 'relative',
         cursor: previewMode ? 'default' : 'pointer',
@@ -204,6 +200,7 @@ function SectionFrame({
           background: 'var(--accent)', color: 'var(--accent-ink)',
           padding: '3px 8px', fontSize: 10, fontWeight: 600,
           borderRadius: 4, letterSpacing: '0.06em', textTransform: 'uppercase',
+          transform: unscale !== 1 ? `scale(${unscale})` : undefined, transformOrigin: 'top left',
         }}>
           {section.type}
         </div>
@@ -218,21 +215,32 @@ function SectionFrame({
             background: 'rgba(17,18,16,0.92)', color: '#fff',
             borderRadius: 8, padding: 3,
             boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+            transform: unscale !== 1 ? `scale(${unscale})` : undefined, transformOrigin: 'top right',
           }}>
-          <span
-            draggable
-            onDragStart={drag?.onGripStart}
-            onDragEnd={drag?.onGripEnd}
-            title="Drag to reorder"
-            style={{ ...tbBtn, cursor: 'grab', fontSize: 13, letterSpacing: 1 }}
-          >⠿</span>
+          <button
+            type="button"
+            data-grip-id={section.id}
+            onPointerDown={drag?.onGripDown}
+            onKeyDown={(e) => gripKeyDown(e, actions.onMove, section.id)}
+            title="Drag to reorder (or Alt+Up / Alt+Down)"
+            aria-label="Drag to reorder. Alt plus Up or Down arrow moves the section."
+            style={{ ...tbBtn, cursor: drag?.dragging ? 'grabbing' : 'grab', fontSize: 13, letterSpacing: 1, touchAction: 'none' }}
+          >⠿</button>
           <button style={{ ...tbBtn, opacity: isFirst ? 0.35 : 1 }} disabled={isFirst}
-            title="Move up" onClick={() => actions.onMove?.(section.id, 'up')}>↑</button>
+            title="Move up" aria-label="Move up" onClick={() => actions.onMove?.(section.id, 'up')}>↑</button>
           <button style={{ ...tbBtn, opacity: isLast ? 0.35 : 1 }} disabled={isLast}
-            title="Move down" onClick={() => actions.onMove?.(section.id, 'down')}>↓</button>
-          <button style={tbBtn} title="Duplicate section"
+            title="Move down" aria-label="Move down" onClick={() => actions.onMove?.(section.id, 'down')}>↓</button>
+          <button style={tbBtn} title="Duplicate section" aria-label="Duplicate section"
             onClick={() => actions.onDuplicate?.(section.id)}>⧉</button>
-          <button style={{ ...tbBtn, color: '#ff8a80' }} title="Delete section"
+          {actions.onPagePicker && (
+            <ActionMenu label="More section actions" buttonStyle={tbBtn} items={[
+              { label: 'Move to page…', icon: 'MoveTo', onClick: () => actions.onPagePicker(section.id, 'move') },
+              { label: 'Copy to page…', icon: 'Copy', onClick: () => actions.onPagePicker(section.id, 'copy') },
+            ]}>
+              <span aria-hidden="true" style={{ fontSize: 14, lineHeight: 1 }}>⋯</span>
+            </ActionMenu>
+          )}
+          <button style={{ ...tbBtn, color: '#ff8a80' }} title="Delete section" aria-label="Delete section"
             onClick={() => actions.onDelete?.(section.id)}>✕</button>
         </div>
       )}
@@ -248,7 +256,7 @@ function SectionFrame({
 
 const tbBtn = {
   background: 'transparent', border: 'none', color: 'inherit',
-  width: 26, height: 24, borderRadius: 6, cursor: 'pointer',
+  width: 30, height: 28, borderRadius: 6, cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   fontSize: 12, lineHeight: 1, padding: 0,
 };

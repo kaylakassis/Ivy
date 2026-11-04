@@ -39,3 +39,20 @@ export function clearDeviceCache() {
     dead.forEach((k) => localStorage.removeItem(k));
   } catch { /* ignore */ }
 }
+
+// Website editor undo history (src/features/website/state.js) is kept in
+// localStorage per account and workspace so it survives a reload. It holds
+// draft site content, so it is wiped on sign-out (auth.jsx) on web and
+// native alike: a shared device never shows another account's history.
+export const SITE_HISTORY_PREFIX = 'ivy_site_history:';
+
+export function clearSiteHistory() {
+  try {
+    const dead = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(SITE_HISTORY_PREFIX)) dead.push(k);
+    }
+    dead.forEach((k) => localStorage.removeItem(k));
+  } catch { /* ignore */ }
+}
