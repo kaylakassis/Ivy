@@ -34,6 +34,7 @@ import { notifyPackageExhausted } from '../../../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../../_lib/intake.js';
 import { archivedForbidden } from '../../../_lib/businessAccess.js';
+import { evaluateAcceptance, refusalBody, recordAcceptance, feeTerms, workspaceCurrency } from '../../../_lib/cancellationPolicy.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
 
 const MAX_OCCURRENCES = 52;          // hard ceiling regardless of credits
@@ -142,7 +143,8 @@ export default async function handler(req, res) {
     const tz = settings.timezone || null;
 
     const sv = await sql`
-      SELECT capacity, availability, name, travel_buffer_minutes, duration_minutes FROM services
+      SELECT capacity, availability, name, travel_buffer_minutes, duration_minutes, price,
+             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount FROM services
        WHERE id = ${serviceId} AND workspace_id = ${cp.workspace_id}
     `;
     if (sv.rows.length === 0) return badRequest(res, "That service isn't offered anymore.");
@@ -187,6 +189,15 @@ export default async function handler(req, res) {
         return badRequest(res, `${s.date} ${fmtMin(s.startMin)}: that slot is taken.`);
       }
     }
+
+    // Cancellation policy switch (same rule as the booking page): checked
+    // before any credit is spent. Old apps that cannot show the box book
+    // and the record says so.
+    const policyCheck = await evaluateAcceptance({ workspaceId: cp.workspace_id, body });
+    if (policyCheck.decision === 'refused' || policyCheck.decision === 'changed') {
+      return res.status(policyCheck.status).json(refusalBody(policyCheck));
+    }
+    const policyCurrency = policyCheck.required ? await workspaceCurrency(cp.workspace_id) : null;
 
     // Atomically debit N credits. All-or-nothing - gating in the WHERE
     // clause means a concurrent booking flow that took the last credit
@@ -253,6 +264,25 @@ export default async function handler(req, res) {
         console.error('[packages/book] rollback failed:', rollbackErr.message);
       }
       throw insertErr;
+    }
+
+    // One acceptance record per booking (package sessions carry no
+    // deposit; the fee terms are the service's).
+    if (policyCheck.required) {
+      for (const b of inserted) {
+        // eslint-disable-next-line no-await-in-loop
+        await recordAcceptance({
+          workspaceId: cp.workspace_id, clientId: cp.client_id, bookingId: b.id,
+          policy: policyCheck.policy,
+          status: policyCheck.decision === 'accepted' ? 'accepted' : 'not_accepted_older_app',
+          source: 'package_booking', req, name: cp.client_name, email: cp.client_email,
+          terms: feeTerms({
+            service: sv.rows[0], bookingTotal: 0, currency: policyCurrency, settings: policyCheck.settings,
+            depositRequired: 0,
+            appointment: { date: b.date, startMin: b.startMin, endMin: b.endMin, timezone: tz },
+          }),
+        });
+      }
     }
 
     // Post-insert side-effects - match the public booking endpoint so

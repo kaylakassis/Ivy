@@ -107,8 +107,9 @@ export function useCalendar(window) {
     setCal((c) => ({ ...c, blocks: c.blocks.filter((b) => b.id !== id) }));
   }, []);
 
-  const cancelBooking = useCallback(async (id) => {
-    await api.del('/calendar/bookings/' + id);
+  const cancelBooking = useCallback(async (id, opts = {}) => {
+    // keepDeposit: the owner chose to keep a paid deposit (default refunds it).
+    await api.del('/calendar/bookings/' + id, opts.keepDeposit ? { refundDeposit: false } : undefined);
     setCal((c) => ({ ...c, bookings: c.bookings.filter((b) => b.id !== id) }));
   }, []);
 

@@ -14,6 +14,7 @@ import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
+import { settleOwnerCancellation } from '../../_lib/bookingFees.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
 
@@ -273,11 +274,21 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       const r = await sql`
-        UPDATE bookings SET cancelled_at = NOW()
+        UPDATE bookings SET cancelled_at = NOW(), cancelled_by = 'owner'
         WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL
       `;
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
       const cancelled = found.rows[0];
+      // The business cancelled: never a fee. A paid deposit goes back to
+      // the client unless the owner asked to keep it ({ refundDeposit:
+      // false }). Helpers never move money. Only the request that won the
+      // UPDATE above gets here, so the refund runs once.
+      if (!req.helper) {
+        const delBody = await readBody(req).catch(() => ({}));
+        await settleOwnerCancellation({
+          workspaceId, bookingId: id, refund: delBody?.refundDeposit !== false,
+        }).catch((err) => console.error('[booking cancel] deposit settle failed:', err.message));
+      }
       syncOnBookingDeleted({ workspaceId, googleEventId: cancelled.google_event_id });
       // Fire-and-forget cancellation email/push (owner-initiated).
       notifyBookingCancellation({ workspaceId, bookingId: id, source: 'owner' });

@@ -34,6 +34,7 @@ import {
 import {
   BizHeader, Progress, ServiceList, DateTimePicker, PolicyNote, StickyBar, MoreFrom, BookingSkeleton,
 } from './PublicBookingParts.jsx';
+import PolicyConsent, { usePolicyConsent, CardOnFilePrompt } from './PolicyConsent.jsx';
 import './publicBooking.css';
 
 const DAYS_FIRST_LOAD = 28;
@@ -54,6 +55,7 @@ export default function PublicBooking({ embedded = false }) {
   // when the page is loaded standalone (the hook checks window.parent).
   useEmbedResize(slug);
   const [cal, setCal] = useState(null);
+  const consent = usePolicyConsent(cal);
   const [loadErr, setLoadErr] = useState(null);
   const [loading, setLoading] = useState(true);
   // Owner's subscription lapsed: the API returns { archived, businessName }
@@ -434,6 +436,7 @@ export default function PublicBooking({ embedded = false }) {
   };
   const bookAnother = () => {
     setStep('pick');
+    consent.setChecked(false); consent.setCardUrl(null);
     setSlot(null);
     setWaitlistMode(false);
     setBookErr(null);
@@ -474,6 +477,7 @@ export default function PublicBooking({ embedded = false }) {
         giftCardCode: giftCardChecked ? giftCardCode : null,
         smsConsent: !!(smsOptIn && phone.trim()),
         joinWaitlist,
+        ...consent.fields(),
       });
       if (!embedded) {
         const st = safeStorage();
@@ -489,6 +493,7 @@ export default function PublicBooking({ embedded = false }) {
       if (Number(r.booking?.depositRequired) > 0) {
         setDepositPending(Number(r.booking.depositRequired));
       }
+      consent.setCardUrl(r.cardSetupUrl || null);
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setConfirmedCalendar(r.booking?.calendar || null);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
@@ -496,6 +501,7 @@ export default function PublicBooking({ embedded = false }) {
       haptic('success'); // a little "done!" tap on the client's phone
     } catch (e) {
       if (isArchivedError(e)) { setArchived({ businessName: cal?.settings?.bizName }); return; }
+      consent.handleError(e);
       setBookErr(e.message || 'Could not confirm - try another slot.');
     } finally {
       setBusy(false);
@@ -587,6 +593,7 @@ export default function PublicBooking({ embedded = false }) {
               ? <div className="row"><span>Where</span><span>{address.trim()}</span></div>
               : where && <div className="row"><span>Where</span><span>{where}</span></div>}
           </div>
+          <CardOnFilePrompt url={consent.cardUrl} svc={svc} bizName={bizName}/>
           {depositPending > 0 && (
             <div className="pb-done-card">
               One more thing: a <b>${depositPending.toFixed(2)} deposit</b> is due for this
@@ -904,6 +911,7 @@ export default function PublicBooking({ embedded = false }) {
               );
             })()}
             {(waitlistMode || total <= 0) && <div style={{ marginBottom: 14 }}><PolicyNote svc={svc} total={total}/></div>}
+            <PolicyConsent consent={consent} svc={svc} total={total} bizName={bizName}/>
 
             {bookErr && (
               <div className="pb-error" role="alert">
@@ -919,7 +927,7 @@ export default function PublicBooking({ embedded = false }) {
               <button type="button" className="pb-btn outline" onClick={backToPick}>
                 <Icons.ArrowLeft size={14}/> Back
               </button>
-              <button type="submit" className="pb-btn primary" disabled={!name.trim() || !email.trim() || busy}>
+              <button type="submit" className="pb-btn primary" disabled={!name.trim() || !email.trim() || busy || !consent.ready}>
                 {busy
                   ? (waitlistMode ? 'Joining…' : 'Confirming…')
                   : (waitlistMode ? 'Join the waitlist' : 'Confirm booking')}

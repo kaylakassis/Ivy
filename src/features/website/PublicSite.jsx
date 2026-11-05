@@ -178,7 +178,7 @@ export default function PublicSite({ byHost = false }) {
           businessName={site.businessName}/>
       )}
 
-      <SiteLinkContext.Provider value={{ anchors: sectionAnchors(visible), pages: nav, linkBase, sections: visible, bookingHref: `/book/${site.handle || handle}` }}>
+      <SiteLinkContext.Provider value={{ anchors: sectionAnchors(visible), pages: nav, linkBase, sections: visible, bookingHref: `/book/${site.handle || handle}`, cancellationPolicy: site.cancellationPolicy || null }}>
         {visible.map((section) => (
           <SectionRenderer key={section.id} section={section} handle={site.handle} />
         ))}

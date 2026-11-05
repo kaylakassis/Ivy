@@ -7,6 +7,8 @@ import { minToHM, hmToMin, parseISO, RECURRENCE_OPTIONS, isOccurrencePast } from
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from '../finance/CollectInPersonModal.jsx';
+import { BookingPolicyStatus } from '../clients/PolicyAcceptances.jsx';
+import BookingMoneyNotes, { useKeepDeposit } from './BookingMoneyNotes.jsx';
 
 export default function EventDrawer({
   event, services,
@@ -40,6 +42,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   const occurrenceISO = event.occurrenceDate || event.date;
 
   const [busy, setBusy] = useState(false);
+  const keep = useKeepDeposit(event);
   const [confirmKind, setConfirmKind] = useState(null); // 'occurrence' | 'series'
   const [editingRecurrence, setEditingRecurrence] = useState(false);
   const [draftRule, setDraftRule]   = useState(event.recurrenceRule || null);
@@ -95,7 +98,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   };
   const cancelSeries = async () => {
     setBusy(true);
-    try { await onCancelSeries({ ...event, id: masterId }); onClose(); } finally { setBusy(false); }
+    try { await onCancelSeries({ ...event, id: masterId, keepDeposit: keep.keepDeposit }); onClose(); } finally { setBusy(false); }
   };
   const saveRecurrence = async () => {
     setBusy(true);
@@ -314,6 +317,9 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         </div>
       )}
 
+      <BookingMoneyNotes event={event} onBookingChanged={onBookingChanged}/>
+      <BookingPolicyStatus bookingId={masterId} hasEmail={!!(event.clientEmail || '').trim()}/>
+
       {!event.cancelledAt && !event.noShowAt && (
         <BookingExtraActions event={event} onBookingChanged={onBookingChanged}/>
       )}
@@ -339,6 +345,8 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
             busy={busy}
           />
         ) : confirmKind === 'series' ? (
+          <>
+          {keep.control}
           <ConfirmRow
             text={isRecurring
               ? 'Cancel this booking AND every future occurrence in the series?'
@@ -347,6 +355,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
             onConfirm={cancelSeries}
             busy={busy}
           />
+          </>
         ) : (
           <>
             <button className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={onClose}>Close</button>

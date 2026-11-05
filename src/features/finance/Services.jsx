@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useCalendar } from '../calendar/state.js';
 import ServicesDrawer from '../calendar/ServicesDrawer.jsx';
+import CancellationPolicyCard from './CancellationPolicyCard.jsx';
 
 export default function FinanceServices() {
   const { cal, saveServices, loading } = useCalendar();
@@ -27,11 +28,14 @@ export default function FinanceServices() {
     return <div style={{ color: 'var(--muted)', fontSize: 13, padding: 12 }}>Loading…</div>;
   }
   return (
-    <ServicesDrawer
-      initial={cal?.services || []}
-      onSave={saveServices}
-      openId={openId}
-      inline
-    />
+    <>
+      <CancellationPolicyCard/>
+      <ServicesDrawer
+        initial={cal?.services || []}
+        onSave={saveServices}
+        openId={openId}
+        inline
+      />
+    </>
   );
 }

@@ -75,6 +75,7 @@ const OnboardingPage     = lazy(() => import('./features/onboarding/OnboardingPa
 
 // ── Lazy: public surfaces (often a fresh visit's first hit) ──
 const PublicBooking = lazy(() => import('./features/calendar/PublicBooking.jsx'));
+const PublicPolicyPage = lazy(() => import('./features/calendar/PublicPolicyPage.jsx'));
 const PublicSite    = lazy(() => import('./features/website/PublicSite.jsx'));
 const EmbedContact  = lazy(() => import('./features/embed/EmbedContact.jsx'));
 const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
@@ -271,6 +272,7 @@ export default function App() {
         <ErrorBoundary fallback={({ resetError, error }) => <RouteCrash resetError={resetError} error={error}/>}>
           <Routes>
             <Route path="/book/:slug" element={<PublicBooking />} />
+            <Route path="/book/:slug/policy" element={<PublicPolicyPage />} />
             <Route path="*"           element={<PublicSite byHost />} />
           </Routes>
         </ErrorBoundary>
@@ -305,6 +307,7 @@ export default function App() {
 
         {/* Public */}
         <Route path="/book/:slug"      element={<PublicBooking />} />
+        <Route path="/book/:slug/policy" element={<PublicPolicyPage />} />
         <Route path="/site/:handle"        element={<PublicSite />} />
         <Route path="/site/:handle/:slug"  element={<PublicSite />} />
         <Route path="/sign/:token"     element={<SignPage />} />

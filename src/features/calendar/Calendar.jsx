@@ -561,7 +561,7 @@ export default function Calendar() {
           onEditCompletion={editCompletion}
           onClearCompletion={clearCompletion}
           onDelete={async (e) => {
-            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id);
+            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id, { keepDeposit: !!e.keepDeposit });
             else if (e.id) await removeBlock(e.id);
           }}
           onClose={() => { setDrawer(null); setSelectedEvent(null); }}

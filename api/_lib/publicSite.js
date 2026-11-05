@@ -11,6 +11,7 @@
 //               Used when a request arrives at the custom domain itself.
 
 import { sql } from './db.js';
+import { publicPolicy } from './cancellationPolicy.js';
 
 // Normalize a hostname for comparison: lowercase, strip trailing dot.
 // Returns the bare + www variants so we match a stored custom_domain
@@ -105,6 +106,24 @@ export async function loadPublicSite({ handle, slug, host }) {
     .filter((p) => p.inNav !== false)
     .map((p) => ({ slug: p.slug, title: p.title }));
 
+  // The owner's cancellation policy, always the latest version, for the
+  // "Cancellation policy" section and the optional footer link. Plain
+  // text; every renderer escapes it.
+  let cancellationPolicy = null;
+  try {
+    const pol = await publicPolicy(r.workspace_id);
+    if (pol) {
+      const cs = await sql`SELECT slug FROM calendar_settings WHERE workspace_id = ${r.workspace_id} LIMIT 1`;
+      cancellationPolicy = {
+        text: pol.text, version: pol.version, updatedAt: pol.updatedAt,
+        showInSiteFooter: !!pol.showInSiteFooter,
+        policyUrl: cs.rows[0]?.slug ? `/book/${cs.rows[0].slug}/policy` : null,
+      };
+    }
+  } catch (err) {
+    console.error('[publicSite] cancellation policy skipped:', err.message);
+  }
+
   return {
     kind: 'ok',
     raw: r,
@@ -123,6 +142,7 @@ export async function loadPublicSite({ handle, slug, host }) {
       redirects:       Array.isArray(r.redirects) ? r.redirects : [],
       exitIntentPopup: r.exit_intent_popup || null,
       stickyCta:       r.sticky_cta || null,
+      cancellationPolicy,
     },
     page: {
       slug: foundPage ? foundPage.slug : '',

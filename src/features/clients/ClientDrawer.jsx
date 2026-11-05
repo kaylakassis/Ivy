@@ -10,6 +10,7 @@ import { api } from '../../lib/api.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
+import PolicyAcceptances from './PolicyAcceptances.jsx';
 
 export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
   // Slide out (140ms) before the parent unmounts us; every close path in
@@ -206,6 +207,8 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
 
           {/* Packages */}
           <ClientPackages client={client}/>
+
+          <PolicyAcceptances clientId={client.id}/>
 
           {/* Projects tied to this client - read-only summary list with
               a "+ New project" shortcut. Full management lives at the

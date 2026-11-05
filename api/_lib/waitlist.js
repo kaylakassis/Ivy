@@ -8,6 +8,7 @@ import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
 import { hasConflict, depositFor } from './calendar.js';
+import { linkWaitlistAcceptance } from './cancellationPolicy.js';
 
 export function serializeWaitlistEntry(row) {
   if (!row) return null;
@@ -139,6 +140,9 @@ export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO,
     UPDATE waitlist_entries SET promoted_booking_id = ${booking.rows[0].id}
     WHERE id = ${w.id}
   `;
+  // Cancellation policy accepted when they joined the waitlist: attach it
+  // to the new booking too. Best-effort, never throws.
+  await linkWaitlistAcceptance({ workspaceId, waitlistEntryId: w.id, bookingId: booking.rows[0].id, clientId });
 
   // Email + SMS the client. Best-effort; failure logs but doesn't undo
   // the promotion (they still got the seat).

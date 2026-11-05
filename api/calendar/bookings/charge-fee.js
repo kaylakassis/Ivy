@@ -11,8 +11,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { loadStripeCreds } from '../../_lib/stripeCreds.js';
-import { chargeOffSession } from '../../_lib/stripe.js';
+import { chargeFeeManually } from '../../_lib/bookingFees.js';
 import { serializeBooking } from '../../_lib/calendar.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
@@ -33,66 +32,36 @@ export default async function handler(req, res) {
       return badRequest(res, 'kind must be late_cancel or no_show');
     }
 
-    const r = await sql`
-      SELECT b.*,
-             c.stripe_customer_id, c.payment_method_id,
-             s.name AS service_name,
-             s.cancellation_fee_amount, s.no_show_fee_amount
-        FROM bookings b
-        LEFT JOIN clients c  ON c.id = b.client_id
-        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
-       WHERE b.id = ${id} AND b.workspace_id = ${workspaceId}
-       LIMIT 1
-    `;
-    const b = r.rows[0];
-    if (!b) return badRequest(res, 'Booking not found');
-    if (b.fee_charged_amount > 0) return badRequest(res, 'A fee was already charged for this booking');
-    if (!b.stripe_customer_id || !b.payment_method_id) {
-      return badRequest(res, 'No card on file for this client - ask them to add one in their portal first.');
+    let amount = null;
+    if (body.amount != null && body.amount !== '') {
+      amount = Number(body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return badRequest(res, 'amount must be a positive number');
+      if (amount > 1_000_000) return badRequest(res, 'amount too large');
     }
 
-    const policyFee = kind === 'late_cancel'
-      ? Number(b.cancellation_fee_amount || 0)
-      : Number(b.no_show_fee_amount || 0);
-    const amount = body.amount != null ? Number(body.amount) : policyFee;
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return badRequest(res, 'amount must be a positive number');
+    // Shared, exactly-once fee logic (api/_lib/bookingFees.js). Without an
+    // amount it charges the policy fee less any deposit the business kept.
+    const out = await chargeFeeManually({ workspaceId, bookingId: id, kind, amount });
+    if (out.notFound) return badRequest(res, 'Booking not found');
+    if (out.alreadyCharged || out.deduped) return badRequest(res, 'A fee was already charged for this booking');
+    if (out.openInvoice) {
+      return badRequest(res, `Invoice ${out.openInvoice} for this fee is already ${out.invoiceStatus}. Void it first if you want to charge the card instead.`);
     }
-    if (amount > 1_000_000) return badRequest(res, 'amount too large');
-
-    const creds = await loadStripeCreds(workspaceId);
-    const pi = await chargeOffSession({
-      secretKey: creds.secretKey,
-
-      stripeAccount: creds.stripeAccount,
-      customerId: b.stripe_customer_id,
-      paymentMethodId: b.payment_method_id,
-      amountCents: Math.round(amount * 100),
-      currency: creds.currency,
-      description: `${kind === 'late_cancel' ? 'Late-cancel' : 'No-show'} fee - ${b.service_name || 'session'}`,
-      metadata: { booking_id: b.id, workspace_id: workspaceId, kind },
-      statementDescriptor: kind === 'late_cancel' ? 'LATE CANCEL FEE' : 'NO-SHOW FEE',
-      // Stable per-booking key: a booking is fee-charged at most once, so
-      // a retry (or a crash after Stripe charged but before the UPDATE
-      // below) reuses Stripe's original charge instead of double-billing.
-      idempotencyKey: `fee-${b.id}`,
-    });
-
-    const upd = await sql`
-      UPDATE bookings SET
-        fee_charged_amount = ${amount},
-        fee_charged_at     = NOW(),
-        fee_charged_kind   = ${kind},
-        fee_payment_intent = ${pi.id},
-        updated_at         = NOW()
-      WHERE id = ${id} AND workspace_id = ${workspaceId}
-      RETURNING *
-    `;
-
+    if (out.noFee) return badRequest(res, 'This service has no fee set. Enter an amount to charge.');
+    const row = (await sql`SELECT * FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId}`).rows[0];
+    if (out.error) {
+      return res.status(402).json({
+        error: out.error,
+        chargeError: out.error,
+        feeInvoice: out.invoice || null,
+        booking: serializeBooking(row),
+      });
+    }
     return ok(res, {
-      booking: serializeBooking(upd.rows[0]),
-      charged: true,
-      chargeAmount: amount,
+      booking: serializeBooking(row),
+      charged: out.charged > 0,
+      chargeAmount: out.charged / 100,
+      feeFromDeposit: (out.fromDeposit || 0) / 100,
     });
   } catch (err) {
     // Stripe 402 (e.g. card declined / requires authentication) ends up here.

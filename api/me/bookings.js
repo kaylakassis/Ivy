@@ -28,6 +28,7 @@ export default async function handler(req, res) {
               b.video_room_url, b.location_address, b.tip_amount,
               b.completion_log, b.booking_total, b.deposit_paid,
               b.gift_card_credit_cents, b.recurrence_rule, b.client_package_id,
+              b.deposit_refunded_amount, cps.refund_deposit_outside_window,
               b.created_at, b.updated_at,
               s.name AS service_name,
               s.location_type, s.location_label,
@@ -43,6 +44,7 @@ export default async function handler(req, res) {
        LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
        LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
        LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
+       LEFT JOIN cancellation_policy_settings cps ON cps.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,
@@ -93,6 +95,9 @@ export default async function handler(req, res) {
         // and disagreed with the charge by the tz offset (east-of-UTC
         // clients were charged with no warning shown).
         startEpochMs: slotEpochMs(dateISO, r.start_min, r.biz_timezone || null),
+        // Cancellation policy (api/_lib/bookingFees.js): whether a paid
+        // deposit comes back when cancelling before the window.
+        depositRefundable: r.refund_deposit_outside_window !== false,
         videoRoomUrl: r.video_room_url || null,
         locationAddress: r.location_address || null,
         tipAmount: Number(r.tip_amount || 0),
