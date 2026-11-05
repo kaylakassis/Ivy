@@ -11,6 +11,7 @@ import { api } from '../../lib/api.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import { US_STATE_NAME } from '../../lib/locations.js';
 import { CATEGORIES } from '../../lib/categories.js';
+import DuplicateBusinesses from './DuplicateBusinesses.jsx';
 
 const MIN = 60_000, HOUR = 3_600_000, DAY = 86_400_000;
 
@@ -341,6 +342,12 @@ export default function UserProfileSheet({ userId, labels }) {
           {b.workspaceCount > 1 && (
             <R k="Businesses"><span style={{ color: 'var(--warn)', fontWeight: 600 }}>{b.workspaceCount} businesses</span> <span style={{ color: 'var(--muted)' }}>(the app uses the oldest)</span></R>
           )}
+        </Section>
+      )}
+
+      {b && b.workspaceCount > 1 && (
+        <Section title="Duplicate businesses" testId="profile-duplicates">
+          <DuplicateBusinesses userId={userId}/>
         </Section>
       )}
 
