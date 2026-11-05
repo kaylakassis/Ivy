@@ -34,6 +34,9 @@ export default async function handler(req, res) {
     if (!inv) return badRequest(res, 'Invoice not found');
     if (inv.status === 'paid')   return badRequest(res, 'Already paid');
     if (inv.status === 'voided') return badRequest(res, 'Voided - restore first');
+    // A refunded invoice was paid and the money went back. Marking it paid
+    // again would overwrite what was collected and count it as income.
+    if (inv.status === 'refunded') return badRequest(res, 'This invoice was refunded in full. Create a new invoice if the client is paying again.');
 
     const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
     // A gift card the client applied already covers part of the total; the
@@ -65,7 +68,7 @@ export default async function handler(req, res) {
         activity = ${JSON.stringify(newActivity)}::jsonb,
         updated_at = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
-        AND status <> 'paid'
+        AND status IN ('draft', 'sent', 'overdue')
       RETURNING *
     `;
     if (updated.rows.length === 0) {

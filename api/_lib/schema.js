@@ -4265,4 +4265,15 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS reminders_use_default BOOLEAN;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS reminder_settings JSONB;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS push_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Invoice clean-up (src/lib/invoiceRules.js). archived_at hides a paid,
+-- refunded or void invoice from the owner's main Finance list. It is a
+-- view setting only: the row, its payments and refunds stay, revenue
+-- history never changes, and unarchiving puts it back. NULL = not archived.
+-- recurring_invoice_id links an invoice to the recurring series that made
+-- it, so the owner sees that voiding one invoice does not stop the series.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS recurring_invoice_id UUID REFERENCES recurring_invoices(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_ws_archived
+  ON invoices(workspace_id, archived_at) WHERE archived_at IS NOT NULL;
+
 `;

@@ -29,8 +29,7 @@ import {
   fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
   syncRefundToPurchases,
 } from '../_lib/checkoutFulfillment.js';
-import { notifyOwnerSafe } from '../_lib/push.js';
-import { restoreGiftCardCreditForInvoice } from '../_lib/giftCards.js';
+import { applyStripeChargeRefundToInvoice } from '../_lib/invoiceRefundSync.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -325,12 +324,9 @@ export default async function handler(req, res) {
         ? charge.payment_intent : charge.payment_intent?.id;
       if (!pi) return ok(res, { received: true, ignored: 'no payment_intent on charge' });
 
-      const inv = await sql`
-        SELECT id, number, activity, refunded_amount FROM invoices
-         WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi}
-         LIMIT 1
-      `;
-      if (inv.rows.length === 0) {
+      // Shared with the per-workspace webhook (api/_lib/invoiceRefundSync.js).
+      const synced = await applyStripeChargeRefundToInvoice({ workspaceId, charge });
+      if (synced === 'not-found') {
         // Purchases with no invoice row. A full refund of a one-time
         // program closes the enrollment so the client's access ends with the
         // money; a refunded gift card is voided and a refunded package
@@ -341,52 +337,10 @@ export default async function handler(req, res) {
         if (programResult !== 'not-found') {
           return ok(res, { received: true, applied: 'program-refund', result: programResult });
         }
-        const synced = await syncRefundToPurchases({ workspaceId, charge });
-        return ok(res, { received: true, ...synced });
+        const purchases = await syncRefundToPurchases({ workspaceId, charge });
+        return ok(res, { received: true, ...purchases });
       }
-      const i = inv.rows[0];
-      const refundedTotal = Math.round(Number(charge.amount_refunded || 0)) / 100;
-      const already = Number(i.refunded_amount || 0);
-      if (refundedTotal <= already) {
-        return ok(res, { received: true, ignored: 'refund already recorded' });
-      }
-      const fully = Number(charge.amount_refunded) >= Number(charge.amount);
-      const entry = {
-        ts: new Date().toISOString(),
-        kind: 'refund',
-        text: `Refunded $${(refundedTotal - already).toFixed(2)} to card (via Stripe)`,
-      };
-      const applied = await sql`
-        UPDATE invoices SET
-          status          = ${fully ? 'refunded' : 'paid'},
-          refunded_amount = ${refundedTotal},
-          refunded_at     = NOW(),
-          activity        = ${JSON.stringify([...(i.activity || []), entry])}::jsonb,
-          updated_at      = NOW()
-        WHERE id = ${i.id} AND workspace_id = ${workspaceId}
-          AND COALESCE(refunded_amount, 0) = ${already}
-        RETURNING id
-      `;
-      if (applied.rowCount > 0) {
-        // A gift card the client applied comes back on the card once the
-        // money part is fully refunded (exactly-once inside the helper).
-        let giftRestoredCents = 0;
-        if (fully) {
-          giftRestoredCents = await restoreGiftCardCreditForInvoice({ workspaceId, invoiceId: i.id })
-            .catch((err) => { console.error('[stripe-platform] gift card restore failed:', err.message); return 0; });
-        }
-        const { notifyInvoiceRefunded } = await import('../_lib/invoiceNotify.js');
-        await notifyInvoiceRefunded({ workspaceId, invoiceId: i.id, amount: Math.round((refundedTotal - already) * 100) / 100, giftRestoredCents }).catch(() => {});
-      }
-      notifyOwnerSafe({
-        workspaceId, type: 'payments',
-        payload: {
-          title: fully ? 'Invoice refunded' : 'Partial refund recorded',
-          body: `${i.number} · $${refundedTotal.toFixed(2)} refunded via Stripe`,
-          url: `/finance?invoice=${i.id}`,
-          tag: `refund-${i.id}`,
-        },
-      });
+      if (synced === 'already') return ok(res, { received: true, ignored: 'refund already recorded' });
       return ok(res, { received: true, applied: 'invoice-refund-synced' });
     }
 

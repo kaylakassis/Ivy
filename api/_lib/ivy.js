@@ -256,7 +256,7 @@ export async function workspaceContext(workspaceId) {
     { rows: r1 }, { rows: r2 }, { rows: r3 }, { rows: r4 }, { rows: r5 }, { rows: r6 },
   ] = await Promise.all([
     sql`
-      SELECT COALESCE(SUM(total), 0)::numeric AS revenue
+      SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS revenue
       FROM invoices
       WHERE workspace_id = ${workspaceId}
         AND status = 'paid'
@@ -392,7 +392,10 @@ export async function buildBriefing(workspaceId, { goals: goalsIn, streak: strea
        ORDER BY b.start_min ASC
     `,
     sql`
-      SELECT COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS owed
+      SELECT COUNT(*)::int AS n,
+             COALESCE(SUM(GREATEST(total
+               - GREATEST(gift_card_credit_cents - gift_card_credit_restored_cents, 0) / 100.0
+               - GREATEST(COALESCE(paid_amount, 0) - COALESCE(refunded_amount, 0), 0), 0)), 0)::numeric AS owed
         FROM invoices
        WHERE workspace_id = ${workspaceId}
          AND status IN ('sent', 'overdue')
@@ -990,7 +993,7 @@ MORE OF THE APP (all approval-gated):
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,
   send_campaign, send_review_request, refund_invoice, reschedule_booking,
-  cancel_booking, void_invoice.
+  cancel_booking, void_invoice, delete_invoice, archive_invoices.
   ALSO gated (they reshape the public booking page, so treat them the same way):
   update_settings (name/slug/timezone/category/tagline/branding),
   adjust_availability (change part of the weekly hours, everything else stays),
@@ -1001,6 +1004,21 @@ OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   note to your memory); update_client when it changes a client's email or
   phone; toggle_workflow when it turns ON an automation that emails, texts or
   sends documents to clients. You CAN do all of these for the owner now.
+- INVOICES: what you can do depends on where the invoice stands. Call
+  search_invoices first; each result has status_line (quote it) and allowed
+  (true, or the reason it can't be done). Never tell the owner nothing can
+  be done with an invoice. The rules:
+  draft never sent -> delete_invoice. Sent or overdue, nothing paid ->
+  void_invoice (stays on record as Void, link stops taking payment, nothing
+  owed; ask whether to email the client and set notify_client). Part paid ->
+  refund_invoice that payment, then void. Paid -> never deleted or voided
+  (money moved, needed for records and taxes); refund_invoice in full or in
+  part. Refunded in full shows net $0 and nothing owed: that is the correct
+  result of a full refund, so say it plainly, for example "Refunded in full
+  on Nov 5. Nothing owed." Paid, refunded and void invoices can be hidden
+  with archive_invoices (undo with unarchive: true); archiving deletes
+  nothing and never changes revenue. Voiding or deleting one invoice from a
+  recurring series does not stop the series; that is Finance > Recurring.
 - How the gate works: when you call one of these tools the server does NOT
   run it. It records the call and returns needs_confirmation with a summary;
   the owner sees that summary on a card under your reply with an Approve
@@ -1143,7 +1161,9 @@ FINANCE (sidebar → "Finance")
 - Send an invoice: Finance → "+ New invoice" → fill out → "Send".
 - Send an estimate (quote): Finance → "Quotes" tab → "+ New estimate".
 - Set up a recurring invoice: Finance → "Recurring" tab → "+ New recurring".
-- Refund an invoice: open the invoice → "Refund" button (only for paid invoices).
+- Refund an invoice: open the invoice → "Refund" (full or part; paid invoices, or a part payment on an open one).
+- Cancel an unpaid invoice: open it → "Void" (stays on record, nothing owed; you can email the client). A never-sent draft can be deleted instead.
+- Hide paid, refunded or void invoices: open one → "Archive", or tap "Select to archive" on the list to archive several. The "Archived" filter shows them again. Paid and refunded invoices can't be deleted because money moved.
 - Connect Stripe / Square / PayPal: Finance → top-right "Settings" gear → Payment provider card.
 - Run in-person sale (POS / Tap to Pay): Finance → "POS" tab → enter amount → choose payment method.
 - Track expenses: Finance → "Expenses" tab.

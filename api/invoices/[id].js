@@ -1,7 +1,10 @@
 // /api/invoices/:id
 //   GET    → fetch
-//   PATCH  → edit (gated to draft / overdue / sent - paid + voided are locked)
-//   DELETE → remove (drafts only - others must be voided first)
+//   PATCH  → edit (gated to draft / overdue / sent - paid, refunded and
+//            voided are locked; a voided one can be restored to draft)
+//   DELETE → remove for good, only a draft that was never sent and has no
+//            payment. Sent invoices are voided; paid / refunded / void ones
+//            are archived (api/invoices/archive.js). See invoiceRules.js.
 
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
@@ -10,6 +13,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, cleanItems } from '../_lib/finance.js';
 import { decrementStock, restoreStock } from '../_lib/products.js';
+import { deleteInvoiceCore } from '../_lib/invoiceActions.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -83,7 +87,7 @@ export default async function handler(req, res) {
         }
         return ok(res, { invoice: serializeInvoice(r.rows[0]) });
       }
-      if (inv.status === 'paid' || inv.status === 'voided') {
+      if (inv.status === 'paid' || inv.status === 'voided' || inv.status === 'refunded') {
         return badRequest(res, `Can't edit a ${inv.status} invoice${inv.status === 'voided' ? ' - use "Restore to draft" first' : ''}`);
       }
       const sets = [];
@@ -143,10 +147,12 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      if (inv.status !== 'draft' && inv.status !== 'voided') {
-        return badRequest(res, "Void the invoice before deleting");
+      try {
+        await deleteInvoiceCore({ workspaceId, id: inv.id, actor: user, req });
+      } catch (e) {
+        if (e.code === 'refused' || e.code === 'not_found') return badRequest(res, e.message);
+        throw e;
       }
-      await sql`DELETE FROM invoices WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       return noContent(res);
     }
 

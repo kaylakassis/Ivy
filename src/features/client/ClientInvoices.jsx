@@ -124,8 +124,10 @@ export default function ClientInvoices() {
     return <div className="page-pad"><div className="portal-page"><SkelCards rows={3}/></div></div>;
   }
 
+  // Only invoices with money actually owed. A void or refunded invoice is
+  // never here (it shows under receipts with "Nothing owed").
   const open = state.invoices
-    .filter((i) => i.status === 'sent' || i.status === 'overdue')
+    .filter((i) => (i.status === 'sent' || i.status === 'overdue') && !(i.amountDue === 0 && Number(i.total) > 0))
     .sort((a, b) => (a.status === 'overdue' ? 0 : 1) - (b.status === 'overdue' ? 0 : 1) || String(a.dueDate || '').localeCompare(String(b.dueDate || '')));
   const receipts = [
     ...state.invoices.filter((i) => i.status === 'paid' || i.status === 'refunded' || i.status === 'voided')
@@ -253,7 +255,8 @@ function Banner({ tone, children }) {
 function OpenInvoice({ inv, opening, onPay }) {
   const overdue = inv.status === 'overdue';
   const due = inv.amountDue > 0 ? inv.amountDue : inv.total;
-  const partly = inv.paidAmount > 0 && inv.amountDue > 0 && inv.amountDue < inv.total;
+  const paidSoFar = inv.netPaid ?? inv.paidAmount;
+  const partly = paidSoFar > 0 && inv.amountDue > 0 && inv.amountDue < inv.total;
   return (
     <div className="card" style={{ padding: 16, borderColor: overdue ? 'color-mix(in srgb, var(--danger) 45%, var(--border))' : undefined }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
@@ -263,7 +266,7 @@ function OpenInvoice({ inv, opening, onPay }) {
             Invoice {inv.number}{inv.dueDate ? ` · due ${fmtDay(inv.dueDate)}` : ''}
           </div>
           {overdue && <div style={{ fontSize: 13, color: 'var(--danger)', fontWeight: 600, marginTop: 4 }}>Overdue</div>}
-          {partly && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>{fmtMoney(inv.paidAmount, inv.currency)} paid so far</div>}
+          {partly && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>{fmtMoney(paidSoFar, inv.currency)} paid so far</div>}
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="mono-num" style={{ fontSize: 20, fontWeight: 650 }}>{fmtMoney(due, inv.currency)}</div>
@@ -322,7 +325,17 @@ function ProgramSubRow({ p, first }) {
   );
 }
 
-const RECEIPT_STATUS = { paid: 'Paid', refunded: 'Refunded', voided: 'Cancelled' };
+const RECEIPT_STATUS = { paid: 'Paid', refunded: 'Refunded', voided: 'Voided' };
+
+// One short line under a settled invoice so a refund or a void is never
+// read as money owed.
+function receiptNote(inv) {
+  const refunded = Number(inv.refundedAmount || 0);
+  if (inv.status === 'voided') return 'Voided. Nothing owed.';
+  if (inv.status === 'refunded') return `Refunded in full${inv.refundedAt ? ` on ${fmtDate(inv.refundedAt)}` : ''}. Nothing owed.`;
+  if (inv.status === 'paid' && refunded > 0) return `${fmtMoney(refunded, inv.currency)} refunded. Nothing owed.`;
+  return null;
+}
 
 function Receipts({ items, opening, onOpen }) {
   const [showAll, setShowAll] = useState(false);
@@ -342,9 +355,12 @@ function Receipts({ items, opening, onOpen }) {
                   <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
                     {RECEIPT_STATUS[inv.status] || 'Paid'} · {fmtDate(r.at)} · Invoice {inv.number}
                   </div>
+                  {receiptNote(inv) && (
+                    <div data-testid="receipt-note" style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>{receiptNote(inv)}</div>
+                  )}
                 </div>
                 <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                  <span className="mono-num" style={{ fontSize: 14.5, fontWeight: 600, textDecoration: inv.status === 'voided' ? 'line-through' : 'none' }}>
+                  <span className="mono-num" style={{ fontSize: 14.5, fontWeight: 600, textDecoration: inv.status === 'voided' || inv.status === 'refunded' ? 'line-through' : 'none' }}>
                     {fmtMoney(inv.total, inv.currency)}
                   </span>
                   <button onClick={() => onOpen(inv.id)} disabled={opening === inv.id}

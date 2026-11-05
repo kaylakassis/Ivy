@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { INVOICE_FONTS, DEFAULT_DESIGN, fontCss, inkFor, loadInvoiceFont } from '../../lib/invoiceDesign.js';
 import { fmtMoney } from '../../lib/money.js';
+import { invoiceMoney } from '../../lib/invoiceRules.js';
 
 function fmtDate(d) {
   if (!d) return '';
@@ -64,11 +65,16 @@ export default function InvoiceDocument({ invoice, business, design, compact: co
   const t = totalsOf(inv);
   const paid = inv.status === 'paid';
   const refunded = inv.status === 'refunded';
-  const paidSoFar = Number(inv.paidAmount || 0);
+  const voided = inv.status === 'voided';
+  // Paid / refunded / net from the shared rules, so the document, the
+  // owner's drawer and the client portal always agree.
+  const money = invoiceMoney({ ...inv, total: t.total });
+  const paidSoFar = money.net;
   // A gift card the client applied: shown as its own line so the document
   // adds up, and taken off what is still due.
   const giftCredit = Number(inv.giftCardCreditCents || 0) / 100;
-  const remaining = Math.max(0, t.total - paidSoFar - giftCredit);
+  const remaining = voided ? 0 : Math.max(0, t.total - paidSoFar - giftCredit);
+  const stamp = paid && money.refunded <= 0 ? 'PAID' : (refunded || (paid && money.fullyRefunded)) ? 'REFUNDED' : voided ? 'VOID' : null;
   const fontFamily = fontCss(d.font);
   const isSerif = /serif/.test(fontFamily) && !/sans-serif/.test(fontFamily.split(',')[0]);
   const pad = compact ? 22 : 40;
@@ -114,12 +120,12 @@ export default function InvoiceDocument({ invoice, business, design, compact: co
       boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 10px 30px rgba(0,0,0,0.10)',
       overflow: 'hidden', position: 'relative', lineHeight: 1.45, ...style,
     }}>
-      {paid && (
-        <div aria-label="Paid" style={{
+      {stamp && (
+        <div aria-label={stamp === 'PAID' ? 'Paid' : stamp === 'VOID' ? 'Void' : 'Refunded'} style={{
           position: 'absolute', top: compact ? 64 : 96, right: pad, transform: 'rotate(-12deg)',
           border: `3px solid ${d.accent}`, color: d.accent, borderRadius: 8, padding: '4px 14px',
           fontSize: compact ? 16 : 22, fontWeight: 800, letterSpacing: '0.18em', opacity: 0.85,
-        }}>PAID</div>
+        }}>{stamp}</div>
       )}
       {header}
 
@@ -172,10 +178,18 @@ export default function InvoiceDocument({ invoice, business, design, compact: co
             {t.taxRate > 0 && <Row label={`Tax (${t.taxRate}%)`} value={fmtMoney(t.tax, inv.currency)}/>}
             {giftCredit > 0 && <Row label={`Gift card${inv.giftCardCodeLast4 ? ` (ending ${inv.giftCardCodeLast4})` : ''}`} value={'− ' + fmtMoney(giftCredit, inv.currency)}/>}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 10px', marginTop: 4, borderTop: `2px solid ${d.layout === 'minimal' ? P.ink : d.accent}`, fontSize: compact ? 15 : 17, fontWeight: 700, color: d.layout === 'minimal' ? d.accent : P.ink }}>
-              <span>{paid ? 'Total paid' : refunded ? 'Total (refunded)' : 'Total due'}</span>
-              <span>{fmtMoney(paid ? t.total : remaining, inv.currency)}</span>
+              <span>{paid && money.refunded <= 0 ? 'Total paid' : (paid || refunded) ? 'Total' : voided ? 'Amount due' : 'Total due'}</span>
+              <span>{fmtMoney((paid || refunded) ? t.total : remaining, inv.currency)}</span>
             </div>
-            {!paid && paidSoFar > 0 && <Row label="Already paid" value={'− ' + fmtMoney(paidSoFar, inv.currency)} muted/>}
+            {!paid && !refunded && !voided && paidSoFar > 0 && <Row label="Already paid" value={'− ' + fmtMoney(paidSoFar, inv.currency)} muted/>}
+            {(paid || refunded) && money.refunded > 0 && (
+              <>
+                <Row label="Paid" value={fmtMoney(money.paid, inv.currency)} muted/>
+                <Row label="Refunded" value={'− ' + fmtMoney(money.refunded, inv.currency)} muted/>
+                <Row label="Balance due" value={fmtMoney(0, inv.currency)} muted/>
+              </>
+            )}
+            {voided && <Row label="This invoice was voided. Nothing is owed." value="" muted/>}
           </div>
         </div>
       </div>
