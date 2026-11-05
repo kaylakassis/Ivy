@@ -34,7 +34,8 @@ export default async function handler(req, res) {
     const { rows } = await sql`
       SELECT a.*, c.name AS client_name, c.email AS client_email, cs.biz_name, cs.timezone, w.name AS ws_name
         FROM cancellation_policy_acceptances a
-        LEFT JOIN clients c ON c.id = a.client_id AND c.workspace_id = a.workspace_id
+        LEFT JOIN client_merges cm ON cm.workspace_id = a.workspace_id AND cm.removed_client_id = a.client_id
+        LEFT JOIN clients c ON c.id = COALESCE(cm.current_client_id, a.client_id) AND c.workspace_id = a.workspace_id
         LEFT JOIN calendar_settings cs ON cs.workspace_id = a.workspace_id
         LEFT JOIN workspaces w ON w.id = a.workspace_id
        WHERE a.id = ${id} AND a.workspace_id = ${workspaceId}

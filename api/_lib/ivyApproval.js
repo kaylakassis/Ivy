@@ -70,6 +70,11 @@ export async function executePendingAction({ row, workspaceId, userId }) {
   if (!result?.error && row.tool === 'import_clients_from_list' && Number(result?.with_email_count) > 0) {
     text += '\n\nWhen you are ready, you can email them your new booking link: [Let them know you moved](/clients?announce=1)';
   }
+  // Some of the new clients look like people already in the list.
+  if (!result?.error && row.tool === 'import_clients_from_list' && Number(result?.possible_duplicates) > 0) {
+    const d = Number(result.possible_duplicates);
+    text += `\n\n${d === 1 ? '1 possible duplicate' : `${d} possible duplicates`} to review: [Review them](/clients?duplicates=1)`;
+  }
   // The main change happened but a side step did not (an email, a notice):
   // say both, so the owner neither thinks it failed nor that the email went.
   if (warnings.length) text += `\n\nOne thing to check: ${warnings.join(' ')}`;

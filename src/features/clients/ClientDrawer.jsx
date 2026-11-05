@@ -14,7 +14,7 @@ import PolicyAcceptances from './PolicyAcceptances.jsx';
 import ClientReminders from './ClientReminders.jsx';
 import ClientDetails from './ClientDetails.jsx';
 
-export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
+export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder, onMergeWith }) {
   // Slide out (140ms) before the parent unmounts us; every close path in
   // this component goes through `onClose`.
   const { closing, close: onClose } = useAnimatedClose(onCloseNow);
@@ -273,6 +273,12 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
                 style={{ color: 'var(--danger)', padding: '8px 12px' }}>
                 <Icons.Trash size={13}/>Delete
               </button>
+              {onMergeWith && (
+                <button className="btn btn-ghost" onClick={onMergeWith} style={{ padding: '8px 12px' }}
+                  title="Combine this client with another record of the same person">
+                  <Icons.MoveTo size={13}/>Merge with…
+                </button>
+              )}
               <div style={{ flex: 1 }}/>
               <button className="btn btn-outline" onClick={startMessage} disabled={!!actBusy}>
                 <Icons.Chat size={13}/>{actBusy === 'message' ? '…' : 'Message'}

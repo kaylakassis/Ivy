@@ -12,6 +12,7 @@ import CustomFieldsSettings from './CustomFieldsSettings.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
 import AnnounceMoveSheet from './AnnounceMoveSheet.jsx';
 import FolderDrawer from './FolderDrawer.jsx';
+import { DuplicatesReview, MergeWithPicker } from './DuplicateClients.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 import { stagger, useFreshKeys, GrowIn } from '../../components/motion/stagger.jsx';
 import { useFolders } from './folders.js';
@@ -47,6 +48,12 @@ export default function Clients() {
   const [announceOpen, setAnnounceOpen] = useState(false);
   // Custom client fields (CustomFieldsSettings), also /clients?fields=1.
   const [fieldsOpen, setFieldsOpen] = useState(false);
+  // Possible duplicates: the count for the entry (shown only when > 0), the
+  // review list (also /clients?duplicates=1) and "Merge with..." on a client.
+  const [dupCount, setDupCount] = useState(0);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [mergeWith, setMergeWith] = useState(null);
+  const [dupTick, setDupTick] = useState(0);
   // One line after an add: was the portal invite emailed or not (and why).
   const [addNotice, setAddNotice] = useState(null);
   useEffect(() => {
@@ -107,6 +114,23 @@ export default function Clients() {
     return () => { live = false; };
   }, [clients.length]);
 
+  useEffect(() => {
+    let live = true;
+    api.get('/clients/duplicates?count=1')
+      .then((r) => { if (live) setDupCount(Number(r.total) || 0); })
+      .catch(() => { /* helpers and older servers: no entry */ });
+    return () => { live = false; };
+  }, [clients.length, dupTick]);
+
+  // After a merge: reload the list, and keep the kept client open when the
+  // merge started from one of them.
+  const afterMerge = async (result, removedId) => {
+    setMergeWith(null);
+    if (openId === removedId) setOpenId(result?.keptClientId || null);
+    try { await refresh?.(); } catch { /* the list reloads on next visit */ }
+    setDupTick((t) => t + 1);
+  };
+
   // Deep-link support so other pages can route here with a modal opened.
   // Used by Dashboard hero "Add client" and per-client quick actions.
   useEffect(() => {
@@ -136,6 +160,11 @@ export default function Clients() {
     if (params.get('fields') === '1') {
       setFieldsOpen(true);
       params.delete('fields');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+    if (params.get('duplicates') === '1') {
+      setDupOpen(true);
+      params.delete('duplicates');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
     if (params.get('announce') === '1') {
@@ -274,6 +303,24 @@ export default function Clients() {
         </div>
       )}
 
+      {dupCount > 0 && (
+        <button type="button" onClick={() => setDupOpen(true)} className="card" style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+          padding: '11px 14px', cursor: 'pointer', color: 'var(--fg)', fontSize: 13,
+        }}>
+          <span style={{
+            width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Users size={15} sw={1.8}/></span>
+          <span style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
+            <strong>Possible duplicates ({dupCount})</strong>
+            <span style={{ display: 'block', color: 'var(--muted)', fontSize: 12 }}>The same person entered twice? Review and merge them.</span>
+          </span>
+          <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, flexShrink: 0 }}>Review</span>
+          <Icons.Arrow size={13} stroke="var(--muted)"/>
+        </button>
+      )}
+
       {/* Analytics */}
       <div className="grid-auto">
         <AnalyticCard label="Total clients" value={active.length + paused.length}
@@ -366,6 +413,7 @@ export default function Clients() {
               onFolder={() => openClientFolder(c)}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
+              onMerge={() => setMergeWith(c)}
               onDelete={() => remove(c.id)}/>
           ) : (
             <ClientRow client={c} first={i === 0} index={i}
@@ -374,6 +422,7 @@ export default function Clients() {
               onFolder={() => openClientFolder(c)}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
+              onMerge={() => setMergeWith(c)}
               onDelete={() => remove(c.id)}/>
           )}</GrowIn>
         ))}
@@ -432,14 +481,31 @@ export default function Clients() {
           onDelete={async () => { await remove(openClient.id); setOpenId(null); }}
           onOpenFolder={(id) => { setOpenId(null); folderState.refresh(); setOpenFolderId(id); }}
           onMakeFolder={() => makeFolder(openClient)}
+          onMergeWith={() => setMergeWith(openClient)}
           clientFolders={foldersByClient[openClient.id] || []}
+        />
+      )}
+      {dupOpen && (
+        <DuplicatesReview
+          onClose={() => setDupOpen(false)}
+          onCountChange={setDupCount}
+          onMerged={(r) => afterMerge(r, null)}
+        />
+      )}
+      {mergeWith && (
+        <MergeWithPicker
+          client={mergeWith}
+          clients={clients}
+          onClose={() => setMergeWith(null)}
+          onMerged={afterMerge}
+          onOpenClient={(id) => setOpenId(id)}
         />
       )}
       {addOpen && <AddClientModal onClose={() => setAddOpen(false)} onAdd={onAdd}/>}
       {importOpen && (
         <ImportClientsModal
           onClose={() => setImportOpen(false)}
-          onComplete={() => refresh?.()}
+          onComplete={() => { refresh?.(); setDupTick((t) => t + 1); }}
         />
       )}
       {announceOpen && <AnnounceMoveSheet onClose={() => setAnnounceOpen(false)}/>}
@@ -465,7 +531,7 @@ function inviteNotice(client) {
   return { ok: inv.reason === 'off' || inv.reason === 'no-email', text: `${name} added. ${why}` };
 }
 
-function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
+function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onMerge, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
 
@@ -506,7 +572,7 @@ function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolde
         {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '-'}
       </div>
       <div style={{ textAlign: 'right', color: 'var(--muted)' }} onClick={(e) => e.stopPropagation()}>
-        <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>
+        <RowMenu client={client} onStage={onStage} onOpen={onOpen} onMerge={onMerge} onDelete={onDelete}/>
       </div>
     </div>
   );
@@ -599,7 +665,7 @@ function MetricChip({ label, tone, title }) {
 // Mobile variant - same data, stacked vertically. Two visible lines
 // (avatar+name+email, stage chip + last seen + lifetime) so the phone
 // shows enough to triage clients without horizontal scroll.
-function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
+function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onMerge, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
   return (
@@ -648,7 +714,7 @@ function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, 
         )}
       </div>
       <div onClick={(e) => e.stopPropagation()} style={{ color: 'var(--muted)' }}>
-        <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>
+        <RowMenu client={client} onStage={onStage} onOpen={onOpen} onMerge={onMerge} onDelete={onDelete}/>
       </div>
     </div>
   );
@@ -656,7 +722,7 @@ function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, 
 
 // Renders the menu via React portal so it escapes the table card's overflow:hidden.
 // Position is computed from the trigger button's bounding rect on each open.
-function RowMenu({ client, onStage, onOpen, onDelete }) {
+function RowMenu({ client, onStage, onOpen, onMerge, onDelete }) {
   const [open, setOpen]   = useState(false);
   const [pos, setPos]     = useState({ top: 0, left: 0 });
   const [confirmDel, setConfirmDel] = useState(false);
@@ -736,6 +802,11 @@ function RowMenu({ client, onStage, onOpen, onDelete }) {
               {o.label}
             </MenuItem>
           ))}
+          {onMerge && (
+            <MenuItem onClick={() => { onMerge(); setOpen(false); }} icon={<Icons.MoveTo size={13}/>}>
+              Merge with…
+            </MenuItem>
+          )}
           <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
           {confirmDel ? (
             <div style={{ padding: '6px 10px' }}>

@@ -31,6 +31,7 @@
 //   - Stripe account and live/test mode must match the approval
 import crypto from 'node:crypto';
 import { sql } from './db.js';
+import { resolveMergedClientId } from './clientResolve.js';
 import { computeTotals, fetchFinanceSettings } from './finance.js';
 import { invoiceMoney } from '../../src/lib/invoiceRules.js';
 import { loadStripeCreds } from './stripeCreds.js';
@@ -524,8 +525,10 @@ export async function syncSetupSession({ myIds, agreementId, sessionId }) {
   if (!/^cs_[A-Za-z0-9_]{1,200}$/.test(String(sessionId || ''))) throw new AutopayError('Unknown card setup.');
   const creds = await loadStripeCreds(a.workspace_id);
   const session = await fetchCheckoutSession({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, sessionId });
+  // The setup may have started on a record merged into this client since.
+  const mdClient = await resolveMergedClientId(a.workspace_id, session?.metadata?.client_id);
   if (session?.mode !== 'setup' || session?.status !== 'complete'
-      || session?.metadata?.client_id !== a.client_id || session?.metadata?.workspace_id !== a.workspace_id) {
+      || mdClient !== a.client_id || session?.metadata?.workspace_id !== a.workspace_id) {
     throw new AutopayError('That card setup did not finish. Please try again.');
   }
   const siId = typeof session.setup_intent === 'string' ? session.setup_intent : session.setup_intent?.id;

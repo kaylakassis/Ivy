@@ -18,6 +18,7 @@
 // stays for backward compatibility - workspaces that pasted keys
 // manually still ride that path.
 import { sql } from '../_lib/db.js';
+import { resolveMergedClientId } from '../_lib/clientResolve.js';
 import { readRawBody } from '../_lib/body.js';
 import {
   verifyWebhookSignature, platformWebhookSecret, platformStripeSecret,
@@ -176,7 +177,8 @@ export default async function handler(req, res) {
 
       // Save-card flow (client portal "save card on file").
       if (session.mode === 'setup' && session.metadata?.purpose === 'save_card') {
-        const clientId = session.metadata?.client_id;
+        // Merged away since the card setup started: save it on the kept client.
+        const clientId = await resolveMergedClientId(workspaceId, session.metadata?.client_id);
         const setupIntentId = typeof session.setup_intent === 'string'
           ? session.setup_intent : session.setup_intent?.id;
         if (!clientId || !setupIntentId) {

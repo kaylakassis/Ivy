@@ -115,7 +115,10 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
   // only): the exact text, version and fees they agreed to.
   const acceptances = await safe(sql.query(
     `SELECT client_id, booking_id, status, source, accepted_at, policy_version, policy_text, policy_sha256, terms
-       FROM cancellation_policy_acceptances WHERE client_id = ANY($1) ORDER BY accepted_at DESC LIMIT 1000`, [myIds]));
+       FROM cancellation_policy_acceptances
+      WHERE client_id = ANY($1)
+         OR client_id IN (SELECT removed_client_id FROM client_merges WHERE current_client_id = ANY($1))
+      ORDER BY accepted_at DESC LIMIT 1000`, [myIds]));
 
   const p = profile.rows[0] || null;
   return {

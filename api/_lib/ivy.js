@@ -998,6 +998,11 @@ MORE OF THE APP (all approval-gated):
   turn_off), client_invite_settings, resend_client_invite. The get/status
   actions just read. cancel_booking never refunds a deposit itself: a paid
   deposit goes to Deposits to review for the owner's Refund or Keep.
+  Duplicate clients: find_duplicate_clients reads possible duplicates;
+  merge_clients moves everything from one record to the other and removes it
+  (no undo; ask which record to keep when it is not obvious; add_client
+  refuses a second record for the same email or phone); dismiss_duplicate
+  marks a pair as different people.
 
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,

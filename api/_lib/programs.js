@@ -1,5 +1,6 @@
 // Programs: shared helpers for the owner API, the client portal and checkout.
 import { sql } from './db.js';
+import { withResolvedClientId, resolveMergedClientId } from './clientResolve.js';
 import { myClientIds, ids } from './clientPortal.js';
 import { mapSubStatus } from './memberships.js';
 import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
@@ -217,7 +218,8 @@ export async function grantEnrollment({ programId, workspaceId, clientId, source
 // cancel_at_period_end, so the portal can say "Access until <date>". A
 // transition into past_due tells the owner and the client once.
 export async function applyProgramSubscription({ workspaceId, sub }) {
-  const md = sub?.metadata || {};
+  // A client merged away since the checkout started: the kept client.
+  const md = (await withResolvedClientId(workspaceId, sub?.metadata)) || {};
   if (md.purpose !== 'program' || !md.program_id || !md.client_id) return 'ignored';
   if (md.workspace_id && md.workspace_id !== workspaceId) return 'mismatch';
   const p = (await sql`SELECT id, title, billing, price_cents FROM programs WHERE id = ${md.program_id} AND workspace_id = ${workspaceId}`).rows[0];
@@ -287,10 +289,11 @@ export async function revokeProgramPurchaseForRefund({ workspaceId, charge }) {
        WHERE e.workspace_id = ${workspaceId} AND e.stripe_payment_intent = ${pi} LIMIT 1`).rows[0] || null;
   }
   if (!e && md.purpose === 'program' && md.program_id && md.client_id) {
+    const cid = await resolveMergedClientId(workspaceId, md.client_id);
     e = (await sql`
       SELECT e.id, e.status, e.client_id, e.price_cents, e.refunded_cents, p.title
         FROM program_enrollments e JOIN programs p ON p.id = e.program_id
-       WHERE e.workspace_id = ${workspaceId} AND e.program_id = ${md.program_id} AND e.client_id = ${md.client_id}
+       WHERE e.workspace_id = ${workspaceId} AND e.program_id = ${md.program_id} AND e.client_id = ${cid}
          AND e.source = 'purchase' ORDER BY e.granted_at DESC LIMIT 1`).rows[0] || null;
   }
   if (!e) return 'not-found';

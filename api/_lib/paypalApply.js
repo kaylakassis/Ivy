@@ -7,6 +7,7 @@
 // the synchronous capture path in paypal-return.js calling applyPayment
 // directly - can't double-apply.
 import { sql } from './db.js';
+import { withResolvedClientId } from './clientResolve.js';
 import { computeTotals } from './finance.js';
 import { notifyOwnerSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
@@ -218,8 +219,10 @@ export async function applyPaypalSubscriptionEvent({ parsed }) {
     // We only create on a positive (active) signal - a cancel/past_due for a
     // subscription we never recorded is a no-op (likely created out-of-band).
     if (parsed.subStatus !== 'active') return 'unknown-subscription';
-    const md = parsed.metadata || {};
-    if (!md.workspace_id || !md.membership_id || !md.client_id) return 'missing-metadata';
+    const md0 = parsed.metadata || {};
+    if (!md0.workspace_id || !md0.membership_id || !md0.client_id) return 'missing-metadata';
+    // A client merged away since the subscription started: the kept one.
+    const md = await withResolvedClientId(md0.workspace_id, md0);
     const tier = (await sql`
       SELECT id, name, price_cents, interval FROM memberships
        WHERE id = ${md.membership_id} AND workspace_id = ${md.workspace_id} LIMIT 1

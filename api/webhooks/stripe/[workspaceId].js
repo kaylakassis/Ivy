@@ -8,6 +8,7 @@
 // over the exact raw bytes; any re-encoding (e.g. JSON parse + stringify)
 // would break verification.
 import { sql } from '../../_lib/db.js';
+import { resolveMergedClientId } from '../../_lib/clientResolve.js';
 import { readRawBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
@@ -213,7 +214,7 @@ export default async function handler(req, res) {
     // client row, plus set it as the customer's default for future
     // off-session charges.
     if (session.mode === 'setup' && session.metadata?.purpose === 'save_card') {
-      const clientId = session.metadata?.client_id;
+      const clientId = await resolveMergedClientId(workspaceId, session.metadata?.client_id);
       const setupIntentId = typeof session.setup_intent === 'string'
         ? session.setup_intent
         : session.setup_intent?.id;
@@ -294,7 +295,9 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'workspace mismatch (membership)' });
       }
       const membershipId = session.metadata?.membership_id;
-      const clientIdMeta = session.metadata?.client_id || null;
+      // A client merged away since the checkout started resolves to the
+      // client that holds their history now.
+      const clientIdMeta = (await resolveMergedClientId(workspaceId, session.metadata?.client_id)) || null;
       const subscriptionId = typeof session.subscription === 'string'
         ? session.subscription
         : session.subscription?.id;

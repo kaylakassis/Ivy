@@ -13,6 +13,7 @@
 // call: they are parked in ivy_pending_actions and only the owner's tap on
 // the approval card (POST /api/ivy/approve) executes them.
 import { normalizePhone } from './sms.js';
+import { countDuplicatesInvolving } from './clientDuplicates.js';
 import { sql } from './db.js';
 import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './calendar.js';
 import { invalidateOwnerWorkspace } from './clientPortal.js';
@@ -1572,6 +1573,7 @@ const ATTEMPT_TEXT = {
   send_policy_for_acceptance: 'Email the cancellation policy', send_document: 'Send the document',
   send_document_from_template: 'Send the template', void_document: 'Void the document', resend_document: 'Resend the document',
   autopay: 'Change automatic payments', client_invite_settings: 'Change the invite setting', resend_client_invite: 'Resend the portal invite',
+  merge_clients: 'Merge the two clients', dismiss_duplicate: 'Mark the clients as different people',
 };
 function attemptText(name, a) {
   const who = a?.name || a?.title || a?.subject || '';
@@ -1976,7 +1978,7 @@ async function add_client({ workspaceId, args }) {
      LIMIT 1`;
   if (dupe.rows.length) {
     const d = dupe.rows[0];
-    throw new Error(`${d.name} is already a client with that ${email ? 'email' : 'phone number'} (client id ${d.id}). Nothing was added; update their record instead.`);
+    throw new Error(`${d.name} is already a client with that ${email ? 'email' : 'phone number'} (client id ${d.id}). Nothing was added; update their record instead (update_client). If this person already has two records, find_duplicate_clients and merge_clients combine them into one.`);
   }
 
   const ins = await sql`
@@ -2543,7 +2545,12 @@ async function import_clients_from_list({ workspaceId, args }) {
   const plan = await prepareClientImport(workspaceId, clientImportRows(list), CLIENT_IMPORT_OPTS);
   const out = await insertPreparedClients(workspaceId, plan, { quiet: true });
   const noEmail = out.createdRows.filter((c) => !c.email);
+  // New possible duplicates (for example "Jane D." next to an existing
+  // "Jane Doe" with the same phone). Counting is best effort.
+  let possibleDuplicates = 0;
+  try { possibleDuplicates = await countDuplicatesInvolving(workspaceId, out.importedIds || []); } catch { /* not critical */ }
   return {
+    possible_duplicates: possibleDuplicates,
     ok: true,
     added: out.created,
     skipped_existing: plan.duplicates.length,
