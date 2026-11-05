@@ -391,7 +391,8 @@ export default async function handler(req, res) {
     // has actually registered. TestFlight and App Store builds use Apple's
     // PRODUCTION push environment; "sandbox" is only for Xcode debug runs.
     try {
-      const apnsMissing = ['APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_PRIVATE_KEY', 'APNS_BUNDLE_ID'].filter((k) => !process.env[k]);
+      // APNS_BUNDLE_ID is optional: api/_lib/apns.js defaults it to ai.joinivy.app.
+      const apnsMissing = ['APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_PRIVATE_KEY'].filter((k) => !process.env[k]);
       const apnsEnv = (process.env.APNS_ENV || 'production') === 'sandbox' ? 'sandbox' : 'production';
       const tok = await sql`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE COALESCE(last_used_at, created_at) > NOW() - INTERVAL '7 days')::int AS recent FROM push_device_tokens WHERE platform = 'ios'`;
       const n = tok.rows[0]?.n || 0, recent = tok.rows[0]?.recent || 0;
@@ -403,7 +404,7 @@ export default async function handler(req, res) {
         const envNote = apnsEnv === 'sandbox' ? ' APNS_ENV is "sandbox": pushes to TestFlight and App Store installs will be rejected (BadDeviceToken); set it to "production".' : '';
         checks.push(check('apns', 'iPhone push (APNs)', !minted ? 'fail' : (apnsEnv === 'sandbox' || n === 0) ? 'warn' : 'ok',
           !minted ? `Vars are set but the key could not sign a token: ${mintErr}`
-            : `Configured (${apnsEnv}), key ${process.env.APNS_KEY_ID}, bundle ${process.env.APNS_BUNDLE_ID}. ${n} iPhone${n === 1 ? '' : 's'} registered, ${recent} active in the last 7 days.${n === 0 ? ' No phone has registered yet: open the app, allow notifications when asked.' : ''}${envNote}`));
+            : `Configured (${apnsEnv}), key ${process.env.APNS_KEY_ID}, bundle ${process.env.APNS_BUNDLE_ID || 'ai.joinivy.app'}. ${n} iPhone${n === 1 ? '' : 's'} registered, ${recent} active in the last 7 days.${n === 0 ? ' No phone has registered yet: open the app, allow notifications when asked.' : ''}${envNote}`));
       }
     } catch (e) {
       checks.push(check('apns', 'iPhone push (APNs)', 'warn', `could not check: ${e.message}`));
