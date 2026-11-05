@@ -401,9 +401,14 @@ export async function listAcceptances({ workspaceId, clientId = null, bookingId 
        ORDER BY accepted_at DESC LIMIT ${lim}
     `);
   } else if (clientId) {
+    // Acceptances are permanent and never re-pointed: a client merged into
+    // this one keeps its old client id on them (client_merges maps it).
     ({ rows } = await sql`
       SELECT * FROM cancellation_policy_acceptances
-       WHERE workspace_id = ${workspaceId} AND client_id = ${clientId}
+       WHERE workspace_id = ${workspaceId}
+         AND (client_id = ${clientId}
+              OR client_id IN (SELECT removed_client_id FROM client_merges
+                                WHERE workspace_id = ${workspaceId} AND current_client_id = ${clientId}))
        ORDER BY accepted_at DESC LIMIT ${lim}
     `);
   } else {

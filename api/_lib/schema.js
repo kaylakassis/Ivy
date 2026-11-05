@@ -4605,4 +4605,473 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_amount_cents INT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_claimed_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_invoices_autopay_due
   ON invoices(autopay_retry_at) WHERE autopay_status IN ('retry_scheduled', 'charging');
+-- Possible duplicate clients and merging two records into one
+-- (api/_lib/clientDuplicates.js, api/_lib/clientMerge.js).
+-- client_duplicate_dismissals: pairs the owner marked "Not the same person",
+-- stored with client_a_id < client_b_id so a pair never comes back.
+CREATE TABLE IF NOT EXISTS client_duplicate_dismissals (
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_a_id  UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  client_b_id  UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  dismissed_by UUID,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (client_a_id < client_b_id),
+  PRIMARY KEY (workspace_id, client_a_id, client_b_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_dup_dismissals_b ON client_duplicate_dismissals(client_b_id);
+-- One row per merge: who, when, both ids, a snapshot of the removed record
+-- (and of the kept one before), what moved and any duplicate rows that were
+-- dropped because the kept client already had the same thing (for example
+-- the same program badge). No foreign keys to clients: the record must
+-- outlive both rows. current_client_id follows later merges (A into B, then
+-- B into C: A's row points at C), so records that are never re-pointed
+-- (cancellation policy acceptances) can still be shown under the right
+-- client. One row per removed client makes a merge happen exactly once.
+CREATE TABLE IF NOT EXISTS client_merges (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id      UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kept_client_id    UUID NOT NULL,
+  removed_client_id UUID NOT NULL,
+  current_client_id UUID,
+  merged_by         UUID,
+  via               TEXT NOT NULL DEFAULT 'app',
+  field_choices     JSONB NOT NULL DEFAULT '{}'::jsonb,
+  removed_snapshot  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  kept_before       JSONB,
+  moved             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  dropped           JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_client_merges_removed ON client_merges(workspace_id, removed_client_id);
+CREATE INDEX IF NOT EXISTS idx_client_merges_current ON client_merges(workspace_id, current_client_id);
+-- When the merged client is deleted later, the personal details kept in
+-- its merge records go too; who merged, when, and the ids stay.
+CREATE OR REPLACE FUNCTION client_merges_scrub() RETURNS trigger AS $$
+BEGIN
+  UPDATE client_merges
+     SET removed_snapshot = jsonb_build_object('scrubbed', true),
+         kept_before = NULL, dropped = '[]'::jsonb, field_choices = '{}'::jsonb
+   WHERE workspace_id = OLD.workspace_id AND current_client_id = OLD.id;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS clients_merge_scrub_trg ON clients;
+CREATE TRIGGER clients_merge_scrub_trg
+  AFTER DELETE ON clients
+  FOR EACH ROW EXECUTE FUNCTION client_merges_scrub();
+-- Autopay consent stays write-once, with one exception: a client merge may
+-- move an agreement to the kept client of the SAME business (the merge sets
+-- ivy.client_merge to that workspace id for its own transaction only). The
+-- consent words, card, cap and evidence never change.
+CREATE OR REPLACE FUNCTION autopay_consent_immutable() RETURNS trigger AS $$
+BEGIN
+  IF OLD.authorized_at IS NOT NULL THEN
+    IF NEW.authorized_at IS DISTINCT FROM OLD.authorized_at
+       OR NEW.consent_text IS DISTINCT FROM OLD.consent_text
+       OR NEW.consent_ip IS DISTINCT FROM OLD.consent_ip
+       OR NEW.consent_user_agent IS DISTINCT FROM OLD.consent_user_agent
+       OR NEW.consent_user_id IS DISTINCT FROM OLD.consent_user_id
+       OR NEW.payment_method_id IS DISTINCT FROM OLD.payment_method_id
+       OR NEW.card_brand IS DISTINCT FROM OLD.card_brand
+       OR NEW.card_last4 IS DISTINCT FROM OLD.card_last4
+       OR NEW.max_amount_cents IS DISTINCT FROM OLD.max_amount_cents
+       OR NEW.currency IS DISTINCT FROM OLD.currency
+       OR NEW.cadence IS DISTINCT FROM OLD.cadence
+       OR NEW.start_date IS DISTINCT FROM OLD.start_date
+       OR NEW.series_name IS DISTINCT FROM OLD.series_name
+       OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+       OR (NEW.recurring_invoice_id IS DISTINCT FROM OLD.recurring_invoice_id AND NEW.recurring_invoice_id IS NOT NULL)
+       OR (NEW.client_id IS DISTINCT FROM OLD.client_id AND NEW.client_id IS NOT NULL
+           AND NOT (COALESCE(current_setting('ivy.client_merge', true), '') = OLD.workspace_id::text
+                    AND EXISTS (SELECT 1 FROM clients c WHERE c.id = NEW.client_id AND c.workspace_id = OLD.workspace_id))) THEN
+      RAISE EXCEPTION 'autopay consent is immutable';
+    END IF;
+  END IF;
+  IF OLD.status = 'ended' AND NEW.status <> 'ended' THEN
+    RAISE EXCEPTION 'an ended autopay agreement cannot be reopened';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+-- The merge itself: ONE statement, so ONE transaction. Everything that
+-- points at the removed client (every uuid column named *client_id or with
+-- a foreign key to clients, found from the catalog so a future table is
+-- included) moves to the kept client, the kept record takes the chosen
+-- field values, the removed row is deleted and the merge is recorded.
+-- Raises merge_refused:<code> when it must not run; returns
+-- {status: 'already_merged'} when this removed client was merged before.
+-- Cancellation policy acceptances are permanent evidence and are NOT
+-- edited: client_merges maps their old client id to the kept client.
+CREATE OR REPLACE FUNCTION ivy_merge_clients(
+  p_ws UUID, p_keep UUID, p_remove UUID, p_actor UUID, p_via TEXT, p_choices JSONB, p_email_types TEXT[]
+) RETURNS JSONB AS $merge$
+DECLARE
+  k clients%ROWTYPE;
+  r clients%ROWTYPE;
+  prior client_merges%ROWTYPE;
+  ref RECORD;
+  dm RECORD;
+  n BIGINT;
+  moved JSONB := '{}'::jsonb;
+  dropped JSONB := '[]'::jsonb;
+  dropped_row JSONB;
+  row_ctid TID;
+  upd TEXT;
+  kt UUID;
+  rt UUID;
+  other UUID;
+  existing UUID;
+  ch JSONB := COALESCE(p_choices, '{}'::jsonb);
+  v_name TEXT; v_email TEXT; v_phone TEXT; v_stage TEXT; v_notes TEXT; v_extra TEXT := '';
+  phone_from_r BOOLEAN; addr_from_r BOOLEAN; bday_from_r BOOLEAN; card_from_r BOOLEAN;
+  r_autopay BOOLEAN; k_autopay BOOLEAN;
+  v_prefs JSONB := '{}'::jsonb;
+  pk TEXT;
+  v_custom JSONB;
+  v_tags TEXT[];
+  v_ref UUID;
+  t TEXT;
+  merge_id UUID;
+  old_emails TEXT[];
+  old_names TEXT[];
+  old_phones TEXT[];
+BEGIN
+  IF p_keep IS NULL OR p_remove IS NULL OR p_keep = p_remove THEN
+    RAISE EXCEPTION 'merge_refused:same_client';
+  END IF;
+  SELECT * INTO prior FROM client_merges WHERE workspace_id = p_ws AND removed_client_id = p_remove;
+  IF FOUND THEN
+    RETURN jsonb_build_object('status', 'already_merged', 'merge_id', prior.id,
+      'kept_client_id', COALESCE(prior.current_client_id, prior.kept_client_id), 'moved', prior.moved);
+  END IF;
+
+  PERFORM 1 FROM clients WHERE workspace_id = p_ws AND id IN (p_keep, p_remove) ORDER BY id FOR UPDATE;
+  SELECT * INTO r FROM clients WHERE id = p_remove AND workspace_id = p_ws;
+  IF NOT FOUND THEN
+    SELECT * INTO prior FROM client_merges WHERE workspace_id = p_ws AND removed_client_id = p_remove;
+    IF FOUND THEN
+      RETURN jsonb_build_object('status', 'already_merged', 'merge_id', prior.id,
+        'kept_client_id', COALESCE(prior.current_client_id, prior.kept_client_id), 'moved', prior.moved);
+    END IF;
+    RAISE EXCEPTION 'merge_refused:not_found';
+  END IF;
+  SELECT * INTO k FROM clients WHERE id = p_keep AND workspace_id = p_ws;
+  IF NOT FOUND THEN
+    IF EXISTS (SELECT 1 FROM client_merges WHERE workspace_id = p_ws AND removed_client_id = p_keep) THEN
+      RAISE EXCEPTION 'merge_refused:keep_merged';
+    END IF;
+    RAISE EXCEPTION 'merge_refused:not_found';
+  END IF;
+  IF k.user_id IS NOT NULL AND r.user_id IS NOT NULL AND k.user_id <> r.user_id THEN
+    RAISE EXCEPTION 'merge_refused:both_claimed';
+  END IF;
+  k_autopay := EXISTS (SELECT 1 FROM autopay_agreements WHERE workspace_id = p_ws AND client_id = p_keep AND status = 'active');
+  r_autopay := EXISTS (SELECT 1 FROM autopay_agreements WHERE workspace_id = p_ws AND client_id = p_remove AND status = 'active');
+  IF k_autopay AND r_autopay AND EXISTS (
+       SELECT 1 FROM autopay_agreements ak, autopay_agreements ar
+        WHERE ak.workspace_id = p_ws AND ak.client_id = p_keep AND ak.status = 'active'
+          AND ar.workspace_id = p_ws AND ar.client_id = p_remove AND ar.status = 'active'
+          AND (ar.payment_method_id IS DISTINCT FROM ak.payment_method_id
+               OR ar.stripe_customer_id IS DISTINCT FROM ak.stripe_customer_id)) THEN
+    RAISE EXCEPTION 'merge_refused:autopay_cards';
+  END IF;
+
+  PERFORM set_config('ivy.client_merge', p_ws::text, true);
+
+  SELECT id INTO kt FROM message_threads WHERE workspace_id = p_ws AND client_id = p_keep;
+  SELECT id INTO rt FROM message_threads WHERE workspace_id = p_ws AND client_id = p_remove;
+  IF rt IS NOT NULL THEN
+    SELECT COUNT(*) INTO n FROM messages WHERE thread_id = rt;
+    IF kt IS NULL THEN
+      UPDATE message_threads SET client_id = p_keep WHERE id = rt;
+      moved := moved || jsonb_build_object('message_threads.client_id', 1);
+    ELSE
+      UPDATE messages SET thread_id = kt WHERE thread_id = rt;
+      UPDATE message_threads mt
+         SET unread_biz = mt.unread_biz + x.unread_biz,
+             unread_client = mt.unread_client + x.unread_client,
+             last_message_at = GREATEST(mt.last_message_at, x.last_message_at),
+             last_message_preview = CASE WHEN x.last_message_at IS NOT NULL
+                                          AND (mt.last_message_at IS NULL OR x.last_message_at > mt.last_message_at)
+                                         THEN x.last_message_preview ELSE mt.last_message_preview END
+        FROM message_threads x
+       WHERE mt.id = kt AND x.id = rt;
+      DELETE FROM message_threads WHERE id = rt;
+    END IF;
+    IF n > 0 THEN moved := moved || jsonb_build_object('messages', n); END IF;
+  END IF;
+
+  FOR dm IN SELECT * FROM client_dm_threads
+             WHERE workspace_id = p_ws AND (client_a_id = p_remove OR client_b_id = p_remove) LOOP
+    other := CASE WHEN dm.client_a_id = p_remove THEN dm.client_b_id ELSE dm.client_a_id END;
+    IF other = p_keep THEN
+      dropped := dropped || jsonb_build_array(jsonb_build_object('table', 'client_dm_threads', 'row', to_jsonb(dm),
+        'messages', (SELECT COALESCE(jsonb_agg(to_jsonb(cm)), '[]'::jsonb) FROM client_dm_messages cm WHERE cm.thread_id = dm.id)));
+      DELETE FROM client_dm_threads WHERE id = dm.id;
+      CONTINUE;
+    END IF;
+    existing := NULL;
+    SELECT id INTO existing FROM client_dm_threads
+     WHERE workspace_id = p_ws AND client_a_id = LEAST(p_keep, other) AND client_b_id = GREATEST(p_keep, other);
+    IF existing IS NOT NULL THEN
+      UPDATE client_dm_messages SET thread_id = existing WHERE thread_id = dm.id;
+      UPDATE client_dm_threads
+         SET last_message_at = GREATEST(last_message_at, dm.last_message_at),
+             last_message_preview = CASE WHEN dm.last_message_at IS NOT NULL
+                                          AND (last_message_at IS NULL OR dm.last_message_at > last_message_at)
+                                         THEN dm.last_message_preview ELSE last_message_preview END
+       WHERE id = existing;
+      DELETE FROM client_dm_threads WHERE id = dm.id;
+    ELSIF (dm.client_a_id = p_remove) = (p_keep < other) THEN
+      UPDATE client_dm_threads
+         SET client_a_id = LEAST(p_keep, other), client_b_id = GREATEST(p_keep, other)
+       WHERE id = dm.id;
+    ELSE
+      UPDATE client_dm_threads
+         SET client_a_id = LEAST(p_keep, other), client_b_id = GREATEST(p_keep, other),
+             unread_a = dm.unread_b, unread_b = dm.unread_a,
+             archived_a = dm.archived_b, archived_b = dm.archived_a
+       WHERE id = dm.id;
+    END IF;
+    moved := moved || jsonb_build_object('client_dm_threads', COALESCE((moved->>'client_dm_threads')::int, 0) + 1);
+  END LOOP;
+  DELETE FROM client_dm_blocks WHERE workspace_id = p_ws
+     AND ((blocker_client_id = p_remove AND blocked_client_id = p_keep) OR (blocker_client_id = p_keep AND blocked_client_id = p_remove));
+  DELETE FROM client_dm_mutes WHERE workspace_id = p_ws
+     AND ((muter_client_id = p_remove AND muted_client_id = p_keep) OR (muter_client_id = p_keep AND muted_client_id = p_remove));
+
+  INSERT INTO client_duplicate_dismissals (workspace_id, client_a_id, client_b_id, dismissed_by, created_at)
+  SELECT p_ws, LEAST(p_keep, d.o), GREATEST(p_keep, d.o), d.dismissed_by, d.created_at
+    FROM (SELECT CASE WHEN client_a_id = p_remove THEN client_b_id ELSE client_a_id END AS o, dismissed_by, created_at
+            FROM client_duplicate_dismissals
+           WHERE workspace_id = p_ws AND (client_a_id = p_remove OR client_b_id = p_remove)) d
+   WHERE d.o <> p_keep
+  ON CONFLICT DO NOTHING;
+  DELETE FROM client_duplicate_dismissals WHERE workspace_id = p_ws AND (client_a_id = p_remove OR client_b_id = p_remove);
+
+  FOR ref IN
+    SELECT cl.relname::text AS tbl, a.attname::text AS col,
+           EXISTS (SELECT 1 FROM pg_attribute w WHERE w.attrelid = cl.oid AND w.attname = 'workspace_id' AND NOT w.attisdropped) AS has_ws
+      FROM pg_attribute a
+      JOIN pg_class cl ON cl.oid = a.attrelid
+     WHERE cl.relnamespace = current_schema()::regnamespace
+       AND cl.relkind IN ('r', 'p')
+       AND a.attnum > 0 AND NOT a.attisdropped
+       AND a.atttypid = 'uuid'::regtype
+       AND (a.attname ~ 'client_id$' OR a.attname IN ('client_a_id', 'client_b_id')
+            OR EXISTS (SELECT 1 FROM pg_constraint con
+                        WHERE con.conrelid = cl.oid AND con.contype = 'f'
+                          AND con.confrelid = 'clients'::regclass AND a.attnum = ANY (con.conkey)))
+       AND cl.relname NOT IN ('client_merges', 'client_duplicate_dismissals', 'cancellation_policy_acceptances',
+                              'message_threads', 'client_dm_threads')
+     ORDER BY 1, 2
+  LOOP
+    IF ref.has_ws THEN
+      upd := format('UPDATE %I SET %I = $1 WHERE %I = $2 AND workspace_id = $3', ref.tbl, ref.col, ref.col);
+    ELSE
+      upd := format('UPDATE %I SET %I = $1 WHERE %I = $2', ref.tbl, ref.col, ref.col);
+    END IF;
+    BEGIN
+      EXECUTE upd USING p_keep, p_remove, p_ws;
+      GET DIAGNOSTICS n = ROW_COUNT;
+    EXCEPTION WHEN unique_violation OR exclusion_violation THEN
+      n := 0;
+      FOR row_ctid IN EXECUTE format('SELECT ctid FROM %I WHERE %I = $1', ref.tbl, ref.col)
+                             || CASE WHEN ref.has_ws THEN ' AND workspace_id = $2' ELSE '' END
+                      USING p_remove, p_ws LOOP
+        BEGIN
+          EXECUTE format('UPDATE %I SET %I = $1 WHERE ctid = $2', ref.tbl, ref.col) USING p_keep, row_ctid;
+          n := n + 1;
+        EXCEPTION WHEN unique_violation OR exclusion_violation THEN
+          EXECUTE format('SELECT to_jsonb(x) FROM %I x WHERE ctid = $1', ref.tbl) INTO dropped_row USING row_ctid;
+          EXECUTE format('DELETE FROM %I WHERE ctid = $1', ref.tbl) USING row_ctid;
+          dropped := dropped || jsonb_build_array(jsonb_build_object('table', ref.tbl, 'column', ref.col, 'row', dropped_row));
+        END;
+      END LOOP;
+    END;
+    IF n > 0 THEN
+      moved := moved || jsonb_build_object(ref.tbl || '.' || ref.col, n);
+    END IF;
+  END LOOP;
+
+  v_name := CASE WHEN ch->>'name' = 'remove' THEN COALESCE(NULLIF(btrim(r.name), ''), k.name)
+                 ELSE COALESCE(NULLIF(btrim(k.name), ''), r.name) END;
+  v_email := CASE WHEN ch->>'email' = 'remove' THEN COALESCE(NULLIF(btrim(r.email), ''), NULLIF(btrim(k.email), ''))
+                  ELSE COALESCE(NULLIF(btrim(k.email), ''), NULLIF(btrim(r.email), '')) END;
+  phone_from_r := NULLIF(btrim(r.phone), '') IS NOT NULL
+                  AND (ch->>'phone' = 'remove' OR NULLIF(btrim(k.phone), '') IS NULL);
+  v_phone := CASE WHEN phone_from_r THEN r.phone ELSE NULLIF(btrim(k.phone), '') END;
+  addr_from_r := COALESCE(NULLIF(btrim(r.address), ''), NULLIF(btrim(r.address_street), ''), NULLIF(btrim(r.address_city), ''),
+                          NULLIF(btrim(r.address_postal_code), '')) IS NOT NULL
+                 AND (ch->>'address' = 'remove'
+                      OR COALESCE(NULLIF(btrim(k.address), ''), NULLIF(btrim(k.address_street), ''), NULLIF(btrim(k.address_city), ''),
+                                  NULLIF(btrim(k.address_postal_code), '')) IS NULL);
+  bday_from_r := r.birth_month IS NOT NULL AND (ch->>'birthday' = 'remove' OR k.birth_month IS NULL);
+  v_stage := CASE WHEN ch->>'stage' = 'remove' THEN r.stage
+                  WHEN ch->>'stage' = 'keep' THEN k.stage
+                  WHEN k.stage = 'active' OR r.stage = 'active' THEN 'active'
+                  WHEN k.stage = 'paused' OR r.stage = 'paused' THEN 'paused'
+                  ELSE COALESCE(k.stage, r.stage) END;
+
+  v_notes := COALESCE(k.notes, '');
+  IF NULLIF(btrim(r.notes), '') IS NOT NULL AND position(btrim(r.notes) IN v_notes) = 0 THEN
+    v_notes := CASE WHEN btrim(v_notes) = '' THEN btrim(r.notes) ELSE rtrim(v_notes) || chr(10) || chr(10) || btrim(r.notes) END;
+  END IF;
+  IF NULLIF(btrim(r.email), '') IS NOT NULL AND lower(btrim(r.email)) IS DISTINCT FROM lower(v_email) THEN
+    v_extra := v_extra || ' Other email: ' || btrim(r.email) || '.';
+  END IF;
+  IF NULLIF(btrim(k.email), '') IS NOT NULL AND lower(btrim(k.email)) IS DISTINCT FROM lower(v_email) THEN
+    v_extra := v_extra || ' Other email: ' || btrim(k.email) || '.';
+  END IF;
+  IF NULLIF(btrim(r.phone), '') IS NOT NULL AND r.phone IS DISTINCT FROM v_phone THEN
+    v_extra := v_extra || ' Other phone: ' || btrim(r.phone) || '.';
+  END IF;
+  IF NULLIF(btrim(k.phone), '') IS NOT NULL AND k.phone IS DISTINCT FROM v_phone THEN
+    v_extra := v_extra || ' Other phone: ' || btrim(k.phone) || '.';
+  END IF;
+  v_notes := CASE WHEN btrim(v_notes) = '' THEN '' ELSE rtrim(v_notes) || chr(10) || chr(10) END
+             || 'Merged with ' || COALESCE(NULLIF(btrim(r.name), ''), 'another record') || ' on '
+             || to_char(NOW() AT TIME ZONE 'UTC', 'Mon FMDD, YYYY') || '.' || v_extra;
+
+  SELECT COALESCE(array_agg(s.tag ORDER BY s.ord), '{}'::text[]) INTO v_tags
+    FROM (SELECT DISTINCT ON (lower(u.tag)) u.tag, u.ord
+            FROM unnest(COALESCE(k.tags, '{}'::text[]) || COALESCE(r.tags, '{}'::text[])) WITH ORDINALITY AS u(tag, ord)
+           WHERE NULLIF(btrim(u.tag), '') IS NOT NULL
+           ORDER BY lower(u.tag), u.ord) s;
+
+  v_custom := COALESCE(r.custom_fields, '{}'::jsonb) || COALESCE(k.custom_fields, '{}'::jsonb);
+  IF jsonb_typeof(ch->'custom_fields') = 'object' THEN
+    FOR pk, t IN SELECT key, value FROM jsonb_each_text(ch->'custom_fields') LOOP
+      IF t = 'remove' AND COALESCE(r.custom_fields, '{}'::jsonb) ? pk THEN
+        v_custom := v_custom || jsonb_build_object(pk, r.custom_fields->pk);
+      END IF;
+    END LOOP;
+  END IF;
+
+  FOR pk IN SELECT DISTINCT key FROM (
+      SELECT key FROM jsonb_object_keys(CASE WHEN jsonb_typeof(k.notification_prefs) = 'object' THEN k.notification_prefs ELSE '{}'::jsonb END) AS key
+      UNION SELECT key FROM jsonb_object_keys(CASE WHEN jsonb_typeof(r.notification_prefs) = 'object' THEN r.notification_prefs ELSE '{}'::jsonb END) AS key) u LOOP
+    IF k.notification_prefs->pk = 'false'::jsonb OR r.notification_prefs->pk = 'false'::jsonb THEN
+      v_prefs := v_prefs || jsonb_build_object(pk, false);
+    ELSE
+      v_prefs := v_prefs || jsonb_build_object(pk, COALESCE(k.notification_prefs->pk, r.notification_prefs->pk));
+    END IF;
+  END LOOP;
+  FOR t IN SELECT DISTINCT o.type FROM client_email_optouts o
+            WHERE o.workspace_id = p_ws AND o.cleared_at IS NULL
+              AND (o.client_id IN (p_keep, p_remove)
+                   OR o.email IN (lower(btrim(k.email)), lower(btrim(r.email)))) LOOP
+    IF t = 'all' THEN
+      FOREACH pk IN ARRAY COALESCE(p_email_types, '{}'::text[]) LOOP
+        v_prefs := v_prefs || jsonb_build_object(pk, false);
+      END LOOP;
+    ELSE
+      v_prefs := v_prefs || jsonb_build_object(t, false);
+    END IF;
+  END LOOP;
+
+  card_from_r := r.payment_method_id IS NOT NULL
+                 AND ((r_autopay AND NOT k_autopay) OR k.payment_method_id IS NULL);
+  v_ref := CASE WHEN k.referred_by_client_id IS NOT NULL AND k.referred_by_client_id NOT IN (p_keep, p_remove) THEN k.referred_by_client_id
+                WHEN r.referred_by_client_id IS NOT NULL AND r.referred_by_client_id NOT IN (p_keep, p_remove) THEN r.referred_by_client_id
+                ELSE NULL END;
+
+  UPDATE client_merges SET current_client_id = p_keep
+   WHERE workspace_id = p_ws AND current_client_id = p_remove;
+  DELETE FROM clients WHERE id = p_remove AND workspace_id = p_ws;
+
+  UPDATE clients SET
+    name = v_name,
+    email = v_email,
+    phone = v_phone,
+    sms_stopped_at = GREATEST(k.sms_stopped_at, r.sms_stopped_at),
+    sms_consent_at = CASE WHEN k.sms_stopped_at IS NOT NULL OR r.sms_stopped_at IS NOT NULL THEN NULL
+                          WHEN k.phone IS NOT DISTINCT FROM r.phone THEN COALESCE(k.sms_consent_at, r.sms_consent_at)
+                          WHEN phone_from_r THEN r.sms_consent_at ELSE k.sms_consent_at END,
+    stage = v_stage,
+    tags = v_tags,
+    notes = v_notes,
+    custom_fields = v_custom,
+    notification_prefs = v_prefs,
+    lifetime_value = COALESCE(k.lifetime_value, 0) + COALESCE(r.lifetime_value, 0),
+    source = COALESCE(NULLIF(btrim(k.source), ''), r.source),
+    joined_at = LEAST(k.joined_at, r.joined_at),
+    last_seen_at = GREATEST(k.last_seen_at, r.last_seen_at),
+    created_at = LEAST(k.created_at, r.created_at),
+    referred_by_client_id = v_ref,
+    invite_sent_at = COALESCE(k.invite_sent_at, r.invite_sent_at),
+    move_announced_at = GREATEST(k.move_announced_at, r.move_announced_at),
+    user_id = COALESCE(k.user_id, r.user_id),
+    portal_hidden_at = CASE WHEN k.user_id IS NULL AND r.user_id IS NOT NULL THEN r.portal_hidden_at ELSE k.portal_hidden_at END,
+    address = CASE WHEN addr_from_r THEN r.address ELSE k.address END,
+    address_street = CASE WHEN addr_from_r THEN r.address_street ELSE k.address_street END,
+    address_city = CASE WHEN addr_from_r THEN r.address_city ELSE k.address_city END,
+    address_region = CASE WHEN addr_from_r THEN r.address_region ELSE k.address_region END,
+    address_postal_code = CASE WHEN addr_from_r THEN r.address_postal_code ELSE k.address_postal_code END,
+    address_country = CASE WHEN addr_from_r THEN r.address_country ELSE k.address_country END,
+    birth_month = CASE WHEN bday_from_r THEN r.birth_month ELSE k.birth_month END,
+    birth_day = CASE WHEN bday_from_r THEN r.birth_day ELSE k.birth_day END,
+    birth_year = CASE WHEN bday_from_r THEN r.birth_year ELSE k.birth_year END,
+    stripe_customer_id = CASE WHEN card_from_r THEN r.stripe_customer_id ELSE COALESCE(k.stripe_customer_id, r.stripe_customer_id) END,
+    payment_method_id = CASE WHEN card_from_r THEN r.payment_method_id ELSE k.payment_method_id END,
+    payment_method_brand = CASE WHEN card_from_r THEN r.payment_method_brand ELSE k.payment_method_brand END,
+    payment_method_last4 = CASE WHEN card_from_r THEN r.payment_method_last4 ELSE k.payment_method_last4 END,
+    payment_method_exp_month = CASE WHEN card_from_r THEN r.payment_method_exp_month ELSE k.payment_method_exp_month END,
+    payment_method_exp_year = CASE WHEN card_from_r THEN r.payment_method_exp_year ELSE k.payment_method_exp_year END,
+    photo_url = COALESCE(NULLIF(btrim(k.photo_url), ''), r.photo_url),
+    attachments = CASE WHEN jsonb_typeof(k.attachments) = 'array' AND jsonb_typeof(r.attachments) = 'array' THEN k.attachments || r.attachments
+                       ELSE COALESCE(k.attachments, r.attachments) END,
+    gallery_photos = CASE WHEN jsonb_typeof(k.gallery_photos) = 'array' AND jsonb_typeof(r.gallery_photos) = 'array' THEN k.gallery_photos || r.gallery_photos
+                          ELSE COALESCE(k.gallery_photos, r.gallery_photos) END,
+    reminder_settings = COALESCE(k.reminder_settings, r.reminder_settings),
+    pronouns = COALESCE(NULLIF(btrim(k.pronouns), ''), r.pronouns),
+    occupation = COALESCE(NULLIF(btrim(k.occupation), ''), r.occupation),
+    preferred_contact = COALESCE(NULLIF(btrim(k.preferred_contact), ''), r.preferred_contact),
+    emergency_name = COALESCE(NULLIF(btrim(k.emergency_name), ''), r.emergency_name),
+    emergency_phone = COALESCE(NULLIF(btrim(k.emergency_phone), ''), r.emergency_phone),
+    emergency_relationship = COALESCE(NULLIF(btrim(k.emergency_relationship), ''), r.emergency_relationship),
+    updated_at = NOW()
+  WHERE id = p_keep AND workspace_id = p_ws;
+
+  old_emails := ARRAY(SELECT DISTINCT lower(btrim(e)) FROM unnest(ARRAY[k.email, r.email]) e
+                       WHERE NULLIF(btrim(e), '') IS NOT NULL AND lower(btrim(e)) IS DISTINCT FROM lower(v_email));
+  old_names := ARRAY(SELECT DISTINCT x FROM unnest(ARRAY[k.name, r.name]) x WHERE x IS NOT NULL AND x <> v_name);
+  old_phones := ARRAY(SELECT DISTINCT x FROM unnest(ARRAY[k.phone, r.phone]) x WHERE NULLIF(btrim(x), '') IS NOT NULL AND x IS DISTINCT FROM v_phone);
+  FOR ref IN
+    SELECT cl.relname::text AS tbl,
+           bool_or(a.attname = 'client_email') AS has_email,
+           bool_or(a.attname = 'client_name') AS has_name,
+           bool_or(a.attname = 'client_phone') AS has_phone
+      FROM pg_class cl JOIN pg_attribute a ON a.attrelid = cl.oid AND a.attnum > 0 AND NOT a.attisdropped
+     WHERE cl.relnamespace = current_schema()::regnamespace AND cl.relkind IN ('r', 'p')
+       AND a.attname IN ('client_email', 'client_name', 'client_phone')
+       AND EXISTS (SELECT 1 FROM pg_attribute c1 WHERE c1.attrelid = cl.oid AND c1.attname = 'client_id' AND NOT c1.attisdropped)
+       AND EXISTS (SELECT 1 FROM pg_attribute w1 WHERE w1.attrelid = cl.oid AND w1.attname = 'workspace_id' AND NOT w1.attisdropped)
+     GROUP BY cl.relname
+     ORDER BY 1
+  LOOP
+    IF ref.has_email AND v_email IS NOT NULL AND cardinality(old_emails) > 0 THEN
+      EXECUTE format('UPDATE %I SET client_email = $1 WHERE workspace_id = $2 AND client_id = $3 AND lower(client_email) = ANY ($4)', ref.tbl)
+        USING v_email, p_ws, p_keep, old_emails;
+    END IF;
+    IF ref.has_name AND cardinality(old_names) > 0 THEN
+      EXECUTE format('UPDATE %I SET client_name = $1 WHERE workspace_id = $2 AND client_id = $3 AND client_name = ANY ($4)', ref.tbl)
+        USING v_name, p_ws, p_keep, old_names;
+    END IF;
+    IF ref.has_phone AND v_phone IS NOT NULL AND cardinality(old_phones) > 0 THEN
+      EXECUTE format('UPDATE %I SET client_phone = $1 WHERE workspace_id = $2 AND client_id = $3 AND client_phone = ANY ($4)', ref.tbl)
+        USING v_phone, p_ws, p_keep, old_phones;
+    END IF;
+  END LOOP;
+
+  INSERT INTO client_merges (workspace_id, kept_client_id, removed_client_id, current_client_id, merged_by, via,
+                             field_choices, removed_snapshot, kept_before, moved, dropped)
+  VALUES (p_ws, p_keep, p_remove, p_keep, p_actor, COALESCE(NULLIF(p_via, ''), 'app'),
+          ch, to_jsonb(r), to_jsonb(k), moved, dropped)
+  RETURNING id INTO merge_id;
+
+  RETURN jsonb_build_object('status', 'merged', 'merge_id', merge_id, 'kept_client_id', p_keep,
+                            'moved', moved, 'dropped', jsonb_array_length(dropped));
+END;
+$merge$ LANGUAGE plpgsql;
 `;

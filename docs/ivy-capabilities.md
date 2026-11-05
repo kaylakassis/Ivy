@@ -95,7 +95,10 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Add a client | `add_client` |
 | Edit name, stage, tags, notes | `update_client` |
 | Edit email or phone | `update_client` (approval, it changes where messages go) |
-| Import a list (file, screenshot, photo) | `import_clients_from_list` (approval, always quiet) |
+| Import a list (file, screenshot, photo) | `import_clients_from_list` (approval, always quiet; the Done message says how many new possible duplicates to review) |
+| Possible duplicates (same email, same phone, similar name) | `find_duplicate_clients` (read). `add_client` refuses a second record for the same email or phone and points Ivy to `update_client` or `merge_clients` |
+| Merge two records of the same person | `merge_clients` (approval: "Merge Jane D. into Jane Doe: 3 bookings, 2 invoices and 14 messages move to Jane Doe. Jane D. is removed."). Same one-transaction merge as the Merge button (`api/_lib/clientMerge.js`). No undo. Refused before a card when both records have portal accounts of two different people, or autopay on two different cards |
+| "Not the same person" | `dismiss_duplicate` (approval) |
 | "Invite new clients automatically"; resend a portal invite | `client_invite_settings` get / update, `resend_client_invite` (approval) |
 | Calendar file / Google events import, "I moved" email | Ivy points to [Import](/clients?import=1) and [Let them know you moved](/clients?announce=1) |
 | Message a client | `send_message_to_client` (approval) |
@@ -195,4 +198,5 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/ivy-website-parity.test.mjs`: every website operation is held before approval, the card text is exact, and the draft equals the editor's transforms after approval. Also covers publish and schedule, discard and restore, invalid input, and workspace isolation.
 - `tests/ivy-owner-tools.test.mjs`: each parity tool is held before approval, gives the right result after approval, refuses invalid input, stays inside its workspace, and writes truthful ledger lines.
 - `tests/ivy-website-tools.test.mjs`: the original build, edit and publish flow, now with every draft edit approval-gated.
+- `tests/client-merge.test.mjs`: duplicate detection precision, "Not the same person", the merge moving every client reference (the list of tables is read from the database catalog), opt-outs, cards and autopay, exactly-once, workspace isolation, and the Ivy approval flow for `merge_clients` and `dismiss_duplicate`.
 - `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy, documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.

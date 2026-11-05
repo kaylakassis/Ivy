@@ -362,6 +362,21 @@ function DoneStep({ result, onClose, onAnnounce, onMore, inWizard }) {
 
   const goMissing = () => { onClose(); navigate('/clients?filter=missing-email'); };
 
+  // New possible duplicates among the people just added (for example
+  // "Jane D." next to an existing "Jane Doe" with the same phone).
+  const [dupes, setDupes] = useState(0);
+  const importedKey = isClients ? (result.importedIds || []).join(',') : '';
+  useEffect(() => {
+    const ids = isClients ? (result.importedIds || []).slice(0, 5000) : [];
+    if (!ids.length || inWizard) return undefined;
+    let live = true;
+    api.post('/clients/duplicates', { action: 'count', clientIds: ids })
+      .then((r) => { if (live) setDupes(Number(r.total) || 0); })
+      .catch(() => { /* not critical */ });
+    return () => { live = false; };
+  }, [importedKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const goDupes = () => { onClose(); navigate('/clients?duplicates=1'); };
+
   return (
     <>
       <div style={{
@@ -397,6 +412,20 @@ function DoneStep({ result, onClose, onAnnounce, onMore, inWizard }) {
           <Icons.Mail size={16} stroke="var(--warn)"/>
           <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>
             <strong>{plural(missingEmail, 'person', 'people')} {missingEmail === 1 ? 'has' : 'have'} no email</strong>, so they will not get reminders. Add their emails.
+          </span>
+          <Icons.Arrow size={13} stroke="var(--muted)"/>
+        </button>
+      )}
+
+      {dupes > 0 && (
+        <button type="button" onClick={goDupes} style={{
+          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+          padding: '10px 12px', borderRadius: 10, marginBottom: 10, cursor: 'pointer', color: 'var(--fg)',
+          border: '1px solid var(--border)', background: 'var(--surface-2)',
+        }}>
+          <Icons.Users size={16} stroke="var(--accent)"/>
+          <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>
+            <strong>{plural(dupes, 'possible duplicate')} to review.</strong> Some new clients look like people already in your list.
           </span>
           <Icons.Arrow size={13} stroke="var(--muted)"/>
         </button>

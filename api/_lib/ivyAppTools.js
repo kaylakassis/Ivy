@@ -44,6 +44,8 @@ import { serializeInvoice } from './finance.js';
 import { setInviteNewClients, resendInviteProblem, resendClientInvite } from './clientNotify.js';
 import { recordWorkspaceAudit } from './audit.js';
 import { fetchBranding } from './branding.js';
+import { listDuplicatePairs, dismissDuplicatePair } from './clientDuplicates.js';
+import { mergePreview, mergeRefusal, mergeClients, mergeSentence, mergeNames, movesPhrase, cleanFieldChoices } from './clientMerge.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -160,10 +162,41 @@ export const APP_TOOLS = [
     description: 'Email a client a reminder to set up their client portal account.',
     input_schema: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] },
   },
+  {
+    name: 'find_duplicate_clients',
+    description: 'Possible duplicate clients (same email, same phone, similar name): each pair with reasons, record counts and which one to keep.',
+    input_schema: { type: 'object', properties: { limit: { type: 'integer', description: 'Pairs to return, default 20, max 50.' } } },
+  },
+  {
+    name: 'merge_clients',
+    description: "Merge two records of the same person: everything on remove_client_id (bookings, invoices, messages, documents, packages, history) moves to keep_client_id, then remove_client_id is removed. field_choices: per field 'keep' (default) or 'remove' = whose value wins. No undo.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        keep_client_id: { type: 'string' },
+        remove_client_id: { type: 'string' },
+        field_choices: {
+          type: 'object',
+          properties: Object.fromEntries(['name', 'email', 'phone', 'address', 'birthday', 'stage']
+            .map((f) => [f, { type: 'string', enum: ['keep', 'remove'] }])),
+        },
+      },
+      required: ['keep_client_id', 'remove_client_id'],
+    },
+  },
+  {
+    name: 'dismiss_duplicate',
+    description: 'Mark two clients from find_duplicate_clients as different people so the pair is never suggested again.',
+    input_schema: {
+      type: 'object',
+      properties: { client_id_a: { type: 'string' }, client_id_b: { type: 'string' } },
+      required: ['client_id_a', 'client_id_b'],
+    },
+  },
 ];
 
 // Tools that only read; tools with a read action; everything else writes.
-export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances'];
+export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients'];
 const READ_ACTION = { reminder_settings: 'get', cancellation_policy: 'get', autopay: 'status', client_invite_settings: 'get' };
 export const APP_MIXED = new Set(Object.keys(READ_ACTION));
 // Always held for approval (by name). send_document is an older tool whose
@@ -568,9 +601,11 @@ async function readAcceptances({ workspaceId, args }) {
     return { client: c.name, acceptances: list.map(compact) };
   }
   const { rows } = await sql`
-    SELECT a.client_id, a.booking_id, a.status, a.source, a.accepted_at, a.policy_version, a.terms, c.name AS client_name
+    SELECT COALESCE(cm.current_client_id, a.client_id) AS client_id, a.booking_id, a.status, a.source, a.accepted_at,
+           a.policy_version, a.terms, c.name AS client_name
       FROM cancellation_policy_acceptances a
-      LEFT JOIN clients c ON c.id = a.client_id AND c.workspace_id = a.workspace_id
+      LEFT JOIN client_merges cm ON cm.workspace_id = a.workspace_id AND cm.removed_client_id = a.client_id
+      LEFT JOIN clients c ON c.id = COALESCE(cm.current_client_id, a.client_id) AND c.workspace_id = a.workspace_id
      WHERE a.workspace_id = ${workspaceId}
      ORDER BY a.accepted_at DESC LIMIT 25`;
   return {
@@ -861,7 +896,95 @@ async function planResendInvite(ws, a) {
   };
 }
 
+// ── duplicate clients ──────────────────────────────────────────────────
+// Same detection and the same one-transaction merge as Clients > Possible
+// duplicates (api/_lib/clientDuplicates.js, api/_lib/clientMerge.js).
+async function readDuplicates({ workspaceId, args }) {
+  const limit = Math.max(1, Math.min(50, Number(args?.limit) || 20));
+  const { total, pairs } = await listDuplicatePairs(workspaceId, { limit });
+  const side = (c) => ({
+    id: c.id, name: c.name, email: c.email || null, phone: c.phone || null, stage: c.stage,
+    created: c.createdAt ? fmtStamp(c.createdAt) : null, portal_account: !!c.portalClaimed,
+    ...(c.counts ? { has: movesPhrase(c.counts) || 'nothing yet' } : {}),
+  });
+  return {
+    total,
+    pairs: pairs.map((p) => ({
+      confidence: p.label, reasons: p.reasons,
+      suggested_keep_client_id: p.keepId,
+      a: side(p.a), b: side(p.b),
+    })),
+    review: '[Possible duplicates](/clients?duplicates=1)',
+    note: total ? 'Merging needs the owner\'s approval and cannot be undone. Ask which record to keep when it is not obvious.' : 'No possible duplicates right now.',
+  };
+}
+
+const FIELD_WORDS = { name: 'Name', email: 'Email', phone: 'Phone', address: 'Address', birthday: 'Birthday', stage: 'Stage' };
+
+async function planMergeClients(ws, a, ctx) {
+  const keepId = needId(a.keep_client_id, 'keep_client_id', 'find_duplicate_clients or search_clients');
+  const removeId = needId(a.remove_client_id, 'remove_client_id', 'find_duplicate_clients or search_clients');
+  if (keepId.toLowerCase() === removeId.toLowerCase()) throw new Error('Pick two different clients to merge');
+  const refusal = await mergeRefusal(ws, keepId, removeId);
+  if (refusal) throw new Error(refusal.message.replace(/\.$/, ''));
+  const preview = await mergePreview(ws, keepId, removeId);
+  const choices = cleanFieldChoices(a.field_choices);
+  // Say which values change on the kept record (only real differences).
+  const wins = [];
+  const STAGE_RANK = { active: 3, paused: 2, lead: 1 };
+  for (const f of preview.fields) {
+    if (!f.remove) continue;
+    let fromRemove = choices[f.field] === 'remove' || !f.keep;
+    // Stage: the more active one wins unless the owner said otherwise.
+    if (f.field === 'stage' && !choices.stage) fromRemove = (STAGE_RANK[f.remove] || 0) > (STAGE_RANK[f.keep] || 0);
+    if (fromRemove && (f.keep || '').toLowerCase() !== f.remove.toLowerCase()) {
+      wins.push(`${FIELD_WORDS[f.field]} becomes ${clip(f.remove, 60)}`);
+    }
+  }
+  const { from, into } = mergeNames(preview);
+  const moves = movesPhrase(preview.remove.counts);
+  return {
+    summary: `${mergeSentence(preview)}${wins.length ? ` ${wins.join('. ')}.` : ''}`,
+    done: `Merged ${from} into ${into}${moves ? `: ${moves} moved to ${into}` : ''}. ${from} was removed`,
+    apply: async () => {
+      const out = await mergeClients({
+        workspaceId: ws, keepId, removeId, fieldChoices: choices, actor: { id: ctx?.userId || null }, via: 'ivy',
+      });
+      return {
+        ok: true, client_id: out.keptClientId, already_merged: out.alreadyMerged, moved: out.moved,
+        ...(out.alreadyMerged ? { done: `${from} was already merged into ${into}` } : {}),
+      };
+    },
+  };
+}
+
+async function planDismissDuplicate(ws, a, ctx) {
+  const idA = needId(a.client_id_a, 'client_id_a', 'find_duplicate_clients');
+  const idB = needId(a.client_id_b, 'client_id_b', 'find_duplicate_clients');
+  if (idA.toLowerCase() === idB.toLowerCase()) throw new Error('Pick two different clients');
+  const { rows } = await sql`SELECT id, name, email, phone FROM clients WHERE workspace_id = ${ws} AND id = ANY(${[idA, idB]}::uuid[])`;
+  if (rows.length !== 2) throw new Error('Client not found');
+  const sameName = String(rows[0].name || '').trim().toLowerCase() === String(rows[1].name || '').trim().toLowerCase();
+  const nameOf = (id) => {
+    const c = rows.find((r) => r.id === id.toLowerCase()) || {};
+    const n = clip(c.name || 'the client', 60);
+    return sameName && (c.email || c.phone) ? `${n} (${c.email || c.phone})` : n;
+  };
+  const pair = `${nameOf(idA)} and ${nameOf(idB)}`;
+  return {
+    summary: `Mark ${pair} as different people, so they are not suggested as duplicates again.`,
+    done: `Marked ${pair} as different people`,
+    apply: async () => {
+      const out = await dismissDuplicatePair(ws, idA, idB, ctx?.userId || null);
+      if (!out.ok) throw new Error(out.error);
+      return { ok: true };
+    },
+  };
+}
+
 const PLANS = {
+  merge_clients: planMergeClients,
+  dismiss_duplicate: planDismissDuplicate,
   reminder_settings: planReminders,
   use_package_session: planUsePackage,
   review_deposit_refund: planDepositDecision,
@@ -911,6 +1034,7 @@ function writeHandler(name, read = null) {
 export const APP_HANDLERS = {
   list_deposit_reviews: readDepositReviews,
   list_policy_acceptances: readAcceptances,
+  find_duplicate_clients: readDuplicates,
   reminder_settings: writeHandler('reminder_settings', readReminders),
   cancellation_policy: writeHandler('cancellation_policy', readPolicy),
   autopay: writeHandler('autopay', readAutopay),
