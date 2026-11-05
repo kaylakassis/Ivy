@@ -16,6 +16,8 @@ import { api } from '../../lib/api.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { PackageCard, RedeemPackageModal } from './ClientPackages.jsx';
 import { accessLine } from './ClientPrograms.jsx';
+import { AutopaySection, AutopayPrompt, AutopaySheet } from './ClientAutopay.jsx';
+import { invoiceAutopayClientLine } from '../../lib/autopayRules.js';
 import {
   fmtDay, fmtDate, fmtMoney, SectionTitle, BusinessAvatar, ErrorNote, SkelCards, EmptyCard, actionBtn,
 } from './portalUi.jsx';
@@ -35,10 +37,13 @@ export default function ClientInvoices() {
   const [actionErr, setActionErr] = useState(null);
   const [redeeming, setRedeeming] = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [autopayOpen, setAutopayOpen] = useState(null); // agreement id
+  const [autopayNote, setAutopayNote] = useState(null);
+  const [autopayBanner, setAutopayBanner] = useState(null);
 
   const load = useCallback(async () => {
     const soft = (p, fb) => p.catch(() => fb);
-    const [inv, pk, ms, progs, pm, orders] = await Promise.all([
+    const [inv, pk, ms, progs, pm, orders, ap] = await Promise.all([
       api.get('/me/invoices'),
       // include=recent: active packages plus ones used up or expired
       // lately, so the card can say "Used up" and offer Buy again.
@@ -47,6 +52,7 @@ export default function ClientInvoices() {
       soft(api.get('/me/programs'), { programs: [] }),
       soft(api.get('/me/payment-methods'), { cards: [] }),
       soft(api.get('/me/orders'), { orders: [] }),
+      soft(api.get('/me/autopay'), { agreements: [] }),
     ]);
     setState({
       invoices: inv.invoices || [],
@@ -55,6 +61,7 @@ export default function ClientInvoices() {
       programs: (progs.programs || []).filter((p) => p.enrollmentBilling === 'subscription' || p.canCancel || p.currentPeriodEnd),
       cards: pm.cards || [],
       orders: orders.orders || [],
+      autopay: ap.agreements || [],
     });
   }, []);
 
@@ -84,6 +91,45 @@ export default function ClientInvoices() {
     }, 5000);
     return () => clearTimeout(t);
   }, [saveStatus, params, setParams]);
+
+  // Arriving from the request email (?autopay=<id>) or back from adding a
+  // card at Stripe (&setup=<session id> | cancel): open that approval.
+  const autopayParam = params.get('autopay');
+  const setupParam = params.get('setup');
+  useEffect(() => {
+    if (!state || !autopayParam) return;
+    let live = true;
+    (async () => {
+      let note = null;
+      if (setupParam && setupParam !== 'cancel') {
+        try {
+          const r = await api.post('/me/autopay', { action: 'sync-card', agreementId: autopayParam, setupSessionId: setupParam });
+          note = r.card?.last4 ? 'Card saved. Check the details and authorize below.' : null;
+          await load();
+        } catch (e) { note = e.message || 'We could not read the new card. Please try again.'; }
+      } else if (setupParam === 'cancel') {
+        note = 'No card was added.';
+      }
+      if (!live) return;
+      setAutopayNote(note);
+      setAutopayOpen(autopayParam);
+      const next = new URLSearchParams(params);
+      next.delete('autopay'); next.delete('setup');
+      setParams(next, { replace: true });
+    })();
+    return () => { live = false; };
+    // Run once per arrival; params are cleared right after.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!state, autopayParam, setupParam]);
+
+  const turnOffAutopay = (a) => {
+    if (!window.confirm(`Turn off automatic payments for ${a.seriesName} with ${a.businessName}? Future invoices will be emailed for you to pay.`)) return;
+    run(async () => {
+      const r = await api.post('/me/autopay', { action: 'turn-off', agreementId: a.id });
+      setState((st) => ({ ...st, autopay: r.agreements || [] }));
+      setAutopayBanner('Automatic payments are off. We let the business know.');
+    });
+  };
 
   const openInvoice = async (id) => {
     setOpening(id); setActionErr(null);
@@ -142,6 +188,8 @@ export default function ClientInvoices() {
   return (
     <div className="page-pad"><div className="portal-page">
       {saveStatus === 'ok' && <Banner tone="ok">Card saved. You're all set.</Banner>}
+      {autopayBanner && <Banner tone="ok">{autopayBanner}</Banner>}
+      <AutopayPrompt agreements={state.autopay} onOpen={(a) => { setAutopayNote(null); setAutopayOpen(a.id); }}/>
       {saveStatus === 'cancel' && <Banner>Card not saved. You can try again any time.</Banner>}
       <ErrorNote>{actionErr}</ErrorNote>
 
@@ -189,6 +237,10 @@ export default function ClientInvoices() {
         </section>
       )}
 
+      <AutopaySection agreements={state.autopay} busy={busy}
+        onAuthorize={(a) => { setAutopayNote(null); setAutopayOpen(a.id); }}
+        onTurnOff={turnOffAutopay}/>
+
       {state.cards.length > 0 && (
         <section aria-label="Saved cards">
           <SectionTitle id="cards">Saved cards</SectionTitle>
@@ -235,6 +287,18 @@ export default function ClientInvoices() {
         </section>
       )}
 
+      {autopayOpen && state.autopay.find((a) => a.id === autopayOpen && a.status !== 'ended') && (
+        <AutopaySheet agreement={state.autopay.find((a) => a.id === autopayOpen)} note={autopayNote}
+          onClose={() => setAutopayOpen(null)}
+          onDone={(agreements, result) => {
+            setState((st) => ({ ...st, autopay: agreements || st.autopay }));
+            setAutopayOpen(null);
+            setAutopayBanner(result === 'on'
+              ? 'Automatic payments are on. You will get a receipt after each charge.'
+              : 'No problem. Invoices will keep coming by email for you to pay.');
+          }}/>
+      )}
+
       {redeeming && (
         <RedeemPackageModal pkg={redeeming} onClose={() => setRedeeming(null)}
           onBooked={() => { setRedeeming(null); load().catch(() => {}); }}/>
@@ -269,6 +333,9 @@ function OpenInvoice({ inv, opening, onPay }) {
           </div>
           {overdue && <div style={{ fontSize: 13, color: 'var(--danger)', fontWeight: 600, marginTop: 4 }}>Overdue</div>}
           {partly && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>{fmtMoney(paidSoFar, inv.currency)} paid so far</div>}
+          {invoiceAutopayClientLine(inv) && (
+            <div data-testid="autopay-client-line" style={{ fontSize: 13, color: 'var(--danger)', marginTop: 4 }}>{invoiceAutopayClientLine(inv)}</div>
+          )}
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="mono-num" style={{ fontSize: 20, fontWeight: 650 }}>{fmtMoney(due, inv.currency)}</div>
@@ -357,6 +424,9 @@ function Receipts({ items, opening, onOpen }) {
                   <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
                     {RECEIPT_STATUS[inv.status] || 'Paid'} · {fmtDate(r.at)} · Invoice {inv.number}
                   </div>
+                  {inv.status === 'paid' && invoiceAutopayClientLine(inv) && (
+                    <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>{invoiceAutopayClientLine(inv)}</div>
+                  )}
                   {receiptNote(inv) && (
                     <div data-testid="receipt-note" style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>{receiptNote(inv)}</div>
                   )}

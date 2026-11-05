@@ -655,6 +655,18 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid, selec
       whiteSpace: 'nowrap',
     }}>Says paid</span>
   ) : null;
+  // Autopay: paid automatically, or the automatic charge failed while the
+  // invoice is still open. Full sentence lives in the invoice drawer.
+  const autopayOpen = invoice.status === 'sent' || invoice.status === 'overdue';
+  const autopayFailed = autopayOpen && (invoice.autopayStatus === 'failed' || invoice.autopayStatus === 'retry_scheduled');
+  const autopayPill = (invoice.autopayStatus === 'succeeded' || autopayFailed) ? (
+    <span data-testid="autopay-pill" title={autopayFailed ? 'The automatic payment failed. Open for details.' : 'Paid automatically'} style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
+      fontSize: 10.5, fontWeight: 600, whiteSpace: 'nowrap',
+      background: 'var(--surface-2)', border: `1px solid ${autopayFailed ? 'var(--danger)' : 'var(--border)'}`,
+      color: autopayFailed ? 'var(--danger)' : 'var(--muted)',
+    }}>{autopayFailed ? 'Autopay failed' : 'Autopay'}</span>
+  ) : null;
   const statusPill = (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       <span style={{
@@ -665,6 +677,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid, selec
         <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
       </span>
       {saysPaidPill}
+      {autopayPill}
       {archivedPill}
     </span>
   );

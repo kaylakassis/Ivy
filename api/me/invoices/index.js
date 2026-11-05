@@ -67,7 +67,8 @@ export default async function handler(req, res) {
               i.tax_rate, i.discount, i.paid_amount, i.paid_method,
               i.refunded_amount, i.refunded_at,
               i.gift_card_credit_cents, i.gift_card_credit_restored_cents,
-              i.updated_at
+              i.updated_at,
+              i.autopay_status, i.autopay_card_brand, i.autopay_card_last4, i.autopay_failed_at
        FROM invoices i
        WHERE i.client_id = ANY($1)
          AND i.status <> 'draft'
@@ -113,6 +114,10 @@ export default async function handler(req, res) {
         netPaid: money.net,
         refundedAt: r.refunded_at || null,
         updatedAt: r.updated_at || null,
+        // Autopay: how this one was (or wasn't) paid automatically.
+        autopayStatus: r.autopay_status || null,
+        autopayCard: r.autopay_card_last4 ? { brand: r.autopay_card_brand || null, last4: r.autopay_card_last4 } : null,
+        autopayFailedAt: r.autopay_failed_at || null,
       };
     });
 

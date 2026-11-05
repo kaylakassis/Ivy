@@ -56,7 +56,7 @@ export const VERTICALS = {
     sub: "One link replaces a stack of separate scheduling, contracting, and e-signing tools. Drop your booking link, attach the agreement to the engagement service, get e-signed automatically.",
     bullets: [
       { title: 'E-signing built in', body: 'Build your own agreement template once. Attach it to your "Strategy engagement" service. Ivy sends it the moment they book and tracks signatures.' },
-      { title: 'Retainer invoices', body: "Recurring monthly invoices via Stripe. Auto-payment if their card's on file; reminders if not." },
+      { title: 'Retainer invoices', body: "Recurring monthly invoices via Stripe. Auto-payment from their card on file once they approve it; reminders if not." },
       { title: 'Discovery → engagement', body: '15-min discovery → if they convert, the agreement, deposit invoice, and follow-up cadence all chain off the same client record.' },
       { title: 'Ivy as your prep assistant', body: 'Ask "Pull up everything on Sarah before our 3pm call" - Ivy summarizes their notes, last session, and open work.' },
     ],

@@ -10,6 +10,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { detachPaymentMethod } from '../../_lib/stripe.js';
+import { endForRemovedCard } from '../../_lib/autopay.js';
 import { methodNotAllowed, noContent, notFound, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -60,6 +61,10 @@ export default async function handler(req, res) {
         WHERE id = $1 AND id = ANY($2)`,
       [clientId, myIds],
     );
+    // Automatic payments approved with this card can't run without it:
+    // end them now and tell the business (api/_lib/autopay.js).
+    try { await endForRemovedCard({ workspaceId: c.workspace_id, clientId }); }
+    catch (e) { console.warn('[payment-methods] autopay end failed:', e.message); }
     return noContent(res);
   } catch (err) {
     return serverError(res, err);

@@ -35,9 +35,18 @@ export function useRecurring() {
 
   const runNow = useCallback(async (id) => {
     const r = await api.post('/recurring-invoices/run-now', { id });
+    // run-now answers without the autopay summary; keep the one we have.
+    setSchedules((xs) => xs.map((s) => s.id === id ? { ...s, ...r.schedule } : s));
+    return r;
+  }, []);
+
+  // Autopay: 'request' asks the client to approve (or asks again), 'off'
+  // ends it. The server answers with the refreshed schedule.
+  const setAutopay = useCallback(async (id, action) => {
+    const r = await api.post('/recurring-invoices/autopay', { id, action });
     setSchedules((xs) => xs.map((s) => s.id === id ? r.schedule : s));
     return r;
   }, []);
 
-  return { schedules, loading, error, create, update, remove, runNow };
+  return { schedules, loading, error, create, update, remove, runNow, setAutopay };
 }

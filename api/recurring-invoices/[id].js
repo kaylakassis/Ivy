@@ -12,6 +12,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeRecurring, cleanRecurringInput } from '../_lib/recurring.js';
+import { withAutopay, stopForSeries } from '../_lib/autopay.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 async function fetchOwned(id, workspaceId) {
@@ -32,8 +33,10 @@ export default async function handler(req, res) {
     const s = await fetchOwned(id, workspaceId);
     if (!s) return notFound(res, 'Schedule not found');
 
+    const one = async (row) => (await withAutopay(workspaceId, [row], serializeRecurring))[0];
+
     if (req.method === 'GET') {
-      return ok(res, { schedule: serializeRecurring(s) });
+      return ok(res, { schedule: await one(s) });
     }
 
     if (req.method === 'PATCH') {
@@ -73,7 +76,7 @@ export default async function handler(req, res) {
       if ('status' in sanitized)    push('status',       sanitized.status);
       if ('autoSend' in sanitized)  push('auto_send',    sanitized.autoSend);
 
-      if (sets.length === 0) return ok(res, { schedule: serializeRecurring(s) });
+      if (sets.length === 0) return ok(res, { schedule: await one(s) });
 
       sets.push('updated_at = NOW()');
       values.push(id, workspaceId);
@@ -87,10 +90,19 @@ export default async function handler(req, res) {
       // particular slot when items is set.
       const finalText = queryText.replace(/items = \$(\d+)/, 'items = $$$1::jsonb');
       const { rows } = await sql.query(finalText, values);
-      return ok(res, { schedule: serializeRecurring(rows[0]) });
+      // Autopay approval belongs to this series AND this client: a new
+      // client, or a stopped series, ends it (the client is told).
+      if (setClient && (sanitized.clientId || null) !== (s.client_id || null)) {
+        await stopForSeries({ workspaceId, seriesId: s.id, reason: 'client_changed' });
+      }
+      if (sanitized.status === 'ended' && s.status !== 'ended') {
+        await stopForSeries({ workspaceId, seriesId: s.id, reason: 'series_stopped' });
+      }
+      return ok(res, { schedule: await one(rows[0]) });
     }
 
     if (req.method === 'DELETE') {
+      await stopForSeries({ workspaceId, seriesId: s.id, reason: 'series_deleted' });
       await sql`DELETE FROM recurring_invoices WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       return noContent(res);
     }

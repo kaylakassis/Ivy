@@ -122,6 +122,11 @@ export async function stripeFetch(path, { method = 'GET', secretKey, stripeAccou
     const err = new Error(msg);
     err.status = res.status;
     err.stripeCode = json?.error?.code;
+    // Card outcomes for off-session charges (autopay): the bank's reason
+    // and the PaymentIntent Stripe created, if any.
+    err.declineCode = json?.error?.decline_code || null;
+    err.stripeType = json?.error?.type || null;
+    err.paymentIntentId = json?.error?.payment_intent?.id || null;
     throw err;
   }
   return json;

@@ -181,6 +181,15 @@ export function serializeInvoice(row) {
     recurringInvoiceId: row.recurring_invoice_id || null,
     fromRecurring: !!row.recurring_invoice_id
       || (Array.isArray(row.activity) && row.activity.some((a) => a && a.kind === 'auto-created')),
+    // Autopay (api/_lib/autopay.js). Display fragments only: status, the
+    // approved card's brand + last4, and when a failure / retry happened.
+    autopayStatus:      row.autopay_status || null,
+    autopayCard:        row.autopay_card_last4 ? { brand: row.autopay_card_brand || null, last4: row.autopay_card_last4 } : null,
+    autopayFailedAt:    row.autopay_failed_at || null,
+    autopayFailureCode: row.autopay_failure_code || null,
+    autopayRetryAt:     row.autopay_retry_at || null,
+    autopaySkipReason:  row.autopay_skip_reason || null,
+    autopayAttempts:    Number(row.autopay_attempts || 0),
     money:        invoiceMoney({ ...row, total: totals.total }),
     allowed:      invoiceActions({ ...row, total: totals.total }),
     statusLine:   invoiceStatusLine({ ...row, total: totals.total }),
@@ -198,6 +207,7 @@ export function serializeInvoicePublic(row, workspaceMeta = {}) {
   delete inv.recurringInvoiceId;
   delete inv.fromRecurring;
   delete inv.stripePaymentIntent;
+  delete inv.autopaySkipReason; // owner-side detail
   const unpaid = row.status === 'sent' || row.status === 'overdue';
   return {
     ...inv,

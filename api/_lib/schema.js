@@ -4331,4 +4331,112 @@ DO $$ BEGIN
   ALTER TABLE bookings ADD CONSTRAINT bookings_package_use_mode_chk
     CHECK (package_use_mode IS NULL OR package_use_mode IN ('booking', 'completion'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Autopay for recurring invoices (api/_lib/autopay.js). One agreement row
+-- per (series, client) consent. The owner asks ('requested'), the client
+-- agrees in the portal ('active', with an immutable snapshot of exactly
+-- what they agreed to), and either side can stop it ('ended'). Ivy never
+-- charges without an 'active' row for that series and client.
+CREATE TABLE IF NOT EXISTS autopay_agreements (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  recurring_invoice_id UUID REFERENCES recurring_invoices(id) ON DELETE SET NULL,
+  client_id            UUID REFERENCES clients(id) ON DELETE SET NULL,
+  status               TEXT NOT NULL DEFAULT 'requested',
+  requested_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  requested_by         UUID,
+  request_emailed_at   TIMESTAMPTZ,
+  authorized_at        TIMESTAMPTZ,
+  consent_text         TEXT,
+  consent_ip           TEXT,
+  consent_user_agent   TEXT,
+  consent_user_id      UUID,
+  payment_method_id    TEXT,
+  stripe_customer_id   TEXT,
+  stripe_account       TEXT,
+  card_brand           TEXT,
+  card_last4           TEXT,
+  livemode             BOOLEAN,
+  max_amount_cents     INT,
+  currency             TEXT,
+  cadence              TEXT,
+  start_date           DATE,
+  series_name          TEXT,
+  ended_at             TIMESTAMPTZ,
+  ended_by             TEXT,
+  ended_reason         TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+DO $$ BEGIN
+  ALTER TABLE autopay_agreements ADD CONSTRAINT autopay_agreements_status_chk
+    CHECK (status IN ('requested', 'active', 'ended'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE autopay_agreements ADD CONSTRAINT autopay_agreements_active_has_consent
+    CHECK (status <> 'active' OR (authorized_at IS NOT NULL AND consent_text IS NOT NULL
+      AND payment_method_id IS NOT NULL AND max_amount_cents > 0));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+CREATE INDEX IF NOT EXISTS idx_autopay_agreements_ws ON autopay_agreements(workspace_id, recurring_invoice_id);
+CREATE INDEX IF NOT EXISTS idx_autopay_agreements_client ON autopay_agreements(client_id) WHERE status <> 'ended';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_autopay_one_active
+  ON autopay_agreements(recurring_invoice_id) WHERE status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_autopay_one_requested
+  ON autopay_agreements(recurring_invoice_id) WHERE status = 'requested';
+-- The consent snapshot is write-once: after authorized_at is set, the
+-- words, the card, the cap and the evidence (time, IP, user agent) can
+-- never change. Only status/ended_* move (to 'ended'), and the series /
+-- client links may go NULL when those rows are deleted.
+CREATE OR REPLACE FUNCTION autopay_consent_immutable() RETURNS trigger AS $$
+BEGIN
+  IF OLD.authorized_at IS NOT NULL THEN
+    IF NEW.authorized_at IS DISTINCT FROM OLD.authorized_at
+       OR NEW.consent_text IS DISTINCT FROM OLD.consent_text
+       OR NEW.consent_ip IS DISTINCT FROM OLD.consent_ip
+       OR NEW.consent_user_agent IS DISTINCT FROM OLD.consent_user_agent
+       OR NEW.consent_user_id IS DISTINCT FROM OLD.consent_user_id
+       OR NEW.payment_method_id IS DISTINCT FROM OLD.payment_method_id
+       OR NEW.card_brand IS DISTINCT FROM OLD.card_brand
+       OR NEW.card_last4 IS DISTINCT FROM OLD.card_last4
+       OR NEW.max_amount_cents IS DISTINCT FROM OLD.max_amount_cents
+       OR NEW.currency IS DISTINCT FROM OLD.currency
+       OR NEW.cadence IS DISTINCT FROM OLD.cadence
+       OR NEW.start_date IS DISTINCT FROM OLD.start_date
+       OR NEW.series_name IS DISTINCT FROM OLD.series_name
+       OR NEW.workspace_id IS DISTINCT FROM OLD.workspace_id
+       OR (NEW.recurring_invoice_id IS DISTINCT FROM OLD.recurring_invoice_id AND NEW.recurring_invoice_id IS NOT NULL)
+       OR (NEW.client_id IS DISTINCT FROM OLD.client_id AND NEW.client_id IS NOT NULL) THEN
+      RAISE EXCEPTION 'autopay consent is immutable';
+    END IF;
+  END IF;
+  IF OLD.status = 'ended' AND NEW.status <> 'ended' THEN
+    RAISE EXCEPTION 'an ended autopay agreement cannot be reopened';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS autopay_consent_immutable_trg ON autopay_agreements;
+CREATE TRIGGER autopay_consent_immutable_trg
+  BEFORE UPDATE ON autopay_agreements
+  FOR EACH ROW EXECUTE FUNCTION autopay_consent_immutable();
+-- Per-invoice autopay state. autopay_status: 'charging' (claimed, Stripe
+-- call in flight), 'succeeded', 'processing', 'retry_scheduled', 'failed',
+-- 'skipped' (series has autopay but this invoice could not use it; the
+-- reason is in autopay_skip_reason). autopay_attempts doubles as the
+-- idempotency-key suffix, so each attempt is exactly one PaymentIntent.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_agreement_id UUID REFERENCES autopay_agreements(id) ON DELETE SET NULL;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_status TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_attempts INT NOT NULL DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_last_attempt_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_retry_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_failed_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_failure_code TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_failure_reason TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_skip_reason TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_card_brand TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_card_last4 TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_payment_intent TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_amount_cents INT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS autopay_claimed_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_invoices_autopay_due
+  ON invoices(autopay_retry_at) WHERE autopay_status IN ('retry_scheduled', 'charging');
 `;
