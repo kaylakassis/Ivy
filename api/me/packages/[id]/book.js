@@ -28,7 +28,9 @@ import { myClientIds, ids } from '../../../_lib/clientPortal.js';
 import {
   hasConflict, withinAvailability, slotEpochMs, serializeBooking,
 } from '../../../_lib/calendar.js';
-import { packageCoversService } from '../../../_lib/packages.js';
+import {
+  packageBlockCode, sendPackageRefusal, refusalForFailedConsume, packageUseModeFor,
+} from '../../../_lib/packages.js';
 import { notifyNewBooking } from '../../../_lib/bookingNotify.js';
 import { notifyPackageExhausted } from '../../../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../../../_lib/googleSync.js';
@@ -66,23 +68,17 @@ export default async function handler(req, res) {
     // so credits cannot be spent there either (the portal hides the button;
     // this is the server-side half of that).
     if (memberships.find((m) => m.clientId === cp.client_id)?.archived) return archivedForbidden(res);
-    if (cp.status !== 'active') return badRequest(res, 'This package is no longer active.');
-    if (cp.credits_remaining <= 0) return badRequest(res, "You're out of credits on this package.");
-    if (cp.expires_at && new Date(cp.expires_at).getTime() < Date.now()) {
-      return badRequest(res, 'This package has expired.');
-    }
+    // Used up / expired / cancelled: refuse with a stable code and the
+    // "Buy again" / "See all services" links (old apps show `error`).
+    const stateCode = packageBlockCode(cp, null, { checkService: false });
+    if (stateCode) return sendPackageRefusal(res, { code: stateCode, cp });
 
     const body = await readBody(req);
     const serviceId = String(body.serviceId || '');
     if (!serviceId) return badRequest(res, 'Pick a service.');
 
-    if (!packageCoversService(
-      { status: cp.status, credits_remaining: cp.credits_remaining,
-        expires_at: cp.expires_at, service_ids: cp.service_ids },
-      serviceId,
-    )) {
-      return badRequest(res, "This package doesn't cover that service.");
-    }
+    const coverCode = packageBlockCode(cp, serviceId);
+    if (coverCode) return sendPackageRefusal(res, { code: coverCode, cp });
 
     // Expand the body into a slot list. Either branch must produce a
     // [{date, startMin, endMin}, ...] array.
@@ -125,7 +121,11 @@ export default async function handler(req, res) {
     }
 
     if (slots.length > cp.credits_remaining) {
-      return badRequest(res, `You only have ${cp.credits_remaining} credit${cp.credits_remaining === 1 ? '' : 's'} left on this package.`);
+      return res.status(400).json({
+        error: `You only have ${cp.credits_remaining} session${cp.credits_remaining === 1 ? '' : 's'} left on this package.`,
+        code: 'package_not_enough_sessions',
+        package: { id: cp.id, name: cp.name, creditsRemaining: cp.credits_remaining, creditsTotal: cp.credits_total, state: 'active' },
+      });
     }
 
     // Load workspace settings + service shape.
@@ -197,6 +197,8 @@ export default async function handler(req, res) {
         status = CASE WHEN credits_remaining - ${slots.length} = 0 THEN 'exhausted' ELSE status END,
         updated_at = NOW()
        WHERE id = ${cpId}
+         AND workspace_id = ${cp.workspace_id}
+         AND client_id = ${cp.client_id}
          AND status = 'active'
          AND credits_remaining >= ${slots.length}
          AND (expires_at IS NULL OR expires_at > NOW())
@@ -204,7 +206,11 @@ export default async function handler(req, res) {
       RETURNING credits_remaining, status
     `;
     if (debit.rows.length === 0) {
-      return badRequest(res, 'Could not consume credits - try refreshing your packages.');
+      // Lost a race (another booking took the last sessions) or the
+      // package changed under us. Say exactly why.
+      return refusalForFailedConsume(res, {
+        workspaceId: cp.workspace_id, clientPackageId: cpId, clientId: cp.client_id, serviceId,
+      });
     }
 
     // Insert the bookings. Each gets client_package_id so a future
@@ -217,17 +223,18 @@ export default async function handler(req, res) {
     // "all-or-nothing" from the client's perspective.
     const inserted = [];
     const insertedIds = [];
+    const packageUseMode = await packageUseModeFor(cp.workspace_id);
     try {
       for (const s of slots) {
         // eslint-disable-next-line no-await-in-loop
         const r = await sql`
           INSERT INTO bookings (
             workspace_id, service_id, client_id, client_name, client_email,
-            date, start_min, end_min, client_package_id, source
+            date, start_min, end_min, client_package_id, source, package_use_mode
           ) VALUES (
             ${cp.workspace_id}, ${serviceId}, ${cp.client_id},
             ${cp.client_name}, ${cp.client_email},
-            ${s.date}, ${s.startMin}, ${s.endMin}, ${cpId}, 'client'
+            ${s.date}, ${s.startMin}, ${s.endMin}, ${cpId}, 'client', ${packageUseMode}
           )
           RETURNING *
         `;
@@ -283,6 +290,7 @@ export default async function handler(req, res) {
       bookings: inserted,
       creditsRemaining: debit.rows[0].credits_remaining,
       status: debit.rows[0].status,
+      state: debit.rows[0].credits_remaining > 0 ? 'active' : 'used_up',
     });
   } catch (err) {
     return serverError(res, err);

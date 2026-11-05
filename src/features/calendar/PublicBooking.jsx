@@ -33,6 +33,7 @@ import {
 } from './publicBookingHelpers.js';
 import {
   BizHeader, Progress, ServiceList, DateTimePicker, PolicyNote, StickyBar, MoreFrom, BookingSkeleton,
+  PackageChoice,
 } from './PublicBookingParts.jsx';
 import './publicBooking.css';
 
@@ -153,6 +154,13 @@ export default function PublicBooking({ embedded = false }) {
   const [giftCardCode, setGiftCardCode] = useState('');
   const [giftCardChecked, setGiftCardChecked] = useState(null);
   const [giftCardErr, setGiftCardErr] = useState(null);
+  // Signed-in client: their packages at this business (null = not loaded
+  // or not signed in). usePackageId = the package paying for this booking
+  // ('' = pay as usual). bookedPackage = the counts returned after a
+  // package booking, for the confirmation screen.
+  const [myPackages, setMyPackages] = useState(null);
+  const [usePackageId, setUsePackageId] = useState('');
+  const [bookedPackage, setBookedPackage] = useState(null);
 
   // Pick a service: reset per-service answers and jump the strip to its
   // first open day so times are on screen straight away.
@@ -197,6 +205,39 @@ export default function PublicBooking({ embedded = false }) {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => load(), [slug]);
+
+  // Signed-in client? Load their packages for this business so they can
+  // book with one. Anonymous visitors get a 401 here, which just means no
+  // package choice. Never on the embed (someone else's website).
+  const loadMyPackages = () => {
+    if (embedded) return;
+    api.get('/me/packages?include=recent', { retry: false })
+      .then((r) => {
+        const mine = (r.packages || []).filter((p) => !p.archived
+          && String(p.bookingSlug || '').toLowerCase() === String(slug || '').toLowerCase());
+        setMyPackages(mine);
+      })
+      .catch(() => setMyPackages(null));
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadMyPackages(); }, [slug, embedded]);
+
+  // ?buy=<package id> (the portal's and the email's "Buy again") opens
+  // that package's checkout once the page has loaded.
+  useEffect(() => {
+    if (!cal) return;
+    let buyId = null;
+    try { buyId = new URLSearchParams(window.location.search).get('buy'); } catch { /* no-op */ }
+    if (!buyId) return;
+    const p = (cal.packages || []).find((x) => x.id === buyId);
+    if (p) setBuyingPackage(p);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('buy');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    } catch { /* no-op */ }
+  }, [cal]);
 
   // Phone back gesture / browser back from the details step returns to the
   // time picker with every choice kept (standalone page only: inside an
@@ -383,6 +424,21 @@ export default function PublicBooking({ embedded = false }) {
     : svc.locationType === 'mobile' ? 'At your place'
     : (svc.locationLabel || cal.settings.addressLabel || null);
 
+  // The client's packages that cover the chosen service.
+  const coveringPackages = (myPackages && svc)
+    ? myPackages.filter((p) => !p.serviceIds?.length || p.serviceIds.includes(svc.id))
+    : [];
+  const usablePackages = coveringPackages.filter((p) => (p.state || 'active') === 'active' && p.creditsRemaining > 0);
+  const usingPackage = !waitlistMode && !!usePackageId && usablePackages.some((p) => p.id === usePackageId);
+  const chosenPackage = usingPackage ? usablePackages.find((p) => p.id === usePackageId) : null;
+  const buyableTemplate = (p) => (cal.packages || []).find((x) => x.id === p.buyAgainPackageId) || null;
+  const seeAllServices = () => {
+    setStep('pick');
+    setSlot(null);
+    setServiceId(null);
+    setScrollTarget('top');
+  };
+
   const chooseService = (s) => {
     if (s.id !== serviceId) applyService(cal, s);
     setScrollTarget('times');
@@ -405,6 +461,9 @@ export default function PublicBooking({ embedded = false }) {
   };
   const goDetails = () => {
     setBookErr(null);
+    // Preselect the client's package when one covers this service (they
+    // can switch to "Pay as usual").
+    setUsePackageId(usablePackages[0]?.id || '');
     setStep('details');
     if (!embedded) {
       try { window.history.pushState({ pb: 'details' }, ''); pushedRef.current = true; } catch { /* no-op */ }
@@ -443,6 +502,8 @@ export default function PublicBooking({ embedded = false }) {
     setSelectedAddOns(new Set());
     setCustomAnswers({});
     setGiftCardCode(''); setGiftCardChecked(null); setGiftCodeOpen(false);
+    setBookedPackage(null);
+    loadMyPackages();
     setScrollTarget('top');
     // The time just booked is no longer free: refresh the slots.
     load(true);
@@ -471,11 +532,14 @@ export default function PublicBooking({ embedded = false }) {
         locationAddress: svc?.locationType === 'mobile' ? address.trim() : null,
         addOnIds: Array.from(selectedAddOns),
         customFieldValues: customAnswers,
-        giftCardCode: giftCardChecked ? giftCardCode : null,
+        giftCardCode: giftCardChecked && !(usingPackage && !joinWaitlist) ? giftCardCode : null,
         smsConsent: !!(smsOptIn && phone.trim()),
         joinWaitlist,
+        // Pay with one session from the signed-in client's package.
+        ...(usingPackage && !joinWaitlist ? { clientPackageId: usePackageId } : {}),
       });
-      if (!embedded) {
+      setBookedPackage(r.package || null);
+      if (!embedded && !usingPackage) {
         const st = safeStorage();
         if (remember) writeRemembered(st, { name: name.trim(), email: email.trim(), phone: phone.trim() });
         else forgetRemembered(st);
@@ -496,6 +560,17 @@ export default function PublicBooking({ embedded = false }) {
       haptic('success'); // a little "done!" tap on the client's phone
     } catch (e) {
       if (isArchivedError(e)) { setArchived({ businessName: cal?.settings?.bizName }); return; }
+      const code = e?.details?.code;
+      if (code === 'package_used_up' || code === 'package_expired') {
+        // Someone (another tab, the business) took the last session or it
+        // expired: show the repurchase prompt, fall back to paying as usual.
+        const state = code === 'package_expired' ? 'expired' : 'used_up';
+        setMyPackages((list) => (list || []).map((p) => (p.id === usePackageId
+          ? { ...p, state, creditsRemaining: state === 'used_up' ? 0 : p.creditsRemaining } : p)));
+        setUsePackageId('');
+        setBookErr(null);
+        return;
+      }
       setBookErr(e.message || 'Could not confirm - try another slot.');
     } finally {
       setBusy(false);
@@ -551,7 +626,9 @@ export default function PublicBooking({ embedded = false }) {
         <ProgramBuyModal program={buyingProgram} bizName={bizName} onClose={() => setBuyingProgram(null)}/>
       )}
       {buyingPackage && (
-        <BuyPackageModal slug={slug} pkg={buyingPackage} bizName={bizName} onClose={() => setBuyingPackage(null)}/>
+        <BuyPackageModal slug={slug} pkg={buyingPackage} bizName={bizName} onClose={() => setBuyingPackage(null)}
+          defaultName={name || myPackages?.[0]?.buyerName || ''}
+          defaultEmail={email || myPackages?.[0]?.buyerEmail || ''}/>
       )}
       {joiningMembership && (
         <JoinMembershipModal slug={slug} membership={joiningMembership} bizName={bizName}
@@ -577,9 +654,14 @@ export default function PublicBooking({ embedded = false }) {
         <section className="pb-card pb-done" aria-labelledby="pb-done-h">
           <div className="pb-done-icon"><Icons.Check size={30} sw={2.6}/></div>
           <h2 id="pb-done-h" tabIndex={-1}>You're booked.</h2>
-          <p>A confirmation is on its way to <b>{email}</b>.</p>
+          <p>{email ? <>A confirmation is on its way to <b>{email}</b>.</> : 'A confirmation is on its way to your email.'}</p>
           <div className="pb-done-card">
             <div className="row"><span>What</span><b>{svc?.name}</b></div>
+            {bookedPackage && (
+              <div className="row"><span>Paid with</span>
+                <span>{bookedPackage.name}: {bookedPackage.creditsRemaining === 1 ? '1 session left' : `${bookedPackage.creditsRemaining} sessions left`}</span>
+              </div>
+            )}
             <div className="row"><span>When</span>
               <span>{longDate(parseISO(slot.dateISO))}, {slotDual}</span>
             </div>
@@ -587,6 +669,20 @@ export default function PublicBooking({ embedded = false }) {
               ? <div className="row"><span>Where</span><span>{address.trim()}</span></div>
               : where && <div className="row"><span>Where</span><span>{where}</span></div>}
           </div>
+          {bookedPackage && bookedPackage.creditsRemaining === 0 && (() => {
+            const own = (myPackages || []).find((p) => p.id === bookedPackage.id);
+            const tpl = own ? buyableTemplate(own) : null;
+            return (
+              <div className="pb-pkg-prompt" role="status" style={{ textAlign: 'left' }}>
+                <div className="pb-pkg-title"><Icons.Gift size={15} sw={1.8}/> That was your last session in {bookedPackage.name}.</div>
+                <p>You've used all your sessions. Buy this package again or see other services.</p>
+                <div className="pb-pkg-actions">
+                  {tpl && <button type="button" className="pb-btn primary" onClick={() => setBuyingPackage(tpl)}>Buy again</button>}
+                  <button type="button" className="pb-btn outline" onClick={() => { bookAnother(); seeAllServices(); }}>See all services</button>
+                </div>
+              </div>
+            );
+          })()}
           {depositPending > 0 && (
             <div className="pb-done-card">
               One more thing: a <b>${depositPending.toFixed(2)} deposit</b> is due for this
@@ -649,7 +745,7 @@ export default function PublicBooking({ embedded = false }) {
             </a>
           </div>
           <p style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>
-            To change or cancel, sign in with {email}. New here? Your confirmation email has a link to set up your free account.
+            To change or cancel, sign in with {email || 'your account'}. New here? Your confirmation email has a link to set up your free account.
           </p>
         </section>
       ) : step === 'deposit-paid' ? (
@@ -697,13 +793,25 @@ export default function PublicBooking({ embedded = false }) {
             </p>
           )}
 
-          <form noValidate={false} onSubmit={(e) => { e.preventDefault(); if (!busy && name.trim() && email.trim()) book(waitlistMode); }}>
-            {prefilled && (name || email) && (
+          <form noValidate={false} onSubmit={(e) => { e.preventDefault(); if (!busy && (usingPackage || (name.trim() && email.trim()))) book(waitlistMode); }}>
+            {!waitlistMode && coveringPackages.length > 0 && (
+              <PackageChoice packages={coveringPackages} value={usingPackage ? usePackageId : ''}
+                onChange={setUsePackageId} onSeeAll={seeAllServices}
+                buyable={(p) => !!buyableTemplate(p)}
+                onBuyAgain={(p) => { const t = buyableTemplate(p); if (t) setBuyingPackage(t); }}/>
+            )}
+            {usingPackage && (
+              <p style={{ margin: '-4px 0 14px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+                Booking with your Ivy account. Your confirmation goes to the email on it.
+              </p>
+            )}
+            {!usingPackage && prefilled && (name || email) && (
               <div className="pb-remembered">
                 <span>Welcome back{name ? `, ${name.split(' ')[0]}` : ''}. We filled in your details from last time.</span>
                 <button type="button" className="pb-link-btn" onClick={notYou}>Not you?</button>
               </div>
             )}
+            {!usingPackage && <>
             <Field label="Your name">
               <input className="pb-input" value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Ana Beltrán" autoComplete="name" required maxLength={120}/>
@@ -727,6 +835,7 @@ export default function PublicBooking({ embedded = false }) {
                 </span>
               </label>
             )}
+            </>}
 
             {svc.locationType === 'mobile' && (
               <Field label="Where should we come?" hint="Street address, city, ZIP. Apartment / suite + parking notes if relevant.">
@@ -805,7 +914,7 @@ export default function PublicBooking({ embedded = false }) {
 
             {/* Gift card apply: tucked behind a link so most visitors see
                 fewer fields. The applied card is redeemed server-side. */}
-            {!giftCodeOpen && !giftCardChecked ? (
+            {usingPackage ? null : !giftCodeOpen && !giftCardChecked ? (
               <div style={{ margin: '-4px 0 10px' }}>
                 <button type="button" className="pb-link-btn" onClick={() => setGiftCodeOpen(true)}>
                   Have a gift card code?
@@ -854,14 +963,14 @@ export default function PublicBooking({ embedded = false }) {
               </div>
             )}
 
-            <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
+            {myPackages === null && <div style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
               Already have a package or membership with {bizName || 'this business'}?{' '}
               <a href="/signin?next=/me" style={{ color: 'var(--accent)', fontWeight: 600 }}
                 {...(embedded ? { target: '_blank', rel: 'noopener noreferrer' } : {})}>Sign in</a>{' '}
               to book with your credits instead.
-            </div>
+            </div>}
 
-            {!embedded && (
+            {!embedded && !usingPackage && (
               <label className="pb-check" style={{ marginBottom: 8 }}>
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)}/>
                 <span>Remember my name, email and phone on this device</span>
@@ -871,7 +980,24 @@ export default function PublicBooking({ embedded = false }) {
             {/* Money summary + policy BEFORE the commit button: nobody should
                 tap "Confirm booking" without seeing the total, what their
                 gift card covers, and what happens next payment-wise. */}
-            {!waitlistMode && (() => {
+            {usingPackage && chosenPackage && (
+              <div className="pb-total">
+                <div className="row"><span>{svc.name}</span><b>1 package session</b></div>
+                {addOnTotal > 0 && (
+                  <div className="row"><span>Add-ons (pay at your appointment)</span><b>${addOnTotal.toFixed(2)}</b></div>
+                )}
+                <div className="row" style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+                  <span>Due now</span><b>$0.00</b>
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+                  {chosenPackage.creditsRemaining - 1 === 0
+                    ? `This uses your last session in ${chosenPackage.name}.`
+                    : `${chosenPackage.creditsRemaining - 1} of ${chosenPackage.creditsTotal} sessions left after this booking.`}
+                  {chosenPackage.useOn === 'completion' ? ' The session is held for you and counts once you attend.' : ''}
+                </div>
+              </div>
+            )}
+            {!waitlistMode && !usingPackage && (() => {
               if (total <= 0) return null;
               const giftApplied = giftCardChecked
                 ? Math.min(Number(giftCardChecked.balanceCents || 0) / 100, total) : 0;
@@ -919,7 +1045,7 @@ export default function PublicBooking({ embedded = false }) {
               <button type="button" className="pb-btn outline" onClick={backToPick}>
                 <Icons.ArrowLeft size={14}/> Back
               </button>
-              <button type="submit" className="pb-btn primary" disabled={!name.trim() || !email.trim() || busy}>
+              <button type="submit" className="pb-btn primary" disabled={(!usingPackage && (!name.trim() || !email.trim())) || busy}>
                 {busy
                   ? (waitlistMode ? 'Joining…' : 'Confirming…')
                   : (waitlistMode ? 'Join the waitlist' : 'Confirm booking')}
@@ -1299,9 +1425,9 @@ function JoinMembershipModal({ slug, membership, bizName, onClose }) {
   );
 }
 
-function BuyPackageModal({ slug, pkg, bizName, onClose }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+function BuyPackageModal({ slug, pkg, bizName, onClose, defaultName = '', defaultEmail = '' }) {
+  const [name, setName] = useState(defaultName || '');
+  const [email, setEmail] = useState(defaultEmail || '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 

@@ -53,13 +53,27 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         cs.timezone,
         w.owner_id,
         u.email AS owner_email,
-        u.name AS owner_name
+        u.name AS owner_name,
+        b.client_package_id,
+        pk.name AS package_name, pk.credits_remaining AS package_remaining,
+        pk.status AS package_status,
+        (pt.id IS NOT NULL AND pt.active AND pt.visibility = 'public' AND pt.price > 0) AS package_buyable,
+        pk.package_id AS package_template_id,
+        (b.client_package_id IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM bookings nb
+           WHERE nb.client_package_id = b.client_package_id
+             AND nb.cancelled_at IS NULL
+             AND nb.id <> b.id
+             AND (nb.created_at > b.created_at OR (nb.created_at = b.created_at AND nb.id > b.id))
+        )) AS package_latest
       FROM bookings b
       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
       LEFT JOIN clients c ON c.id = b.client_id
       LEFT JOIN workspaces w ON w.id = b.workspace_id
       LEFT JOIN users u ON u.id = w.owner_id
+      LEFT JOIN client_packages pk ON pk.id = b.client_package_id AND pk.workspace_id = b.workspace_id
+      LEFT JOIN packages pt ON pt.id = pk.package_id AND pt.workspace_id = b.workspace_id
       WHERE b.id = ${bookingId}
     `;
     const ctx = rows[0];
@@ -128,6 +142,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         locationAddress: ctx.location_address || (ctx.location_type === 'in_person' ? ctx.location_label : null),
         source,
         branding,
+        packageNote: packageNoteFor(ctx),
       }));
     }
 
@@ -235,7 +250,37 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions }) {
+// One modest line for a confirmation paid with a package session: the
+// sessions left, or on the last one "That was your last session in X.
+// Buy again: <link>". Only the newest booking of a batch carries it, so a
+// four-session booking doesn't send four "last session" lines.
+export function packageNoteFor(ctx) {
+  if (!ctx?.client_package_id || !ctx.package_name || !ctx.package_latest) return null;
+  const left = Number(ctx.package_remaining);
+  if (!Number.isFinite(left)) return null;
+  const base = appUrl();
+  const slug = ctx.slug ? encodeURIComponent(ctx.slug) : null;
+  if (left <= 0) {
+    const buyUrl = slug && ctx.package_buyable && ctx.package_template_id
+      ? `${base}/book/${slug}?buy=${encodeURIComponent(ctx.package_template_id)}`
+      : (slug ? `${base}/book/${slug}` : null);
+    return { last: true, name: ctx.package_name, left: 0, url: buyUrl, canBuy: !!(slug && ctx.package_buyable) };
+  }
+  return { last: false, name: ctx.package_name, left, url: null, canBuy: false };
+}
+
+function renderPackageNote(note) {
+  if (!note) return '';
+  if (note.last) {
+    const link = note.url
+      ? ` ${note.canBuy ? 'Buy again' : 'See all services'}: <a href="${escapeHtml(note.url)}" style="color:#2E3168;">${escapeHtml(note.url)}</a>`
+      : '';
+    return `<p style="margin:14px 0;">That was your last session in <strong>${escapeHtml(note.name)}</strong>.${link}</p>`;
+  }
+  return `<p style="margin:14px 0;">Paid with your <strong>${escapeHtml(note.name)}</strong> package. ${note.left} session${note.left === 1 ? '' : 's'} left.</p>`;
+}
+
+async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions, packageNote = null }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -290,6 +335,7 @@ async function sendClientConfirm({ clientId, workspaceId, to, clientName, busine
         <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
         <br/><span style="font-size:12px;color:#85827B;">Save this - open it at the start of your session.</span>
       </p>` : ''}
+      ${renderPackageNote(packageNote)}
       ${renderAddToCalendar(calendarLinks)}
       ${renderPrepInstructions(prepInstructions)}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? ${hasPortal
@@ -376,6 +422,8 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
       LEFT JOIN workspaces w ON w.id = b.workspace_id
       LEFT JOIN users u ON u.id = w.owner_id
+      LEFT JOIN client_packages pk ON pk.id = b.client_package_id AND pk.workspace_id = b.workspace_id
+      LEFT JOIN packages pt ON pt.id = pk.package_id AND pt.workspace_id = b.workspace_id
       WHERE b.id = ${bookingId}
     `;
     const ctx = rows[0];
@@ -551,6 +599,8 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
       LEFT JOIN workspaces w ON w.id = b.workspace_id
       LEFT JOIN users u ON u.id = w.owner_id
+      LEFT JOIN client_packages pk ON pk.id = b.client_package_id AND pk.workspace_id = b.workspace_id
+      LEFT JOIN packages pt ON pt.id = pk.package_id AND pt.workspace_id = b.workspace_id
       WHERE b.id = ${bookingId}
     `;
     const ctx = rows[0];

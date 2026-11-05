@@ -6,11 +6,12 @@ import { useCalendar } from '../calendar/state.js';
 import PackagesDrawer from '../calendar/PackagesDrawer.jsx';
 
 export default function FinancePackages() {
-  const { cal, loading } = useCalendar();
+  const { cal, loading, patchSettings } = useCalendar();
   if (loading) {
     return <div style={{ color: 'var(--muted)', fontSize: 13, padding: 12 }}>Loading…</div>;
   }
   return (
-    <PackagesDrawer services={cal?.services || []} inline />
+    <PackagesDrawer services={cal?.services || []} settings={cal?.settings || null}
+      onPatchSettings={patchSettings} inline />
   );
 }

@@ -440,6 +440,24 @@ export function cancelPolicy(b, now = Date.now()) {
   const late = windowH > 0 && startMs < now + windowH * 3600 * 1000;
   const lines = [];
   let tone = 'calm';
+  // Package bookings: a late cancel (under the business's own fee policy)
+  // keeps the session used instead of charging the card. Same rule as
+  // the server (api/me/bookings/[id].js isLateCancelWithPolicy).
+  if (b.fromPackage && b.packageUseMode !== 'completion') {
+    const pkg = b.packageName ? `your ${b.packageName} package` : 'your package';
+    if (fee > 0 && windowH > 0) {
+      lines.push(`${b.businessName} lets you cancel for free up to ${windowH} hours before.`);
+      if (late) {
+        tone = 'warn';
+        lines.push(`This appointment starts in less than ${windowH} hours, so the session from ${pkg} stays used. Your card is not charged.`);
+      } else {
+        lines.push(`You are cancelling in time, so the session goes back into ${pkg}.`);
+      }
+    } else {
+      lines.push(`The session goes back into ${pkg}.`);
+    }
+    return { lines, tone, late: late && fee > 0, fee: 0 };
+  }
   if (fee > 0 && windowH > 0) {
     lines.push(`${b.businessName} lets you cancel for free up to ${windowH} hours before. After that there is a ${fmtMoney(fee)} late-cancellation fee.`);
     if (late) {
@@ -458,7 +476,10 @@ export function cancelPolicy(b, now = Date.now()) {
     lines.push(`Your ${fmtMoney(p.depositPaid)} deposit is not refunded automatically. Message ${b.businessName} if you would like it back.`);
   }
   if (p.giftCardCredit > 0) lines.push(`The ${fmtMoney(p.giftCardCredit)} you used from a gift card goes back on the card.`);
-  if (b.fromPackage) lines.push('The session goes back into your package.');
+  if (b.fromPackage) {
+    // Business counts sessions when you attend: the session was only held.
+    lines.push(`The session goes back into ${b.packageName ? `your ${b.packageName} package` : 'your package'}.`);
+  }
   return { lines, tone, late, fee };
 }
 

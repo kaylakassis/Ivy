@@ -13,7 +13,9 @@ import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { fetchOwnedClient } from '../../_lib/clients.js';
-import { serializeClientPackage } from '../../_lib/packages.js';
+import {
+  serializeClientPackage, SESSIONS_BOOKED_SQL, SESSIONS_HELD_SQL, SERVICE_NAMES_SQL,
+} from '../../_lib/packages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -29,14 +31,23 @@ export default async function handler(req, res) {
     if (!client) return notFound(res, 'Client not found');
 
     if (req.method === 'GET') {
-      const { rows } = await sql`
-        SELECT * FROM client_packages
-        WHERE client_id = ${clientId} AND workspace_id = ${workspaceId}
-        ORDER BY
-          CASE status WHEN 'active' THEN 0 ELSE 1 END,
-          created_at DESC
-      `;
-      return ok(res, { packages: rows.map((r) => serializeClientPackage(r)) });
+      // SESSIONS_BOOKED_SQL is fixed text; the values are parameters.
+      const { rows } = await sql.query(
+        `SELECT cp.*, ${SESSIONS_BOOKED_SQL}, ${SESSIONS_HELD_SQL}, ${SERVICE_NAMES_SQL},
+                (p.id IS NOT NULL AND p.active) AS template_active
+           FROM client_packages cp
+           LEFT JOIN packages p ON p.id = cp.package_id AND p.workspace_id = cp.workspace_id
+          WHERE cp.client_id = $1 AND cp.workspace_id = $2
+          ORDER BY CASE cp.status WHEN 'active' THEN 0 ELSE 1 END, cp.created_at DESC`,
+        [clientId, workspaceId],
+      );
+      return ok(res, {
+        packages: rows.map((r) => ({
+          ...serializeClientPackage(r),
+          // Owner side: can this exact package be sold again ("Offer a new one")?
+          templateActive: !!r.template_active,
+        })),
+      });
     }
 
     if (req.method === 'POST') {
@@ -79,6 +90,10 @@ export default async function handler(req, res) {
         }
         if (expiryDays != null && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 3650)) {
           return badRequest(res, 'Validity must be from 1 to 3650 days');
+        }
+        serviceIds = [...new Set(serviceIds)];
+        if (serviceIds.some((sid) => !/^[0-9a-fA-F-]{36}$/.test(sid))) {
+          return badRequest(res, 'serviceIds must be UUIDs');
         }
         if (serviceIds.length > 0) {
           const { rows } = await sql.query(

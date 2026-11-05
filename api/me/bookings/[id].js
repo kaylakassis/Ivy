@@ -64,14 +64,27 @@ export default async function handler(req, res) {
       // can't make).
       let lateCancelCharged = null;
       let lateCancelChargeError = null;
-      try {
-        const policy = await maybeChargeLateCancel({
-          booking, myIds,
-        });
-        lateCancelCharged = policy.charged;
-        lateCancelChargeError = policy.error;
-      } catch {
-        // Logged inside helper. Don't block the cancel.
+      // Package sessions follow the business's own late-cancel policy:
+      // cancelling in time gives the session back; cancelling late (inside
+      // the service's window, when the business has set a late-cancel fee)
+      // keeps the session used INSTEAD of charging the card a second time.
+      // No policy set = the session always comes back.
+      // A business that uses sessions on completion only HOLDS the session
+      // until the visit happens, so a cancel always releases it (their
+      // usual late-cancel fee, if any, still applies).
+      const packageKept = booking.client_package_id && booking.package_use_mode !== 'completion'
+        ? await isLateCancelWithPolicy(booking).catch(() => false)
+        : false;
+      if (!packageKept) {
+        try {
+          const policy = await maybeChargeLateCancel({
+            booking, myIds,
+          });
+          lateCancelCharged = policy.charged;
+          lateCancelChargeError = policy.error;
+        } catch {
+          // Logged inside helper. Don't block the cancel.
+        }
       }
 
       // Soft-cancel. Defense-in-depth: include client_id IN (...) on the
@@ -115,8 +128,11 @@ export default async function handler(req, res) {
       notifyBookingCancellation({
         workspaceId: booking.workspace_id, bookingId: booking.id, source: 'client',
       });
-      // Refund any consumed package credit.
-      await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
+      // Give the package session back, unless this was a late cancel
+      // under the business's policy (see packageKept above).
+      if (!packageKept) {
+        await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
+      }
       // Put any gift-card credit back on the card (exactly-once inside).
       await restoreGiftCardCreditForBooking({ workspaceId: booking.workspace_id, bookingId: booking.id })
         .catch((err) => console.error('[portal cancel] gift card restore failed:', err.message));
@@ -145,6 +161,8 @@ export default async function handler(req, res) {
         cancelled: true,
         feeCharged: lateCancelCharged ? lateCancelCharged.amount : 0,
         feeChargeError: lateCancelChargeError,
+        // Package bookings: whether the session went back into the package.
+        ...(booking.client_package_id ? { packageSessionReturned: !packageKept } : {}),
       });
     }
 
@@ -356,6 +374,29 @@ export default async function handler(req, res) {
 // { charged, error } where charged is { amount, paymentIntent } on
 // success or null when nothing was charged. Never throws - the cancel
 // must always go through.
+// True when cancelling now is "late" under a policy the business chose:
+// the service has a late-cancel fee AND a free-cancel window, and the
+// booking starts inside that window (workspace time zone). Shared by the
+// portal (to warn before cancelling) through the same numbers the
+// bookings list sends: cancellationFeeAmount / cancellationWindowHours.
+export async function isLateCancelWithPolicy(booking, now = Date.now()) {
+  if (!booking.service_id) return false;
+  const r = await sql`
+    SELECT s.cancellation_fee_amount, s.cancellation_window_hours, cs.timezone
+      FROM services s
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = s.workspace_id
+     WHERE s.id = ${booking.service_id} AND s.workspace_id = ${booking.workspace_id}
+  `;
+  const row = r.rows[0];
+  if (!row) return false;
+  const fee = Number(row.cancellation_fee_amount || 0);
+  const windowHours = Number(row.cancellation_window_hours || 0);
+  if (fee <= 0 || windowHours <= 0) return false;
+  const dateISO = booking.date instanceof Date ? booking.date.toISOString().slice(0, 10) : booking.date;
+  const startMs = slotEpochMs(dateISO, booking.start_min, row.timezone || null);
+  return startMs < now + windowHours * 60 * 60 * 1000;
+}
+
 async function maybeChargeLateCancel({ booking, myIds }) {
   try {
     if (!booking.client_id) return { charged: null, error: null };

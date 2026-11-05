@@ -4314,4 +4314,21 @@ CREATE TABLE IF NOT EXISTS client_field_definitions (
 );
 CREATE INDEX IF NOT EXISTS idx_client_field_defs_ws ON client_field_definitions(workspace_id, position);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_client_field_defs_label ON client_field_definitions(workspace_id, LOWER(label));
+-- Packages: when a package session counts as used. 'booking' (default):
+-- the session is used when the booking is made. 'completion': the
+-- session is held when booked and counts as used once the visit is
+-- marked complete (or a no-show); cancelling releases it. Each booking
+-- records the mode it was made under, so switching the setting never
+-- changes bookings that already exist (NULL = made before this setting
+-- existed = 'booking').
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS package_use_on TEXT NOT NULL DEFAULT 'booking';
+DO $$ BEGIN
+  ALTER TABLE calendar_settings ADD CONSTRAINT calendar_settings_package_use_on_chk
+    CHECK (package_use_on IN ('booking', 'completion'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS package_use_mode TEXT;
+DO $$ BEGIN
+  ALTER TABLE bookings ADD CONSTRAINT bookings_package_use_mode_chk
+    CHECK (package_use_mode IS NULL OR package_use_mode IN ('booking', 'completion'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 `;

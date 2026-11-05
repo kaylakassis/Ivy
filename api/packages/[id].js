@@ -42,7 +42,8 @@ export default async function handler(req, res) {
       }
       if ('serviceIds' in body) {
         if (!Array.isArray(body.serviceIds)) return badRequest(res, 'serviceIds must be an array');
-        const ids = body.serviceIds.map((s) => String(s)).filter(Boolean).slice(0, 50);
+        const ids = [...new Set(body.serviceIds.map((s) => String(s)).filter(Boolean))].slice(0, 50);
+        if (ids.some((sid) => !/^[0-9a-fA-F-]{36}$/.test(sid))) return badRequest(res, 'serviceIds must be UUIDs');
         if (ids.length > 0) {
           const { rows } = await sql.query(
             'SELECT id FROM services WHERE workspace_id = $1 AND id = ANY($2)',

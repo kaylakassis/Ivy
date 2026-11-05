@@ -40,7 +40,9 @@ export default function ClientInvoices() {
     const soft = (p, fb) => p.catch(() => fb);
     const [inv, pk, ms, progs, pm, orders] = await Promise.all([
       api.get('/me/invoices'),
-      soft(api.get('/me/packages'), { packages: [] }),
+      // include=recent: active packages plus ones used up or expired
+      // lately, so the card can say "Used up" and offer Buy again.
+      soft(api.get('/me/packages?include=recent'), { packages: [] }),
       soft(api.get('/me/memberships'), { memberships: [] }),
       soft(api.get('/me/programs'), { programs: [] }),
       soft(api.get('/me/payment-methods'), { cards: [] }),

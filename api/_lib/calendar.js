@@ -68,6 +68,8 @@ export function serializeSettings(row) {
     bufferMinutes:  row.buffer_minutes,
     minNoticeHours: row.min_notice_hours == null ? 24 : Number(row.min_notice_hours),
     maxAdvanceDays: row.max_advance_days == null ? 60 : Number(row.max_advance_days),
+    // When a package session counts as used: 'booking' | 'completion'.
+    packageUseOn:   row.package_use_on === 'completion' ? 'completion' : 'booking',
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',
@@ -301,6 +303,8 @@ export function serializeBooking(row, opts = {}) {
     recurrenceUntil,
     cancelledOccurrences,
     clientPackageId:     money(row.client_package_id || null),
+    // 'booking' | 'completion' | null: when this booking's package session counts as used.
+    packageUseMode:      money(row.client_package_id ? (row.package_use_mode || 'booking') : null),
     staffId:             row.staff_id || null,
     depositRequired:     Number(row.deposit_required || 0),
     depositPaid:         money(Number(row.deposit_paid || 0)),
