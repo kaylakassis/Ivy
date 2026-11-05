@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res); if (!user) return;
     const id = String(req.query.id || '');
     if (!isUuid(id)) return notFound(res, 'Program not found');
-    const owner = (await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`).rows[0]?.id || null;
+    const owner = (await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`).rows[0]?.id || null;
     const access = await programAccess(user, id, owner);
     if (!access.program) return notFound(res, 'Program not found');
     if (!access.role) return forbidden(res, 'You do not have access to this program.');

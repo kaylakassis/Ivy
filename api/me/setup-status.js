@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
     let ws;
     try {
-      ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+      ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`;
     } catch (e) {
       // workspaces table missing entirely (very-cold install) - pretend
       // we're done so the dashboard doesn't crash. The wizard will create

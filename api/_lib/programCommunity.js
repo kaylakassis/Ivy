@@ -19,7 +19,7 @@ export const PAGE_SIZE = 30;
 export const BIO_MAX = 280;
 
 export async function ownerWorkspaceOf(user) {
-  const r = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+  const r = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`;
   return r.rows[0]?.id || null;
 }
 

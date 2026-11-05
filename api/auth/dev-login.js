@@ -77,7 +77,7 @@ async function ensureQaAccount() {
       RETURNING id`;
     userId = ins.rows[0].id;
   }
-  const ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
+  const ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC, id ASC LIMIT 1`;
   let workspaceId = ws.rows[0]?.id;
   if (!workspaceId) {
     const insW = await sql`INSERT INTO workspaces (owner_id, name) VALUES (${userId}, 'QA Workspace') RETURNING id`;

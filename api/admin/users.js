@@ -101,6 +101,7 @@ async function listUsers(req, res) {
       w.comp_until,
       w.data_deletion_at,
       w.data_purged_at,
+      COALESCE(w.workspace_count, 0)::int AS workspace_count,
       EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id) AS is_client,
       EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id) AS is_helper,
       u.is_tester,
@@ -110,7 +111,16 @@ async function listUsers(req, res) {
       wr.programs AS rev_programs, wr.packages AS rev_packages, wr.gift_cards AS rev_gift_cards,
       wr.booking_payments AS rev_booking_payments, wr.invoice_currencies AS rev_invoice_currencies
     FROM users u
-    LEFT JOIN workspaces w ON w.owner_id = u.id
+    -- One row per person: their oldest business (the one the app uses).
+    -- A plain join listed someone twice when two workspaces existed for
+    -- them (a signup race); workspace_count shows that case instead.
+    LEFT JOIN LATERAL (
+      SELECT ws.*, COUNT(*) OVER () AS workspace_count
+        FROM workspaces ws
+       WHERE ws.owner_id = u.id
+       ORDER BY ws.created_at ASC, ws.id ASC
+       LIMIT 1
+    ) w ON TRUE
     LEFT JOIN affiliates af ON af.user_id = u.id
     LEFT JOIN workspace_revenue wr ON wr.workspace_id = w.id
     ${whereSql}
@@ -134,6 +144,7 @@ async function listUsers(req, res) {
     emailVerifiedAt: row.email_verified_at,
     lastLoginAt: row.last_login_at,
     lastActiveAt: row.last_active_at,
+    workspaceCount: row.workspace_count || 0,
     workspace: row.workspace_id ? {
       id: row.workspace_id,
       status: row.subscription_status,

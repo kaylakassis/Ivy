@@ -4115,4 +4115,19 @@ CREATE OR REPLACE VIEW admin_real_workspace_profile AS
 -- reply and fed back to the model in later turns so Ivy can neither forget
 -- nor deny what she did. NULL for turns with no actions (and older rows).
 ALTER TABLE ivy_messages ADD COLUMN IF NOT EXISTS actions JSONB;
+
+-- One workspace per owner. ensureWorkspace's comment always assumed a
+-- unique constraint here, but there was only a plain index, so two parallel
+-- first requests after signup could each create a workspace. The unique
+-- index is created only when no owner already has two (those are listed in
+-- Admin > Users with a "2 businesses" tag and resolved by hand first), so this
+-- migration can never fail on existing data.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM workspaces GROUP BY owner_id HAVING COUNT(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_workspaces_owner ON workspaces(owner_id);
+  END IF;
+END $$;
 `;

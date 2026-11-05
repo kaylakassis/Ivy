@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     // this endpoint too, in which case workspace_id stays null.
     let workspaceId = null;
     try {
-      const ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+      const ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`;
       workspaceId = ws.rows[0]?.id || null;
     } catch { /* ignore */ }
 

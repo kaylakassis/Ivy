@@ -77,6 +77,14 @@ async function run() {
       VALUES (${`rc-${Date.now()}@test.local`}, 'x', 'RC Owner', 'v1', NOW())
       RETURNING id`;
     const ownerId = u.rows[0].id;
+    // One workspace per owner (uq_workspaces_owner): each extra workspace
+    // in this test gets its own owner, cleaned up at the end.
+    const extraOwners = [];
+    const newOwner = async () => {
+      const id = (await sql`INSERT INTO users (email, password_hash) VALUES (${`rc-extra-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`}, 'x') RETURNING id`).rows[0].id;
+      extraOwners.push(id);
+      return id;
+    };
     // The owner identified this workspace in the app (what
     // /api/billing/iap-identify stamps); the webhook ignores events for a
     // workspace that never did (tests/revenuecat-binding.test.mjs).
@@ -146,8 +154,9 @@ async function run() {
     assert(aliasRes.statusCode === 200 && aliasRes.body?.ignored === 'SUBSCRIBER_ALIAS', 'ignored event type → 200 ignored');
 
     console.log('\n[9] an Apple downgrade never knocks out a workspace that pays through Stripe');
+    const owner9 = await newOwner();
     const w9 = await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_source, stripe_customer_id, subscription_period_end)
-                          VALUES (${ownerId}, 'active', 'stripe', 'cus_web_9', NOW() + INTERVAL '20 days') RETURNING id`;
+                          VALUES (${owner9}, 'active', 'stripe', 'cus_web_9', NOW() + INTERVAL '20 days') RETURNING id`;
     const wid9 = w9.rows[0].id;
     await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${wid9}`;
     let r9 = mkRes();
@@ -165,7 +174,7 @@ async function run() {
     assert(s9.subscription_status === 'active' && s9.subscription_source === 'apple', 'an Apple purchase still applies (access granted, source moves to apple)');
 
     console.log('\n[10] CANCELLATION remembers auto-renew is off; RENEWAL clears it');
-    const w10 = await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`;
+    const w10 = await sql`INSERT INTO workspaces (owner_id) VALUES (${await newOwner()}) RETURNING id`;
     const wid10 = w10.rows[0].id;
     await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${wid10}`;
     let r10 = mkRes();
@@ -195,6 +204,7 @@ async function run() {
     await sql`DELETE FROM webhook_event_dedup WHERE provider = 'revenuecat'`.catch(() => {});
     await sql`DELETE FROM workspaces WHERE id = ${wid}`.catch(() => {});
     await sql`DELETE FROM users WHERE id = ${ownerId}`.catch(() => {});
+    for (const id of (typeof extraOwners !== 'undefined' ? extraOwners : [])) await sql`DELETE FROM users WHERE id = ${id}`.catch(() => {});
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

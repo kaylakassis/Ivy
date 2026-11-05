@@ -501,7 +501,7 @@ async function workspaceForUser(userId) {
   if (!userId) return null;
   try {
     const { rows } = await sql`
-      SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1
+      SELECT id FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC, id ASC LIMIT 1
     `;
     return rows[0]?.id || null;
   } catch { return null; }

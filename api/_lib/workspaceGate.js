@@ -114,7 +114,7 @@ export async function ensureActiveWorkspace(user, req, res, opts = {}) {
   // owner endpoint. Refuse with a plain 403 before ensureWorkspace's
   // auto-create runs. Owners who also help elsewhere are unaffected:
   // they already have a workspace row, so this branch is skipped.
-  const owned = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+  const owned = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`;
   if (owned.rows.length === 0 && await isHelperUser(user.id)) {
     stampRequestId(undefined, res);
     res.status(403).json({

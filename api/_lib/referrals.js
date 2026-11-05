@@ -139,7 +139,7 @@ async function loadWorkspaceByOwner(ownerId) {
   const r = await sql`
     SELECT id, owner_id, subscription_status, subscription_source, converted_at,
            stripe_customer_id, revenuecat_user_id, apple_original_transaction_id
-    FROM workspaces WHERE owner_id = ${ownerId} LIMIT 1
+    FROM workspaces WHERE owner_id = ${ownerId} ORDER BY created_at ASC, id ASC LIMIT 1
   `;
   return r.rows[0] || null;
 }
@@ -492,7 +492,7 @@ export async function canAttachReferralCode(userId) {
   const r = await sql`
     SELECT u.created_at,
            (SELECT id FROM referrals WHERE referred_user_id = u.id) AS referral_id,
-           (SELECT converted_at FROM workspaces WHERE owner_id = u.id LIMIT 1) AS ws_converted_at
+           (SELECT converted_at FROM workspaces WHERE owner_id = u.id ORDER BY created_at ASC, id ASC LIMIT 1) AS ws_converted_at
       FROM users u WHERE u.id = ${userId}
   `;
   const row = r.rows[0];

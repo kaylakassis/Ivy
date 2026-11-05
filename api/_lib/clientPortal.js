@@ -151,7 +151,7 @@ async function ownsWorkspaceFromDb(userId) {
              cs.biz_name, cs.slug
       FROM workspaces w
       LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
-      WHERE w.owner_id = ${userId} LIMIT 1
+      WHERE w.owner_id = ${userId} ORDER BY w.created_at ASC, w.id ASC LIMIT 1
     `;
     if (!rows.length) return null;
     const r = rows[0];
@@ -172,7 +172,7 @@ async function ownsWorkspaceFromDb(userId) {
     // eslint-disable-next-line no-console
     console.error('[clientPortal] ownsWorkspace full query failed; falling back:', err.message);
     try {
-      const { rows } = await sql`SELECT id, onboarded_at FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
+      const { rows } = await sql`SELECT id, onboarded_at FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC, id ASC LIMIT 1`;
       if (!rows.length) return null;
       return {
         id: rows[0].id,

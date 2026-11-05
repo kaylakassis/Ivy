@@ -1346,7 +1346,15 @@ function UsersTab() {
                 {data.users.map((u) => (
                   <React.Fragment key={u.id}>
                   <tr style={{ borderTop: '1px solid var(--border)' }}>
-                    <Td>{u.email}</Td>
+                    <Td>
+                      {u.email}
+                      {u.workspaceCount > 1 && (
+                         <span title="This person has more than one business record (usually two created at sign-up). The app uses the oldest one."
+                           style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 600, padding: '1px 6px', borderRadius: 99, background: 'var(--warn-soft, rgba(234,179,8,.15))', color: 'var(--warn)' }}>
+                           {u.workspaceCount} businesses
+                         </span>
+                       )}
+                     </Td>
                     <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       <Pill text={u.classification}/>

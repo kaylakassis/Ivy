@@ -46,6 +46,7 @@ async function run() {
     const acctId = `acct_${tag}`;
 
     // Workspace + website + products + Stripe creds.
+    let otherUid = null;
     const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
       VALUES (${`${tag}@example.com`}, 'x', '2026-05-05', NOW()) RETURNING id`).rows[0].id;
     const wid = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end, business_type)
@@ -101,7 +102,9 @@ async function run() {
 
       // ── 2. Cross-tenant product rejected ──────────────────────
       console.log('\n[2] cross-tenant productId is rejected');
-      const otherWid = (await sql`INSERT INTO workspaces (owner_id) VALUES (${uid}) RETURNING id`).rows[0].id;
+      // One workspace per owner (uq_workspaces_owner): the other tenant gets its own owner.
+      otherUid = (await sql`INSERT INTO users (email, password_hash) VALUES (${`orders-other-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`}, 'x') RETURNING id`).rows[0].id;
+      const otherWid = (await sql`INSERT INTO workspaces (owner_id) VALUES (${otherUid}) RETURNING id`).rows[0].id;
       const otherP = (await sql`INSERT INTO products (workspace_id, name, price, active)
         VALUES (${otherWid}, 'Other', 10, TRUE) RETURNING id`).rows[0].id;
       const r2 = mkRes();
@@ -162,6 +165,7 @@ async function run() {
     await sql`DELETE FROM clients WHERE workspace_id IN (SELECT id FROM workspaces WHERE owner_id = ${uid})`;
     await sql`DELETE FROM workspaces WHERE owner_id = ${uid}`;
     await sql`DELETE FROM users WHERE id = ${uid}`;
+    if (otherUid) await sql`DELETE FROM users WHERE id = ${otherUid}`.catch(() => {});
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

@@ -314,19 +314,29 @@ export class HelperOnlyError extends Error {
 }
 
 export async function ensureWorkspace(userId) {
-  const existing = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
+  const existing = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC, id ASC LIMIT 1`;
   if (existing.rows.length > 0) return existing.rows[0].id;
   // Lazy import: helpers.js imports this module.
   const { isHelperUser } = await import('./helpers.js');
   if (await isHelperUser(userId)) throw new HelperOnlyError();
   try {
+    // Insert only if no workspace exists yet. With the unique index on
+    // owner_id (schema.js) a parallel insert fails and the catch re-reads;
+    // without it (a database that still has old duplicates) the NOT EXISTS
+    // guard still narrows the race to almost nothing.
     const created = await sql`
-      INSERT INTO workspaces (owner_id) VALUES (${userId}) RETURNING id
+      INSERT INTO workspaces (owner_id)
+      SELECT ${userId}
+       WHERE NOT EXISTS (SELECT 1 FROM workspaces WHERE owner_id = ${userId})
+      RETURNING id
     `;
-    return created.rows[0].id;
+    if (created.rows.length > 0) return created.rows[0].id;
+    const again = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC, id ASC LIMIT 1`;
+    if (again.rows.length > 0) return again.rows[0].id;
+    throw new Error('Could not create a workspace');
   } catch (err) {
     // Concurrent request won the INSERT - re-read and return its row.
-    const retry = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
+    const retry = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC, id ASC LIMIT 1`;
     if (retry.rows.length > 0) return retry.rows[0].id;
     throw err;
   }

@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const owned = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+    const owned = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`;
     if (owned.rows.length > 0) return ok(res, { workspaceId: owned.rows[0].id, created: false });
     let row;
     try {
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       row = ins.rows[0];
     } catch (err) {
       // Lost a race with a concurrent request: read the winner's row.
-      const retry = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+      const retry = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} ORDER BY created_at ASC, id ASC LIMIT 1`;
       if (retry.rows.length === 0) throw err;
       return ok(res, { workspaceId: retry.rows[0].id, created: false });
     }
