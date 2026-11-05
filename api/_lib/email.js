@@ -19,6 +19,11 @@ import { tryConsumeQuota, DEFAULT_EMAIL_CAP_PER_DAY } from './usageCounters.js';
 import { unsubscribeUrlFor } from './unsubscribeToken.js';
 import { sql } from './db.js';
 
+// The Ivy logo at the top of Ivy's own emails (not on a business's branded
+// emails, which show that business's logo or name). Always the production
+// address: a mail client has to be able to load it.
+export const IVY_EMAIL_LOGO_URL = 'https://www.joinivy.ai/email-logo.png';
+
 const RESEND_URL = 'https://api.resend.com/emails';
 
 // Resend's per-account rate limit is 10 requests/sec on Pro and below. A
@@ -294,7 +299,11 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
          style="max-height:36px;max-width:180px;width:auto;height:auto;display:block;border:0;"/>`
     : (businessName
        ? `<div style="font-family:${fontDisplay};font-size:22px;letter-spacing:-0.02em;font-weight:500;color:${C.fg};line-height:1;">${escapeText(businessName)}</div>`
-       : `<div style="font-family:${fontDisplay};font-size:21px;letter-spacing:-0.02em;font-weight:600;color:${accent};line-height:1;">Ivy</div>`);
+       : `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td style="padding:0 10px 0 0;vertical-align:middle;"><img src="${IVY_EMAIL_LOGO_URL}" width="32" height="32" alt="Ivy"
+              style="display:block;width:32px;height:32px;border:1px solid rgba(255,255,255,0.14);border-radius:8px;"/></td>
+            <td style="vertical-align:middle;font-family:${fontDisplay};font-size:21px;letter-spacing:-0.02em;font-weight:600;color:${C.fg};line-height:1;">Ivy</td>
+          </tr></table>`);
 
   const headerRight = businessName
     ? '' // workspaces don't show "Business OS" tag; their name IS the brand

@@ -10,7 +10,7 @@ const h1 = (html) => (html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/) || [])[1] || '';
 console.log('\n[1] markup in the heading is rendered as text');
 const evil = '<img src=x onerror=alert(1)> & "Co"';
 let html = emailShell({ heading: evil, body: '<p>hi</p>' });
-assert(!/<img/.test(html), 'no <img> tag survives');
+assert(!/<img/.test(h1(html)) && (html.match(/<img/g) || []).length === 1 && html.includes('email-logo.png'), 'no <img> survives from the heading (the Ivy logo is the only image)');
 assert(h1(html).includes('&lt;img src=x onerror=alert(1)&gt; &amp; &quot;Co&quot;'), 'heading is entity-escaped in the <h1>');
 assert(/<title>&lt;img/.test(html), '<title> is escaped too');
 
