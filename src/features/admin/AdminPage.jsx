@@ -18,6 +18,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { US_STATE_NAME } from '../../lib/locations.js';
 import { CATEGORIES } from '../../lib/categories.js';
+import UserProfileSheet, { relTime, fmtDateTime } from './UserProfileSheet.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
@@ -1260,7 +1261,17 @@ const USER_FILTERS = [
   { id: 'client-only',      label: 'Client-only' },
   { id: 'real',             label: 'Real users' },
   { id: 'testers',          label: 'Testers · excluded' },
+  { id: 'missing-answers',  label: 'Missing onboarding answers' },
 ];
+
+// Sortable columns: [descending key, ascending key]. Keys map to fixed
+// ORDER BY clauses on the server (api/admin/users.js SORTS).
+const USER_SORTS = {
+  joined:     ['', 'joined_asc'],
+  lastLogin:  ['last_login', 'last_login_asc'],
+  lastActive: ['last_active', 'last_active_asc'],
+  revenue:    ['revenue', 'revenue'],
+};
 
 function UsersTab() {
   const [q, setQ]           = useState('');
@@ -1310,7 +1321,7 @@ function UsersTab() {
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 11.5, color: 'var(--muted)', marginRight: 2 }}>Sort</span>
-        {[['', 'Newest'], ['revenue', 'Top revenue']].map(([id, label]) => (
+        {[['', 'Newest'], ['revenue', 'Top revenue'], ['last_login', 'Last login'], ['last_active', 'Last active']].map(([id, label]) => (
           <button key={id || 'newest'} onClick={() => { setSort(id); setPage(1); }}
             className={`btn ${sort === id ? 'btn-primary' : 'btn-outline'}`}
             style={{ padding: '4px 10px', fontSize: 11.5 }}>
@@ -1339,7 +1350,12 @@ function UsersTab() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>
-                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Revenue in Ivy</Th><Th>Joined</Th><Th>Last active</Th><Th>Verified</Th><Th>Onboarding</Th><Th></Th>
+                  <Th>Email</Th><Th>Name</Th><Th>Type</Th>
+                  <SortTh label="Revenue in Ivy" keys={USER_SORTS.revenue} sort={sort} onSort={(k) => { setSort(k); setPage(1); }}/>
+                  <SortTh label="Joined" keys={USER_SORTS.joined} sort={sort} onSort={(k) => { setSort(k); setPage(1); }}/>
+                  <SortTh label="Last login" keys={USER_SORTS.lastLogin} sort={sort} onSort={(k) => { setSort(k); setPage(1); }}/>
+                  <SortTh label="Last active" keys={USER_SORTS.lastActive} sort={sort} onSort={(k) => { setSort(k); setPage(1); }}/>
+                  <Th>Verified</Th><Th>Onboarding</Th><Th></Th>
                 </tr>
               </thead>
               <tbody>
@@ -1373,8 +1389,9 @@ function UsersTab() {
                       )}
                     </Td>
                     <Td><RevenueCell revenue={u.revenue}/></Td>
-                    <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</Td>
-                    <Td><span style={{ color: (u.lastActiveAt || u.lastLoginAt) ? 'inherit' : 'var(--muted)' }} title={(u.lastActiveAt || u.lastLoginAt) ? `Last active ${new Date(u.lastActiveAt || u.lastLoginAt).toLocaleString()}` : 'No activity recorded'}>{lastLoginLabel(u.lastActiveAt || u.lastLoginAt)}</span></Td>
+                    <Td><WhenCell iso={u.createdAt}/></Td>
+                    <Td><WhenCell iso={u.lastLoginAt}/></Td>
+                    <Td><WhenCell iso={u.lastActiveAt || u.lastLoginAt}/></Td>
                     <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       {u.workspace ? (
@@ -1384,6 +1401,12 @@ function UsersTab() {
                           {openAnswers.has(u.id) ? 'Hide answers ▴' : 'Answers ▾'}
                         </button>
                       ) : <span style={{ color: 'var(--muted)' }}>-</span>}
+                      {u.workspace && u.onboardingAnswersMissing > 0 && (
+                        <div title="Required onboarding questions they still have to answer. They are asked in the app the next time they open it."
+                          style={{ fontSize: 11, fontWeight: 600, color: 'var(--warn)', marginTop: 2, whiteSpace: 'nowrap', paddingLeft: 10 }}>
+                          {u.onboardingAnswersMissing} missing
+                        </div>
+                      )}
                     </Td>
                     <Td>
                       <button onClick={() => setActive(u)} className="btn btn-ghost"
@@ -1394,7 +1417,7 @@ function UsersTab() {
                   </tr>
                   {openAnswers.has(u.id) && (
                     <tr>
-                      <td colSpan={9} style={{ padding: '0 12px 14px' }}>
+                      <td colSpan={10} style={{ padding: '0 12px 14px' }}>
                         {/* Sticky so the panel stays in view when the wide
                             table is scrolled sideways on a phone. */}
                         <div style={{ position: 'sticky', left: 12, maxWidth: 'min(760px, calc(100vw - 56px))' }}>
@@ -1406,7 +1429,7 @@ function UsersTab() {
                   </React.Fragment>
                 ))}
                 {data.users.length === 0 && (
-                  <tr><td colSpan={9} style={{ padding: 28 }}>
+                  <tr><td colSpan={10} style={{ padding: 28 }}>
                     <EmptyNote icon="Users" title="No users match" hint="Try a different filter or search."/>
                   </td></tr>
                 )}
@@ -1531,6 +1554,12 @@ const fmtWhen = (iso) => {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
+// The required onboarding questions (api/_lib/onboardingAnswers.js keys).
+const REQUIRED_LABELS = {
+  heardFrom: 'how they heard', location: 'where they are based', stage: 'business stage',
+  goals: 'goals', challenges: "what's draining them",
+};
+
 // One owner's onboarding answers, fetched on demand from
 // /api/admin/users/:id/onboarding (super-admin only). Shown inline under a
 // row in the Users table and inside the user detail sheet. Questions an
@@ -1593,6 +1622,22 @@ function OnboardingAnswersPanel({ userId }) {
 
   return (
     <div style={shell} data-testid="onboarding-answers">
+      {data.required && (
+        <div data-testid="required-status" style={{
+          padding: '7px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 550,
+          background: data.required.answered ? 'color-mix(in srgb, var(--ok) 10%, transparent)' : 'color-mix(in srgb, var(--warn) 12%, transparent)',
+          color: data.required.answered ? 'var(--ok)' : 'var(--warn)',
+        }}>
+          Required questions: {data.required.answered
+            ? 'answered'
+            : `missing (${data.required.missing.length}): ${data.required.missing.map((k) => REQUIRED_LABELS[k] || k).join(', ')}`}
+          {!data.required.answered && (
+            <div style={{ fontWeight: 400, color: 'var(--fg-2)', marginTop: 2 }}>
+              They are asked these in the app (web and iPhone 1.0.5 or later) until they answer.
+            </div>
+          )}
+        </div>
+      )}
       <div className="metric-label">Answers</div>
       <Row k="How they heard">{heard || none}</Row>
       {(a.referralName || (a.heardFrom || []).includes('referral')) && (
@@ -1785,31 +1830,16 @@ function UserDetailModal({ user, onClose, onChanged }) {
   const active = currentRole(user);
 
   return (
-    <Modal title={user.email} onClose={onClose}>
+    <Modal title={user.name ? `${user.name} · ${user.email}` : user.email} onClose={onClose} wide>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
-        <Row k="Name" v={user.name || '-'}/>
-        <Row k="Joined" v={user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}/>
-        <Row k="Last active" v={(user.lastActiveAt || user.lastLoginAt) ? new Date(user.lastActiveAt || user.lastLoginAt).toLocaleString() : 'No activity recorded'}/>
-        <Row k="Last password sign-in" v={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not since this was tracked'}/>
-        <Row k="Email verified" v={user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : 'No'}/>
+        <UserProfileSheet userId={user.id} labels={ONB_LABELS}/>
         {user.revenue && <Row k="Revenue in Ivy" v={<RevenueBreakdown revenue={user.revenue}/>}/>}
         <Row k="Classification" v={<><Pill text={user.classification}/>{user.excludedFromAnalytics && <TesterPill flagged={user.isTester}/>}</>}/>
         <Row k="Analytics" v={user.excludedFromAnalytics
           ? (user.isTester ? 'Excluded: marked as a test account' : 'Excluded automatically (beta, sponsored, super admin or comped)')
           : 'Counted as a real user'}/>
-        {user.workspace && (
-          <>
-            <Row k="Subscription" v={<>{user.workspace.status}{user.workspace.active === false && <ArchivedPill/>}</>}/>
-            {user.workspace.dataDeletionAt && (
-              <Row k="Data deletion" v={`Scheduled for ${new Date(user.workspace.dataDeletionAt).toLocaleString()} (7 days after access ended; cancelled automatically if they resubscribe)`}/>
-            )}
-            {user.workspace.dataPurgedAt && (
-              <Row k="Data deleted" v={new Date(user.workspace.dataPurgedAt).toLocaleString()}/>
-            )}
-            {user.workspace.trialEndsAt && (
-              <Row k="Trial ends" v={new Date(user.workspace.trialEndsAt).toLocaleString()}/>
-            )}
-          </>
+        {user.workspace?.active === false && (
+          <Row k="Booking page" v={<>Archived<ArchivedPill/></>}/>
         )}
         {user.affiliateCode && <Row k="Affiliate code" v={<code>{user.affiliateCode}</code>}/>}
 
@@ -2558,17 +2588,19 @@ function ExportTab() {
 
 // ---------- Tiny shared bits ----------
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, wide = false }) {
   return (
-    <div role="dialog" onClick={onClose} style={{
+    <div role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} onClick={onClose} style={{
       position: 'fixed', inset: 0, zIndex: 200,
       background: 'rgba(0,0,0,0.55)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: wide ? 12 : 20,
     }}>
+      {/* Scrolls inside the card so a long sheet (the user profile) never
+          runs off the screen on a phone. */}
       <div onClick={(e) => e.stopPropagation()} className="card"
-        style={{ width: '100%', maxWidth: 520, padding: 22 }}>
+        style={{ width: '100%', maxWidth: wide ? 680 : 520, maxHeight: '100%', overflowY: 'auto', padding: wide ? 18 : 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>{title}</h3>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
           <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }}>
             <Icons.X size={14}/>
           </button>
@@ -2604,26 +2636,41 @@ const fieldSty = {
   color: 'var(--fg)', fontSize: 13, outline: 'none',
 };
 
-// Compact relative label for "last active": the most recent of any
-// authenticated request (stamped by requireUser, at most every 10 minutes)
-// and the last password sign-in. "Never" only when neither was ever
-// recorded, which means the account has not been used since tracking began.
-function lastLoginLabel(iso) {
-  if (!iso) return 'Never';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return 'Never';
-  const days = Math.floor((Date.now() - then) / 86400000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 7) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
-
 function Th({ children }) {
   return <th style={{ padding: '10px 12px', fontSize: 11.5, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{children}</th>;
 }
 function Td({ children }) {
   return <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>{children}</td>;
+}
+// Table date: short local date + relative label underneath; the full local
+// date and time on hover. "Never" when nothing was recorded.
+function WhenCell({ iso }) {
+  const full = fmtDateTime(iso);
+  if (!full) return <span style={{ color: 'var(--muted)' }}>Never</span>;
+  const d = new Date(iso);
+  return (
+    <span title={full} style={{ whiteSpace: 'nowrap' }}>
+      {d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' })}
+      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{relTime(iso)}</div>
+    </span>
+  );
+}
+// Column header that sorts the list: first click newest first, second
+// click oldest first (or "Never" first for sign-ins).
+function SortTh({ label, keys, sort, onSort }) {
+  const [desc, asc] = keys;
+  const on = sort === desc || sort === asc;
+  const isAsc = sort === asc && asc !== desc;
+  const next = sort === desc && asc !== desc ? asc : desc;
+  return (
+    <th aria-sort={on ? (isAsc ? 'ascending' : 'descending') : 'none'}
+      style={{ padding: '10px 12px', fontSize: 11.5, fontWeight: 600, color: on ? 'var(--fg)' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      <button type="button" onClick={() => onSort(next)}
+        style={{ all: 'unset', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        {label}<span aria-hidden="true" style={{ opacity: on ? 1 : 0.35 }}>{on ? (isAsc ? '▲' : '▼') : '▾'}</span>
+      </button>
+    </th>
+  );
 }
 // Revenue a business has collected through Ivy (workspace_revenue view).
 // Operator-only. Covered by the Privacy Policy "Business totals" section.

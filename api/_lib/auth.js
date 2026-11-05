@@ -280,12 +280,20 @@ export async function requireUser(req, res) {
   const la = row.last_active_at ? new Date(row.last_active_at).getTime() : 0;
   if (Date.now() - la > ACTIVITY_STAMP_THROTTLE_MS) {
     row.last_active_at = new Date().toISOString(); // optimistic; dedupes within the window
+    // Which app they were using (the iPhone app marks every request with
+    // X-Client-Platform); shown on the admin user profile.
+    const platform = isNativeClient(req) ? String(req.headers['x-client-platform'] || req.headers['X-Client-Platform']) : 'web';
     sql`
+      UPDATE users
+         SET last_active_at = NOW(), dormant_nudge_sent_at = NULL, last_active_platform = ${platform}
+       WHERE id = ${row.id}
+         AND (last_active_at IS NULL OR last_active_at < NOW() - INTERVAL '10 minutes')
+    `.catch(() => sql`
       UPDATE users
          SET last_active_at = NOW(), dormant_nudge_sent_at = NULL
        WHERE id = ${row.id}
          AND (last_active_at IS NULL OR last_active_at < NOW() - INTERVAL '10 minutes')
-    `.catch(() => { /* never block auth on the stamp */ });
+    `).catch(() => { /* never block auth on the stamp */ });
   }
   return row;
 }

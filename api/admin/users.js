@@ -25,8 +25,22 @@ import { createToken, KIND_RESET, KIND_VERIFY, appUrl } from '../_lib/tokens.js'
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { isWorkspaceActive } from '../_lib/clientPortal.js';
+import { missingCountSql } from '../_lib/onboardingAnswers.js';
 
 const PAGE_SIZE = 50;
+
+// Fixed ORDER BY choices only; the request picks a key, never SQL text.
+// "_asc" variants put "Never" first, which is how you find people who
+// never came back.
+const SORTS = {
+  '':                'u.created_at DESC',
+  joined_asc:        'u.created_at ASC',
+  revenue:           'COALESCE(wr.total, 0) DESC, u.created_at DESC',
+  last_login:        'u.last_login_at DESC NULLS LAST, u.created_at DESC',
+  last_login_asc:    'u.last_login_at ASC NULLS FIRST, u.created_at DESC',
+  last_active:       'GREATEST(u.last_active_at, u.last_login_at) DESC NULLS LAST, u.created_at DESC',
+  last_active_asc:   'GREATEST(u.last_active_at, u.last_login_at) ASC NULLS FIRST, u.created_at DESC',
+};
 // Internally we surface 'business-trial' / 'business-active' as creation
 // shortcuts even though they're not stored on users.user_type. They
 // translate into the workspace's subscription_status. 'beta' IS a real
@@ -80,13 +94,21 @@ async function listUsers(req, res) {
     where.push(`EXISTS (SELECT 1 FROM admin_real_users ru WHERE ru.id = u.id)`);
   } else if (filter === 'helper') {
     where.push(`EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id)`);
+  } else if (filter === 'missing-answers') {
+    // Owners whose business (the oldest one, the one the app uses) is
+    // missing at least one required onboarding answer. Non-owners drop
+    // out because the subquery is NULL for them.
+    where.push(`(SELECT ${missingCountSql('wpf')}
+                   FROM workspaces wf
+                   LEFT JOIN workspace_profile wpf ON wpf.workspace_id = wf.id
+                  WHERE wf.owner_id = u.id
+                  ORDER BY wf.created_at ASC, wf.id ASC
+                  LIMIT 1) > 0`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  // Fixed ORDER BY choices only; never built from the request text.
-  const sortSql = String(req.query.sort || '') === 'revenue'
-    ? 'COALESCE(wr.total, 0) DESC, u.created_at DESC'
-    : 'u.created_at DESC';
+  const sortKey = String(req.query.sort || '');
+  const sortSql = Object.prototype.hasOwnProperty.call(SORTS, sortKey) ? SORTS[sortKey] : SORTS[''];
 
   params.push(PAGE_SIZE, offset);
   const queryText = `
@@ -109,7 +131,8 @@ async function listUsers(req, res) {
       af.code AS affiliate_code,
       wr.total AS rev_total, wr.invoices AS rev_invoices, wr.store_orders AS rev_store_orders,
       wr.programs AS rev_programs, wr.packages AS rev_packages, wr.gift_cards AS rev_gift_cards,
-      wr.booking_payments AS rev_booking_payments, wr.invoice_currencies AS rev_invoice_currencies
+      wr.booking_payments AS rev_booking_payments, wr.invoice_currencies AS rev_invoice_currencies,
+      CASE WHEN w.id IS NULL THEN NULL ELSE ${missingCountSql('wp')} END AS answers_missing
     FROM users u
     -- One row per person: their oldest business (the one the app uses).
     -- A plain join listed someone twice when two workspaces existed for
@@ -123,6 +146,7 @@ async function listUsers(req, res) {
     ) w ON TRUE
     LEFT JOIN affiliates af ON af.user_id = u.id
     LEFT JOIN workspace_revenue wr ON wr.workspace_id = w.id
+    LEFT JOIN workspace_profile wp ON wp.workspace_id = w.id
     ${whereSql}
     ORDER BY ${sortSql}
     LIMIT $${params.length - 1} OFFSET $${params.length}
@@ -145,6 +169,8 @@ async function listUsers(req, res) {
     lastLoginAt: row.last_login_at,
     lastActiveAt: row.last_active_at,
     workspaceCount: row.workspace_count || 0,
+    // Required onboarding answers still missing (0-5); null without a business.
+    onboardingAnswersMissing: row.answers_missing == null ? null : Number(row.answers_missing),
     workspace: row.workspace_id ? {
       id: row.workspace_id,
       status: row.subscription_status,

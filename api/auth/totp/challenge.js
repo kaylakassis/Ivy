@@ -118,7 +118,7 @@ export default async function handler(req, res) {
     await sql`UPDATE users SET last_login_at = NOW() WHERE id = ${userId}`
       .catch((e) => console.warn('[totp/challenge] last_login_at stamp failed:', e.message));
     maybeNotifyNewSignIn({ userId, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
-    recordAudit(req, { actor: user, action: 'auth.login', meta: { mfa: true, backup: usedBackup, via } });
+    recordAudit(req, { actor: user, action: 'auth.login', meta: { mfa: true, backup: usedBackup, via, platform: isNativeClient(req) ? String(req.headers['x-client-platform']) : 'web' } });
 
     const payload = {
       user: {

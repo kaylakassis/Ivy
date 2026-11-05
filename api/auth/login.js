@@ -158,7 +158,7 @@ export default async function handler(req, res) {
     // Fire-and-forget (like recordAudit) so it never slows or breaks login;
     // the helper seeds a silent baseline on the first tracked sign-in.
     maybeNotifyNewSignIn({ userId: user.id, ip, userAgent: req.headers['user-agent'] });
-    recordAudit(req, { actor: user, action: 'auth.login', meta: {} });
+    recordAudit(req, { actor: user, action: 'auth.login', meta: { platform: isNativeClient(req) ? String(req.headers['x-client-platform']) : 'web' } });
     // Decorate the user payload with isSuperAdmin so the sidebar /
     // bottom-nav / command-palette show the Admin tab on first paint.
     // /api/auth/me also adds this on subsequent loads; doing it here

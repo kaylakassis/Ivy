@@ -16,6 +16,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { US_STATE_CODES, US_COUNTRY } from '../../src/lib/locations.js';
+import { missingRequiredAnswers } from '../_lib/onboardingAnswers.js';
 
 // Allowed preset option ids per question. Free-text fields are length-
 // capped but otherwise unconstrained. Keeping the allowlist server-side
@@ -86,7 +87,7 @@ export default async function handler(req, res) {
                location_state, location_country, referral_name
           FROM workspace_profile WHERE workspace_id = ${workspaceId}
       `;
-      return ok(res, { profile: serialize(rows[0] || null) });
+      return ok(res, { profile: serialize(rows[0] || null), missing: missingRequiredAnswers(rows[0] || null) });
     }
 
     if (req.method === 'PATCH') {
@@ -136,6 +137,18 @@ export default async function handler(req, res) {
         : null;
       const referralKeep = referralPicked && !referralSent;
 
+      // Required answers are never erased by an empty one. Every current
+      // screen requires them, so an empty answer only arrives from an older
+      // app build whose About step left the question optional (or never
+      // asked it). Without this, re-saving there would wipe what the owner
+      // already answered and the required-questions sheet would come back.
+      const keepGoal      = goalArr.length === 0 && !goalOther;
+      const keepChallenge = challengeArr.length === 0 && !challengeOther;
+      const keepHeard     = heardArr.length === 0 && !heardOther;
+      const keepStage     = stageArr.length === 0;
+      // An empty location from a new build is the same story.
+      const locationWrite = locationSent && !!(loc.state || loc.country);
+
       const { rows } = await sql`
         INSERT INTO workspace_profile (
           workspace_id, goal, goal_other, challenge, challenge_other,
@@ -153,20 +166,20 @@ export default async function handler(req, res) {
           NOW()
         )
         ON CONFLICT (workspace_id) DO UPDATE SET
-          goal             = EXCLUDED.goal,
-          goal_other       = EXCLUDED.goal_other,
-          challenge        = EXCLUDED.challenge,
-          challenge_other  = EXCLUDED.challenge_other,
+          goal             = CASE WHEN ${keepGoal} THEN workspace_profile.goal ELSE EXCLUDED.goal END,
+          goal_other       = CASE WHEN ${keepGoal} THEN workspace_profile.goal_other ELSE EXCLUDED.goal_other END,
+          challenge        = CASE WHEN ${keepChallenge} THEN workspace_profile.challenge ELSE EXCLUDED.challenge END,
+          challenge_other  = CASE WHEN ${keepChallenge} THEN workspace_profile.challenge_other ELSE EXCLUDED.challenge_other END,
           ideal_client     = EXCLUDED.ideal_client,
-          heard_from       = EXCLUDED.heard_from,
-          heard_from_other = EXCLUDED.heard_from_other,
-          stage            = EXCLUDED.stage,
-          goal_ids         = EXCLUDED.goal_ids,
-          challenge_ids    = EXCLUDED.challenge_ids,
-          heard_from_ids   = EXCLUDED.heard_from_ids,
-          stage_ids        = EXCLUDED.stage_ids,
-          location_state   = CASE WHEN ${locationSent} THEN EXCLUDED.location_state   ELSE workspace_profile.location_state END,
-          location_country = CASE WHEN ${locationSent} THEN EXCLUDED.location_country ELSE workspace_profile.location_country END,
+          heard_from       = CASE WHEN ${keepHeard} THEN workspace_profile.heard_from ELSE EXCLUDED.heard_from END,
+          heard_from_other = CASE WHEN ${keepHeard} THEN workspace_profile.heard_from_other ELSE EXCLUDED.heard_from_other END,
+          stage            = CASE WHEN ${keepStage} THEN workspace_profile.stage ELSE EXCLUDED.stage END,
+          goal_ids         = CASE WHEN ${keepGoal} THEN workspace_profile.goal_ids ELSE EXCLUDED.goal_ids END,
+          challenge_ids    = CASE WHEN ${keepChallenge} THEN workspace_profile.challenge_ids ELSE EXCLUDED.challenge_ids END,
+          heard_from_ids   = CASE WHEN ${keepHeard} THEN workspace_profile.heard_from_ids ELSE EXCLUDED.heard_from_ids END,
+          stage_ids        = CASE WHEN ${keepStage} THEN workspace_profile.stage_ids ELSE EXCLUDED.stage_ids END,
+          location_state   = CASE WHEN ${locationWrite} THEN EXCLUDED.location_state   ELSE workspace_profile.location_state END,
+          location_country = CASE WHEN ${locationWrite} THEN EXCLUDED.location_country ELSE workspace_profile.location_country END,
           referral_name    = CASE WHEN ${referralKeep} THEN workspace_profile.referral_name ELSE EXCLUDED.referral_name END,
           updated_at       = NOW()
         RETURNING goal, goal_other, challenge, challenge_other, ideal_client,
@@ -174,7 +187,7 @@ export default async function handler(req, res) {
                   goal_ids, challenge_ids, heard_from_ids, stage_ids,
                   location_state, location_country, referral_name
       `;
-      return ok(res, { profile: serialize(rows[0]) });
+      return ok(res, { profile: serialize(rows[0]), missing: missingRequiredAnswers(rows[0]) });
     }
 
     return methodNotAllowed(res, ['GET', 'PATCH']);

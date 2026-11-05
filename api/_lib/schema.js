@@ -4130,4 +4130,10 @@ BEGIN
     CREATE UNIQUE INDEX IF NOT EXISTS uq_workspaces_owner ON workspaces(owner_id);
   END IF;
 END $$;
+
+-- Admin user profile (Admin > Users > Manage). last_active_platform is
+-- stamped next to last_active_at by requireUser ('web', or 'ios' /
+-- 'android' from the app's X-Client-Platform header) so the operator can
+-- see whether someone uses the iPhone app or the website.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_platform TEXT;
 `;

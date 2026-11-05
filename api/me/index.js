@@ -6,6 +6,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, isNativeClient } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { userContext, ids } from '../_lib/clientPortal.js';
+import { missingRequiredAnswers } from '../_lib/onboardingAnswers.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -30,17 +31,38 @@ export default async function handler(req, res) {
       `.catch(() => { /* never block /me on the stamp */ });
     }
 
+    // Required onboarding answers still missing for this owner (empty for
+    // everyone else). The owner app shows a required "A few quick
+    // questions" sheet while this is non-empty. Additive field: older app
+    // builds ignore it. A lookup failure never blocks /me.
+    const onboardingAnswersMissing = ctx.owns?.id
+      ? await loadMissingAnswers(ctx.owns.id)
+      : [];
+
     if (!ctx.isClient) {
       // Owner-only - return context with empty summary.
-      return ok(res, { ...ctx, summary: emptySummary() });
+      return ok(res, { ...ctx, onboardingAnswersMissing, summary: emptySummary() });
     }
 
     const myIds = ids(ctx.memberships);
     // Use ARRAY[$1...] style via sql.query so we can pass an array param.
     const summary = await loadSummary(myIds);
-    return ok(res, { ...ctx, summary });
+    return ok(res, { ...ctx, onboardingAnswersMissing, summary });
   } catch (err) {
     return serverError(res, err);
+  }
+}
+
+async function loadMissingAnswers(workspaceId) {
+  try {
+    const { rows } = await sql`
+      SELECT heard_from, heard_from_other, heard_from_ids, location_state, location_country,
+             stage, stage_ids, goal, goal_other, goal_ids, challenge, challenge_other, challenge_ids
+        FROM workspace_profile WHERE workspace_id = ${workspaceId}
+    `;
+    return missingRequiredAnswers(rows[0] || null);
+  } catch {
+    return [];
   }
 }
 
