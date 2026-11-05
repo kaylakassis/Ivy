@@ -14,6 +14,8 @@ import {
 } from '../_lib/calendar.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
+import { sendClientInvite, inviteNewClientsEnabled } from '../_lib/clientNotify.js';
+import { keepAlive } from '../_lib/keepAlive.js';
 import { notifyPackageExhausted } from '../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
 import {
@@ -81,6 +83,7 @@ export default async function handler(req, res) {
     }
     // Validate client if provided.
     let resolvedClientId = clientId;
+    let newClientId = null; // set when this booking created the client record
     if (clientId) {
       const r = await sql`SELECT id FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
       if (r.rows.length === 0) return badRequest(res, 'Unknown client');
@@ -106,6 +109,7 @@ export default async function handler(req, res) {
           RETURNING *
         `;
         resolvedClientId = newClient.rows[0].id;
+        newClientId = newClient.rows[0].id;
         // New client record → client_created workflows, like every other
         // creation path. Fire-and-forget; the helper never throws.
         fireClientCreatedWorkflows({ workspaceId, client: newClient.rows[0], source: 'owner-booking' });
@@ -273,6 +277,14 @@ export default async function handler(req, res) {
     // Auto-create the client-side chat thread + send the client a confirmation.
     // Don't notify the owner here (they're the one who just created it).
     notifyNewBooking({ workspaceId, bookingId: insert.rows[0].id, source: 'owner' });
+    // A client added through this booking gets the portal invite when the
+    // business invites new clients automatically (same rule as Add client).
+    // Only once the booking stuck, so a refused slot sends nothing.
+    if (newClientId && clientEmail) {
+      keepAlive(inviteNewClientsEnabled(workspaceId)
+        .then((on) => (on ? sendClientInvite({ workspaceId, clientId: newClientId }) : null))
+        .catch(() => {}));
+    }
     // Best-effort Google Calendar push. Failures log + skip; never block.
     syncOnBookingCreated({ workspaceId, bookingId: insert.rows[0].id });
     // Auto-send any intake forms the service has attached.

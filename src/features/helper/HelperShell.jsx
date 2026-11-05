@@ -20,6 +20,8 @@ import { ViewSwitch } from '../../components/ViewToggle.jsx';
 import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 import { HelperProvider, useHelper } from './helperContext.jsx';
 import HelperGone from './HelperGone.jsx';
+import NativePushPrompt from '../../components/NativePushPrompt.jsx';
+import { syncPushOnLaunch } from '../../lib/push.js';
 
 // Tabs appear only for granted permissions (api/_lib/helpers.js):
 // Schedule is always there (own bookings, or the whole calendar with the
@@ -66,6 +68,9 @@ function HelperShellInner() {
   }, [viewport.isMobile]);
 
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+  // Bind this device's notifications to the signed-in helper (new and
+  // moved sessions, reminders, client messages). Never prompts.
+  useEffect(() => { Promise.resolve().then(() => syncPushOnLaunch()).catch(() => {}); }, []);
 
   // The owner removed this helper: the API answers 403 { error: 'revoked' }
   // and /api/me still lists the team with status 'revoked'. Anyone else
@@ -112,6 +117,7 @@ function HelperShellInner() {
       )}
       <TermsAcceptModal/>
       <PrivacyUpdateNotice/>
+      <NativePushPrompt audience="helper" active={!!me && !paused && !error}/>
     </div>
   );
 }

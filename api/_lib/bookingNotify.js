@@ -19,6 +19,7 @@ import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 import { notifyOwnerSafe, notifyClientSafe, notifyHelperSafe } from './push.js';
+import { keepAlive } from './keepAlive.js';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -35,9 +36,21 @@ function fmtTime(min) {
 // Fetches everything we need about a booking + workspace in a single
 // round-trip, then dispatches thread + emails in parallel.
 //
-// `source`: 'public' | 'owner' - controls the email copy ("you booked
-// with us" vs "a new booking just landed").
-export async function notifyNewBooking({ workspaceId, bookingId, source = 'public' }) {
+// `source`: 'public' | 'client-portal' | 'owner' | 'waitlist' - who made
+// the booking. Client-made bookings ('public' booking page, 'client-portal'
+// package booking) tell the owner; owner-made ones tell the client.
+//
+// Push audience rules (shared by the cancel + reschedule notifiers below):
+// whoever did the thing is never pushed about it; the other side is.
+//
+// Wrapped in keepAlive so callers that fire and forget (most of them) do
+// not lose the emails + pushes when the response ends first.
+export function notifyNewBooking(args) {
+  return keepAlive(notifyNewBookingImpl(args));
+}
+
+async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public' }) {
+  const clientMade = source === 'public' || source === 'client-portal';
   try {
     const { rows } = await sql`
       SELECT
@@ -160,9 +173,9 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       }).catch((e) => console.error('[booking] confirm SMS failed:', e?.message)));
     }
 
-    // 3. Notification email to owner - only for public bookings (owner
-    //    manually adding a booking already knows it happened).
-    if (source === 'public' && ctx.owner_email) {
+    // 3. Notification email to owner - only for bookings a client made
+    //    (owner manually adding a booking already knows it happened).
+    if (clientMade && ctx.owner_email) {
       tasks.push(sendOwnerNotify({
         ownerId: ctx.owner_id,
         to: ctx.owner_email,
@@ -177,17 +190,36 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       }));
     }
 
-    // 4. Push notification to owner - same gating as the email (public
-    //    bookings only). Useful when the owner has the app open in
-    //    another tab or installed as a PWA.
-    if (source === 'public') {
+    // 4. Push notification to owner - same gating as the email (bookings
+    //    a client made), plus a waitlist auto-fill so the owner knows the
+    //    freed slot was taken. Deep-links to the booking's drawer. The
+    //    business's very first client booking already pushed "Your first
+    //    booking is in." (firstWin above), so it is not pushed twice.
+    if ((clientMade || source === 'waitlist') && !firstWin) {
       tasks.push(notifyOwnerSafe({
         workspaceId,
         type: 'bookings',
         payload: {
-          title: 'New booking',
+          title: source === 'waitlist' ? 'Spot filled from your waitlist' : 'New booking',
           body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
-          url: `/calendar`,
+          url: `/calendar?booking=${ctx.id}`,
+          tag: `booking-${ctx.id}`,
+        },
+      }));
+    }
+
+    // 4b. Push to the client when the business booked them (owner, helper
+    //     or Ivy). No-op unless they claimed their portal and allow
+    //     booking pushes. Client-made bookings skip it (they just did it),
+    //     and waitlist promotions get their own push in waitlist.js.
+    if (source === 'owner' && ctx.client_id) {
+      tasks.push(notifyClientSafe({
+        clientId: ctx.client_id,
+        type: 'bookings',
+        payload: {
+          title: `Booked with ${businessName}`,
+          body: `${serviceName} · ${dateLabel} at ${fmtTime(ctx.start_min)}`,
+          url: '/me/bookings',
           tag: `booking-${ctx.id}`,
         },
       }));
@@ -407,7 +439,11 @@ export function renderPrepInstructions(text) {
 //   • 'client' → client-initiated cancel via portal → email to owner
 //                ("X cancelled their appointment")
 // Both directions also get a thread system message + push.
-export async function notifyBookingCancellation({ workspaceId, bookingId, occurrenceDate = null, source = 'owner' }) {
+export function notifyBookingCancellation(args) {
+  return keepAlive(notifyBookingCancellationImpl(args));
+}
+
+async function notifyBookingCancellationImpl({ workspaceId, bookingId, occurrenceDate = null, source = 'owner' }) {
   try {
     const { rows } = await sql`
       SELECT
@@ -486,8 +522,10 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
       }));
     }
 
-    // Owner-side push regardless of direction (owner always wants to know).
-    if (ctx.owner_id || source === 'client') {
+    // Owner-side push when someone else cancelled (the client, or any
+    // non-owner path). An owner who cancels from their own phone used to
+    // get a push about their own tap; the bell row would duplicate it too.
+    if (source !== 'owner') {
       tasks.push(notifyOwnerSafe({
         workspaceId,
         type: 'bookings',
@@ -583,7 +621,11 @@ async function sendCancellationToOwner({ ownerId, to, ownerName, clientName, cli
 // Fires when a booking is moved to a new time. Both directions:
 //   • 'owner'  → owner moved a booking → email client with the new slot
 //   • 'client' → client rescheduled via portal → email owner with the change
-export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDateISO, oldStartMin, oldEndMin, source = 'owner' }) {
+export function notifyBookingRescheduled(args) {
+  return keepAlive(notifyBookingRescheduledImpl(args));
+}
+
+async function notifyBookingRescheduledImpl({ workspaceId, bookingId, oldDateISO, oldStartMin, oldEndMin, source = 'owner' }) {
   try {
     const { rows } = await sql`
       SELECT
@@ -644,16 +686,33 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
       }));
     }
 
-    tasks.push(notifyOwnerSafe({
-      workspaceId,
-      type: 'bookings',
-      payload: {
-        title: source === 'client' ? 'Booking rescheduled by client' : 'Booking rescheduled',
-        body: `${ctx.client_name || 'Client'} · ${serviceName} · ${newDate} ${fmtTime(ctx.start_min)}`,
-        url: '/calendar',
-        tag: `booking-reschedule-${ctx.id}`,
-      },
-    }));
+    // Owner push only when someone else moved it (same rule as cancels).
+    if (source !== 'owner') {
+      tasks.push(notifyOwnerSafe({
+        workspaceId,
+        type: 'bookings',
+        payload: {
+          title: source === 'client' ? 'Booking rescheduled by client' : 'Booking rescheduled',
+          body: `${ctx.client_name || 'Client'} · ${serviceName} · ${newDate} ${fmtTime(ctx.start_min)}`,
+          url: `/calendar?booking=${ctx.id}`,
+          tag: `booking-reschedule-${ctx.id}`,
+        },
+      }));
+    }
+    // Client push when the business moved it - the email alone can sit
+    // unread while the old time is still in their head.
+    if (source === 'owner' && ctx.client_id) {
+      tasks.push(notifyClientSafe({
+        clientId: ctx.client_id,
+        type: 'bookings',
+        payload: {
+          title: 'Appointment moved',
+          body: `${businessName} moved ${serviceName} to ${newDate} at ${fmtTime(ctx.start_min)}`,
+          url: '/me/bookings',
+          tag: `booking-reschedule-${ctx.id}`,
+        },
+      }));
+    }
     if (ctx.staff_id) {
       tasks.push(notifyHelperSafe({
         workspaceId, staffId: ctx.staff_id,
@@ -746,4 +805,35 @@ async function sendRescheduleToOwner({ ownerId, to, ownerName, clientName, clien
     userId: ownerId, type: 'bookings',
     to, subject: `Rescheduled by ${clientName || 'client'} - ${newDate}`, html,
   });
+}
+
+// The owner (re)assigned an existing booking to a helper: tell that
+// helper it is now on their day. Same payload as a new assigned booking.
+// No-op for staff without a login. Never throws.
+export function notifyHelperAssigned({ workspaceId, bookingId }) {
+  return keepAlive((async () => {
+    try {
+      const { rows } = await sql`
+        SELECT b.id, b.staff_id, b.client_name, b.date, b.start_min, s.name AS service_name
+          FROM bookings b
+          LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+         WHERE b.id = ${bookingId} AND b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL`;
+      const ctx = rows[0];
+      if (!ctx?.staff_id) return;
+      const dateISO = ctx.date instanceof Date ? ctx.date.toISOString().slice(0, 10) : ctx.date;
+      await notifyHelperSafe({
+        workspaceId, staffId: ctx.staff_id,
+        type: 'bookings',
+        payload: {
+          title: 'New booking for you',
+          body: `${ctx.client_name || 'A client'} · ${ctx.service_name || 'Session'} · ${fmtDate(dateISO)} ${fmtTime(ctx.start_min)}`,
+          url: `/helper?date=${dateISO}`,
+          tag: `helper-booking-${ctx.id}`,
+        },
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[notifyHelperAssigned] failed:', err.message);
+    }
+  })());
 }

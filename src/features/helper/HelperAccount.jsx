@@ -9,6 +9,7 @@ import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useHelper } from './helperContext.jsx';
 import TwoFactor from '../account/TwoFactor.jsx';
+import PushDeviceCard from '../../components/PushDeviceCard.jsx';
 
 export default function HelperAccount() {
   return (
@@ -16,6 +17,7 @@ export default function HelperAccount() {
       <ProfileCard/>
       <PasswordCard/>
       <div className="card" style={{ padding: 18 }}><TwoFactor bare/></div>
+      <PushDeviceCard audience="helper"/>
       <NotificationsCard/>
       <SignOutCard/>
       <DeleteCard/>
@@ -111,11 +113,10 @@ function NotificationsCard() {
     }
   };
   return (
-    <Card title="Notifications" hint="New sessions assigned to you, changes to them, and reminders before they start.">
+    <Card title="Emails" hint="Phone and browser alerts are in Notifications on this device, above.">
       {!prefs && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
       {prefs && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <ToggleRow label="Push notifications" hint="On this device, when the app is installed." on={prefs.push.bookings !== false} onToggle={() => toggle('push', 'bookings')}/>
           <ToggleRow label="Email" hint="Booking emails about your sessions." on={prefs.email.bookings !== false} onToggle={() => toggle('email', 'bookings')}/>
           {marketing !== null && (
             <ToggleRow label="Tips and news from Ivy" hint="Optional. Product news and offers from Ivy itself." on={marketing} onToggle={toggleMarketing}/>

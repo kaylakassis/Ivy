@@ -1,11 +1,13 @@
-// /me/notifications - per-workspace email preferences for the
-// authenticated user's client memberships. A user who's a client of
+// /me/notifications - push for this device (PushDeviceCard), then
+// per-workspace email preferences for the authenticated user's client
+// memberships. A user who's a client of
 // three businesses sees three independent toggle blocks.
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SkelCards } from './portalUi.jsx';
 import { api } from '../../lib/api.js';
+import PushDeviceCard from '../../components/PushDeviceCard.jsx';
 
 const EMAIL_LABELS = {
   bookings:  { label: 'Bookings',     hint: 'Confirmations, reminders, cancellations, reschedules.' },
@@ -110,8 +112,10 @@ export default function ClientNotifications() {
   return (
     <div className="page-pad"><div className="portal-page" style={{ gap: 0 }}>
       <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: '0 0 16px', lineHeight: 1.55 }}>
-        Choose what each business can email or text you. Sign-in emails, receipts and invoices always arrive.
+        Choose how you hear from the businesses you book with: alerts on this device, emails and texts. Sign-in emails, receipts and invoices always arrive.
       </p>
+
+      <PushDeviceCard audience="client"/>
 
       <TextMessages/>
 

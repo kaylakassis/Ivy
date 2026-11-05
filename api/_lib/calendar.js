@@ -70,6 +70,9 @@ export function serializeSettings(row) {
     maxAdvanceDays: row.max_advance_days == null ? 60 : Number(row.max_advance_days),
     // When a package session counts as used: 'booking' | 'completion'.
     packageUseOn:   row.package_use_on === 'completion' ? 'completion' : 'booking',
+    // Portal invite for newly added clients (NULL = on). Written through
+    // /api/clients/invite-settings.
+    inviteNewClients: row.invite_new_clients !== false,
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',

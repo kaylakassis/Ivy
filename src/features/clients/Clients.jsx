@@ -47,6 +47,13 @@ export default function Clients() {
   const [announceOpen, setAnnounceOpen] = useState(false);
   // Custom client fields (CustomFieldsSettings), also /clients?fields=1.
   const [fieldsOpen, setFieldsOpen] = useState(false);
+  // One line after an add: was the portal invite emailed or not (and why).
+  const [addNotice, setAddNotice] = useState(null);
+  useEffect(() => {
+    if (!addNotice) return undefined;
+    const t = setTimeout(() => setAddNotice(null), 8000);
+    return () => clearTimeout(t);
+  }, [addNotice]);
   const { isMobile } = useViewport();
 
   // Folders (stored as projects). Any client can become a folder: their
@@ -202,8 +209,9 @@ export default function Clients() {
   const setStage = (id, stage) => update(id, { stage });
 
   const onAdd = async (input) => {
-    await create(input);
+    const made = await create(input);
     setAddOpen(false);
+    setAddNotice(inviteNotice(made));
   };
 
   const openClient = clients.find((c) => c.id === openId) || null;
@@ -250,6 +258,21 @@ export default function Clients() {
         />
       )}
 
+      {addNotice && (
+        <div role="status" className="card" style={{
+          padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10,
+          fontSize: 13, color: 'var(--fg-2)',
+        }}>
+          <span style={{ color: addNotice.ok ? 'var(--ok)' : 'var(--muted)', display: 'inline-flex' }}>
+            {addNotice.ok ? <Icons.Check size={14} sw={2.4}/> : <Icons.Mail size={14}/>}
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>{addNotice.text}</span>
+          <button type="button" className="btn btn-ghost" onClick={() => setAddNotice(null)}
+            aria-label="Dismiss" style={{ padding: 4 }}>
+            <Icons.X size={13}/>
+          </button>
+        </div>
+      )}
 
       {/* Analytics */}
       <div className="grid-auto">
@@ -423,6 +446,23 @@ export default function Clients() {
       {fieldsOpen && <CustomFieldsSettings onClose={() => setFieldsOpen(false)}/>}
     </div>
   );
+}
+
+// The line shown after Add client: did the portal invite go out?
+// Honest about why not (no email, left unticked, client opted out).
+function inviteNotice(client) {
+  const name = client?.name || 'Your client';
+  const inv = client?.invite;
+  if (!inv) return { ok: true, text: `${name} added.` };
+  if (inv.sent) return { ok: true, text: `${name} added. Portal invite sent to ${client.email}.` };
+  const why = {
+    'no-email': 'No invite sent because there is no email on file.',
+    off: 'Added quietly, no invite sent. You can invite them from their profile.',
+    muted: 'No invite sent: they have turned off emails from your business.',
+    'already-invited': 'They were already invited.',
+    'workspace-quota-exceeded': "No invite sent: you reached today's email limit. Try again from their profile tomorrow.",
+  }[inv.reason] || 'The invite did not go out. You can resend it from their profile.';
+  return { ok: inv.reason === 'off' || inv.reason === 'no-email', text: `${name} added. ${why}` };
 }
 
 function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {

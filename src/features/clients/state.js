@@ -47,10 +47,13 @@ export function useClients() {
     }
   }, [hasMore, nextOffset, loadingMore, clients]);
 
+  // Returns the new client; `invite` ({ sent, reason } from the server,
+  // null on an older API) rides along on the returned object so
+  // the page can say whether the portal invite really went out.
   const create = useCallback(async (input) => {
     const r = await api.post('/clients', input);
     setClients((cs) => [r.client, ...cs]);
-    return r.client;
+    return { ...r.client, invite: r.invite || null };
   }, []);
 
   const update = useCallback(async (id, patch) => {

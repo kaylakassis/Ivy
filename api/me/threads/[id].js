@@ -11,7 +11,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { serializeThread, serializeMessage } from '../../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
-import { notifyOwnerSafe } from '../../_lib/push.js';
+import { notifyOwnerSafe, notifyHelpersForClientSafe } from '../../_lib/push.js';
 import { sendEmailToUser, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { appUrl } from '../../_lib/tokens.js';
@@ -174,6 +174,22 @@ export default async function handler(req, res) {
           title: `Message from ${thread.client_name || 'a client'}`,
           body: preview,
           url: `/messages?threadId=${id}`,
+          tag: `thread-${id}`,
+        },
+      });
+      // Helpers who answer messages for this client (messages permission,
+      // and the client is in their reach) get it too, deep-linked into
+      // their own inbox.
+      notifyHelpersForClientSafe({
+        workspaceId: thread.workspace_id,
+        clientId: thread.client_id,
+        permission: 'messages',
+        type: 'messages',
+        excludeUserId: user.id,
+        payload: {
+          title: `Message from ${thread.client_name || 'a client'}`,
+          body: preview,
+          url: `/helper/messages?threadId=${id}`,
           tag: `thread-${id}`,
         },
       });
