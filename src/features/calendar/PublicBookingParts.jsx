@@ -536,3 +536,59 @@ export function BookingSkeleton({ embedded }) {
     </div>
   );
 }
+
+// "Use your package" on the details step, for a signed-in client of this
+// business. `packages` are the client's packages that cover the chosen
+// service (from /api/me/packages?include=recent). Usable ones are offered
+// as a choice, preselected; when none is usable but one is used up or
+// expired, the repurchase prompt shows instead.
+export function PackageChoice({ packages, value, onChange, onBuyAgain, onSeeAll, buyable }) {
+  const usable = packages.filter((p) => (p.state || 'active') === 'active' && p.creditsRemaining > 0);
+  const spent = packages.filter((p) => p.state === 'used_up' || p.state === 'expired');
+  if (usable.length === 0 && spent.length === 0) return null;
+  if (usable.length === 0) {
+    const p = spent[0];
+    const canBuy = buyable(p);
+    return (
+      <div className="pb-pkg-prompt" role="status">
+        <div className="pb-pkg-title">
+          <Icons.Gift size={15} sw={1.8}/> {p.name}: {p.state === 'expired' ? 'Expired' : '0 sessions left'}
+        </div>
+        <p>
+          {p.state === 'expired'
+            ? 'This package has expired. Buy it again or see other services.'
+            : "You've used all your sessions. Buy this package again or see other services."}
+          {' '}You can still book this time and pay as usual.
+        </p>
+        <div className="pb-pkg-actions">
+          {canBuy && <button type="button" className="pb-btn primary" onClick={() => onBuyAgain(p)}>Buy again</button>}
+          <button type="button" className="pb-btn outline" onClick={onSeeAll}>See all services</button>
+        </div>
+      </div>
+    );
+  }
+  const option = (id, title, sub) => {
+    const on = value === id;
+    return (
+      <label key={id || 'none'} className="pb-check pb-pkg-option" data-on={on ? '1' : undefined}>
+        <input type="radio" name="pb-pkg" checked={on} onChange={() => onChange(id)}/>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <b>{title}</b>
+          {sub && <small>{sub}</small>}
+        </span>
+      </label>
+    );
+  };
+  return (
+    <div className="pb-field" role="radiogroup" aria-label="How to pay">
+      <div className="pb-label">Use your package?</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {usable.map((p) => option(p.id, `Use 1 session from ${p.name}`,
+          p.creditsRemaining === 1
+            ? '1 session left. This is your last one.'
+            : `${p.creditsRemaining} sessions left${p.sessionsBooked > 0 ? ` · ${p.sessionsBooked} booked` : ''}`))}
+        {option('', 'Pay as usual', null)}
+      </div>
+    </div>
+  );
+}

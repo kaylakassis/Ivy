@@ -546,6 +546,8 @@ function ClientPackages({ client }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
   const [showSell, setShowSell] = useState(false);
+  // "Offer a new one" on a used-up package preselects its template.
+  const [sellPreset, setSellPreset] = useState(null);
   // Refund flow for a bundle bought online: confirm step with an amount
   // (dollars, blank = everything left) and a reason, like the invoice editor.
   const [refundId, setRefundId] = useState(null);
@@ -606,7 +608,7 @@ function ClientPackages({ client }) {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <Section label="Packages"/>
-        <button onClick={() => setShowSell(!showSell)} className="btn btn-ghost"
+        <button onClick={() => { setSellPreset(null); setShowSell(!showSell); }} className="btn btn-ghost"
           style={{ padding: '4px 10px', fontSize: 12, color: 'var(--accent)' }}>
           {showSell ? 'Cancel' : '+ Sell package'}
         </button>
@@ -623,7 +625,7 @@ function ClientPackages({ client }) {
       {refundNote && <div style={{ fontSize: 12, color: 'var(--ok)', marginBottom: 10 }}>{refundNote}</div>}
 
       {showSell && templates !== null && (
-        <SellPackageForm templates={templates} busy={busy}
+        <SellPackageForm key={sellPreset || 'new'} templates={templates} busy={busy} presetId={sellPreset}
           onSubmit={sell} onCancel={() => setShowSell(false)}/>
       )}
 
@@ -636,11 +638,19 @@ function ClientPackages({ client }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {packages.map((p) => {
+            // One word from the server (older servers: derived here).
+            const state = p.state || (p.status === 'cancelled' ? 'ended'
+              : (p.creditsRemaining <= 0 || p.status === 'exhausted') ? 'used_up'
+              : (p.expiresAt && p.daysToExpiry != null && p.daysToExpiry <= 0) ? 'expired' : 'active');
+            const label = state === 'active' ? 'Active' : state === 'used_up' ? 'Used up' : state === 'expired' ? 'Expired' : 'Cancelled';
             const tone =
-              p.status === 'active'    ? 'var(--ok)' :
-              p.status === 'exhausted' ? 'var(--muted)' :
-              p.status === 'expired'   ? 'var(--warn)' :
-                                         'var(--danger)';
+              state === 'active'  ? 'var(--ok)' :
+              state === 'used_up' ? 'var(--muted)' :
+              state === 'expired' ? 'var(--warn)' :
+                                    'var(--danger)';
+            const spent = state === 'used_up' || state === 'expired';
+            const canOfferSame = spent && p.packageId && p.templateActive
+              && (templates || []).some((t) => t.id === p.packageId);
             const priceCents = Math.round(Number(p.price || 0) * 100);
             const refundLeftCents = Math.max(0, priceCents - Number(p.refundedCents || 0));
             const refundable = p.paidOnline && refundLeftCents > 0;
@@ -657,7 +667,7 @@ function ClientPackages({ client }) {
                     background: 'color-mix(in srgb, ' + tone + ' 14%, transparent)',
                     color: tone, fontWeight: 600,
                     letterSpacing: '0.06em', textTransform: 'uppercase',
-                  }}>{p.status}</span>
+                  }}>{label}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
                     ${Number(p.price).toFixed(0)}{Number(p.refundedCents) > 0 ? ` · $${(Number(p.refundedCents) / 100).toFixed(2)} refunded` : ''}
                   </span>
@@ -668,6 +678,7 @@ function ClientPackages({ client }) {
                 }}>
                   <span>
                     <strong>{p.creditsRemaining}</strong> of {p.creditsTotal} sessions left
+                    {p.sessionsBooked > 0 ? ` · ${p.sessionsBooked} booked` : ''}
                   </span>
                   {p.expiresAt && (
                     <span style={{ color: 'var(--muted)' }}>
@@ -675,7 +686,21 @@ function ClientPackages({ client }) {
                     </span>
                   )}
                 </div>
-                {p.status === 'active' && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, overflowWrap: 'anywhere' }}>
+                  Good for: {p.serviceNames?.length > 0 ? p.serviceNames.join(', ') : (p.serviceIds?.length > 0 ? 'a removed service' : 'any service')}
+                </div>
+                {spent && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, fontSize: 12 }}>
+                    <span style={{ color: 'var(--fg-2)', flex: '1 1 160px' }}>
+                      {state === 'used_up' ? 'All sessions used.' : 'This package expired.'} Offer them a new one?
+                    </span>
+                    <button type="button" className="btn btn-primary" style={{ fontSize: 11.5, padding: '4px 10px' }}
+                      onClick={() => { setSellPreset(canOfferSame ? p.packageId : null); setShowSell(true); setErr(null); }}>
+                      Offer a new one
+                    </button>
+                  </div>
+                )}
+                {state === 'active' && (
                   <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                     <button onClick={() => adjustCredits(p.id, +1)}
                       className="btn btn-ghost" style={{ fontSize: 11.5, padding: '3px 8px' }}>
@@ -731,9 +756,10 @@ function ClientPackages({ client }) {
   );
 }
 
-function SellPackageForm({ templates, busy, onSubmit, onCancel }) {
+function SellPackageForm({ templates, busy, onSubmit, onCancel, presetId = null }) {
   const [mode, setMode] = useState(templates.length > 0 ? 'template' : 'custom');
-  const [packageId, setPackageId] = useState(templates[0]?.id || '');
+  const [packageId, setPackageId] = useState(
+    (presetId && templates.some((t) => t.id === presetId)) ? presetId : (templates[0]?.id || ''));
   const [name, setName] = useState('');
   const [sessionCount, setSessionCount] = useState(5);
   const [price, setPrice] = useState('');

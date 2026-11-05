@@ -535,7 +535,8 @@ export default function Calendar() {
         <SyncDrawer onClose={() => setDrawer(null)}/>
       )}
       {drawer === 'packages' && (
-        <PackagesDrawer services={cal.services} onClose={() => setDrawer(null)}/>
+        <PackagesDrawer services={cal.services} settings={cal.settings} onPatchSettings={patchSettings}
+          onClose={() => setDrawer(null)}/>
       )}
       {drawer === 'staff' && (
         <StaffDrawer onClose={() => setDrawer(null)} onChanged={refresh}/>

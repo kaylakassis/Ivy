@@ -139,6 +139,11 @@ export default async function handler(req, res) {
         if (!Number.isInteger(n) || n < 0 || n > 240) return badRequest(res, 'bufferMinutes must be 0–240');
         push('buffer_minutes', n);
       }
+      if ('packageUseOn' in body) {
+        const v = String(body.packageUseOn || '');
+        if (!['booking', 'completion'].includes(v)) return badRequest(res, 'packageUseOn must be booking or completion');
+        push('package_use_on', v);
+      }
       if ('minNoticeHours' in body) {
         // Minimum advance notice before a client can book (0 = allow
         // same-moment booking, still never the past). Cap at 30 days.
