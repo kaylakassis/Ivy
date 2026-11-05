@@ -11,6 +11,8 @@ import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
 import { buildBriefing } from './_lib/ivy.js';
 import { buildWeekStats, recapHasActivity, recapIvyRows, ivyTaskCount, timeSavedMinutes, MINUTES_PER_IVY_TASK } from './_lib/weeklyRecap.js';
 import { firstWinForDashboard } from './_lib/firstWin.js';
+import { computeSignals, publicItem, isSnoozedToday, readPartnerSettings } from './_lib/accountability.js';
+import { keyNumbers } from './_lib/dashboardNumbers.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 const TWO_STEP_PROMPT_AFTER_DAYS = 3;
@@ -30,7 +32,8 @@ export default async function handler(req, res) {
     // parallel reads with the same connection pool finish in roughly
     // the time of the slowest single one.
     const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows, fsRow] = await Promise.all([
-      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS v FROM invoices
+      // Same revenue rule as Finance: paid only, minus refunds, never below 0.
+      sql`SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS v FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid'
              AND paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}`,
       sql`SELECT COUNT(*)::int AS v FROM clients
@@ -46,9 +49,11 @@ export default async function handler(req, res) {
       sql`SELECT COALESCE(SUM(amount), 0)::numeric AS v FROM expenses
            WHERE workspace_id = ${workspaceId} AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date`,
       sql`SELECT b.id, b.start_min, b.end_min, b.client_name, b.no_show_at, b.completion_log,
-                 s.name AS service_name
+                 b.client_id, b.video_room_url, b.date::text AS date,
+                 s.name AS service_name, t.id AS thread_id
             FROM bookings b
             LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+            LEFT JOIN message_threads t ON t.client_id = b.client_id AND t.workspace_id = b.workspace_id
            WHERE b.workspace_id = ${workspaceId} AND b.date = (NOW() AT TIME ZONE ${tz})::date
              AND b.cancelled_at IS NULL
            ORDER BY b.start_min ASC LIMIT 20`,
@@ -63,6 +68,18 @@ export default async function handler(req, res) {
     ]);
 
     const currency = fsRow.rows[0]?.currency || 'USD';
+
+    // Started now so they run alongside the reads below.
+    const extrasP = Promise.all([
+      Promise.all([
+        computeSignals(workspaceId, { tz }),
+        isSnoozedToday(workspaceId, tz),
+        readPartnerSettings(user.id),
+      ]).then(([items, snoozedToday, partner]) => ({
+        items: items.slice(0, 12).map(publicItem), total: items.length, snoozedToday, partnerOn: partner.enabled,
+      })).catch(() => null),
+      keyNumbers(workspaceId, tz).catch(() => null),
+    ]);
 
     // Merge a small recent-activity feed (newest first).
     const activity = [
@@ -190,8 +207,22 @@ export default async function handler(req, res) {
       switchPrompt = (row.clients || 0) < 3 && !row.has_bookings;
     } catch { /* no card this load */ }
 
+    // 1.0.6: the accountability partner's "Needs your attention" list (the
+    // same signals its messages use), the key numbers with honest
+    // comparisons, and money in today / this week. All additive: every
+    // field above stays for the iPhone 1.0.5 dashboard. Best-effort each.
+    // (started in parallel near the top of the handler)
+    const [attention, numbers] = await extrasP;
+
     return ok(res, {
       currency,
+      attention,
+      keyNumbers: numbers ? {
+        revenue: numbers.revenue, bookingsWeek: numbers.bookingsWeek, newClients: numbers.newClients,
+        outstanding: numbers.outstanding, rebooking: numbers.rebooking,
+        expensesThisMonth: Number(exp.rows[0].v || 0),
+      } : null,
+      money: numbers ? numbers.money : null,
       week,
       twoStepPrompt,
       switchPrompt,
@@ -216,6 +247,9 @@ export default async function handler(req, res) {
         clientName: r.client_name, serviceName: r.service_name,
         noShow: !!r.no_show_at,
         completed: !!(r.completion_log && Object.keys(r.completion_log).length),
+        // 1.0.6 (additive): for the Message / Start / Complete buttons.
+        clientId: r.client_id || null, threadId: r.thread_id || null,
+        videoUrl: r.video_room_url || null, date: r.date,
       })),
       tasks: (taskRows || []).slice(0, 6).map((t) => ({
         id: t.id, title: t.title, type: t.type,

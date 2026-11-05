@@ -22,7 +22,7 @@ When you add a screen or an owner action, add a row here. Then either give Ivy a
   - A completed call is "done". Website and parity tools word the done line from what the plan actually did.
   - A failed call is "failed", with the reason.
 - **Compact schemas.** Tool schemas are sent with every request. Group related operations under one tool with an `action` enum, and keep descriptions short.
-  - A grouped tool with a read action (`reminder_settings` get, `cancellation_policy` get, `autopay` status, `client_invite_settings` get) runs that read straight away; every other action is held for approval (`appToolNeedsApproval` in `api/_lib/ivyAppTools.js`).
+  - A grouped tool with a read action (`reminder_settings` get, `cancellation_policy` get, `autopay` status, `client_invite_settings` get, `accountability_partner` get) runs that read straight away; every other action is held for approval (`appToolNeedsApproval` in `api/_lib/ivyAppTools.js`).
 - **Same code as the button.** A tool calls the server function the app's own screen calls (for example `decideDepositRefund`, `sendDocumentForSigning`, `requestAutopay`). Ivy never has a second copy of money, signing or email logic.
 
 ## Website (full editor parity)
@@ -178,7 +178,8 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Business name, booking address (slug), tagline, time zone, category, email branding (logo, colour, signature), lead instant reply | `update_settings` (approval) |
 | Finish setup | `complete_onboarding` |
 | Ivy's memory | `remember` (approval), `forget`, `list_memories` |
-| Notification preferences | Not yet (personal settings; low value for chat) |
+| Accountability partner: see what needs attention, turn it on or off, email on or off, how often (daily, only important, weekly), which kinds of reminders, "Not today" | `accountability_partner` get (read) / update / snooze (approval). Turning it off is worded with the same warning the app shows |
+| Other notification preferences | Not yet (personal settings; low value for chat) |
 | Password, two-step sign-in, email address | Owner only: account security |
 | Subscription, billing, plan changes | Owner only: the owner's own payments to Ivy |
 | Export all data, delete the account | Owner only: irreversible or a personal-data download |
@@ -199,4 +200,5 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/ivy-owner-tools.test.mjs`: each parity tool is held before approval, gives the right result after approval, refuses invalid input, stays inside its workspace, and writes truthful ledger lines.
 - `tests/ivy-website-tools.test.mjs`: the original build, edit and publish flow, now with every draft edit approval-gated.
 - `tests/client-merge.test.mjs`: duplicate detection precision, "Not the same person", the merge moving every client reference (the list of tables is read from the database catalog), opt-outs, cards and autopay, exactly-once, workspace isolation, and the Ivy approval flow for `merge_clients` and `dismiss_duplicate`.
+- `tests/accountability-partner.test.mjs`: the partner's list (each signal, first names only, workspace isolation), the cron (quiet hours, one a day, away check-ins then stop, the switch, testers and helpers and no-plan owners skipped), the settings endpoint, snooze, and `accountability_partner` held before approval.
 - `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy, documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.

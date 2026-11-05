@@ -101,8 +101,8 @@
       "schedule": "37 * * * *"
     },
     {
-      "path": "/api/cron/ivy-nudges",
-      "schedule": "0 9,13,17 * * *"
+      "path": "/api/cron/accountability-partner",
+      "schedule": "12 * * * *"
     },
     {
       "path": "/api/cron/daily-return",

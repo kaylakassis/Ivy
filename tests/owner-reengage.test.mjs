@@ -27,10 +27,14 @@ function mkRes() {
 const cronReq = () => ({ method: 'POST', url: '/api/cron/owner-reengage', headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
 
 // Subscribed + onboarded owner with a given activity age + nudge state.
-async function mkOwner(tag, { activeAgo, nudged = false, status = 'active' }) {
-  const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at, last_active_at, dormant_nudge_sent_at)
+// Since 1.0.6 this cron only serves owners who turned the accountability
+// partner off (partner-on owners get its own away check-ins), so owners
+// here have it off unless `partner` is set.
+async function mkOwner(tag, { activeAgo, nudged = false, status = 'active', partner = false }) {
+  const prefs = partner ? {} : { accountability: false };
+  const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at, last_active_at, dormant_nudge_sent_at, notification_prefs)
     VALUES (${`${tag}@example.com`}, 'x', '2026-05-05', NOW(),
-            NOW() - ${activeAgo}::interval, ${nudged ? new Date().toISOString() : null})
+            NOW() - ${activeAgo}::interval, ${nudged ? new Date().toISOString() : null}, ${JSON.stringify(prefs)}::jsonb)
     RETURNING id`).rows[0].id;
   const ws = (await sql`INSERT INTO workspaces (owner_id, subscription_status, onboarded_at)
     VALUES (${uid}, ${status}, NOW()) RETURNING id`).rows[0].id;
@@ -56,6 +60,7 @@ async function run() {
     const dormant = await mkOwner(`${tag}-dormant`, { activeAgo: '15 days' });
     const active  = await mkOwner(`${tag}-active`,  { activeAgo: '1 day' });
     const already = await mkOwner(`${tag}-already`, { activeAgo: '20 days', nudged: true });
+    const partnerOn = await mkOwner(`${tag}-partner`, { activeAgo: '15 days', partner: true });
 
     const res1 = mkRes();
     await ownerReengage(cronReq(), res1);
@@ -64,6 +69,7 @@ async function run() {
     assert(await nudgeAt(active.uid) === null, 'active owner is NOT selected');
     // already-nudged: stamp stays (not re-fired), value unchanged.
     assert(await nudgeAt(already.uid) !== null, 'already-nudged owner stays stamped (skipped)');
+    assert(await nudgeAt(partnerOn.uid) === null, 'owner with the accountability partner on is left to the partner (no day-10 email)');
 
     console.log('\n[3] second run does not re-fire');
     const before = await nudgeAt(dormant.uid);
@@ -81,7 +87,7 @@ async function run() {
     assert(await nudgeAt(dormant.uid) !== null, 'a fresh dormancy episode re-fires after the flag was cleared');
 
     // Cleanup
-    for (const o of [dormant, active, already]) {
+    for (const o of [dormant, active, already, partnerOn]) {
       await sql`DELETE FROM bookings WHERE workspace_id = ${o.ws}`;
       await sql`DELETE FROM workspaces WHERE id = ${o.ws}`;
       await sql`DELETE FROM users WHERE id = ${o.uid}`;

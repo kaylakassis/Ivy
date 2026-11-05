@@ -121,7 +121,8 @@ export default function Calendar() {
     const serviceId = params.get('service');
 
     if (cid) {
-      setBookingDefaultClientId(cid);
+      // ?newBooking=new (dashboard quick action) opens it with no client.
+      setBookingDefaultClientId(cid === 'new' ? null : cid);
       setAddBookingOpen(true);
       params.delete('newBooking');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });

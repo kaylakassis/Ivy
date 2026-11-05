@@ -134,7 +134,8 @@ export default function Finance() {
       consumedRef.current = true;
       params.delete('newInvoice');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-      startNew(cid);
+      // ?newInvoice=new (dashboard quick action) starts one with no client.
+      startNew(cid === 'new' ? null : cid);
       return;
     }
     if (invoiceId) {

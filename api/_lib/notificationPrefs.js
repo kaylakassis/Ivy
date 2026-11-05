@@ -33,12 +33,16 @@ export const EMAIL_NOTIFY_TYPES = [
   'programs',    // client: new lessons and newly opened modules in their programs
   'client_optouts', // owner-only: a client unsubscribed from this business's emails
   'signup_reminders', // owner-only: "finish signing up" emails to owners who never started a trial
+  'accountability', // owner-only: the accountability partner's digest and check-in emails
 ];
+// Types the owner manages somewhere other than the generic email list
+// (the partner's email switch sits under its own row in Notifications).
+export const UNLISTED_EMAIL_TYPES = ['accountability'];
 
 // Owner-only categories never go to clients, so the client portal does
 // not offer a switch for them. 'programs' is the mirror image (client-only)
 // and the owner Account page hides it.
-export const OWNER_ONLY_EMAIL_TYPES = ['reports', 'client_optouts', 'signup_reminders'];
+export const OWNER_ONLY_EMAIL_TYPES = ['reports', 'client_optouts', 'signup_reminders', 'accountability'];
 export const CLIENT_EMAIL_TYPES = EMAIL_NOTIFY_TYPES.filter((t) => !OWNER_ONLY_EMAIL_TYPES.includes(t));
 
 // Labels shown in the notification settings UI. Keep terse - the
@@ -54,6 +58,7 @@ export const EMAIL_NOTIFY_LABELS = {
   programs:  'Programs',
   client_optouts: 'Client email opt-outs',
   signup_reminders: 'Finish sign-up reminders',
+  accountability: 'Accountability partner',
 };
 
 // Critical sends bypass preferences. These are tied to account

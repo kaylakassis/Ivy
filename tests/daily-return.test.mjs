@@ -82,33 +82,15 @@ async function run() {
     await dailyReturn({ method: 'POST', headers: {} }, noAuth);
     assert(noAuth.statusCode === 401, `no cron secret → 401 (got ${noAuth.statusCode})`);
 
-    console.log('\n[2] morning fires at local 8am with a non-empty briefing');
+    console.log('\n[2] the morning briefing push is retired (the accountability partner sends the daily message)');
     const m = track(await mkOwner(`${tag}-m`, { tz: zoneForLocalHour(8) }));
-    // Non-empty briefing: one unpaid invoice → the "unpaid invoices" item.
     await sql`INSERT INTO invoices (workspace_id, number, client_name, items, status)
       VALUES (${m.ws}, 'INV-1', 'C', '[]'::jsonb, 'sent')`;
-    await dailyReturn(cronReq(), mkRes());
-    assert(await briefingStamp(m.ws) !== null, 'morning stamp set');
-    const mr = await feedRow(m.uid, 'daily-briefing');
-    assert(mr && mr.type === 'engagement', 'a briefing bell row with type=engagement');
-    assert(mr && /^\/ivy\?prompt=/.test(mr.url), `briefing deep-links into Ivy (got ${mr?.url})`);
-
-    console.log('\n[3] wrong local hour → skipped');
-    const w = track(await mkOwner(`${tag}-w`, { tz: zoneForLocalHour(9) })); // 9am, not 8
-    await sql`INSERT INTO invoices (workspace_id, number, client_name, items, status)
-      VALUES (${w.ws}, 'INV-1', 'C', '[]'::jsonb, 'sent')`;
-    await dailyReturn(cronReq(), mkRes());
-    assert(await briefingStamp(w.ws) === null, 'no morning stamp at the wrong hour');
-    assert(await feedRow(w.uid, 'daily-briefing') === null, 'no briefing notification at the wrong hour');
-
-    console.log('\n[4] morning skipped when the briefing is empty (but still stamped)');
-    const e = track(await mkOwner(`${tag}-e`, { tz: zoneForLocalHour(8) })); // 8am but no invoices/bookings/clients
-    await dailyReturn(cronReq(), mkRes());
-    // Stamped even though nothing is sent - an unstamped skip would keep the
-    // row in the candidate set and busy-loop the batch scan (starving
-    // workspaces past the 250-row batch).
-    assert(await briefingStamp(e.ws) !== null, 'empty briefing → stamped so the scan advances');
-    assert(await feedRow(e.uid, 'daily-briefing') === null, 'empty briefing → no notification');
+    const mres = mkRes();
+    await dailyReturn(cronReq(), mres);
+    assert(await briefingStamp(m.ws) === null, 'no morning stamp');
+    assert(await feedRow(m.uid, 'daily-briefing') === null, 'no morning briefing notification');
+    assert(mres.body?.morningSent === 0, 'morningSent stays in the response, always 0');
 
     console.log('\n[5] evening streak-at-risk fires for a savable streak');
     const s = track(await mkOwner(`${tag}-s`, { tz: zoneForLocalHour(19) }));
@@ -140,9 +122,18 @@ async function run() {
     assert(await streakStamp(u.ws) === null, 'a 1-day streak is below the >=2 threshold');
 
     console.log('\n[8] dedupe: a second run the same hour does not re-fire');
-    const before = await briefingStamp(m.ws);
+    const before = await streakStamp(s.ws);
     await dailyReturn(cronReq(), mkRes());
-    assert(String(await briefingStamp(m.ws)) === String(before), 'morning stamp unchanged on a second run');
+    assert(String(await streakStamp(s.ws)) === String(before), 'evening stamp unchanged on a second run');
+
+    console.log('\n[8b] no streak push on a day the accountability partner already wrote');
+    const p = track(await mkOwner(`${tag}-p`, { tz: zoneForLocalHour(19) }));
+    await sql`UPDATE workspaces SET streak_days = 4,
+                streak_last_day = ((NOW() AT TIME ZONE ${zoneForLocalHour(19)})::date - 1),
+                partner_last_sent_day = (NOW() AT TIME ZONE ${zoneForLocalHour(19)})::date
+              WHERE id = ${p.ws}`;
+    await dailyReturn(cronReq(), mkRes());
+    assert(await streakStamp(p.ws) === null && await feedRow(p.uid, 'streak-risk') === null, 'one Ivy nudge a day: streak push skipped');
 
     console.log('\n[9] opt-out of engagement suppresses the push (muted)');
     const o = track(await mkOwner(`${tag}-o`, { tz: 'UTC', prefs: { engagement: false } }));

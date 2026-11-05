@@ -179,6 +179,12 @@ export default function Clients() {
       params.delete('filter');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
+    // ?filter=leads opens the Leads tab (accountability partner, dashboard).
+    if (params.get('filter') === 'leads') {
+      setTab('leads');
+      params.delete('filter');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
     if (params.get('id')) {
       setOpenId(params.get('id'));
       params.delete('id');

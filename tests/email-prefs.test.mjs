@@ -118,7 +118,7 @@ async function testHelpers(clientEmail) {
   // 'reports' was added for the weekly business-owner recap, 'client_optouts'
   // for the owner notice when a client unsubscribes. Keep this
   // list in lockstep with EMAIL_NOTIFY_TYPES in api/_lib/notificationPrefs.js.
-  const expected = ['bookings', 'invoices', 'documents', 'messages', 'marketing', 'billing', 'reports', 'programs', 'client_optouts', 'signup_reminders'];
+  const expected = ['bookings', 'invoices', 'documents', 'messages', 'marketing', 'billing', 'reports', 'programs', 'client_optouts', 'signup_reminders', 'accountability'];
   assert(EMAIL_NOTIFY_TYPES.length === expected.length, 'EMAIL_NOTIFY_TYPES length matches');
   for (const t of expected) {
     assert(EMAIL_NOTIFY_TYPES.includes(t), `EMAIL_NOTIFY_TYPES includes "${t}"`);

@@ -46,6 +46,10 @@ import { recordWorkspaceAudit } from './audit.js';
 import { fetchBranding } from './branding.js';
 import { listDuplicatePairs, dismissDuplicatePair } from './clientDuplicates.js';
 import { mergePreview, mergeRefusal, mergeClients, mergeSentence, mergeNames, movesPhrase, cleanFieldChoices } from './clientMerge.js';
+import {
+  partnerOverview, readPartnerSettings, cleanSettingsPatch, savePartnerSettings, snoozeToday,
+  PARTNER_KINDS, PARTNER_KIND_LABELS, PARTNER_FREQUENCIES, PARTNER_FREQUENCY_LABELS,
+} from './accountability.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -163,6 +167,21 @@ export const APP_TOOLS = [
     input_schema: { type: 'object', properties: { client_id: { type: 'string' } }, required: ['client_id'] },
   },
   {
+    name: 'accountability_partner',
+    description: "The owner's accountability partner (Ivy's reminders about what needs attention). get: settings + the current list. update: enabled, email, frequency (daily|important|weekly), kinds. snooze: no reminder today.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['get', 'update', 'snooze'] },
+        enabled: { type: 'boolean' },
+        email: { type: 'boolean', description: 'Also send reminders by email.' },
+        frequency: { type: 'string', enum: PARTNER_FREQUENCIES },
+        kinds: { type: 'object', properties: Object.fromEntries(PARTNER_KINDS.map((k) => [k, { type: 'boolean' }])) },
+      },
+      required: ['action'],
+    },
+  },
+  {
     name: 'find_duplicate_clients',
     description: 'Possible duplicate clients (same email, same phone, similar name): each pair with reasons, record counts and which one to keep.',
     input_schema: { type: 'object', properties: { limit: { type: 'integer', description: 'Pairs to return, default 20, max 50.' } } },
@@ -197,7 +216,7 @@ export const APP_TOOLS = [
 
 // Tools that only read; tools with a read action; everything else writes.
 export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients'];
-const READ_ACTION = { reminder_settings: 'get', cancellation_policy: 'get', autopay: 'status', client_invite_settings: 'get' };
+const READ_ACTION = { reminder_settings: 'get', cancellation_policy: 'get', autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get' };
 export const APP_MIXED = new Set(Object.keys(READ_ACTION));
 // Always held for approval (by name). send_document is an older tool whose
 // plan now lives here.
@@ -875,6 +894,71 @@ async function planInviteSettings(ws, a) {
   };
 }
 
+// ── accountability partner ─────────────────────────────────────────────
+// Settings belong to the business owner (Ivy only runs for owners).
+async function ownerIdOf(ws) {
+  const { rows } = await sql`SELECT owner_id FROM workspaces WHERE id = ${ws}`;
+  if (!rows[0]) throw new Error('No workspace');
+  return rows[0].owner_id;
+}
+
+async function readPartner(ws) {
+  const o = await partnerOverview({ userId: await ownerIdOf(ws), workspaceId: ws });
+  return {
+    enabled: o.enabled, email: o.emailEnabled,
+    frequency: PARTNER_FREQUENCY_LABELS[o.frequency], kinds: Object.fromEntries(PARTNER_KINDS.map((k) => [PARTNER_KIND_LABELS[k], o.kinds[k]])),
+    snoozed_today: o.snoozedToday,
+    needs_attention: o.items.map((i) => ({ what: i.title, detail: i.detail, important: i.important, open: `[${i.action}](${i.href})` })),
+    manage: '[Notifications](/account?tab=notifications)',
+  };
+}
+
+async function planPartner(ws, a) {
+  if (a.action === 'snooze') {
+    return {
+      summary: 'Pause your accountability partner for today: no reminder today, and the "Needs your attention" list on your dashboard folds until tomorrow.',
+      done: 'Paused your accountability partner for today',
+      apply: async () => ({ ok: true, snoozed_today: await snoozeToday(ws, true) }),
+    };
+  }
+  if (a.action !== 'update') throw new Error('action must be get, update or snooze');
+  const body = {};
+  if ('enabled' in a) body.enabled = a.enabled;
+  if ('email' in a) body.emailEnabled = a.email;
+  if ('frequency' in a) body.frequency = a.frequency;
+  if ('kinds' in a) body.kinds = a.kinds;
+  const patch = cleanSettingsPatch(body);
+  if (patch.error) throw new Error(patch.error);
+  const userId = await ownerIdOf(ws);
+  const cur = await readPartnerSettings(userId);
+  const parts = [];
+  if ('enabled' in body && body.enabled !== cur.enabled) {
+    parts.push(body.enabled
+      ? 'Turn on your accountability partner: at most one short reminder a day about what needs you'
+      : 'Turn off your accountability partner. It is there to help you stay on top of things: unanswered messages, unsigned documents, quiet clients. You will stop getting its reminders (you can turn it back on in Account > Notifications)');
+  }
+  if ('emailEnabled' in body && body.emailEnabled !== cur.emailEnabled) {
+    parts.push(body.emailEnabled ? 'Also send its reminders by email' : 'Stop its reminder emails (notifications in the app stay)');
+  }
+  if ('frequency' in body && body.frequency !== cur.frequency) {
+    parts.push(`How often: ${PARTNER_FREQUENCY_LABELS[body.frequency].toLowerCase()}`);
+  }
+  if (body.kinds) {
+    for (const [k, v] of Object.entries(body.kinds)) {
+      if (cur.kinds[k] !== v) parts.push(`${v ? 'Remind' : 'Stop reminding'} you about: ${PARTNER_KIND_LABELS[k].toLowerCase()}`);
+    }
+  }
+  if (!parts.length) throw new Error('Those are already your accountability partner settings');
+  return {
+    summary: `${parts.join('. ')}.`,
+    done: `Updated your accountability partner: ${parts.map((p) => p.split('.')[0]).join('; ').toLowerCase()}`,
+    apply: async () => {
+      const next = await savePartnerSettings(userId, patch);
+      return { ok: true, enabled: next.enabled, email: next.emailEnabled, frequency: next.frequency };
+    },
+  };
+}
+
 async function planResendInvite(ws, a) {
   const id = needId(a.client_id, 'client_id', 'search_clients');
   const c = (await sql`SELECT id, name, email, user_id, invite_sent_at FROM clients WHERE id = ${id} AND workspace_id = ${ws}`).rows[0];
@@ -997,6 +1081,7 @@ const PLANS = {
   autopay: planAutopay,
   client_invite_settings: planInviteSettings,
   resend_client_invite: planResendInvite,
+  accountability_partner: planPartner,
 };
 
 export async function planAppAction(name, args, ctx) {
@@ -1041,5 +1126,6 @@ export const APP_HANDLERS = {
   client_invite_settings: writeHandler('client_invite_settings', async (ws) => ({
     invite_new_clients: await inviteSetting(ws), manage: '[Clients](/clients)',
   })),
+  accountability_partner: writeHandler('accountability_partner', readPartner),
   ...Object.fromEntries(APP_SENSITIVE.map((n) => [n, writeHandler(n)])),
 };

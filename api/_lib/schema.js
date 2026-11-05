@@ -5074,4 +5074,25 @@ BEGIN
                             'moved', moved, 'dropped', jsonb_array_length(dropped));
 END;
 $merge$ LANGUAGE plpgsql;
+
+-- Accountability partner (api/_lib/accountability.js, api/cron/
+-- accountability-partner.js). The on/off switch and the email channel are
+-- users.notification_prefs keys 'accountability' / 'email_accountability'
+-- (missing = on). accountability_prefs holds { frequency, kinds }.
+-- Per business: when the partner last wrote (and on which owner-local
+-- day, so it writes at most once a day), what it last mentioned (key ->
+-- { at, fp }, so an unchanged item is not repeated every day), a "Not
+-- today" snooze, the away check-in step (1 = the 3-day one sent, 2 = the
+-- 7-day one sent) with when it was sent (a later last_active_at means the
+-- owner came back, which resets it), and when the cron last looked.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS accountability_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_last_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_last_sent_day DATE;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_mentioned JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_snoozed_day DATE;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_away_step INT NOT NULL DEFAULT 0;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_away_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_checked_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_message_threads_unread_biz ON message_threads(workspace_id) WHERE unread_biz > 0;
+CREATE INDEX IF NOT EXISTS idx_bookings_deposit_review ON bookings(workspace_id) WHERE deposit_refund_request_status = 'pending';
 `;

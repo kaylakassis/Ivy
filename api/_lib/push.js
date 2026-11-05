@@ -44,7 +44,13 @@ export function publicVapidKey() {
 // /account → Notifications card and /api/me/notifications. Each
 // sendPushToUser call passes one of these so the user's per-type
 // opt-out is honored.
-export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement', 'client_optouts'];
+//
+// 'accountability' is the accountability partner's on/off switch (owners
+// only, api/_lib/accountability.js). It is not in LISTED_PUSH_TYPES: older
+// apps draw one generic row per listed type, and the partner's row needs
+// its own label and a turn-off warning, which only the new app has.
+export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement', 'client_optouts', 'accountability'];
+export const LISTED_PUSH_TYPES = NOTIFY_TYPES.filter((t) => t !== 'accountability');
 
 // 'ok' when the user can be pushed `type`, 'muted' when they opted out
 // of it, 'gone' when the account was deleted (its device rows may still

@@ -7,6 +7,7 @@
 // Future tabs (billing, team, notifications) will mount alongside.
 import React, { useEffect, useRef, useState } from 'react';
 import { isNative, isIos } from '../../lib/platform.js';
+import AccountabilityPartnerRow from './AccountabilityPartnerRow.jsx';
 import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason, iapIdentifyRefusal } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -873,7 +874,7 @@ const PUSH_LABELS = {
   documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
   support:   { label: 'Support',   hint: 'When Ivy Support replies to your conversation.' },
-  engagement: { label: 'Daily nudges', hint: 'Your morning briefing (today\'s sessions, unpaid invoices, quiet clients) and an evening reminder to keep your streak going.' },
+  engagement: { label: 'Streak and setup nudges', hint: 'An evening reminder to keep your streak going (never on a day your accountability partner already checked in), and setup tips.' },
   client_optouts: { label: 'Client email opt-outs', hint: 'When a client unsubscribes from your emails.' },
 };
 const EMAIL_LABELS = {
@@ -977,6 +978,7 @@ function NotificationPrefs({ emailOnly = false }) {
         <>
           <div className="metric-label" style={{ marginBottom: 8 }}>Push notifications</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            <AccountabilityPartnerRow/>
             {pushTypes.map((t) => {
               const meta = PUSH_LABELS[t] || { label: t, hint: '' };
               const on = pushPrefs[t] !== false;
@@ -1002,6 +1004,12 @@ function NotificationPrefs({ emailOnly = false }) {
         </>
       )}
 
+      {/* Push is off on this device, so the push list above is hidden: the
+          accountability partner's switch still shows (it also covers email
+          and the in-app reminders). */}
+      {emailOnly && (
+        <div style={{ marginBottom: 18 }}><AccountabilityPartnerRow/></div>
+      )}
       {emailPrefs && emailTypes.length > 0 && (
         <>
           <div className="metric-label" style={{ marginBottom: 8 }}>Email notifications</div>

@@ -33,9 +33,11 @@ async function run() {
       VALUES (${ws}, 'Bright & Co.', ${`${tag}-slug`})`;
     const cA = (await sql`INSERT INTO clients (workspace_id, name, email, stage)
       VALUES (${ws}, 'Booking Bob', ${`${tag}-a@example.com`}, 'active') RETURNING id`).rows[0].id;
-    // Second active client, no messages → counts toward "gone quiet".
-    await sql`INSERT INTO clients (workspace_id, name, email, stage)
-      VALUES (${ws}, 'Quiet Quinn', ${`${tag}-b@example.com`}, 'active')`;
+    // Second active client, a client for a month, no booking or message in
+    // 21 days → counts toward "gone quiet". (Bob has a booking today, so he
+    // is not quiet: the shared definition in api/_lib/accountability.js.)
+    await sql`INSERT INTO clients (workspace_id, name, email, stage, created_at)
+      VALUES (${ws}, 'Quiet Quinn', ${`${tag}-b@example.com`}, 'active', NOW() - INTERVAL '30 days')`;
     // A booking today for Bob (09:00–10:00).
     await sql`INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min)
       VALUES (${ws}, ${cA}, 'Booking Bob', ${`${tag}-a@example.com`}, CURRENT_DATE, 540, 600)`;
@@ -49,7 +51,7 @@ async function run() {
     assert(b1.todaySessions === 1, `todaySessions 1 (got ${b1.todaySessions})`);
     assert(b1.overdueInvoices === 1, `overdueInvoices 1 (got ${b1.overdueInvoices})`);
     assert(Number(b1.overdueTotal) === 150, `overdueTotal 150 (got ${b1.overdueTotal})`);
-    assert(b1.quietClients === 2, `quietClients 2 (both active, no messages) (got ${b1.quietClients})`);
+    assert(b1.quietClients === 1, `quietClients 1 (Quinn; Bob is booked today) (got ${b1.quietClients})`);
     assert(b1.items.length === 3, `three items (got ${b1.items.length})`);
     const icons = b1.items.map((i) => i.icon);
     assert(icons[0] === 'Calendar', `calendar item first (got ${icons[0]})`);

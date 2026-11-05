@@ -25,6 +25,7 @@ import { renderWeeklyRecap } from '../_lib/weeklyRecap.js';
 import * as R from '../_lib/emailRenderers.js';
 import { appUrl } from '../_lib/tokens.js';
 import { renderSignupReminder } from '../_lib/signupReminders.js';
+import { renderPartnerEmail, SAMPLE_PARTNER_ITEMS } from '../_lib/accountability.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const SAMPLE = {
@@ -60,6 +61,11 @@ export const PREVIEW_CATALOGUE = [
 
   // Reports (owner-facing recaps)
   { id: 'weekly_recap',              group: 'Reports',     label: 'Weekly business recap (Monday digest)' },
+
+  // Accountability partner (api/cron/accountability-partner.js)
+  { id: 'partner_digest',            group: 'Accountability partner', label: 'Daily digest' },
+  { id: 'partner_away_3d',           group: 'Accountability partner', label: 'Away 3 days check-in' },
+  { id: 'partner_away_7d',           group: 'Accountability partner', label: 'Away 7 days check-in (last one)' },
 
   // Admin invites
   { id: 'admin_invite_sponsored',       group: 'Admin invites', label: 'Admin invite — Sponsored' },
@@ -164,6 +170,10 @@ function render(template) {
           upcomingBookings: 5, overdueInvoiceCount: 2, overdueInvoiceTotal: 380,
         },
       });
+
+    case 'partner_digest':  return renderPartnerEmail({ kind: 'digest', items: SAMPLE_PARTNER_ITEMS, firstName: SAMPLE.firstName, baseUrl: appUrl() });
+    case 'partner_away_3d': return renderPartnerEmail({ kind: 'away1', items: SAMPLE_PARTNER_ITEMS.slice(0, 2), firstName: SAMPLE.firstName, baseUrl: appUrl() });
+    case 'partner_away_7d': return renderPartnerEmail({ kind: 'away2', items: SAMPLE_PARTNER_ITEMS.slice(0, 2), firstName: SAMPLE.firstName, baseUrl: appUrl() });
 
     // Admin invites
     case 'admin_invite_sponsored':       return R.renderAdminInviteSponsored({ firstName: SAMPLE.firstName, name: SAMPLE.firstName });

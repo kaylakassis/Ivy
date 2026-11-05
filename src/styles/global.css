@@ -1165,3 +1165,45 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
    of one pane stops there instead of dragging the other along. */
 .website-editor .scroll,
 .website-editor [data-pane-scroll] { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* Dashboard (1.0.6): Today + Needs your attention side by side on wide
+   screens, stacked on phones; key numbers 2-up on phones, 5-up on desktop;
+   quick actions as a 4-up grid that never wraps oddly at 390px. */
+.dash-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+@media (max-width: 900px) {
+  .dash-top { grid-template-columns: minmax(0, 1fr); }
+}
+.dash-numbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .dash-numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .dash-numbers > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+.dash-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 720px) {
+  .dash-actions {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+  .dash-actions .btn {
+    flex-direction: column;
+    gap: 4px;
+    padding: 9px 4px;
+    font-size: 11.5px;
+    justify-content: center;
+    text-align: center;
+  }
+}

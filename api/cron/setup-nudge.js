@@ -7,7 +7,9 @@
 //
 // Skips anyone who got a "finish signing up" reminder in the last 24 hours
 // (and that cron skips anyone nudged here in the last 24 hours), so the two
-// never land on the same day.
+// never land on the same day. Also skips a day the accountability partner
+// already wrote; the partner in turn keeps the setup gap in the app only
+// and stays silent on a day this email went out.
 //
 // One-shot via workspaces.setup_nudge_sent_at; only recent signups (≤30 days)
 // are scanned so the daily scan stays bounded. Auth: same three paths as the
@@ -87,6 +89,10 @@ async function handler(req, res) {
               -- (api/cron/signup-reminders.js); picked up on a later run.
               AND (u.signup_reminder_last_sent_at IS NULL
                    OR u.signup_reminder_last_sent_at < NOW() - INTERVAL '24 hours')
+              -- Nor on a day the accountability partner already wrote
+              -- (api/cron/accountability-partner.js): one Ivy message a day.
+              AND (w.partner_last_sent_at IS NULL
+                   OR w.partner_last_sent_at < NOW() - INTERVAL '20 hours')
               AND ${HAS_MISSING_ITEM}
               ${shardFilter}
             ORDER BY w.onboarded_at ASC

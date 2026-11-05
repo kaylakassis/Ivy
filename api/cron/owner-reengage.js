@@ -8,6 +8,9 @@
 // dormancy episode via users.dormant_nudge_sent_at, which requireUser CLEARS
 // when they come back — so a later dormancy episode can re-fire.
 //
+// Since 1.0.6 this only runs for owners who turned the accountability
+// partner OFF: the partner's own away check-ins cover everyone else.
+//
 // Auth: same three paths as the other crons (Vercel cron header / admin secret
 // / super-admin session). Registered in vercel.json.
 import { sql } from '../_lib/db.js';
@@ -52,6 +55,10 @@ async function handler(req, res) {
               AND u.dormant_nudge_sent_at IS NULL
               AND u.email IS NOT NULL
               AND COALESCE(u.user_type, 'regular') <> 'sponsored'
+              -- Owners with the accountability partner on get its 3-day and
+              -- 7-day check-ins instead (api/cron/accountability-partner.js),
+              -- then nothing until they return; no third "away" email here.
+              AND u.notification_prefs->>'accountability' = 'false'
               ${shardFilter}
             ORDER BY u.last_active_at ASC
             LIMIT $2`,

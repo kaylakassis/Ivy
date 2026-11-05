@@ -8,6 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { resolveIvyModel, IVY_DEFAULT_MODEL } from './ivyModel.js';
 import { sql } from './db.js';
+import { QUIET_CLIENT_WHERE } from './accountability.js';
 import { workspaceTimeZone } from './calendar.js';
 import { IVY_TOOLS, executeIvyTool, ledgerEntry } from './ivyTools.js';
 import {
@@ -279,18 +280,10 @@ export async function workspaceContext(workspaceId) {
         AND date >= (NOW() AT TIME ZONE ${tz})::date
         AND date <  ((NOW() AT TIME ZONE ${tz})::date + INTERVAL '7 days')::date
     `,
-    sql`
-      SELECT COUNT(*)::int AS quiet FROM clients c
-      WHERE c.workspace_id = ${workspaceId}
-        AND c.stage = 'active'
-        AND NOT EXISTS (
-          SELECT 1 FROM message_threads mt
-          JOIN messages m ON m.thread_id = mt.id
-          WHERE mt.workspace_id = c.workspace_id
-            AND mt.client_id = c.id
-            AND m.created_at >= NOW() - INTERVAL '21 days'
-        )
-    `,
+    // Quiet clients: the one shared definition (no booking or message in
+    // 21 days, not brand new, not sample data), so Ivy, the dashboard and
+    // the accountability partner always agree (api/_lib/accountability.js).
+    sql.query(`SELECT COUNT(*)::int AS quiet FROM clients c WHERE ${QUIET_CLIENT_WHERE}`, [workspaceId]),
     // Business identity + owner-stated profile (onboarding "About you").
     // Lets Ivy address the business by name and tailor coaching to the
     // owner's actual goal, challenge, ideal client, and stage.
@@ -400,20 +393,7 @@ export async function buildBriefing(workspaceId, { goals: goalsIn, streak: strea
        WHERE workspace_id = ${workspaceId}
          AND status IN ('sent', 'overdue')
     `,
-    sql`
-      SELECT c.name FROM clients c
-       WHERE c.workspace_id = ${workspaceId}
-         AND c.stage = 'active'
-         AND NOT EXISTS (
-           SELECT 1 FROM message_threads mt
-           JOIN messages m ON m.thread_id = mt.id
-           WHERE mt.workspace_id = c.workspace_id
-             AND mt.client_id = c.id
-             AND m.created_at >= NOW() - INTERVAL '21 days'
-         )
-       ORDER BY c.created_at DESC
-       LIMIT 5
-    `,
+    sql.query(`SELECT c.name FROM clients c WHERE ${QUIET_CLIENT_WHERE} ORDER BY c.created_at DESC LIMIT 5`, [workspaceId]),
     sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
     // Streak + the closest-to-done goal, so Ivy can coach toward them. Reuse a
     // caller-provided value (skips the read) or fetch it in parallel. Both
@@ -878,7 +858,7 @@ Voice:
 
 When their question is broad, ask one focused follow-up before launching into advice. When it's specific, answer directly.
 
-You can reference: revenue this month, open invoice count, active client count, upcoming sessions in next 7 days, and clients who haven't been messaged in 3+ weeks ("quiet clients"). The current snapshot is included in the user's message. Use those numbers - don't make up data you don't have.
+You can reference: revenue this month, open invoice count, active client count, upcoming sessions in next 7 days, and clients with no booking or message in 3+ weeks ("quiet clients"). The current snapshot is included in the user's message. Use those numbers - don't make up data you don't have.
 
 You also have tools that operate on the workspace directly. Group them mentally:
 
@@ -1003,6 +983,13 @@ MORE OF THE APP (all approval-gated):
   (no undo; ask which record to keep when it is not obvious; add_client
   refuses a second record for the same email or phone); dismiss_duplicate
   marks a pair as different people.
+  Accountability partner: accountability_partner get reads what needs the
+  owner's attention right now (the same list as the dashboard) and the
+  partner's settings; update (on/off, email, frequency, kinds) and snooze
+  ("not today") show an approval card first. If the owner asks to turn it
+  off, say once, kindly, that it is there to help them stay on top of
+  unanswered messages, unsigned documents and quiet clients, then offer the
+  card. Ivy never messages clients for the partner.
 
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,
@@ -1559,7 +1546,7 @@ function fmtCtx(ctx) {
     `- Active clients: ${c.activeClients ?? 0}`,
     `- Open invoices (sent or overdue): ${c.openInvoices ?? 0}`,
     `- Sessions booked next 7 days: ${c.upcomingSessions ?? 0}`,
-    `- Quiet clients (no message in 3+ weeks): ${c.quietClients ?? 0}`,
+    `- Quiet clients (no booking or message in 3+ weeks): ${c.quietClients ?? 0}`,
   ];
 
   // Owner-stated profile (from onboarding). Only emit the block when at
@@ -1734,7 +1721,7 @@ function mockReply(text, ctx, attachment) {
     } Want me to help draft a follow-up message?`;
   }
   if (t.includes('retention') || t.includes('churn') || t.includes('quiet')) {
-    return `Retention is about rhythm. Of your ${ctx.activeClients} active client${ctx.activeClients === 1 ? '' : 's'}, ${ctx.quietClients} haven't heard from you in 3+ weeks. Clients who go that long without a touchpoint are 4× more likely to churn. Want a draft of a light check-in to send them?`;
+    return `Retention is about rhythm. Of your ${ctx.activeClients} active client${ctx.activeClients === 1 ? '' : 's'}, ${ctx.quietClients} have had no booking or message in 3+ weeks. Clients who go that long without a touchpoint are 4× more likely to churn. Want a draft of a light check-in to send them?`;
   }
   if (t.includes('pricing') || t.includes('rates') || t.includes('raise')) {
     return `A simple rule: raise rates when you're >70% booked for 4 weeks straight. You have ${ctx.upcomingSessions} session${ctx.upcomingSessions === 1 ? '' : 's'} on the books in the next 7 days. If your calendar's been steadily full, that's a green light. Want me to walk through a 10–15% increase plan?`;

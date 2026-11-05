@@ -7,7 +7,7 @@ import ImportClientsModal from '../clients/ImportClientsModal.jsx';
 
 const KEY = 'ivy.switchCard.dismissed';
 
-function dismissed() {
+export function dismissed() {
   try { return localStorage.getItem(KEY) === '1'; } catch { return false; }
 }
 

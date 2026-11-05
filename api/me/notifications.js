@@ -13,8 +13,14 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { NOTIFY_TYPES } from '../_lib/push.js';
-import { EMAIL_NOTIFY_TYPES, EMAIL_NOTIFY_LABELS } from '../_lib/notificationPrefs.js';
+import { NOTIFY_TYPES, LISTED_PUSH_TYPES } from '../_lib/push.js';
+import { EMAIL_NOTIFY_TYPES, EMAIL_NOTIFY_LABELS, UNLISTED_EMAIL_TYPES } from '../_lib/notificationPrefs.js';
+
+// The lists the app draws one row per type from. The accountability
+// partner's switches are left out (the new app draws its own row with a
+// turn-off warning); its keys are still in pushPrefs / emailPrefs and
+// PATCH still accepts them.
+const LISTED_EMAIL_TYPES = EMAIL_NOTIFY_TYPES.filter((t) => !UNLISTED_EMAIL_TYPES.includes(t));
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { setMarketingConsent } from '../_lib/emailConsent.js';
 
@@ -46,10 +52,10 @@ export default async function handler(req, res) {
       const { push, email } = resolve(stored);
       return ok(res, {
         pushPrefs: push, emailPrefs: email,
-        pushTypes: NOTIFY_TYPES, emailTypes: EMAIL_NOTIFY_TYPES,
+        pushTypes: LISTED_PUSH_TYPES, emailTypes: LISTED_EMAIL_TYPES,
         emailLabels: EMAIL_NOTIFY_LABELS,
         // Back-compat for older clients that read `prefs` / `types`.
-        prefs: push, types: NOTIFY_TYPES,
+        prefs: push, types: LISTED_PUSH_TYPES,
       });
     }
 
@@ -88,9 +94,9 @@ export default async function handler(req, res) {
       const { push, email } = resolve(next);
       return ok(res, {
         pushPrefs: push, emailPrefs: email,
-        pushTypes: NOTIFY_TYPES, emailTypes: EMAIL_NOTIFY_TYPES,
+        pushTypes: LISTED_PUSH_TYPES, emailTypes: LISTED_EMAIL_TYPES,
         emailLabels: EMAIL_NOTIFY_LABELS,
-        prefs: push, types: NOTIFY_TYPES,
+        prefs: push, types: LISTED_PUSH_TYPES,
       });
     }
 
