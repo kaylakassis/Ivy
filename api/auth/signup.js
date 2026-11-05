@@ -1,4 +1,11 @@
-// POST /api/auth/signup  { email, password, name?, acceptedTermsVersion }
+// POST /api/auth/signup  { email, password, name?, acceptedTermsVersion,
+//                          acceptedAccountEmails?, marketingOptIn? }
+//
+// Email consent (api/_lib/emailConsent.js): current clients send
+// acceptedAccountEmails: true (required box) and marketingOptIn (optional
+// box). A request that sends acceptedAccountEmails as anything but true is
+// refused; a request without the field (iPhone app 1.0.4) still succeeds
+// and records no account-email consent (NULL).
 //
 // `acceptedTermsVersion` is required. It must equal the server's
 // CURRENT_TERMS_VERSION; we record an immutable acceptance row in
@@ -23,6 +30,7 @@ import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersio
 import { recordReferralSignup } from '../_lib/referrals.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { parseSignupConsent, recordSignupConsent, ACCOUNT_EMAILS_REQUIRED_MESSAGE } from '../_lib/emailConsent.js';
 
 // Vercel default function timeout is 10s, which is tight when we're
 // awaiting two Resend API calls in series after the DB work. Bump it
@@ -72,7 +80,8 @@ export default async function handler(req, res) {
     // schema hasn't been applied yet, the SELECT users at line ~85
     // would 500. Bootstrap explicitly here.
     await ensureSchemaApplied();
-    const { email, password, name, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = await readBody(req);
+    const body = await readBody(req);
+    const { email, password, name, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = body;
     // One account per address, whatever the capitals or stray spaces:
     // everything below works on the normalised key.
     const emailKey = normalizeAccountEmail(email);
@@ -94,6 +103,10 @@ export default async function handler(req, res) {
     const privacyVersionAccepted = acceptablePrivacyVersion(acceptedPrivacyVersion);
     if (!privacyVersionAccepted) {
       return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create an account.`);
+    }
+    const consent = parseSignupConsent(body);
+    if (consent.refuse) {
+      return badRequest(res, ACCOUNT_EMAILS_REQUIRED_MESSAGE, { code: 'account_emails_required' });
     }
     // 'owner' (default) creates a workspace; 'client' does not - they're
     // signing up to view their bookings/invoices/messages from businesses
@@ -190,6 +203,9 @@ export default async function handler(req, res) {
           (${user.id}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
           (${user.id}, 'privacy', ${privacyVersionAccepted}, ${ip}, ${ua})
       `;
+      // Email consent: the required account-emails box and the optional
+      // marketing box, with their own proof rows.
+      await recordSignupConsent(req, { userId: user.id, consent, source: 'signup' });
 
       if (role === 'owner') {
         // Card-backed-trial model: new owners start INACTIVE (no auto no-card

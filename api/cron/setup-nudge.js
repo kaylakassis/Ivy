@@ -5,6 +5,10 @@
 // an owner who wanders off is unreachable. This cron emails/pushes them once,
 // naming the single most important gap, a couple of days after they onboarded.
 //
+// Skips anyone who got a "finish signing up" reminder in the last 24 hours
+// (and that cron skips anyone nudged here in the last 24 hours), so the two
+// never land on the same day.
+//
 // One-shot via workspaces.setup_nudge_sent_at; only recent signups (≤30 days)
 // are scanned so the daily scan stays bounded. Auth: same three paths as the
 // other crons. Registered in vercel.json.
@@ -79,6 +83,10 @@ async function handler(req, res) {
               AND w.setup_nudge_sent_at IS NULL
               AND u.email IS NOT NULL
               AND COALESCE(u.user_type, 'regular') <> 'sponsored'
+              -- Never on the same day as a "finish signing up" reminder
+              -- (api/cron/signup-reminders.js); picked up on a later run.
+              AND (u.signup_reminder_last_sent_at IS NULL
+                   OR u.signup_reminder_last_sent_at < NOW() - INTERVAL '24 hours')
               AND ${HAS_MISSING_ITEM}
               ${shardFilter}
             ORDER BY w.onboarded_at ASC

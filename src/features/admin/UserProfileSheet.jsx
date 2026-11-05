@@ -98,6 +98,26 @@ const TONE = {
   suspended: 'var(--danger)', cancelled: 'var(--muted)', lapsed: 'var(--muted)', inactive: 'var(--muted)',
 };
 
+const CONSENT_SOURCE = { signup: 'at sign-up', helper_invite: 'when joining as a helper', settings: 'in settings', admin: 'by an admin' };
+
+// "Opted in Nov 5 at sign-up" / "Not opted in" / "Withdrawn Nov 6".
+export function marketingWords(c) {
+  if (c.marketingAt && !c.marketingMuted) {
+    return `Opted in ${fmtDate(c.marketingAt)}${CONSENT_SOURCE[c.marketingSource] ? ` ${CONSENT_SOURCE[c.marketingSource]}` : ''}`;
+  }
+  if (c.marketingAt && c.marketingMuted) return 'Opted in, but unsubscribed from marketing emails';
+  if (c.marketingWithdrawnAt) return `Withdrawn ${fmtDate(c.marketingWithdrawnAt)}`;
+  return 'Not opted in';
+}
+
+// "Sent 2 of 3, last Nov 6" / "None sent" / "... (turned off)".
+export function signupReminderWords(r) {
+  const base = r.sent > 0
+    ? `Sent ${r.sent} of ${r.of}${r.lastSentAt ? `, last ${fmtDate(r.lastSentAt)}` : ''}`
+    : 'None sent';
+  return r.turnedOff ? `${base} (turned off by them)` : base;
+}
+
 function Section({ title, children, testId }) {
   return (
     <section data-testid={testId} style={{
@@ -233,6 +253,21 @@ export default function UserProfileSheet({ userId, labels }) {
         </R>
         <R k="2-step verification">{twoStep}</R>
         <R k="Account type">{roles.length ? roles.map(([t, tone]) => <Chip key={t} tone={tone}>{t}</Chip>) : muted('Not set')}</R>
+        {a.emailConsent && (
+          <R k="Marketing emails">
+            <span data-testid="profile-marketing">{marketingWords(a.emailConsent)}</span>
+          </R>
+        )}
+        {a.emailConsent && (
+          <R k="Account emails consent">
+            {a.emailConsent.accountEmailsAt ? <>Agreed {fmtDate(a.emailConsent.accountEmailsAt)}</> : muted('Not recorded (older sign-up or app)')}
+          </R>
+        )}
+        {a.signupReminders && a.roles.owner && (
+          <R k="Finish sign-up emails">
+            <span data-testid="profile-signup-reminders">{signupReminderWords(a.signupReminders)}</span>
+          </R>
+        )}
         <R k="Account deletion">
           {a.deletedAt
             ? <span style={{ color: 'var(--danger)' }}>Deleted {fmtDateTime(a.deletedAt)}, removed for good {fmtDate(a.purgeAt)}</span>

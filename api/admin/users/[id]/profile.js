@@ -54,7 +54,10 @@ export default async function handler(req, res) {
     const u = (await sql`
       SELECT id, email, name, user_type, is_tester, created_at, email_verified_at,
              last_login_at, last_active_at, last_active_platform,
-             totp_enrolled_at, mfa_email_enabled_at, deleted_at, onboarding_state
+             totp_enrolled_at, mfa_email_enabled_at, deleted_at, onboarding_state,
+             account_email_consent_at, marketing_consent_at, marketing_consent_source,
+             marketing_consent_withdrawn_at, signup_reminder_step, signup_reminder_last_sent_at,
+             notification_prefs
         FROM users WHERE id = ${id}
     `).rows[0];
     if (!u) return notFound(res, 'User not found');
@@ -119,6 +122,23 @@ export default async function handler(req, res) {
         tester: !!u.is_tester,
         superAdmin: isSuperAdmin,
         userType: u.user_type || 'regular',
+      },
+      // Email consent from the sign-up boxes and the settings switch.
+      // accountEmailsAt is null for accounts made before the box existed
+      // (and by the iPhone app 1.0.4, which does not send it).
+      emailConsent: {
+        accountEmailsAt: iso(u.account_email_consent_at),
+        marketingAt: iso(u.marketing_consent_at),
+        marketingSource: u.marketing_consent_source || null,
+        marketingWithdrawnAt: iso(u.marketing_consent_withdrawn_at),
+        marketingMuted: (u.notification_prefs || {}).email_marketing === false,
+      },
+      // "Finish signing up" emails (api/cron/signup-reminders.js).
+      signupReminders: {
+        sent: Number(u.signup_reminder_step || 0),
+        of: 3,
+        lastSentAt: iso(u.signup_reminder_last_sent_at),
+        turnedOff: (u.notification_prefs || {}).email_signup_reminders === false,
       },
       deletedAt: iso(u.deleted_at),
       purgeAt: u.deleted_at ? new Date(new Date(u.deleted_at).getTime() + ACCOUNT_PURGE_DAYS * DAY).toISOString() : null,

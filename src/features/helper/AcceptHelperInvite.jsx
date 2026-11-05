@@ -33,6 +33,10 @@ export default function AcceptHelperInvite() {
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [agree, setAgree] = useState(false);
+  // Email consent, same two boxes as the sign-up page: account and
+  // service emails (required) and marketing (optional, off by default).
+  const [agreeEmails, setAgreeEmails] = useState(false);
+  const [marketing, setMarketing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null);
   // A link we issued that no longer works (cancelled, used, expired):
@@ -82,12 +86,14 @@ export default function AcceptHelperInvite() {
       if (!name.trim()) { setErr('Your name is required'); return; }
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
       if (!agree) { setErr('You must accept the Terms and Privacy Policy to continue.'); return; }
+      if (!agreeEmails) { setErr('Please agree to receive emails about your account and the service to continue.'); return; }
     }
     setBusy(true);
     try {
       const r = await api.post('/helper/accept', info.hasAccount ? { token } : {
         token, name: name.trim(), password,
         acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
+        acceptedAccountEmails: agreeEmails, marketingOptIn: marketing,
       });
       if (isNative() && r?.token) await setNativeAuthToken(r.token);
       clearMeCache(); forgetLanding();
@@ -190,9 +196,22 @@ export default function AcceptHelperInvite() {
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} style={{ marginTop: 3 }}/>
                   <span>I agree to the <Link to="/terms" style={{ color: 'var(--accent)' }}>Terms</Link> and <Link to="/privacy" style={{ color: 'var(--accent)' }}>Privacy Policy</Link>.</span>
                 </label>
-                <button type="submit" className="btn btn-primary" disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.45 }}>
+                  <input type="checkbox" checked={agreeEmails} onChange={(e) => setAgreeEmails(e.target.checked)} style={{ marginTop: 3 }}/>
+                  <span>I agree to receive emails from Ivy about my account and the service.</span>
+                </label>
+                <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.45 }}>
+                  <input type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} style={{ marginTop: 3 }}/>
+                  <span>Send me tips, product news and offers from Ivy. (Optional)</span>
+                </label>
+                <button type="submit" className="btn btn-primary" disabled={busy || !agree || !agreeEmails} style={{ width: '100%', justifyContent: 'center' }}>
                   {busy ? 'Creating your sign-in…' : 'Create my sign-in and join'}
                 </button>
+                {!busy && (!agree || !agreeEmails) && (
+                  <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
+                    Check the two required boxes above to continue.
+                  </div>
+                )}
               </div>
             )}
 

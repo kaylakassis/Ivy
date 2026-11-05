@@ -1,5 +1,10 @@
 // POST /api/helper/accept  (public, rate-limited)
-//   { token, name?, password?, acceptedTermsVersion?, acceptedPrivacyVersion? }
+//   { token, name?, password?, acceptedTermsVersion?, acceptedPrivacyVersion?,
+//     acceptedAccountEmails?, marketingOptIn? }
+//
+// A new sign-in records email consent the same way /api/auth/signup does
+// (api/_lib/emailConsent.js): acceptedAccountEmails must be true when sent,
+// an old app that does not send it still works (recorded as NULL).
 //
 // Burns a helper invite link and attaches the invitee's login to the
 // staff record (api/_lib/helpers.js acceptInvite).
@@ -27,6 +32,7 @@ import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersio
 import { findLiveInvite, acceptInvite, invalidateHelperCache } from '../_lib/helpers.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { parseSignupConsent, recordSignupConsent, ACCOUNT_EMAILS_REQUIRED_MESSAGE } from '../_lib/emailConsent.js';
 
 const EXPIRED = 'This invite link has expired or was already used. Ask the business to send a new one.';
 
@@ -94,6 +100,10 @@ export default async function handler(req, res) {
       if (!acceptablePrivacyVersion(body.acceptedPrivacyVersion)) {
         return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create a sign-in.`);
       }
+      const consent = parseSignupConsent(body);
+      if (consent.refuse) {
+        return badRequest(res, ACCOUNT_EMAILS_REQUIRED_MESSAGE.replace('an account', 'a sign-in'), { code: 'account_emails_required' });
+      }
       const passwordHash = await hashPassword(body.password);
       // A second tap racing this one (or a signup for the same address in
       // between) loses on the unique email index: send them to sign in, the
@@ -130,6 +140,7 @@ export default async function handler(req, res) {
             (${userId}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
             (${userId}, 'privacy', ${acceptablePrivacyVersion(body.acceptedPrivacyVersion) || CURRENT_PRIVACY_VERSION}, ${ip}, ${ua})
         `;
+        await recordSignupConsent(req, { userId, consent, source: 'helper_invite' });
       } catch (legalErr) {
         // Same compensation as signup: never strand an account without
         // its acceptance proof.

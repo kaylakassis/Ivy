@@ -1,4 +1,14 @@
-// POST /api/admin/email-blast  { segment, subject, html, dryRun? }
+// POST /api/admin/email-blast  { segment, subject, html, purpose?, dryRun? }
+//
+// purpose (default 'marketing'):
+//   marketing  tips, product news, offers, anything promotional. Only
+//              people who opted in to marketing (users.marketing_consent_at,
+//              the optional sign-up box or the settings switch) receive
+//              it, whatever the segment. Nobody without consent is ever
+//              sent a marketing blast.
+//   service    news about the service people already use (a change to how
+//              something works, an outage, a policy update). Goes to the
+//              whole segment, still honouring each person's unsubscribe.
 //
 // Sends one transactional email per recipient in the chosen segment.
 // Wraps every send in try/catch so a single bad address doesn't kill
@@ -11,6 +21,7 @@
 //   sponsored        | user_type = 'sponsored'
 //   affiliate        | user_type = 'affiliate'
 //   client-only      | claimed clients-row but no workspace
+//   marketing-opted-in | everyone on the Admin > Marketing list
 //
 // `dryRun: true` returns the recipient count without sending - use it
 // before pulling the trigger.
@@ -28,8 +39,9 @@ import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const SEGMENTS = new Set([
   'all', 'business-active', 'business-trial',
-  'sponsored', 'beta', 'affiliate', 'client-only',
+  'sponsored', 'beta', 'affiliate', 'client-only', 'marketing-opted-in',
 ]);
+const PURPOSES = new Set(['marketing', 'service']);
 const MAX_BLAST = 2000;
 // Cooldown between blasts to prevent fat-finger double-sends + protect
 // the shared Resend rate limit. Five minutes is enough to notice a
@@ -48,8 +60,10 @@ export default async function handler(req, res) {
     const htmlIn  = (body.html    || '').toString();
     const heading = (body.heading || '').toString().trim().slice(0, 200);
     const dryRun  = !!body.dryRun;
+    const purpose = body.purpose == null || body.purpose === '' ? 'marketing' : String(body.purpose);
 
     if (!SEGMENTS.has(segment)) return badRequest(res, 'Unknown segment');
+    if (!PURPOSES.has(purpose)) return badRequest(res, 'Unknown purpose');
     if (!subject) return badRequest(res, 'Subject is required');
     if (!htmlIn)  return badRequest(res, 'Body is required');
 
@@ -83,12 +97,12 @@ export default async function handler(req, res) {
       }
     }
 
-    const recipients = await loadSegment(segment);
+    const recipients = await loadSegment(segment, { marketingOnly: purpose === 'marketing' });
     if (recipients.length > MAX_BLAST) {
       return badRequest(res, `Segment has ${recipients.length} recipients - over the per-blast cap of ${MAX_BLAST}.`);
     }
     if (dryRun) {
-      return ok(res, { dryRun: true, recipients: recipients.length });
+      return ok(res, { dryRun: true, recipients: recipients.length, purpose });
     }
 
     const html = emailShell({
@@ -134,10 +148,10 @@ export default async function handler(req, res) {
     const actor = await getAdminActor(req);
     await recordAudit(req, {
       actor, action: 'email_blast',
-      meta: { segment, subject, recipients: recipients.length, sent, skipped, failed },
+      meta: { segment, purpose, subject, recipients: recipients.length, sent, skipped, failed },
     });
 
-    return ok(res, { ok: true, recipients: recipients.length, sent, skipped, failed });
+    return ok(res, { ok: true, purpose, recipients: recipients.length, sent, skipped, failed });
   } catch (err) {
     return serverError(res, err);
   }
@@ -153,9 +167,16 @@ const REAL_RECIPIENT_SQL = `
       AND COALESCE(u.user_type, 'regular') <> 'super_admin'
       AND NOT COALESCE(u.is_tester, FALSE)`;
 
-async function loadSegment(segment) {
+// Marketing consent given and not withdrawn (same rule as the Admin >
+// Marketing list).
+const MARKETING_CONSENT_SQL = `
+      AND u.marketing_consent_at IS NOT NULL
+      AND COALESCE(u.notification_prefs->>'email_marketing', 'true') <> 'false'`;
+
+async function loadSegment(segment, { marketingOnly = true } = {}) {
+  const consent = (marketingOnly || segment === 'marketing-opted-in') ? MARKETING_CONSENT_SQL : '';
   const q = (where, params = []) => sql.query(
-    `SELECT u.id, u.email, u.name FROM users u WHERE ${REAL_RECIPIENT_SQL} AND (${where})`, params,
+    `SELECT u.id, u.email, u.name FROM users u WHERE ${REAL_RECIPIENT_SQL} ${consent} AND (${where})`, params,
   );
   let r;
   if (segment === 'all') {
@@ -167,6 +188,8 @@ async function loadSegment(segment) {
                    AND w.subscription_status = 'trialing' AND w.trial_ends_at > NOW())`);
   } else if (segment === 'sponsored' || segment === 'beta' || segment === 'affiliate') {
     r = await q('u.user_type = $1', [segment]);
+  } else if (segment === 'marketing-opted-in') {
+    r = await q('TRUE');
   } else if (segment === 'client-only') {
     r = await q(`NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
                  AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`);

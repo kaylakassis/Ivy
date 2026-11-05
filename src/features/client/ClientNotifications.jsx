@@ -51,6 +51,23 @@ export default function ClientNotifications() {
     }
   };
 
+  // Ivy's own tips, product news and offers (not any business's emails):
+  // the same choice as the optional box at sign-up.
+  const toggleMarketing = async () => {
+    const next = !prefs?.marketingEmails;
+    setPrefs((p) => ({ ...(p || {}), marketingEmails: next }));
+    setBusy('ivy-marketing');
+    try {
+      const r = await api.patch('/me/notification-prefs', { marketingEmails: next });
+      setPrefs(r.prefs);
+    } catch (e) {
+      setPrefs((p) => ({ ...(p || {}), marketingEmails: !next }));
+      setErr(e.message || 'Could not update');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const toggle = async (clientId, type) => {
     setMemberships((list) => list.map((m) => m.clientId === clientId
       ? { ...m, prefs: { ...m.prefs, [type]: !m.prefs[type] } } : m));
@@ -105,6 +122,22 @@ export default function ClientNotifications() {
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
               One email each morning summarizing every unread group message across the businesses
               you're a member of. Turn off if you want push only.
+            </div>
+          </div>
+        </label>
+      </section>
+
+      <section className="card" style={{ padding: 18, marginBottom: 16 }} data-testid="ivy-marketing-pref">
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Emails from Ivy</div>
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+          cursor: busy === 'ivy-marketing' ? 'wait' : 'pointer',
+        }}>
+          <Switch checked={!!prefs?.marketingEmails} disabled={!prefs || busy === 'ivy-marketing'} onChange={toggleMarketing}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Tips, product news and offers from Ivy</div>
+            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+              Optional. This is about Ivy itself, not the businesses you book with. Emails about your account always arrive.
             </div>
           </div>
         </label>

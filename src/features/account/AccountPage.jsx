@@ -812,6 +812,12 @@ function NotificationsCard() {
           )}
         </>
       )}
+      {/* Email choices do not depend on this browser's push: when push is
+          off or unsupported here, still show the email switches (including
+          Ivy marketing and finish sign-up reminders). */}
+      {!(supported && perm !== 'denied' && active) && (
+        <div style={{ marginTop: 18 }}><NotificationPrefs emailOnly/></div>
+      )}
       <DigestPrefs/>
     </div>
   );
@@ -875,22 +881,29 @@ const EMAIL_LABELS = {
   invoices:  { label: 'Invoices',  hint: 'Invoices and quotes you receive, plus paid-receipt emails.' },
   documents: { label: 'Documents', hint: 'Signature requests + reminders when a document is waiting.' },
   messages:  { label: 'Messages',  hint: 'When the other side of a chat thread replies.' },
-  marketing: { label: 'Reviews & announcements', hint: 'Review prompts after sessions, occasional product updates.' },
+  marketing: { label: 'Tips, product news and offers from Ivy', hint: 'Optional. The same choice as the box at sign-up. Turn it on or off any time.' },
   billing:   { label: 'Subscription billing', hint: 'Renewal reminders + cancellation confirmations. Payment failures always send.' },
   reports:   { label: 'Weekly business recap', hint: 'Your weekly recap of bookings and revenue, plus setup reminders.' },
   client_optouts: { label: 'Client email opt-outs', hint: 'An email when a client unsubscribes from your emails, at most one per client per day. Only the client can turn their emails back on.' },
+  signup_reminders: { label: 'Finish sign-up reminders', hint: 'Up to three short emails if you create an account but have not started your trial yet. They stop once you start.' },
 };
 
-function NotificationPrefs() {
+function NotificationPrefs({ emailOnly = false }) {
   const [pushPrefs, setPushPrefs] = useState(null);
   const [emailPrefs, setEmailPrefs] = useState(null);
   const [pushTypes, setPushTypes] = useState([]);
   const [emailTypes, setEmailTypes] = useState([]);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
+  // Ivy marketing consent (users.marketing_consent_at). Shown in place of
+  // the bare 'marketing' category switch so there is one clear choice.
+  const [marketingOn, setMarketingOn] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
+    api.get('/me/notification-prefs')
+      .then((r) => { if (!cancelled) setMarketingOn(!!r?.prefs?.marketingEmails); })
+      .catch(() => { if (!cancelled) setMarketingOn(false); });
     api.get('/me/notifications')
       .then((r) => {
         if (cancelled) return;
@@ -918,7 +931,22 @@ function NotificationPrefs() {
     } finally { setBusy(null); }
   };
 
+  const toggleMarketing = async () => {
+    const next = !marketingOn;
+    setMarketingOn(next);
+    setBusy('email-marketing'); setErr(null);
+    try {
+      const r = await api.patch('/me/notification-prefs', { marketingEmails: next });
+      setMarketingOn(!!r?.prefs?.marketingEmails);
+      setEmailPrefs((p) => (p ? { ...p, marketing: next } : p));
+    } catch (e) {
+      setMarketingOn(!next);
+      setErr(e.message || 'Could not update');
+    } finally { setBusy(null); }
+  };
+
   const toggleEmail = async (type) => {
+    if (type === 'marketing') return toggleMarketing();
     if (!emailPrefs) return;
     const next = !emailPrefs[type];
     setEmailPrefs((p) => ({ ...p, [type]: next }));
@@ -945,7 +973,7 @@ function NotificationPrefs() {
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading preferences…</div>
       )}
 
-      {pushPrefs && (
+      {pushPrefs && !emailOnly && (
         <>
           <div className="metric-label" style={{ marginBottom: 8 }}>Push notifications</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
@@ -980,7 +1008,7 @@ function NotificationPrefs() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {emailTypes.map((t) => {
               const meta = EMAIL_LABELS[t] || { label: t, hint: '' };
-              const on = emailPrefs[t] !== false;
+              const on = t === 'marketing' ? !!marketingOn : emailPrefs[t] !== false;
               const busyKey = `email-${t}`;
               return (
                 <label key={t} style={{

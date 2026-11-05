@@ -32,7 +32,9 @@ async function main() {
   const tester = await person('tester', { tester: true, owner: 'active' });
   const unverified = await person('unver', { verified: false, owner: 'active' });
 
-  const ids = async (seg) => new Set((await loadSegment(seg)).map((r) => r.id));
+  // Service blasts (purpose 'service') go to the whole segment; the
+  // default (marketing) is checked in [4].
+  const ids = async (seg) => new Set((await loadSegment(seg, { marketingOnly: false })).map((r) => r.id));
   const all = await ids('all');
   const act = await ids('business-active');
   const tri = await ids('business-trial');
@@ -53,6 +55,18 @@ async function main() {
   assert(await userAllowsEmail(deletedActive, 'marketing') === false, 'deleted user, marketing: refused');
   assert(await userAllowsEmail(deletedActive, 'security') === false, 'deleted user, critical type: refused');
   assert(await userAllowsEmail(deletedActive, undefined) === false, 'deleted user, no type: refused');
+
+  console.log('\n[4] marketing blasts (the default) reach only people who opted in');
+  const optedIn = await person('optin', { owner: 'active' });
+  await sql`UPDATE users SET marketing_consent_at = NOW(), marketing_consent_source = 'signup' WHERE id = ${optedIn}`;
+  const optedInMuted = await person('optinmuted', { owner: 'active' });
+  await sql`UPDATE users SET marketing_consent_at = NOW(), notification_prefs = '{"email_marketing": false}'::jsonb WHERE id = ${optedInMuted}`;
+  const mAll = new Set((await loadSegment('all')).map((r) => r.id));
+  const mAct = new Set((await loadSegment('business-active', { marketingOnly: true })).map((r) => r.id));
+  const mList = new Set((await loadSegment('marketing-opted-in', { marketingOnly: false })).map((r) => r.id));
+  assert(mAll.has(optedIn) && mAct.has(optedIn) && mList.has(optedIn), 'opted-in owner gets marketing in every segment');
+  assert(![real, trial, spons].some((id) => mAll.has(id) || mAct.has(id) || mList.has(id)), 'no consent: never in a marketing blast');
+  assert(!mAll.has(optedInMuted) && !mList.has(optedInMuted), 'opted in but later unsubscribed: excluded');
 
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

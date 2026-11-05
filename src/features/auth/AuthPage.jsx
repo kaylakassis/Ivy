@@ -38,6 +38,10 @@ export default function AuthPage({ mode = 'signin' }) {
   const [refInput, setRefInput] = useState('');
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  // Email consent: account and service emails (required) and marketing
+  // (optional, unticked by default). The server records both.
+  const [acceptedEmails, setAcceptedEmails] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [busy, setBusy]   = useState(false);
   // ?mfa=1: a password reset on a 2FA account lands here for the code step.
   const [mfaStep, setMfaStep] = useState(params.get('mfa') === '1');
@@ -51,7 +55,7 @@ export default function AuthPage({ mode = 'signin' }) {
   const isSignUp = mode === 'signup';
   const canSubmit = !busy
     && (!isSignUp
-      || (name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && password.length >= 8 && acceptedTerms));
+      || (name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && password.length >= 8 && acceptedTerms && acceptedEmails));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -64,6 +68,10 @@ export default function AuthPage({ mode = 'signin' }) {
         setErr('You must accept the Terms and Privacy Policy to continue.');
         return;
       }
+      if (!acceptedEmails) {
+        setErr('Please agree to receive emails about your account and the service to continue.');
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -74,7 +82,8 @@ export default function AuthPage({ mode = 'signin' }) {
         // continue button so they know to resend from their account,
         // instead of redirecting silently.
         const typedRef = refInput.trim() ? refInput.trim().toUpperCase() : null;
-        const r = await signUp(email, password, name.trim(), role, refCode || (role === 'owner' ? typedRef : null));
+        const r = await signUp(email, password, name.trim(), role, refCode || (role === 'owner' ? typedRef : null),
+          { accountEmails: acceptedEmails, marketing: marketingOptIn });
         if (r?.emailErrors) {
           setEmailWarn(role === 'client' ? '/me' : '/');
           return;
@@ -186,23 +195,22 @@ export default function AuthPage({ mode = 'signin' }) {
             longer responsibility wording lives in the fine print below
             the button, still on-screen at the moment of signup. */}
         {isSignUp && (
-          <label style={{
-            display: 'flex', alignItems: 'flex-start', gap: 10,
-            padding: '12px 14px', borderRadius: 10,
-            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
-            fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55, cursor: 'pointer',
-          }}>
-            <input type="checkbox" checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              style={{ marginTop: 3, flexShrink: 0, width: 18, height: 18 }}/>
-            <span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <ConsentBox checked={acceptedTerms} onChange={setAcceptedTerms} testId="consent-terms">
               I agree to the{' '}
               <LegalLink to="/terms" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</LegalLink>{' '}and{' '}
               <LegalLink to="/privacy" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</LegalLink>,
               and I understand Ivy provides informational tools - not
               financial, legal, or tax advice.
-            </span>
-          </label>
+            </ConsentBox>
+            <ConsentBox checked={acceptedEmails} onChange={setAcceptedEmails} testId="consent-account-emails">
+              I agree to receive emails from Ivy about my account and the service.
+            </ConsentBox>
+            <ConsentBox checked={marketingOptIn} onChange={setMarketingOptIn} optional testId="consent-marketing">
+              Send me tips, product news and offers from Ivy.{' '}
+              <span style={{ color: 'var(--muted)' }}>(Optional)</span>
+            </ConsentBox>
+          </div>
         )}
 
         {err && (
@@ -242,7 +250,7 @@ export default function AuthPage({ mode = 'signin' }) {
         )}
         {!emailWarn && isSignUp && !canSubmit && !busy && (
           <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: -4 }}>
-            Fill in your name, email and password, and check the box to agree to the Terms and Privacy Policy.
+            Fill in your name, email and password, and check the two required boxes above.
           </div>
         )}
 
@@ -435,6 +443,25 @@ const inputS = {
   fontSize: 16,
   color: 'var(--fg)',
 };
+
+// One sign-up checkbox row. The two required boxes share the strong
+// border; the optional marketing box is lighter so it reads as a choice.
+function ConsentBox({ checked, onChange, optional = false, testId, children }) {
+  return (
+    <label data-testid={testId} style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '12px 14px', borderRadius: 10,
+      background: optional ? 'transparent' : 'var(--surface-2)',
+      border: `1px solid ${optional ? 'var(--border)' : 'var(--border-strong)'}`,
+      fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55, cursor: 'pointer',
+    }}>
+      <input type="checkbox" checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ marginTop: 3, flexShrink: 0, width: 18, height: 18 }}/>
+      <span>{children}</span>
+    </label>
+  );
+}
 
 function Field({ label, children }) {
   return (

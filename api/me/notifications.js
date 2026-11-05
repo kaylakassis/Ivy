@@ -16,6 +16,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { NOTIFY_TYPES } from '../_lib/push.js';
 import { EMAIL_NOTIFY_TYPES, EMAIL_NOTIFY_LABELS } from '../_lib/notificationPrefs.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { setMarketingConsent } from '../_lib/emailConsent.js';
 
 function resolve(stored) {
   const push = {};
@@ -79,6 +80,11 @@ export default async function handler(req, res) {
         UPDATE users SET notification_prefs = ${JSON.stringify(next)}::jsonb
         WHERE id = ${user.id}
       `;
+      // Muting the marketing category (an older app's "Reviews &
+      // announcements" switch) also withdraws Ivy marketing consent.
+      if (incomingEmail && 'marketing' in incomingEmail && !incomingEmail.marketing) {
+        await setMarketingConsent(req, { userId: user.id, on: false, source: 'settings', actor: user });
+      }
       const { push, email } = resolve(next);
       return ok(res, {
         pushPrefs: push, emailPrefs: email,

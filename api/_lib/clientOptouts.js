@@ -42,6 +42,9 @@ export const OPTOUT_LABELS = {
   marketing: 'reviews and announcements',
   billing:   'billing emails',
   programs:  'program updates',
+  // Owner-side categories: used for the owner's own unsubscribe page line.
+  reports:   'weekly recaps and setup reminders',
+  signup_reminders: 'reminders to finish signing up',
 };
 
 export function optOutLabel(type) {

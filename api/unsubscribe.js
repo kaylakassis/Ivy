@@ -31,6 +31,7 @@ import { EMAIL_NOTIFY_TYPES } from './_lib/notificationPrefs.js';
 import { applyClientOptOut, optOutLabel } from './_lib/clientOptouts.js';
 import { fetchBranding } from './_lib/branding.js';
 import { reportError } from './_lib/monitoring.js';
+import { setMarketingConsent } from './_lib/emailConsent.js';
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -85,6 +86,12 @@ async function applyOptOut(payload, source) {
          SET notification_prefs = COALESCE(notification_prefs, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb
        WHERE id = ${id}
     `;
+    // Unsubscribing from Ivy's marketing (or from everything) also
+    // withdraws the marketing consent given at sign-up or in settings, so
+    // the person drops off the admin marketing list too.
+    if (type === 'marketing' || type === 'all') {
+      await setMarketingConsent(null, { userId: id, on: false, source: 'unsubscribe' });
+    }
     return {
       line: type === 'all'
         ? "You won't get any more emails from Ivy, apart from account and security notices."

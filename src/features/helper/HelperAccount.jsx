@@ -78,8 +78,12 @@ function PasswordCard() {
 function NotificationsCard() {
   const [prefs, setPrefs] = useState(null);
   const [err, setErr] = useState(null);
+  const [marketing, setMarketing] = useState(null);
   useEffect(() => {
     let live = true;
+    api.get('/me/notification-prefs')
+      .then((r) => live && setMarketing(!!r?.prefs?.marketingEmails))
+      .catch(() => live && setMarketing(false));
     api.get('/me/notifications')
       .then((r) => live && setPrefs({ push: r.pushPrefs || {}, email: r.emailPrefs || {} }))
       .catch((e) => live && setErr(e.message));
@@ -95,6 +99,17 @@ function NotificationsCard() {
       setErr(e.message || 'Could not update');
     }
   };
+  const toggleMarketing = async () => {
+    const next = !marketing;
+    setMarketing(next);
+    try {
+      const r = await api.patch('/me/notification-prefs', { marketingEmails: next });
+      setMarketing(!!r?.prefs?.marketingEmails);
+    } catch (e) {
+      setMarketing(!next);
+      setErr(e.message || 'Could not update');
+    }
+  };
   return (
     <Card title="Notifications" hint="New sessions assigned to you, changes to them, and reminders before they start.">
       {!prefs && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
@@ -102,6 +117,9 @@ function NotificationsCard() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <ToggleRow label="Push notifications" hint="On this device, when the app is installed." on={prefs.push.bookings !== false} onToggle={() => toggle('push', 'bookings')}/>
           <ToggleRow label="Email" hint="Booking emails about your sessions." on={prefs.email.bookings !== false} onToggle={() => toggle('email', 'bookings')}/>
+          {marketing !== null && (
+            <ToggleRow label="Tips and news from Ivy" hint="Optional. Product news and offers from Ivy itself." on={marketing} onToggle={toggleMarketing}/>
+          )}
         </div>
       )}
       {err && <div style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 6 }}>{err}</div>}

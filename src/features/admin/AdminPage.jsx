@@ -30,6 +30,7 @@ const TABS = [
   { id: 'bugs',       label: 'Bug reports', icon: 'Spark' },
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
   { id: 'reports',    label: 'Reports',    icon: 'EyeOff' },
+  { id: 'marketing',  label: 'Marketing list', icon: 'Mail' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'waitlist',   label: 'Waitlist',   icon: 'Mail' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
@@ -136,6 +137,7 @@ export default function AdminPage() {
       {tab === 'bugs'       && <BugsTab/>}
       {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'reports'    && <ReportsTab onChanged={(n) => setReportsOpen(n)}/>}
+      {tab === 'marketing'  && <MarketingTab/>}
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'waitlist'   && <WaitlistTab/>}
       {tab === 'audit'      && <AuditTab/>}
@@ -2404,7 +2406,100 @@ function SupportConversation({ thread, onChanged }) {
 
 // ---------- Email blast tab ----------
 
+// ---------- Marketing list tab ----------
+// Everyone who opted in to Ivy's tips, product news and offers and has
+// not withdrawn (api/admin/marketing-list.js). Withdrawing anywhere
+// (settings switch, unsubscribe link) removes them from this list.
+function MarketingTab() {
+  const [q, setQ] = useState('');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    setErr(null);
+    const qs = new URLSearchParams();
+    if (query) qs.set('q', query);
+    if (page > 1) qs.set('page', String(page));
+    api.get(`/admin/marketing-list?${qs.toString()}`)
+      .then((r) => { if (live) setData(r); })
+      .catch((e) => { if (live) setErr(e.message || 'Could not load the list'); });
+    return () => { live = false; };
+  }, [query, page]);
+
+  const search = (e) => { e?.preventDefault?.(); setPage(1); setQuery(q.trim()); };
+  const exportCsv = () => {
+    const qs = new URLSearchParams({ format: 'csv' });
+    if (query) qs.set('q', query);
+    window.location.href = `/api/admin/marketing-list?${qs.toString()}`;
+  };
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+  const date = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} data-testid="marketing-list">
+      <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Marketing list</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)' }} data-testid="marketing-count">
+            {data ? `${data.total.toLocaleString()} ${data.total === 1 ? 'person' : 'people'} opted in` : 'Loading…'}
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          People who chose to get tips, product news and offers from Ivy, at sign-up or in their settings.
+          Anyone who turns it off or unsubscribes drops off this list right away.
+        </div>
+        <form onSubmit={search} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email or business"
+            style={{ ...fieldSty, flex: '1 1 220px' }} aria-label="Search the marketing list"/>
+          <button type="submit" className="btn btn-outline">Search</button>
+          <button type="button" className="btn btn-outline" onClick={exportCsv} disabled={!data || data.total === 0}>
+            <Icons.Doc size={13}/> Export CSV
+          </button>
+        </form>
+      </div>
+
+      {err && <ErrCard msg={err}/>}
+      {data && data.people.length === 0 && (
+        <div className="card" style={{ padding: 28 }}>
+          <EmptyNote icon="Mail" title={query ? 'No one matches that search' : 'No one has opted in yet'}
+            hint={query ? 'Try a different name or email.' : 'People who tick the marketing box at sign-up show up here.'}/>
+        </div>
+      )}
+      {data && data.people.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {data.people.map((p) => (
+            <div key={p.id} className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>{p.name || p.email}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', overflowWrap: 'anywhere' }}>{p.email}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '4px 14px', flexWrap: 'wrap', fontSize: 12.5, color: 'var(--fg-2)' }}>
+                <span>{p.accountTypes.length ? p.accountTypes.map((t) => t[0].toUpperCase() + t.slice(1)).join(' + ') : 'No role yet'}</span>
+                <span>Opted in {date(p.optedInAt)}{p.sourceLabel ? ` · ${p.sourceLabel}` : ''}</span>
+                {p.businessName && <span>{p.businessName}{p.state ? `, ${p.state}` : ''}</span>}
+                {!p.businessName && p.state && <span>{p.state}</span>}
+                {p.planStatus && <span>{p.planStatus}</span>}
+              </div>
+            </div>
+          ))}
+          {pages > 1 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={() => setPage((x) => Math.max(1, x - 1))} disabled={page <= 1} className="btn btn-outline">Prev</button>
+              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Page {page} of {pages}</span>
+              <button onClick={() => setPage((x) => Math.min(pages, x + 1))} disabled={page >= pages} className="btn btn-outline">Next</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const BLAST_SEGMENTS = [
+  { id: 'marketing-opted-in', label: 'Marketing list (everyone opted in)' },
   { id: 'business-active', label: 'Business - Active' },
   { id: 'business-trial',  label: 'Business - Trial' },
   { id: 'sponsored',       label: 'Sponsored' },
@@ -2414,8 +2509,14 @@ const BLAST_SEGMENTS = [
   { id: 'all',             label: 'Everyone' },
 ];
 
+const BLAST_PURPOSES = [
+  { id: 'marketing', label: 'Marketing (opted-in people only)' },
+  { id: 'service',   label: 'Service notice (whole segment)' },
+];
+
 function BlastTab() {
   const [segment, setSegment] = useState('business-active');
+  const [purpose, setPurpose] = useState('marketing');
   const [subject, setSubject] = useState('');
   const [heading, setHeading] = useState('');
   const [html, setHtml] = useState('');
@@ -2426,7 +2527,7 @@ function BlastTab() {
   const dryRun = async () => {
     setBusy(true); setErr(null); setResult(null);
     try {
-      const r = await api.post('/admin/email-blast', { segment, subject, html, heading, dryRun: true });
+      const r = await api.post('/admin/email-blast', { segment, purpose, subject, html, heading, dryRun: true });
       setResult(`Dry run: would send to ${r.recipients} recipient${r.recipients === 1 ? '' : 's'}.`);
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
@@ -2435,7 +2536,7 @@ function BlastTab() {
     if (!confirm(`Send to every "${BLAST_SEGMENTS.find((s) => s.id === segment)?.label}" recipient?`)) return;
     setBusy(true); setErr(null); setResult(null);
     try {
-      const r = await api.post('/admin/email-blast', { segment, subject, html, heading });
+      const r = await api.post('/admin/email-blast', { segment, purpose, subject, html, heading });
       setResult(`Sent ${r.sent} of ${r.recipients} (${r.failed} failed).`);
     } catch (e) { setErr(e.message); }
     finally { setBusy(false); }
@@ -2453,6 +2554,14 @@ function BlastTab() {
       <Field label="Segment">
         <select value={segment} onChange={(e) => setSegment(e.target.value)} style={fieldSty}>
           {BLAST_SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </Field>
+      <Field label="What kind of email is this?"
+        hint={purpose === 'marketing'
+          ? 'Tips, news, offers, anything promotional. Goes only to people who opted in to marketing emails, whatever the segment.'
+          : 'Only for news about the service people already use: changes, outages, policy updates. Never for offers or promotions.'}>
+        <select value={purpose} onChange={(e) => setPurpose(e.target.value)} style={fieldSty} data-testid="blast-purpose">
+          {BLAST_PURPOSES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
       </Field>
       <Field label="Subject" hint="What lands in their inbox preview.">
@@ -2937,6 +3046,10 @@ function EmailPreviewCard() {
     // Welcome
     { group: 'Welcome',  id: 'welcome_owner',            label: 'Welcome — business owner' },
     { group: 'Welcome',  id: 'welcome_client',           label: 'Welcome — client' },
+    // Finish sign-up reminders
+    { group: 'Finish sign-up', id: 'signup_reminder_1', label: 'Finish sign-up 1 of 3 (about 3 hours)' },
+    { group: 'Finish sign-up', id: 'signup_reminder_2', label: 'Finish sign-up 2 of 3 (about 24 hours)' },
+    { group: 'Finish sign-up', id: 'signup_reminder_3', label: 'Finish sign-up 3 of 3 (about 3 days)' },
     // Reports
     { group: 'Reports',  id: 'weekly_recap',             label: 'Weekly business recap (Monday digest)' },
     // Admin invites

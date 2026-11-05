@@ -4217,4 +4217,30 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_at         TIME
 -- 'android' from the app's X-Client-Platform header) so the operator can
 -- see whether someone uses the iPhone app or the website.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_platform TEXT;
+
+-- Email consent (sign-up checkboxes). account_email_consent_at: when the
+-- person ticked "I agree to receive emails from Ivy about my account and
+-- the service" (NULL for accounts made before the box existed and for the
+-- iPhone app 1.0.4, which does not send it: account emails still go out,
+-- they are needed to run the account). marketing_consent_at: when they
+-- opted in to tips, product news and offers (NULL = not opted in or
+-- withdrawn); marketing_consent_source says where ('signup', 'helper_invite',
+-- 'settings'); marketing_consent_withdrawn_at is the last withdrawal.
+-- The full trail lives in legal_acceptances (grants at sign-up) and
+-- audit_events (later changes).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS account_email_consent_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent_source TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS marketing_consent_withdrawn_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_users_marketing_consent
+  ON users(marketing_consent_at DESC) WHERE marketing_consent_at IS NOT NULL;
+
+-- "Finish signing up" reminders (api/cron/signup-reminders.js): how many
+-- of the three emails this person has had and when the last one went.
+-- Each send is claimed by bumping the step under a guard, so two runs can
+-- never send the same step twice.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_step INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_last_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_users_signup_reminder_due
+  ON users(created_at) WHERE signup_reminder_step < 3 AND deleted_at IS NULL;
 `;

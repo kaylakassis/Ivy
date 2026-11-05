@@ -97,6 +97,10 @@
       "schedule": "0 16 * * *"
     },
     {
+      "path": "/api/cron/signup-reminders",
+      "schedule": "37 * * * *"
+    },
+    {
       "path": "/api/cron/ivy-nudges",
       "schedule": "0 9,13,17 * * *"
     },

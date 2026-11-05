@@ -87,10 +87,13 @@ export function PrivacyPolicyBody() {
         <li>To publish combined, anonymous statistics about Ivy as a whole
             (see "Combined, anonymous statistics" above). These never
             identify you, your business, or your clients.</li>
-        <li>To send you product updates, tips, and growth content via
-            email. You can opt out of marketing email at any time
-            from Account Settings; we'll still send transactional
-            messages your account requires.</li>
+        <li>To send you product updates, tips, and offers by email, only
+            if you choose to. You choose at sign-up whether to receive
+            marketing emails, and you can change that any time in your
+            settings or with the unsubscribe link in any marketing email.
+            Account and service emails (including reminders to finish
+            signing up) are part of using Ivy; the ones that are not
+            essential can be turned off in your notification settings.</li>
       </UL>
       <P>We don't use your data to train AI models. Conversations with Ivy are
         sent to our AI model provider to generate replies; under our agreement

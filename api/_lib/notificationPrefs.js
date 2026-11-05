@@ -8,7 +8,7 @@
 //
 //   • Email prefs (EMAIL_NOTIFY_TYPES below):
 //       bookings, invoices, documents, messages, marketing, billing, reports,
-//       programs, client_optouts
+//       programs, client_optouts, signup_reminders
 //     Stored on users.notification_prefs prefixed with `email_`, AND on
 //     clients.notification_prefs as bare keys (clients are workspace-
 //     scoped so each client row holds prefs for that one workspace).
@@ -32,12 +32,13 @@ export const EMAIL_NOTIFY_TYPES = [
   'reports',     // owner-only: weekly recap of bookings, revenue, etc.
   'programs',    // client: new lessons and newly opened modules in their programs
   'client_optouts', // owner-only: a client unsubscribed from this business's emails
+  'signup_reminders', // owner-only: "finish signing up" emails to owners who never started a trial
 ];
 
 // Owner-only categories never go to clients, so the client portal does
 // not offer a switch for them. 'programs' is the mirror image (client-only)
 // and the owner Account page hides it.
-export const OWNER_ONLY_EMAIL_TYPES = ['reports', 'client_optouts'];
+export const OWNER_ONLY_EMAIL_TYPES = ['reports', 'client_optouts', 'signup_reminders'];
 export const CLIENT_EMAIL_TYPES = EMAIL_NOTIFY_TYPES.filter((t) => !OWNER_ONLY_EMAIL_TYPES.includes(t));
 
 // Labels shown in the notification settings UI. Keep terse - the
@@ -52,6 +53,7 @@ export const EMAIL_NOTIFY_LABELS = {
   reports:   'Weekly business recap',
   programs:  'Programs',
   client_optouts: 'Client email opt-outs',
+  signup_reminders: 'Finish sign-up reminders',
 };
 
 // Critical sends bypass preferences. These are tied to account

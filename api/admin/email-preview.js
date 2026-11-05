@@ -24,6 +24,7 @@ import { renderWelcome } from '../_lib/welcome-content.js';
 import { renderWeeklyRecap } from '../_lib/weeklyRecap.js';
 import * as R from '../_lib/emailRenderers.js';
 import { appUrl } from '../_lib/tokens.js';
+import { renderSignupReminder } from '../_lib/signupReminders.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const SAMPLE = {
@@ -51,6 +52,11 @@ export const PREVIEW_CATALOGUE = [
   // Welcome
   { id: 'welcome_owner',             group: 'Welcome',     label: 'Welcome — business owner' },
   { id: 'welcome_client',            group: 'Welcome',     label: 'Welcome — client' },
+
+  // "Finish signing up" reminders (api/cron/signup-reminders.js)
+  { id: 'signup_reminder_1',         group: 'Finish sign-up', label: 'Finish sign-up 1 of 3 (about 3 hours)' },
+  { id: 'signup_reminder_2',         group: 'Finish sign-up', label: 'Finish sign-up 2 of 3 (about 24 hours)' },
+  { id: 'signup_reminder_3',         group: 'Finish sign-up', label: 'Finish sign-up 3 of 3 (about 3 days)' },
 
   // Reports (owner-facing recaps)
   { id: 'weekly_recap',              group: 'Reports',     label: 'Weekly business recap (Monday digest)' },
@@ -138,6 +144,12 @@ function render(template) {
     // return { subject, html } so they slot in directly).
     case 'welcome_owner':             return renderWelcome({ name: SAMPLE.firstName, appUrl: appUrl(), variant: 'owner' });
     case 'welcome_client':            return renderWelcome({ name: SAMPLE.firstName, appUrl: appUrl(), variant: 'client' });
+
+    // Finish sign-up reminders. Shown in the "onboarding not done yet"
+    // variant (the most common case).
+    case 'signup_reminder_1': return renderSignupReminder({ step: 1, firstName: SAMPLE.firstName, onboarded: false });
+    case 'signup_reminder_2': return renderSignupReminder({ step: 2, firstName: SAMPLE.firstName, onboarded: false });
+    case 'signup_reminder_3': return renderSignupReminder({ step: 3, firstName: SAMPLE.firstName, onboarded: false });
 
     // Weekly recap (real renderer; preview feeds plausible sample stats).
     case 'weekly_recap':
