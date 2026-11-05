@@ -1,12 +1,14 @@
 // The onboarding "About you" answers: sentinels, validation, the save
 // payload for PATCH /api/onboarding/profile, and the question widgets.
-// Shared by the wizard (OnboardingPage.jsx) and the one-time dashboard
-// prompt for owners who finished onboarding before these questions were
-// required (dashboard/AboutYouPrompt.jsx).
+// Shared by the wizard (OnboardingPage.jsx) and the required "A few quick
+// questions" sheet the owner app shows to any owner still missing one of
+// the required answers (onboarding/RequiredAnswersSheet.jsx).
 //
-// Required answers are enforced here in the UI only. The server checks
-// shape and allowlists and records whatever it gets, so older app builds
-// that never send the newer answers keep working.
+// Required answers are enforced here in the UI. The server checks shape
+// and allowlists, records whatever it gets (so older app builds that never
+// send the newer answers keep working) and never lets an empty answer erase
+// a stored one. Which answers are still missing is decided on the server
+// (api/_lib/onboardingAnswers.js); missingFromAbout() below is its mirror.
 import React from 'react';
 import { US_STATES, COUNTRIES } from '../../lib/locations.js';
 
@@ -22,6 +24,31 @@ export const HEARD_FROM_OPTIONS = [
   { id: 'google',    label: 'Google' },
   { id: 'referral',  label: 'Friend / referral' },
 ];
+
+export const GOAL_OPTIONS = [
+  { id: 'grow_revenue', label: 'Grow revenue' },
+  { id: 'more_clients', label: 'Get more clients' },
+  { id: 'save_time',    label: 'Save time on admin' },
+  { id: 'look_pro',     label: 'Look more professional' },
+];
+export const CHALLENGE_OPTIONS = [
+  { id: 'leads',        label: 'Not enough leads' },
+  { id: 'no_shows',     label: 'No-shows & cancellations' },
+  { id: 'getting_paid', label: 'Chasing payments' },
+  { id: 'organized',    label: 'Staying on top of it all' },
+  { id: 'marketing',    label: 'Marketing myself' },
+];
+export const STAGE_OPTIONS = [
+  { id: 'starting',    label: 'Just starting out' },
+  { id: 'side_hustle', label: 'Side hustle' },
+  { id: 'established', label: 'Established & steady' },
+  { id: 'scaling',     label: 'Ready to scale' },
+];
+
+// Server's required-answer keys (api/_lib/onboardingAnswers.js) → the
+// error key validateAbout() uses for that question.
+export const REQUIRED_KEYS = ['goals', 'challenges', 'stage', 'location', 'heardFrom'];
+export const ERROR_KEY = { goals: 'goal', challenges: 'challenge', stage: 'stage', location: 'location', heardFrom: 'heardFrom' };
 
 const isOtherEmpty = (ids, text) => (ids || []).includes(OTHER) && !String(text || '').trim();
 const picked = (ids) => (ids || []).length > 0;
@@ -60,6 +87,13 @@ export function validateAbout(about) {
   const heard = heardFromError(a);
   if (heard) errs.heardFrom = heard;
   return errs;
+}
+
+// Required answers still missing from a form state, as server keys. The
+// client mirror of missingRequiredAnswers() on the server.
+export function missingFromAbout(about) {
+  const errs = validateAbout(about);
+  return REQUIRED_KEYS.filter((k) => errs[ERROR_KEY[k]]);
 }
 
 // Stored location → picker state.

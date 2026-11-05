@@ -50,13 +50,17 @@ import SwitchStep from './SwitchStep.jsx';
 import {
   OTHER, validateAbout, aboutPayload, aboutFromProfile, scrollToFirstError,
   ChoiceField, LocationField, HeardFromField,
+  GOAL_OPTIONS, CHALLENGE_OPTIONS, STAGE_OPTIONS,
 } from './aboutFields.jsx';
 
 // OTHER / OUTSIDE_US sentinels, validation and the save payload for the
 // About step live in aboutFields.jsx (shared with the dashboard prompt).
 
 // Steps that must be answered before setup starts. "Save & exit" is
-// hidden on these so the core answers can't be skipped.
+// hidden on these so the core answers can't be skipped. It also stays
+// hidden on later steps until the About answers are complete (an owner
+// resuming from an older app build can be past About with nothing
+// answered), unless a save failed, so a broken network never traps anyone.
 const REQUIRED_STEPS = new Set(['welcome', 'business', 'about']);
 
 // Step set per business type. 'both' keeps every step so existing
@@ -231,14 +235,20 @@ export default function OnboardingPage() {
       api.get('/clients?limit=1').catch(() => ({ clients: [] })),
       api.get('/finance/stripe-status').catch(() => null),
       api.get('/website').catch(() => null),
-      api.get('/onboarding/profile').catch(() => ({ profile: null })),
+      api.get('/onboarding/profile').catch(() => ({ profile: null, failed: true })),
     ]).then(([stateRes, calRes, clientsRes, stripeRes, webRes, profileRes]) => {
       if (!live) return;
       const st = stateRes?.state;
       if (st) {
         // On a replay, always start at 'welcome' regardless of the saved
-        // step (a completed owner's saved step is 'done').
-        setCurrentStep(isReplay ? 'welcome' : (st.currentStep || 'welcome'));
+        // step (a completed owner's saved step is 'done'). Someone who got
+        // past About without the required answers (an older app build did
+        // not ask them) resumes on About first.
+        const resumeAt = st.currentStep || 'welcome';
+        const pastAbout = !REQUIRED_STEPS.has(resumeAt) && resumeAt !== 'done';
+        const aboutMissing = !profileRes?.failed
+          && Object.keys(validateAbout(aboutFromProfile(profileRes?.profile || null))).length > 0;
+        setCurrentStep(isReplay ? 'welcome' : (pastAbout && aboutMissing ? 'about' : resumeAt));
         setCompletedSteps(st.completedSteps || []);
         setSkippedSteps(st.skippedSteps || []);
         if (st.switchFrom) setSwitchFrom(st.switchFrom);
@@ -676,6 +686,8 @@ export default function OnboardingPage() {
   // What's still missing on the About step, once the owner has tried to
   // continue (live, so each message clears as it's answered).
   const aboutErrors = showAboutErrors ? validateAbout(about) : {};
+  // Every required About answer is in (gates "Save & exit", see REQUIRED_STEPS).
+  const aboutComplete = Object.keys(validateAbout(about)).length === 0;
 
   if (!stateLoaded) {
     return (
@@ -830,7 +842,7 @@ export default function OnboardingPage() {
             </button>
           )}
           {currentStep !== 'done' && currentStep !== 'tour'
-            && (!REQUIRED_STEPS.has(currentStep) || requiredSaveFailed) && (
+            && ((!REQUIRED_STEPS.has(currentStep) && aboutComplete) || requiredSaveFailed) && (
             <button onClick={saveAndExit} className="btn btn-outline" disabled={busy}
               style={{ color: 'var(--muted)' }}>
               Save & exit
@@ -1771,12 +1783,7 @@ function AboutStep({ about, setAbout, errors = {}, subtitle }) {
         id="goal" required error={errors.goal}
         label="What are your goals with Ivy?"
         hint="Pick all that apply."
-        options={[
-          { id: 'grow_revenue', label: 'Grow revenue' },
-          { id: 'more_clients', label: 'Get more clients' },
-          { id: 'save_time',    label: 'Save time on admin' },
-          { id: 'look_pro',     label: 'Look more professional' },
-        ]}
+        options={GOAL_OPTIONS}
         values={about.goalIds} other={about.goalOther}
         onToggle={toggle('goalIds')}
         onOtherToggle={() => toggle('goalIds')(OTHER)}
@@ -1788,13 +1795,7 @@ function AboutStep({ about, setAbout, errors = {}, subtitle }) {
         id="challenge" required error={errors.challenge}
         label="What's draining you most right now?"
         hint="Be honest and pick all that apply. This is exactly what Ivy takes off your plate."
-        options={[
-          { id: 'leads',        label: 'Not enough leads' },
-          { id: 'no_shows',     label: 'No-shows & cancellations' },
-          { id: 'getting_paid', label: 'Chasing payments' },
-          { id: 'organized',    label: 'Staying on top of it all' },
-          { id: 'marketing',    label: 'Marketing myself' },
-        ]}
+        options={CHALLENGE_OPTIONS}
         values={about.challengeIds} other={about.challengeOther}
         onToggle={toggle('challengeIds')}
         onOtherToggle={() => toggle('challengeIds')(OTHER)}
@@ -1808,12 +1809,7 @@ function AboutStep({ about, setAbout, errors = {}, subtitle }) {
         id="stage" required error={errors.stage}
         label="Where's your business at?"
         hint="Pick all that apply."
-        options={[
-          { id: 'starting',    label: 'Just starting out' },
-          { id: 'side_hustle', label: 'Side hustle' },
-          { id: 'established', label: 'Established & steady' },
-          { id: 'scaling',     label: 'Ready to scale' },
-        ]}
+        options={STAGE_OPTIONS}
         values={about.stageIds}
         onToggle={toggle('stageIds')}
       />

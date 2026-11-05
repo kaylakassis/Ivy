@@ -14,6 +14,7 @@ import { sql } from '../../../_lib/db.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import { requireSuperAdmin } from '../../../_lib/admin.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
+import { missingRequiredAnswers, REQUIRED_ANSWERS } from '../../../_lib/onboardingAnswers.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -114,6 +115,12 @@ export default async function handler(req, res) {
         answeredAt:     p.created_at || null,
         updatedAt:      p.updated_at || null,
       } : null,
+      // The required questions (same rule as the owner app's required
+      // sheet): which are still missing for this owner.
+      required: (() => {
+        const missing = missingRequiredAnswers(p);
+        return { total: REQUIRED_ANSWERS.length, missing, answered: missing.length === 0 };
+      })(),
       switchFrom: typeof st.switchFrom === 'string' ? st.switchFrom : null,
       progress: {
         currentStep:    typeof st.currentStep === 'string' ? st.currentStep : null,

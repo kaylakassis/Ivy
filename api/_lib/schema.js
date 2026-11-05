@@ -4211,4 +4211,10 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_session_id TEXT
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_key        TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_url        TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_at         TIMESTAMPTZ;
+
+-- Admin user profile (Admin > Users > Manage). last_active_platform is
+-- stamped next to last_active_at by requireUser ('web', or 'ios' /
+-- 'android' from the app's X-Client-Platform header) so the operator can
+-- see whether someone uses the iPhone app or the website.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_platform TEXT;
 `;

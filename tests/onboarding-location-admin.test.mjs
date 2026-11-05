@@ -131,7 +131,9 @@ async function run() {
     } });
     assert(r.statusCode === 200, 'wrong types do not 400');
     row = await profileRow(b.w);
-    assert(row.location_state === null && row.location_country === null, 'non-string location values dropped');
+    // Dropped, and (since required answers are never erased by an empty
+    // one) the stored country stays.
+    assert(row.location_state === null && row.location_country?.length === 80, 'non-string location values dropped, stored location kept');
     assert(row.heard_from_other === null, 'non-string Other text dropped');
     assert(row.referral_name === 'Line one two', 'control characters stripped from the referrer name');
 

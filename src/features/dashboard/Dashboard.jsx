@@ -16,7 +16,6 @@ import SuccessToast from '../../components/SuccessToast.jsx';
 import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
 import SwitchingCard from './SwitchingCard.jsx';
-import AboutYouPrompt from './AboutYouPrompt.jsx';
 import WorkflowSuggestionCard from './WorkflowSuggestionCard.jsx';
 import IvyNoticedCard from './IvyNoticedCard.jsx';
 import { FirstWinReadyCard, FirstWinMoment } from './FirstWinCards.jsx';
@@ -530,7 +529,6 @@ export default function Dashboard() {
         <FirstWinReadyCard show={!!data?.firstWin?.showReady} onDone={loadDashboard}/>
         <SwitchingCard show={!!data?.switchPrompt} onImported={loadDashboard}/>
         <SetupChecklist/>
-        <AboutYouPrompt/>
         <TwoStepCard show={!!data?.twoStepPrompt}/>
         <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
