@@ -2,7 +2,8 @@
 // Body: {
 //   services: [{
 //     id?, name, durationMinutes, price, displayOrder?,
-//     description?, photoUrl?, prepInstructions?, reminderMinutes?
+//     description?, photoUrl?, prepInstructions?, reminderMinutes?,
+//     reminderUseDefault?
 //   }]
 // }
 // Existing services keep their id (preserves booking links). New ones get a new id.
@@ -13,7 +14,10 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeService, DEFAULT_REMINDERS } from '../_lib/calendar.js';
+import { serializeService, DEFAULT_REMINDERS, ensureCalendarSettings } from '../_lib/calendar.js';
+import {
+  clientRemindersFrom, serviceFollowsDefault, sameSet, LEGACY_SERVICE_DEFAULT,
+} from '../_lib/reminderSettings.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const ALLOWED_REMINDER_MIN = 5;            // can't remind less than 5 min before
@@ -30,6 +34,17 @@ export default async function handler(req, res) {
     const body = await readBody(req);
     if (!Array.isArray(body.services)) return badRequest(res, 'services must be an array');
     if (body.services.length > 50) return badRequest(res, 'Too many services (max 50)');
+
+    // Reminder default: a service either follows the business default
+    // (Calendar > Reminders) or keeps its own schedule. Older app versions
+    // never send reminderUseDefault; they send back the reminderMinutes we
+    // served, so a service keeps following the default as long as what
+    // comes back is the default (or the old built-in schedule).
+    const settingsRow = await ensureCalendarSettings(workspaceId);
+    const bizMinutes = clientRemindersFrom(settingsRow?.client_reminders ?? null).minutes;
+    const prevRows = await sql`
+      SELECT id, reminder_minutes, reminders_use_default FROM services WHERE workspace_id = ${workspaceId}`;
+    const prevById = new Map(prevRows.rows.map((r) => [r.id, r]));
 
     const cleaned = [];
     for (const [idx, s] of body.services.entries()) {
@@ -60,6 +75,16 @@ export default async function handler(req, res) {
         reminderMinutes = [...new Set(cleanedReminders)].sort((a, b) => b - a);
       } else {
         reminderMinutes = DEFAULT_REMINDERS.slice();
+      }
+      let reminderUseDefault;
+      if (s && typeof s.reminderUseDefault === 'boolean') {
+        reminderUseDefault = s.reminderUseDefault;
+      } else {
+        const prev = s?.id ? prevById.get(s.id) : null;
+        const prevFollows = prev ? serviceFollowsDefault(prev) : true;
+        reminderUseDefault = !Array.isArray(s?.reminderMinutes)
+          || sameSet(reminderMinutes, LEGACY_SERVICE_DEFAULT)
+          || (prevFollows && sameSet(reminderMinutes, bizMinutes));
       }
 
       const capRaw = s?.capacity ?? 1;
@@ -239,6 +264,7 @@ export default async function handler(req, res) {
         photoUrl,
         prepInstructions,
         reminderMinutes,
+        reminderUseDefault,
         capacity,
         intakeFormTemplateIds,
         depositType,
@@ -306,6 +332,7 @@ export default async function handler(req, res) {
             photo_url = ${s.photoUrl},
             prep_instructions = ${s.prepInstructions},
             reminder_minutes = ${s.reminderMinutes},
+            reminders_use_default = ${s.reminderUseDefault},
             capacity = ${s.capacity},
             intake_form_template_ids = ${s.intakeFormTemplateIds},
             deposit_type = ${s.depositType},
@@ -324,13 +351,13 @@ export default async function handler(req, res) {
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
-        out.push(serializeService(u.rows[0]));
+        out.push(serializeService(u.rows[0], { reminderDefaultMinutes: bizMinutes }));
       } else {
         // eslint-disable-next-line no-await-in-loop
         const i = await sql`
           INSERT INTO services (
             workspace_id, name, duration_minutes, price, display_order,
-            description, photo_url, prep_instructions, reminder_minutes, capacity,
+            description, photo_url, prep_instructions, reminder_minutes, reminders_use_default, capacity,
             intake_form_template_ids, deposit_type, deposit_amount,
             location_type, location_label, visibility, travel_buffer_minutes,
             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount,
@@ -338,7 +365,7 @@ export default async function handler(req, res) {
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
-            ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity},
+            ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.reminderUseDefault}, ${s.capacity},
             ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount},
             ${s.locationType}, ${s.locationLabel}, ${s.visibility}, ${s.travelBufferMinutes},
             ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount},
@@ -347,7 +374,7 @@ export default async function handler(req, res) {
           )
           RETURNING *
         `;
-        out.push(serializeService(i.rows[0]));
+        out.push(serializeService(i.rows[0], { reminderDefaultMinutes: bizMinutes }));
       }
     }
 

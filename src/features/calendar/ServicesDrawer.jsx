@@ -6,8 +6,8 @@
 //   description (shown to clients on the booking page)
 //   prep_instructions (shown after booking - placeholder for the full
 //     "items needed" doc-flow once Documents ships)
-//   reminder_minutes (array of "minutes before appointment" - defaults to
-//     7d/2d/1d/2h, fully customizable)
+//   reminders: "Use my business default" (Calendar > Reminders) or its own
+//     reminder_minutes (minutes before the appointment)
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -18,6 +18,7 @@ import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 import { WEEKDAYS_SHORT, minToHM, hmToMin } from './utils.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
+import { useReminderSettings, describeSchedule } from '../../lib/reminders.js';
 
 const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 
@@ -67,6 +68,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
       durationMinutes: 60, price: 0,
       description: '', photoUrl: '', prepInstructions: '',
       reminderMinutes: [...DEFAULT_REMINDERS],
+      reminderUseDefault: true,
       capacity: 1,
       intakeFormTemplateIds: [],
       depositType: 'none',
@@ -114,6 +116,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
         photoUrl: (s.photoUrl || '').trim(),
         prepInstructions: (s.prepInstructions || '').trim(),
         reminderMinutes: (s.reminderMinutes || []).slice(),
+        reminderUseDefault: s.reminderUseDefault !== false,
         capacity: Number(s.capacity) || 1,
         intakeFormTemplateIds: (s.intakeFormTemplateIds || []).slice(),
         depositType: s.depositType || 'none',
@@ -270,7 +273,11 @@ function ServiceCard({ service, onEdit, onRemove }) {
               <Icons.FileIcon size={10}/> Prep info
             </span>
           )}
-          {(service.reminderMinutes || []).length > 0 && (
+          {service.reminderUseDefault !== false ? (
+            <span style={chipS}>
+              <Icons.Bell size={10}/> Default reminders
+            </span>
+          ) : (service.reminderMinutes || []).length > 0 && (
             <span style={chipS}>
               <Icons.Bell size={10}/> {service.reminderMinutes.length} reminder{service.reminderMinutes.length > 1 ? 's' : ''}
             </span>
@@ -402,11 +409,8 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
         </Field>
 
         <Field label="Reminders"
-          hint="When to remind both parties before the appointment. Picks here override the default schedule.">
-          <ReminderEditor
-            values={service.reminderMinutes || []}
-            onChange={(reminderMinutes) => onChange({ reminderMinutes })}
-          />
+          hint="When clients booked for this service get a reminder.">
+          <ServiceReminders service={service} onChange={onChange}/>
         </Field>
 
         <Field label="Intake forms"
@@ -561,6 +565,54 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// "Use my business default" (Calendar > Reminders) or this service's own
+// schedule. A service that follows the default changes with it.
+function ServiceReminders({ service, onChange }) {
+  const { data } = useReminderSettings();
+  const useDefault = service.reminderUseDefault !== false;
+  const bizMinutes = data?.clients?.minutes || null;
+  const bizOff = data?.clients?.enabled === false;
+  const opt = (on) => ({
+    display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 10,
+    border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border)'),
+    background: on ? 'var(--accent-soft)' : 'var(--surface)', cursor: 'pointer',
+  });
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <label style={opt(useDefault)}>
+        <input type="radio" name={`svc-rem-${service._key || service.id}`} checked={useDefault}
+          onChange={() => onChange({ reminderUseDefault: true, ...(bizMinutes ? { reminderMinutes: bizMinutes.slice() } : {}) })}
+          style={{ marginTop: 2 }}/>
+        <span style={{ fontSize: 13, lineHeight: 1.45 }}>
+          <span style={{ fontWeight: 600 }}>Use my business default</span>
+          <span style={{ display: 'block', color: 'var(--muted)', fontSize: 12 }}>
+            {bizOff ? 'Client reminders are off for your business right now.'
+              : bizMinutes ? describeSchedule(bizMinutes).replace(/^./, (c) => c.toUpperCase()) + '.'
+              : 'Set in Calendar > Reminders.'}
+          </span>
+        </span>
+      </label>
+      <label style={opt(!useDefault)}>
+        <input type="radio" name={`svc-rem-${service._key || service.id}`} checked={!useDefault}
+          onChange={() => onChange({ reminderUseDefault: false })}
+          style={{ marginTop: 2 }}/>
+        <span style={{ fontSize: 13, lineHeight: 1.45 }}>
+          <span style={{ fontWeight: 600 }}>Its own schedule</span>
+          <span style={{ display: 'block', color: 'var(--muted)', fontSize: 12 }}>
+            Only for this service.
+          </span>
+        </span>
+      </label>
+      {!useDefault && (
+        <ReminderEditor
+          values={service.reminderMinutes || []}
+          onChange={(reminderMinutes) => onChange({ reminderMinutes, reminderUseDefault: false })}
+        />
+      )}
     </div>
   );
 }

@@ -91,6 +91,22 @@ export default function ClientNotifications() {
     }
   };
 
+  const toggleReminders = async (clientId) => {
+    const current = memberships.find((m) => m.clientId === clientId);
+    const next = current?.reminders === false;
+    setMemberships((list) => list.map((m) => m.clientId === clientId ? { ...m, reminders: next } : m));
+    setBusy(`${clientId}:reminders`); setErr(null);
+    try {
+      const r = await api.patch('/me/notifications-clients', { clientId, reminders: next });
+      setMemberships((list) => list.map((m) => m.clientId === clientId ? { ...m, reminders: r.reminders } : m));
+    } catch (e) {
+      setMemberships((list) => list.map((m) => m.clientId === clientId ? { ...m, reminders: !next } : m));
+      setErr(e.message || 'Could not update');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <div className="page-pad"><div className="portal-page" style={{ gap: 0 }}>
       <p style={{ fontSize: 13.5, color: 'var(--muted)', margin: '0 0 16px', lineHeight: 1.55 }}>
@@ -165,6 +181,23 @@ export default function ClientNotifications() {
                 {m.businessName}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Appointment reminders: one switch for every channel
+                    (email, text, app). Off always wins over the business. */}
+                <label data-testid="portal-reminders" style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '10px 12px', borderRadius: 10,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  cursor: busy === `${m.clientId}:reminders` ? 'wait' : 'pointer',
+                }}>
+                  <Switch checked={m.reminders !== false} disabled={busy === `${m.clientId}:reminders`}
+                    onChange={() => toggleReminders(m.clientId)}/>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>Appointment reminders</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                      A heads up before each appointment, by email, text or app. Booking confirmations still arrive.
+                    </div>
+                  </div>
+                </label>
                 {emailTypes.map((t) => {
                   const meta = EMAIL_LABELS[t] || { label: t, hint: '' };
                   const on = m.prefs[t] !== false;

@@ -21,6 +21,28 @@ import {
 } from '../_lib/notificationPrefs.js';
 import { applyPortalEmailPrefs } from '../_lib/clientOptouts.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { sql } from '../_lib/db.js';
+
+// Appointment reminders switch: clients.notification_prefs.reminders.
+// false = no reminder emails, texts or pushes from that business, whatever
+// the business set (api/_lib/reminderSettings.js). Applied to every row
+// of that business for this person (same row, same login or same email).
+// PATCH { clientId, reminders: false } sets it; GET returns `reminders`
+// on each membership.
+async function remindersOn(clientId) {
+  const { rows } = await sql`SELECT notification_prefs FROM clients WHERE id = ${clientId}`;
+  return (rows[0]?.notification_prefs || {}).reminders !== false;
+}
+async function setReminders({ clientId, userId, on }) {
+  await sql`
+    UPDATE clients c
+       SET notification_prefs = COALESCE(c.notification_prefs, '{}'::jsonb) || jsonb_build_object('reminders', ${on}::boolean)
+      FROM clients me
+     WHERE me.id = ${clientId}
+       AND c.workspace_id = me.workspace_id
+       AND (c.id = me.id OR c.user_id = ${userId}
+            OR (COALESCE(me.email, '') <> '' AND LOWER(c.email) = LOWER(me.email)))`;
+}
 
 const LABELS = Object.fromEntries(CLIENT_EMAIL_TYPES.map((t) => [t, EMAIL_NOTIFY_LABELS[t]]));
 
@@ -50,6 +72,8 @@ export default async function handler(req, res) {
           workspaceId: m.workspaceId,
           businessName: m.businessName,
           prefs,
+          // eslint-disable-next-line no-await-in-loop
+          reminders: await remindersOn(m.clientId),
         });
       }
       return ok(res, {
@@ -63,16 +87,21 @@ export default async function handler(req, res) {
       const body = await readBody(req);
       const clientId = body.clientId ? String(body.clientId) : null;
       const prefs = body && typeof body.prefs === 'object' ? body.prefs : null;
+      const hasReminders = typeof body.reminders === 'boolean';
       if (!clientId) return badRequest(res, 'clientId is required');
-      if (!prefs) return badRequest(res, 'prefs is required');
+      if (!prefs && !hasReminders) return badRequest(res, 'prefs is required');
       if (!myIds.includes(clientId)) return badRequest(res, 'Not your client membership');
 
-      const wanted = {};
-      for (const t of CLIENT_EMAIL_TYPES) if (t in prefs) wanted[t] = !!prefs[t];
-      await applyPortalEmailPrefs({ clientId, prefs: wanted });
+      if (prefs) {
+        const wanted = {};
+        for (const t of CLIENT_EMAIL_TYPES) if (t in prefs) wanted[t] = !!prefs[t];
+        if (Object.keys(wanted).length) await applyPortalEmailPrefs({ clientId, prefs: wanted });
+      }
+      if (hasReminders) await setReminders({ clientId, userId: user.id, on: body.reminders });
       return ok(res, {
         clientId,
         prefs: await effectiveClientEmailPrefs(clientId),
+        reminders: await remindersOn(clientId),
         emailTypes: CLIENT_EMAIL_TYPES,
         emailLabels: LABELS,
       });

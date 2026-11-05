@@ -2,6 +2,7 @@
 // Used by both the owner-side API (validate booking before insert) and frontend.
 import { sql } from './db.js';
 import { getOrSet, invalidate as cacheInvalidate } from './hotCache.js';
+import { serviceFollowsDefault } from './reminderSettings.js';
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export const VALID_HANDLE = HANDLE_RE;
@@ -111,8 +112,14 @@ export const DISCOVER_CATEGORIES = [
 ];
 export const DISCOVER_CATEGORY_SET = new Set(DISCOVER_CATEGORIES);
 
-export function serializeService(row) {
+// opts.reminderDefaultMinutes: the business's default client reminder
+// schedule. A service that follows the default reports it as its
+// reminderMinutes, so older app versions (which only know reminderMinutes)
+// show and save back the schedule clients really get.
+export function serializeService(row, opts = {}) {
   if (!row) return null;
+  const followsDefault = serviceFollowsDefault(row);
+  const defaultMins = Array.isArray(opts.reminderDefaultMinutes) ? opts.reminderDefaultMinutes : null;
   return {
     id:                row.id,
     name:              row.name,
@@ -122,7 +129,12 @@ export function serializeService(row) {
     description:       row.description || '',
     photoUrl:          row.photo_url || '',
     prepInstructions:  row.prep_instructions || '',
-    reminderMinutes:   row.reminder_minutes || DEFAULT_REMINDERS.slice(),
+    reminderMinutes:   (followsDefault && defaultMins)
+      ? defaultMins.slice()
+      : (row.reminder_minutes || DEFAULT_REMINDERS.slice()),
+    // true = this service follows the business reminder default
+    // (Calendar > Reminders); false = its own reminderMinutes.
+    reminderUseDefault: followsDefault,
     capacity:          row.capacity || 1,
     intakeFormTemplateIds: row.intake_form_template_ids || [],
     depositType:       row.deposit_type || 'none',

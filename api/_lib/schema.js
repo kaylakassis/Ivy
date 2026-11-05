@@ -4243,4 +4243,26 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_step INTEGER NOT NULL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_last_sent_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_users_signup_reminder_due
   ON users(created_at) WHERE signup_reminder_step < 3 AND deleted_at IS NULL;
+
+-- Appointment reminders (api/_lib/reminderSettings.js).
+-- calendar_settings.client_reminders: the business-wide default for client
+--   reminders { enabled, minutes[], channels { email, sms, push } }.
+--   NULL = never customised = on, 1 day / 8 hours / 1 hour before.
+-- calendar_settings.owner_reminders: the owner's own reminders about their
+--   appointments { enabled, minutes[], channels { email, push } }.
+--   NULL = on, 1 day and 1 hour before. Never affects clients.
+-- services.reminders_use_default: TRUE = follow the business default,
+--   FALSE = use services.reminder_minutes. NULL (saved before this existed)
+--   = follow the default only while reminder_minutes is still the old
+--   built-in {10080,2880,1440,120}.
+-- clients.reminder_settings: per-client override, NULL = business default,
+--   { "mode": "off" } or { "mode": "custom", "minutes": [...] }.
+-- bookings.push_sent / owner_reminders_sent: per-beat claim maps, same
+--   shape as reminders_sent, for client push and the owner/helper beats.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS client_reminders JSONB;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS owner_reminders JSONB;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS reminders_use_default BOOLEAN;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS reminder_settings JSONB;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS push_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
 `;

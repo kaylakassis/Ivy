@@ -16,6 +16,7 @@ import { sessionsAsCalendarBlocks } from '../_lib/programEvents.js';
 import { validateAvailability, validateTimezone } from '../_lib/settingsValidation.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
+import { clientRemindersFrom } from '../_lib/reminderSettings.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -94,7 +95,9 @@ export default async function handler(req, res) {
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),
-          services: services.rows.map(serializeService),
+          services: services.rows.map((r) => serializeService(r, {
+            reminderDefaultMinutes: clientRemindersFrom(settings?.client_reminders ?? null).minutes,
+          })),
           blocks:   [...blocks.rows.map(serializeBlock), ...sessionBlocks],
           // Helper mode (schedule permission): the calendar without revenue.
           bookings: bookings.rows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
