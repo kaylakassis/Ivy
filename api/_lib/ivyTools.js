@@ -12,6 +12,7 @@
 // hard-to-reverse tools (SENSITIVE_TOOLS below) never run from a model
 // call: they are parked in ivy_pending_actions and only the owner's tap on
 // the approval card (POST /api/ivy/approve) executes them.
+import { normalizePhone } from './sms.js';
 import { sql } from './db.js';
 import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './calendar.js';
 import { invalidateOwnerWorkspace } from './clientPortal.js';
@@ -1956,10 +1957,27 @@ async function add_client({ workspaceId, args }) {
   if (!name) throw new Error('name is required');
   if (name.length > 200) throw new Error('name too long');
   const email = args.email ? String(args.email).trim().toLowerCase() : null;
-  const phone = args.phone ? String(args.phone).trim() : null;
+  const phoneRaw = args.phone ? String(args.phone).trim() : null;
+  const phone = phoneRaw ? (normalizePhone(phoneRaw) || phoneRaw) : null;
   const stage = args.stage === 'active' ? 'active' : 'lead';
   const details = clientDetailColumns(ivyDetailsToBody(args));
   if (details.errors.length) throw new Error(details.errors[0]);
+
+  // One person, one record (same rule as the Add client form): an existing
+  // client with this email, or this phone when no email is given, is not
+  // added again. Ivy is told who it is so she can open or update them.
+  const dupe = await sql`
+    SELECT id, name FROM clients
+     WHERE workspace_id = ${workspaceId}
+       AND (
+         (${email}::text IS NOT NULL AND lower(email) = ${email})
+         OR (${email}::text IS NULL AND ${phone}::text IS NOT NULL AND phone = ${phone})
+       )
+     LIMIT 1`;
+  if (dupe.rows.length) {
+    const d = dupe.rows[0];
+    throw new Error(`${d.name} is already a client with that ${email ? 'email' : 'phone number'} (client id ${d.id}). Nothing was added; update their record instead.`);
+  }
 
   const ins = await sql`
     INSERT INTO clients (workspace_id, name, email, phone, stage, source)
