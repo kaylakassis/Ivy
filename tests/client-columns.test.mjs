@@ -23,6 +23,8 @@ check('Square customer export', () => {
   assert.deepStrictEqual(fieldsOf(h), {
     firstName: 'First Name', lastName: 'Last Name', email: 'Email Address', phone: 'Phone Number',
     notes: 'Memo', tags: 'Groups',
+    // The richer client record (address, birthday, company) is kept too.
+    occupation: 'Company Name', street: 'Street Address 1', birthday: 'Birthday',
   });
 });
 

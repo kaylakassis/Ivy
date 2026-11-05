@@ -1,6 +1,7 @@
 // /me/profile - the client's own settings, grouped:
 //   Your details        photo (upload + crop to a circle), name, email
-//                       (read-only), phone, address
+//                       (read-only), phone, address, birthday, emergency
+//                       contact
 //   Sign-in and security password reset, 2-step verification
 //   Payment methods     cards saved with each business
 //   Notifications       link to /me/notifications
@@ -26,6 +27,20 @@ import { SectionTitle, Sheet, ErrorNote, actionBtn } from './portalUi.jsx';
 
 const SUPPORT_EMAIL = 'support@joinivy.ai';
 
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function bdayParts(v) {
+  const m = /^(?:(\d{4})|-)-(\d{2})-(\d{2})$/.exec(v || '');
+  return m ? { m: String(Number(m[2])), d: String(Number(m[3])), y: m[1] || '' } : { m: '', d: '', y: '' };
+}
+function bdayToApi(b) {
+  if (!b.m || !b.d) return null;
+  const md = `${String(b.m).padStart(2, '0')}-${String(b.d).padStart(2, '0')}`;
+  return /^\d{4}$/.test(b.y) ? `${b.y}-${md}` : `--${md}`;
+}
+function emParts(e) {
+  return { name: e?.name || '', phone: e?.phone || '', relationship: e?.relationship || '' };
+}
+
 export default function ClientProfile() {
   const { data: portal } = useClientPortal();
   const { refresh: refreshUser } = useAuth();
@@ -37,6 +52,8 @@ export default function ClientProfile() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [bday, setBday] = useState({ m: '', d: '', y: '' });
+  const [em, setEm] = useState({ name: '', phone: '', relationship: '' });
 
   const load = useCallback(() => api.get('/me/profile')
     .then((r) => {
@@ -44,18 +61,30 @@ export default function ClientProfile() {
       setName(r.profile.name || '');
       setPhone(r.profile.phone || '');
       setAddress(r.profile.address || '');
+      setBday(bdayParts(r.profile.birthday));
+      setEm(emParts(r.profile.emergencyContact));
     })
     .catch((e) => setLoadErr(e.message || 'Could not load your profile')), []);
   useEffect(() => { load(); }, [load]);
 
+  const bdayValue = bdayToApi(bday);
+  const bdayChanged = bdayValue !== (profile?.birthday || null);
+  const emChanged = !!profile && JSON.stringify(em) !== JSON.stringify(emParts(profile.emergencyContact));
   const dirty = !!profile && (
-    name !== (profile.name || '') || phone !== (profile.phone || '') || address !== (profile.address || ''));
+    name !== (profile.name || '') || phone !== (profile.phone || '') || address !== (profile.address || '')
+    || bdayChanged || emChanged);
 
   const save = async (e) => {
     e?.preventDefault();
+    if ((bday.m && !bday.d) || (!bday.m && bday.d)) { setErr('Pick both the month and the day of your birthday.'); return; }
+    if (bday.y && !/^\d{4}$/.test(bday.y)) { setErr('Write your birth year with 4 digits, or leave it empty.'); return; }
     setBusy(true); setErr(null); setSaved(false);
     try {
-      const r = await api.patch('/me/profile', { name, phone, address });
+      const r = await api.patch('/me/profile', {
+        name, phone, address,
+        ...(bdayChanged ? { birthday: bdayValue } : {}),
+        ...(emChanged ? { emergencyContact: em } : {}),
+      });
       setProfile(r.profile);
       setSaved(true);
       Promise.resolve(refreshUser?.()).catch(() => {});
@@ -111,6 +140,30 @@ export default function ClientProfile() {
               placeholder="Street, city, postal code" rows={2} maxLength={500} autoComplete="street-address"
               style={{ ...inputStyle, resize: 'vertical', minHeight: 60 }}/>
           </Field>
+          <Field label="Birthday" hint="Optional. The year is up to you.">
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1fr)', gap: 8 }}>
+              <select className="input" value={bday.m} onChange={(e) => setBday({ ...bday, m: e.target.value })} aria-label="Birthday month" style={inputStyle}>
+                <option value="">Month</option>
+                {MONTHS.map((mo, i) => <option key={mo} value={String(i + 1)}>{mo}</option>)}
+              </select>
+              <select className="input" value={bday.d} onChange={(e) => setBday({ ...bday, d: e.target.value })} aria-label="Birthday day" style={inputStyle}>
+                <option value="">Day</option>
+                {Array.from({ length: 31 }, (_, i) => <option key={i} value={String(i + 1)}>{i + 1}</option>)}
+              </select>
+              <input className="input" value={bday.y} onChange={(e) => setBday({ ...bday, y: e.target.value })} inputMode="numeric"
+                maxLength={4} placeholder="Year" aria-label="Birth year" style={inputStyle}/>
+            </div>
+          </Field>
+          <Field label="Emergency contact" hint="Who a business should call if something happens during a session.">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input className="input" value={em.name} onChange={(e) => setEm({ ...em, name: e.target.value })} maxLength={120}
+                placeholder="Their name" aria-label="Emergency contact name" style={inputStyle}/>
+              <input className="input" type="tel" inputMode="tel" value={em.phone} onChange={(e) => setEm({ ...em, phone: e.target.value })} maxLength={40}
+                placeholder="Their phone" aria-label="Emergency contact phone" style={inputStyle}/>
+              <input className="input" value={em.relationship} onChange={(e) => setEm({ ...em, relationship: e.target.value })} maxLength={60}
+                placeholder="Partner, parent, friend…" aria-label="Relationship" style={inputStyle}/>
+            </div>
+          </Field>
           <ErrorNote>{err}</ErrorNote>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <button type="submit" className="btn btn-primary" disabled={!dirty || busy} style={actionBtn}>
@@ -123,7 +176,7 @@ export default function ClientProfile() {
             )}
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-            Your phone, address and photo are shared with every business you are a client of.
+            Your phone, address, birthday, emergency contact and photo are shared with every business you are a client of.
           </div>
         </form>
       </section>

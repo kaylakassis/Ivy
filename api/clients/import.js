@@ -1,7 +1,12 @@
 // POST /api/clients/import - bulk-create clients from a parsed CSV, a
 // contacts file (.vcf) or the phone's contact picker.
 // Body: {
-//   rows: [{ name, email?, phone?, stage?, notes?, source?, tags? }, ...],
+//   rows: [{ name, email?, phone?, stage?, notes?, source?, tags?,
+//            addressParts?, birthday?, pronouns?, emergencyContact?,
+//            preferredContact?, occupation?, customFields? }, ...],
+//   newFields?: [{ ref, label, type?, options? }]  (custom fields to create
+//            from unmapped columns, max 25; a field with the same name is
+//            reused. Rows refer to them by `ref` in customFields.)
 //   sendInvites?: boolean   (default false: portal invites are opt-in)
 //   quiet?: boolean         (default false; true = nothing is sent and no
 //                            client_created / lead_created automation fires,
@@ -26,6 +31,7 @@ import { enforce } from '../_lib/rate-limit.js';
 import {
   prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS, CLIENT_IMPORT_WORKFLOW_SKIP_REASON,
 } from '../_lib/clientImport.js';
+import { ensureFieldDefs, loadFieldDefs, ClientDetailError, CUSTOM_FIELD_MAX } from '../_lib/clientDetails.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -44,7 +50,28 @@ export default async function handler(req, res) {
       return badRequest(res, `Too many rows - split into batches of ${CLIENT_IMPORT_MAX_ROWS}`);
     }
 
-    const plan = await prepareClientImport(workspaceId, body.rows, { onBadPhone: 'reject', defaultSource: 'CSV import' });
+    // Custom fields: create the ones this file needs (all or nothing, under
+    // the per-business cap) before any client is written.
+    let fieldDefs = [];
+    let fieldRefs = new Map();
+    const wantsCustom = body.rows.some((r) => r && typeof r.customFields === 'object' && r.customFields);
+    if (Array.isArray(body.newFields) && body.newFields.length) {
+      if (body.newFields.length > CUSTOM_FIELD_MAX) return badRequest(res, `You can have up to ${CUSTOM_FIELD_MAX} custom fields`);
+      try {
+        const made = await ensureFieldDefs(workspaceId, body.newFields);
+        fieldDefs = made.defs;
+        fieldRefs = made.byRef;
+      } catch (e) {
+        if (e instanceof ClientDetailError) return badRequest(res, e.message);
+        throw e;
+      }
+    } else if (wantsCustom) {
+      fieldDefs = await loadFieldDefs(workspaceId);
+    }
+
+    const plan = await prepareClientImport(workspaceId, body.rows, {
+      onBadPhone: 'reject', defaultSource: 'CSV import', fieldDefs, fieldRefs,
+    });
     const out = await insertPreparedClients(workspaceId, plan, {
       quiet: body.quiet === true,
       sendInvites: body.sendInvites === true,

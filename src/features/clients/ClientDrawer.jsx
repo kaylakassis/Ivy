@@ -11,6 +11,7 @@ import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
 import ClientReminders from './ClientReminders.jsx';
+import ClientDetails from './ClientDetails.jsx';
 
 export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
   // Slide out (140ms) before the parent unmounts us; every close path in
@@ -174,6 +175,12 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
             </div>
           </div>
 
+          {/* Notes near the top (owners read them before every session),
+              then the richer record: address, birthday, emergency contact,
+              custom fields (ClientDetails.jsx). */}
+          <Notes client={client} onSave={safeUpdate}/>
+          <ClientDetails client={client} onSave={onUpdate}/>
+
           {/* Portal claim status + resend-invite affordance. Only shows
               when the client has an email AND hasn't claimed yet. */}
           {client.email && !client.hasClaimedPortal && (
@@ -242,8 +249,6 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
               forms, and similar live here too. */}
           <ClientAttachments client={client} onSave={safeUpdate}/>
 
-          {/* Notes */}
-          <Notes client={client} onSave={safeUpdate}/>
         </div>
 
         <div style={{

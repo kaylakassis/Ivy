@@ -3,7 +3,11 @@
 //           users, plus phone / address / photoUrl which live on the
 //           per-workspace clients row).
 //   PATCH → updates name (on users) + phone/address/photoUrl (on every
-//           clients row connected to this user). Email is read-only -
+//           clients row connected to this user).
+//           Also birthday ('YYYY-MM-DD' or '--MM-DD') and emergencyContact
+//           ({ name, phone, relationship }): the client keeps these up to
+//           date for the businesses they see. The business's private notes
+//           and custom fields are never shown here. Email is read-only -
 //           changing it is auth-critical and goes through a separate
 //           flow (not built yet; documented).
 //
@@ -20,6 +24,7 @@ import { requireUser } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { normalizePhone } from '../_lib/sms.js';
+import { clientDetailColumns, formatBirthday } from '../_lib/clientDetails.js';
 import { blobPathnameForUser, isBlobHost } from '../_lib/blobScope.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -44,6 +49,16 @@ export async function checkPhotoUrl(url, userId) {
   return null;
 }
 
+// What the client sees of the richer record: only what they can edit.
+function portalDetails(row) {
+  if (!row) return { birthday: null, emergencyContact: null };
+  const em = { name: row.emergency_name || null, phone: row.emergency_phone || null, relationship: row.emergency_relationship || null };
+  return {
+    birthday: formatBirthday(row),
+    emergencyContact: em.name || em.phone || em.relationship ? em : null,
+  };
+}
+
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
@@ -61,9 +76,11 @@ export default async function handler(req, res) {
       let phone = null;
       let address = null;
       let photoUrl = null;
+      let more = { birthday: null, emergencyContact: null };
       try {
         const c = await sql`
-          SELECT phone, address, photo_url
+          SELECT phone, address, photo_url, birth_month, birth_day, birth_year,
+                 emergency_name, emergency_phone, emergency_relationship
           FROM clients
           WHERE user_id = ${user.id}
           ORDER BY updated_at DESC NULLS LAST
@@ -73,6 +90,7 @@ export default async function handler(req, res) {
           phone    = c.rows[0].phone || null;
           address  = c.rows[0].address || null;
           photoUrl = c.rows[0].photo_url || null;
+          more = portalDetails(c.rows[0]);
         }
       } catch (e) {
         console.error('[me/profile GET] client read failed:', e.message);
@@ -82,6 +100,7 @@ export default async function handler(req, res) {
           name:     ux.name || '',
           email:    ux.email || '',
           phone, address, photoUrl,
+          ...more,
         },
       });
     }
@@ -135,6 +154,13 @@ export default async function handler(req, res) {
         }
       }
 
+      // Birthday + emergency contact (validated like the owner side).
+      const more = {};
+      if ('birthday' in body) more.birthday = body.birthday;
+      if ('emergencyContact' in body) more.emergencyContact = body.emergencyContact;
+      const det = clientDetailColumns(more);
+      errors.push(...det.errors);
+
       if (errors.length) return badRequest(res, errors.join(' · '));
 
       if (patch.name !== undefined) {
@@ -151,6 +177,12 @@ export default async function handler(req, res) {
       if (phoneToSet     !== undefined) push('phone',     phoneToSet);
       if (addressToSet   !== undefined) push('address',   addressToSet);
       if (photoUrlToSet  !== undefined) push('photo_url', photoUrlToSet);
+      // A new one-line address from the client replaces the business's
+      // address parts (they would otherwise disagree).
+      if (addressToSet !== undefined) {
+        for (const col of ['address_street', 'address_city', 'address_region', 'address_postal_code', 'address_country']) push(col, null);
+      }
+      for (const [col, val] of Object.entries(det.cols)) push(col, val);
       if (sets.length > 0) {
         sets.push('updated_at = NOW()');
         try {
@@ -169,7 +201,8 @@ export default async function handler(req, res) {
       // state without a second round-trip.
       const u = await sql`SELECT name, email FROM users WHERE id = ${user.id}`;
       const c = await sql`
-        SELECT phone, address, photo_url
+        SELECT phone, address, photo_url, birth_month, birth_day, birth_year,
+               emergency_name, emergency_phone, emergency_relationship
         FROM clients
         WHERE user_id = ${user.id}
         ORDER BY updated_at DESC NULLS LAST
@@ -182,6 +215,7 @@ export default async function handler(req, res) {
           phone:    c.rows[0]?.phone || null,
           address:  c.rows[0]?.address || null,
           photoUrl: c.rows[0]?.photo_url || null,
+          ...portalDetails(c.rows[0]),
         },
       });
     }

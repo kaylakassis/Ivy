@@ -12,6 +12,7 @@
 // client_portal section of the owner account export.
 import { sql } from './db.js';
 import { myClientIds } from './clientPortal.js';
+import { serializeClientDetails, formatBirthday } from './clientDetails.js';
 
 const iso = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : d);
 
@@ -57,7 +58,10 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
 
   const [profile, bookings, invoices, documents, messages, packages, memberships2, reviews] = await Promise.all([
     safe(sql.query(
-      `SELECT name, email, phone, address, photo_url FROM clients
+      `SELECT name, email, phone, address, photo_url, birth_month, birth_day, birth_year, pronouns,
+              address_street, address_city, address_region, address_postal_code, address_country,
+              emergency_name, emergency_phone, emergency_relationship, preferred_contact, occupation
+         FROM clients
         WHERE id = ANY($1) ORDER BY updated_at DESC NULLS LAST LIMIT 1`, [myIds])),
     safe(sql.query(
       `SELECT b.id, b.client_id, b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
@@ -109,7 +113,17 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
   const p = profile.rows[0] || null;
   return {
     businesses,
-    profile: p ? { name: p.name, email: p.email, phone: p.phone, address: p.address, photoUrl: p.photo_url } : null,
+    // Their own record only (myIds), the client-facing details; never the
+    // business's private notes or custom fields.
+    profile: p ? {
+      name: p.name, email: p.email, phone: p.phone, address: p.address, photoUrl: p.photo_url,
+      addressParts: serializeClientDetails(p).addressParts,
+      birthday: formatBirthday(p),
+      pronouns: p.pronouns || null,
+      emergencyContact: serializeClientDetails(p).emergencyContact,
+      preferredContact: p.preferred_contact || null,
+      occupation: p.occupation || null,
+    } : null,
     bookings: bookings.rows.map((r) => ({
       business: biz(r.client_id),
       service: r.service_name || null,

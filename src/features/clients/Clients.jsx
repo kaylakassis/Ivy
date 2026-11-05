@@ -8,6 +8,7 @@ import { SkelRowList } from '../../components/Skeleton.jsx';
 import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
+import CustomFieldsSettings from './CustomFieldsSettings.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
 import AnnounceMoveSheet from './AnnounceMoveSheet.jsx';
 import FolderDrawer from './FolderDrawer.jsx';
@@ -44,6 +45,8 @@ export default function Clients() {
   // "Let your clients know" (the "I've moved to Ivy" email), opened by
   // /clients?announce=1 - Ivy's import "Done" message links there.
   const [announceOpen, setAnnounceOpen] = useState(false);
+  // Custom client fields (CustomFieldsSettings), also /clients?fields=1.
+  const [fieldsOpen, setFieldsOpen] = useState(false);
   const { isMobile } = useViewport();
 
   // Folders (stored as projects). Any client can become a folder: their
@@ -121,6 +124,11 @@ export default function Clients() {
     if (params.get('import') === '1') {
       setImportOpen(true);
       params.delete('import');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+    if (params.get('fields') === '1') {
+      setFieldsOpen(true);
+      params.delete('fields');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
     if (params.get('announce') === '1') {
@@ -220,6 +228,9 @@ export default function Clients() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setFieldsOpen(true)} aria-label="Custom fields" title="Custom fields">
+            <Icons.Settings size={13}/> Fields
+          </button>
           <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
             <Icons.Doc size={13}/> Import
           </button>
@@ -409,6 +420,7 @@ export default function Clients() {
         />
       )}
       {announceOpen && <AnnounceMoveSheet onClose={() => setAnnounceOpen(false)}/>}
+      {fieldsOpen && <CustomFieldsSettings onClose={() => setFieldsOpen(false)}/>}
     </div>
   );
 }

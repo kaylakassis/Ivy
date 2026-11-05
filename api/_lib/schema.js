@@ -4276,4 +4276,42 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS recurring_invoice_id UUID REFERENC
 CREATE INDEX IF NOT EXISTS idx_invoices_ws_archived
   ON invoices(workspace_id, archived_at) WHERE archived_at IS NOT NULL;
 
+-- Richer client record (api/_lib/clientDetails.js). Address in parts (the
+-- one-line clients.address stays, rewritten from the parts, for older app
+-- builds and the client portal), birthday as month + day with an optional
+-- year, gender or pronouns, emergency contact, preferred contact method,
+-- company or occupation, and the business's own custom fields
+-- (custom_fields JSONB keyed by client_field_definitions.id). Owner data:
+-- helpers without the clients permission and public pages never get it.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_street TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_city TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_region TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_postal_code TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_country TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_month SMALLINT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_day SMALLINT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_year SMALLINT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS pronouns TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS occupation TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS preferred_contact TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS emergency_name TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS emergency_phone TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS emergency_relationship TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Fields an owner defines once for their business (Clients > Custom
+-- fields). type: text | number | date | boolean (yes/no) | select
+-- (dropdown, options = ["..."]). At most 25 per business (enforced in
+-- api/clients/fields.js). Deleting one removes its values from every client.
+CREATE TABLE IF NOT EXISTS client_field_definitions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  label        TEXT NOT NULL,
+  type         TEXT NOT NULL CHECK (type IN ('text','number','date','boolean','select')),
+  options      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  position     INTEGER NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_client_field_defs_ws ON client_field_definitions(workspace_id, position);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_client_field_defs_label ON client_field_definitions(workspace_id, LOWER(label));
 `;

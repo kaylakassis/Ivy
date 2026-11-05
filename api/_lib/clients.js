@@ -1,6 +1,7 @@
 // Shared serializer + helpers for the clients table.
 import { sql } from './db.js';
 import { clientOverrideFrom } from './reminderSettings.js';
+import { serializeClientDetails } from './clientDetails.js';
 
 export function serializeClient(row) {
   if (!row) return null;
@@ -40,12 +41,18 @@ export function serializeClient(row) {
     // turned reminders off in their own portal, which always wins.
     reminderSettings: clientOverrideFrom(row.reminder_settings),
     remindersOptedOut: (row.notification_prefs || {}).reminders === false,
+    // The richer record (api/_lib/clientDetails.js): addressParts,
+    // birthday, pronouns, emergencyContact, preferredContact, occupation,
+    // customFields. Added fields only; nothing above changes shape.
+    ...serializeClientDetails(row),
   };
 }
 
 // What a helper WITHOUT the clients permission gets: enough to pick a
 // client for a booking and greet them, nothing else (no notes, no
-// lifetime value, no address, no files, no consent/referral state).
+// lifetime value, no address, no files, no consent/referral state, and
+// none of the richer record: birthday, emergency contact, pronouns,
+// custom fields).
 export function serializeClientMinimal(row) {
   if (!row) return null;
   return {
