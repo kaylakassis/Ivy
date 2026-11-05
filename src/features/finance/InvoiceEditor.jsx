@@ -10,6 +10,7 @@ import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { fireConfetti } from '../../lib/celebrate.js';
 import InvoicePreviewModal from './InvoicePreviewModal.jsx';
 import { invoiceMoney, invoiceActions, invoiceStatusLine } from '../../lib/invoiceRules.js';
+import { invoiceAutopayLine } from '../../lib/autopayRules.js';
 
 // Labels for paid_method / payment_claimed_method values. Mirrors
 // PAID_METHOD_LABELS in api/_lib/finance.js.
@@ -48,6 +49,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
   const refundBasis = invoice.paidAmount != null ? Number(invoice.paidAmount) : Number(invoice.total || 0);
   const remaining = Math.max(0, refundBasis - refundedAmount);
   const giftCredit = Number(invoice.giftCardCreditCents || 0) / 100;
+  const autopayTrouble = invoice.autopayStatus === 'failed' || invoice.autopayStatus === 'retry_scheduled';
   const giftRestored = Number(invoice.giftCardCreditRestoredCents || 0) / 100;
   // Which actions the server will accept right now (src/lib/invoiceRules.js).
   // The server sends `allowed`; older payloads fall back to the same rules.
@@ -257,6 +259,17 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                   Manage the series
                 </button>
               )}
+            </div>
+          )}
+
+          {invoiceAutopayLine(invoice) && (
+            <div data-testid="autopay-note" style={{
+              padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)',
+              border: `1px solid ${autopayTrouble ? 'color-mix(in srgb, var(--danger) 40%, var(--border))' : 'var(--border)'}`,
+              fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 8, lineHeight: 1.5,
+            }}>
+              <Icons.Repeat size={13} stroke={invoice.autopayStatus === 'succeeded' ? 'var(--ok)' : autopayTrouble ? 'var(--danger)' : 'currentColor'}/>
+              <span style={{ flex: 1 }}>{invoiceAutopayLine(invoice)}</span>
             </div>
           )}
 

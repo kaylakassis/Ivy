@@ -9,6 +9,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useRecurring } from './recurringState.js';
+import { seriesAutopayLabel, fmtAmount, fmtDay, cardShort } from '../../lib/autopayRules.js';
 
 const CADENCE_LABEL = {
   weekly:    'Weekly',
@@ -24,7 +25,7 @@ const STATUS_META = {
 };
 
 export default function Recurring() {
-  const { schedules, loading, error, create, update, remove, runNow } = useRecurring();
+  const { schedules, loading, error, create, update, remove, runNow, setAutopay } = useRecurring();
   const [creatingOpen, setCreatingOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -95,10 +96,19 @@ export default function Recurring() {
 
       {creatingOpen && (
         <ScheduleEditor onClose={() => setCreatingOpen(false)}
-          onSave={async (input) => { await create(input); setCreatingOpen(false); }}/>
+          onSave={async (input, { autopay } = {}) => {
+            const made = await create(input);
+            // Turning autopay on for a new series sends the client the
+            // approval request right after it exists.
+            if (autopay && made?.id) {
+              try { await setAutopay(made.id, 'request'); } catch { /* shown on the series */ }
+            }
+            setCreatingOpen(false);
+          }}/>
       )}
       {editing && (
         <ScheduleEditor schedule={editing}
+          onAutopay={(action) => setAutopay(editing.id, action)}
           onClose={() => setEditingId(null)}
           onSave={async (patch) => { await update(editing.id, patch); setEditingId(null); }}
           onDelete={async () => { await remove(editing.id); setEditingId(null); }}/>
@@ -129,6 +139,7 @@ function ScheduleRow({ schedule, first, onOpen, onRunNow, busy }) {
           {schedule.autoSend ? ' · auto-sends' : ' · creates as draft'}
           {' · '}{schedule.occurrencesRun} cycle{schedule.occurrencesRun === 1 ? '' : 's'} run
         </div>
+        <AutopayChip autopay={schedule.autopay}/>
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
         {CADENCE_LABEL[schedule.cadence] || schedule.cadence}
@@ -158,7 +169,141 @@ function ScheduleRow({ schedule, first, onOpen, onRunNow, busy }) {
   );
 }
 
-function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
+function AutopayChip({ autopay }) {
+  const state = autopay?.state || 'off';
+  const color = state === 'on' ? 'var(--ok)' : state === 'waiting' ? 'var(--warn)' : 'var(--muted)';
+  return (
+    <div data-testid="autopay-chip" style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 5,
+      fontSize: 11, fontWeight: 600, color,
+    }}>
+      <Icons.Repeat size={11} stroke={color}/>
+      {seriesAutopayLabel(autopay)}
+    </div>
+  );
+}
+
+function Switch({ checked, disabled, onChange, label }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked} aria-label={label}
+      onClick={onChange} disabled={disabled}
+      style={{
+        flexShrink: 0, width: 36, height: 22, borderRadius: 999,
+        background: checked ? 'var(--accent)' : 'var(--border-strong)',
+        border: 0, padding: 2, cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+      }}>
+      <span className="switch-thumb" style={{
+        display: 'block', width: 18, height: 18, borderRadius: 999, background: '#fff',
+        transform: checked ? 'translateX(14px)' : 'translateX(0)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+      }}/>
+    </button>
+  );
+}
+
+const ENDED_BY = {
+  client: 'Your client turned autopay off',
+  owner: 'You turned autopay off',
+  system: 'Autopay stopped',
+};
+
+// Owner control for one series. The owner can only ASK: charging starts
+// once the client approves in their portal (amount, how often, start date,
+// how to cancel), and stops the moment either side turns it off.
+function AutopayField({ schedule, isNew, wantNew, setWantNew, onAutopay }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [note, setNote] = useState(null);
+  const ap = schedule?.autopay || { state: 'off' };
+  // A brand-new series hasn't asked the server yet; assume available and
+  // let the request explain if it isn't.
+  const available = isNew ? true : schedule?.autopayAvailable !== false;
+  const reason = schedule?.autopayUnavailableReason;
+  const on = isNew ? wantNew : ap.state !== 'off';
+
+  const act = async (action) => {
+    setBusy(true); setErr(null); setNote(null);
+    try {
+      const r = await onAutopay(action);
+      if (action === 'request') setNote(r?.emailed ? 'Request sent. We emailed your client.' : null);
+    } catch (e) { setErr(e.message || 'Something went wrong'); }
+    finally { setBusy(false); }
+  };
+  const toggle = () => {
+    if (isNew) { setWantNew(!wantNew); return; }
+    if (on) {
+      if (ap.state === 'on' && !window.confirm('Turn off autopay? Your client will be told, and the next invoices will be emailed for them to pay.')) return;
+      act('off');
+    } else {
+      act('request');
+    }
+  };
+
+  return (
+    <div data-testid="autopay-field" style={{
+      padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--fg)' }}>Charge automatically to the client's saved card</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>
+            {available
+              ? "Your client gets an email to approve it first. Until they do, invoices are emailed with a pay link as usual."
+              : reason}
+          </div>
+        </div>
+        <Switch checked={!!on && available} disabled={!available || busy} onChange={toggle} label="Charge automatically"/>
+      </div>
+
+      {!isNew && available && ap.state === 'waiting' && (
+        <StatusLine tone="warn" text="Waiting for client to authorize"
+          sub={ap.requestEmailedAt ? `Request emailed ${fmtDay(ap.requestEmailedAt, { year: false })}.` : null}
+          action={<button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act('request')} style={smallBtn}>Send again</button>}/>
+      )}
+      {!isNew && ap.state === 'on' && (
+        <StatusLine tone="ok" text={seriesAutopayLabel(ap)}
+          sub={`Approved ${fmtDay(ap.authorizedAt, { year: false })} for up to ${fmtAmount(ap.maxAmountCents, ap.currency || 'USD')} per invoice. Each new invoice is charged the day it is created.`}/>
+      )}
+      {!isNew && ap.state === 'on' && (ap.overApproved || ap.cardChanged) && !ap.reapprovalRequested && (
+        <StatusLine tone="warn"
+          text={ap.overApproved ? 'The total is now higher than your client approved.' : 'Your client saved a different card.'}
+          sub="Until they approve again, invoices are emailed with a pay link."
+          action={<button type="button" className="btn btn-outline" disabled={busy} onClick={() => act('request')} style={smallBtn}>Ask to approve again</button>}/>
+      )}
+      {!isNew && ap.state === 'on' && ap.reapprovalRequested && (
+        <StatusLine tone="warn" text="Asked your client to approve the new details" sub={ap.card ? `Meanwhile the ${cardShort(ap.card.brand, ap.card.last4)} approval stays as it was.` : null}/>
+      )}
+      {!isNew && ap.state === 'off' && ap.lastEnded && (
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+          {ENDED_BY[ap.lastEnded.by] || 'Autopay stopped'} on {fmtDay(ap.lastEnded.at, { year: false })}.
+        </div>
+      )}
+      {note && <div role="status" style={{ fontSize: 12, color: 'var(--ok)' }}>{note}</div>}
+      {err && <div role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>}
+    </div>
+  );
+}
+
+const smallBtn = { fontSize: 12, padding: '5px 10px', flexShrink: 0 };
+
+function StatusLine({ tone, text, sub, action }) {
+  const color = tone === 'ok' ? 'var(--ok)' : 'var(--warn)';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color }}>
+          <span style={{ width: 6, height: 6, borderRadius: 99, background: color, flexShrink: 0 }}/>{text}
+        </div>
+        {sub && <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 2, lineHeight: 1.5 }}>{sub}</div>}
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
   const isNew = !schedule;
   const [name, setName]       = useState(schedule?.name || '');
   const [clientId, setClientId] = useState(schedule?.clientId || '');
@@ -178,6 +323,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [wantAutopay, setWantAutopay] = useState(false);
 
   const [clients, setClients] = useState([]);
   useEffect(() => {
@@ -214,7 +360,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
         endDate: endDate || null,
         autoSend,
         ...(isNew ? {} : { status }),
-      });
+      }, { autopay: isNew && wantAutopay });
     } catch (e) { setErr(e.message || 'Save failed'); }
     finally { setBusy(false); }
   };
@@ -283,6 +429,11 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
               </label>
             </Field>
           </div>
+
+          <Field label="Automatic payment">
+            <AutopayField schedule={schedule} isNew={isNew}
+              wantNew={wantAutopay} setWantNew={setWantAutopay} onAutopay={onAutopay}/>
+          </Field>
 
           {!isNew && (
             <Field label="Status">

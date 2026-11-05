@@ -13,6 +13,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeRecurring, cleanRecurringInput } from '../_lib/recurring.js';
+import { withAutopay } from '../_lib/autopay.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -29,7 +30,7 @@ export default async function handler(req, res) {
            WHERE workspace_id = ${workspaceId}
            ORDER BY status ASC, next_run_at ASC, created_at DESC
         `;
-        return ok(res, { schedules: r.rows.map(serializeRecurring) });
+        return ok(res, { schedules: await withAutopay(workspaceId, r.rows, serializeRecurring) });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[recurring-invoices GET] failed (returning empty):', e.message);
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
         )
         RETURNING *
       `;
-      return created(res, { schedule: serializeRecurring(insert.rows[0]) });
+      return created(res, { schedule: (await withAutopay(workspaceId, insert.rows, serializeRecurring))[0] });
     }
 
     return methodNotAllowed(res, ['GET', 'POST']);

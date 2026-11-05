@@ -16,6 +16,7 @@ import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
 import { materializeOne } from '../_lib/recurring.js';
+import { chargeInvoiceAutopay, runAutopaySweep } from '../_lib/autopay.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
@@ -46,7 +47,8 @@ async function handler(req, res) {
     const { shard, shards } = shardFromReq(req);
     const shardFilter = shardClause({ shard, shards }, 'ri.workspace_id');
 
-    let considered = 0, materialized = 0, sent = 0, errors = 0, batches = 0;
+    let considered = 0, materialized = 0, sent = 0, errors = 0, batches = 0, charged = 0, chargeFailed = 0;
+    let autopaySweep = null;
     let emptied = false;
     const getBranding = makeBrandingCache();
 
@@ -77,6 +79,29 @@ async function handler(req, res) {
             materialized++;
 
             const { schedule, invoice } = result;
+
+            // Autopay: with an active client approval for this series the
+            // new invoice is charged to the approved card right away (one
+            // claim + one PaymentIntent per attempt, see api/_lib/autopay.js).
+            // Paid -> receipt instead of an invoice email. Declined -> the
+            // invoice goes out with a pay link and a friendly note. No
+            // approval (or one that can't be used) -> the normal path below.
+            let ap = { outcome: 'no_consent' };
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              ap = await chargeInvoiceAutopay({ workspaceId: invoice.workspace_id, invoiceId: invoice.id });
+            } catch (apErr) {
+              // eslint-disable-next-line no-console
+              console.error('[cron/recurring] autopay failed:', apErr.message);
+              try { reportError(apErr); } catch { /* ignore */ }
+              ap = { outcome: 'error' };
+            }
+            if (['succeeded', 'processing', 'failed', 'unknown', 'claimed_elsewhere'].includes(ap.outcome)) {
+              if (ap.outcome === 'succeeded' || ap.outcome === 'processing') charged++;
+              if (ap.outcome === 'failed') { chargeFailed++; if (ap.emailed) sent++; }
+              continue;
+            }
+
             // Owner-side push: a new invoice just dropped into Finance -
             // worth a heads-up even when auto_send delivered it to the
             // client. Type 'payments' so it inherits the same per-user
@@ -138,8 +163,21 @@ async function handler(req, res) {
       }
     });
 
+    // Scheduled autopay retries + charges whose answer never came back.
+    // Shard 0 only, so parallel shards never sweep the same rows (the
+    // per-invoice claim would make that safe anyway).
+    if (!shard) {
+      try {
+        autopaySweep = await runAutopaySweep({ deadline: Date.now() + 60_000 });
+      } catch (sweepErr) {
+        // eslint-disable-next-line no-console
+        console.error('[cron/recurring] autopay sweep failed:', sweepErr.message);
+        try { reportError(sweepErr); } catch { /* ignore */ }
+      }
+    }
+
     const terminatedBy = terminationReason({ emptied, hitCap: false });
-    return ok(res, { shard, shards, batches, considered, materialized, sent, errors, terminatedBy });
+    return ok(res, { shard, shards, batches, considered, materialized, sent, errors, charged, chargeFailed, autopaySweep, terminatedBy });
   } catch (err) {
     return serverError(res, err);
   }

@@ -82,11 +82,14 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   `;
   if (upd.rows.length === 0) return 'already-paid'; // lost a race with the webhook / another confirm
 
+  // Autopay charges say so (and with which card), so the owner can tell
+  // a hands-off payment from one the client made.
+  const autopaid = ['charging', 'succeeded', 'processing'].includes(inv.autopay_status) && inv.autopay_card_last4;
   notifyOwnerSafe({
     workspaceId, type: 'payments',
     payload: {
-      title: 'Invoice paid 💸',
-      body: `${inv.client_name || 'A client'} · ${inv.number} · ${fmtMoney(paidAmount)}`,
+      title: autopaid ? 'Autopay collected' : 'Invoice paid 💸',
+      body: `${inv.client_name || 'A client'} · ${inv.number} · ${fmtMoney(paidAmount)}${autopaid ? ` · ${String(inv.autopay_card_brand || 'card').replace(/^./, (c) => c.toUpperCase())} ${inv.autopay_card_last4}` : ''}`,
       url: `/finance?invoice=${invoiceId}`,
       tag: `invoice-paid-${invoiceId}`,
     },

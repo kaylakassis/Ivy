@@ -14,6 +14,7 @@ import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 import { paidMethodLabel, computeTotals } from './finance.js';
 import { invoiceMoney } from '../../src/lib/invoiceRules.js';
+import { cardLong } from '../../src/lib/autopayRules.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -40,7 +41,8 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
   try {
     const { rows } = await sql`
       SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,
-             i.paid_amount, i.paid_at, i.workspace_id
+             i.paid_amount, i.paid_at, i.workspace_id,
+             i.autopay_status, i.autopay_card_brand, i.autopay_card_last4
       FROM invoices i
       WHERE i.id = ${invoiceId} AND i.workspace_id = ${workspaceId}
     `;
@@ -49,13 +51,21 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName || 'your business';
     const amount = totalAmount != null ? Number(totalAmount) : Number(inv.paid_amount || 0);
+    // Autopay: the card was charged without the client lifting a finger,
+    // so the receipt says exactly which card and how to stop it.
+    const autopaid = ['charging', 'succeeded', 'processing'].includes(inv.autopay_status) && inv.autopay_card_last4;
+    const howPaid = autopaid
+      ? `. Paid automatically with ${escapeHtml(cardLong(inv.autopay_card_brand, inv.autopay_card_last4))}`
+      : (method && method !== 'other' ? ` (paid by ${escapeHtml(paidMethodLabel(method))})` : '');
     const html = emailShell({
       heading: 'Payment received',
       branding,
       body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
         <p>Thanks - we received your payment of <strong>${fmtMoney(amount)}</strong> for invoice
-        <strong>${escapeHtml(inv.number)}</strong>${method && method !== 'other' ? ` (paid by ${escapeHtml(paidMethodLabel(method))})` : ''}.</p>
-        <p>This email is your receipt.</p>`,
+        <strong>${escapeHtml(inv.number)}</strong>${howPaid}.</p>
+        <p>This email is your receipt.</p>${autopaid
+          ? '<p style="color:#6b7280;font-size:13px">You can turn off automatic payments any time in your client portal under Payments.</p>'
+          : ''}`,
       footer: `Need anything? Reply to this email to reach ${escapeHtml(business)}.`,
     });
     await sendEmailToClient({
