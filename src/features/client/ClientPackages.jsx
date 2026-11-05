@@ -6,6 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import PolicyConsent, { usePolicyConsent } from '../calendar/PolicyConsent.jsx';
 import { api } from '../../lib/api.js';
 import { Sheet, ErrorNote, actionBtn, bookHref, plural, fmtDate } from './portalUi.jsx';
 
@@ -139,6 +140,7 @@ export function PackageCard({ pkg: p, onBook }) {
 // creates one booking per session (cancelling one gives the credit back).
 export function RedeemPackageModal({ pkg, onClose, onBooked }) {
   const [calendar, setCalendar] = useState(null);
+  const consent = usePolicyConsent(calendar);
   const [loadErr, setLoadErr] = useState(null);
   const [serviceId, setServiceId] = useState(null);
   const [mode, setMode] = useState('once');
@@ -184,9 +186,10 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
       const body = mode === 'once'
         ? { serviceId: service.id, slots: [{ date: firstDate, startMin, endMin }] }
         : { serviceId: service.id, recurrence: mode, firstDate, startMin, endMin, occurrences: slotCount };
-      const j = await api.post(`/me/packages/${encodeURIComponent(pkg.id)}/book`, body);
+      const j = await api.post(`/me/packages/${encodeURIComponent(pkg.id)}/book`, { ...body, ...consent.fields() });
       onBooked?.(j);
     } catch (ex) {
+      consent.handleError(ex);
       const code = ex?.details?.code;
       if (code === 'package_used_up' || code === 'package_expired') {
         setBlocked(code === 'package_expired' ? 'expired' : 'used_up');
@@ -282,12 +285,13 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
                 Each session is {service.durationMinutes} minutes and ends at {fmtTimeFromMin(endMin)}.
               </div>
             )}
+            <PolicyConsent consent={consent} svc={service} total={0} bizName={calendar?.settings?.bizName}/>
             <ErrorNote>{err}</ErrorNote>
             <div style={{ display: 'flex', gap: 10 }}>
               <button type="button" className="btn btn-outline" onClick={onClose} disabled={submitting} style={{ ...actionBtn, flex: 1 }}>
                 Not now
               </button>
-              <button type="submit" className="btn btn-primary" disabled={submitting || !service} style={{ ...actionBtn, flex: 2 }}>
+              <button type="submit" className="btn btn-primary" disabled={submitting || !service || !consent.ready} style={{ ...actionBtn, flex: 2 }}>
                 {submitting ? 'Booking…' : (slotCount === 1 ? 'Book session' : `Book ${slotCount} sessions`)}
               </button>
             </div>

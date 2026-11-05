@@ -10,6 +10,7 @@ import { api } from '../../lib/api.js';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { FOLDER_STATUS } from './folders.js';
+import PolicyAcceptances from './PolicyAcceptances.jsx';
 
 const TABS = [
   ['bookings',  'Bookings'],
@@ -157,6 +158,8 @@ export default function FolderDrawer({ folder, clients, onClose: onCloseNow, onU
               onOpen={(path) => { onClose(); navigate(path); }}
               onRemove={(id) => unfile(tab, id)}/>
           </div>
+
+          {folder.clientId && <PolicyAcceptances clientId={folder.clientId} label="Client's cancellation policy"/>}
 
           {/* Details */}
           <div>

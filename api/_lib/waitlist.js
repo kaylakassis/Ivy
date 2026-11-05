@@ -8,6 +8,9 @@ import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
 import { hasConflict, depositFor } from './calendar.js';
+import { linkWaitlistAcceptance } from './cancellationPolicy.js';
+import { notifyClientSafe } from './push.js';
+import { keepAlive } from './keepAlive.js';
 
 export function serializeWaitlistEntry(row) {
   if (!row) return null;
@@ -139,13 +142,16 @@ export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO,
     UPDATE waitlist_entries SET promoted_booking_id = ${booking.rows[0].id}
     WHERE id = ${w.id}
   `;
+  // Cancellation policy accepted when they joined the waitlist: attach it
+  // to the new booking too. Best-effort, never throws.
+  await linkWaitlistAcceptance({ workspaceId, waitlistEntryId: w.id, bookingId: booking.rows[0].id, clientId });
 
   // Email + SMS the client. Best-effort; failure logs but doesn't undo
   // the promotion (they still got the seat).
-  notifyPromotion({ workspaceId, entry: w, booking: booking.rows[0] }).catch((err) => {
+  keepAlive(notifyPromotion({ workspaceId, entry: w, booking: booking.rows[0] }).catch((err) => {
     // eslint-disable-next-line no-console
     console.error('[waitlist] notify failed:', err.message);
-  });
+  }));
 
   return booking.rows[0];
 }
@@ -167,6 +173,23 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
     weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
   });
   const timeLabel = fmtTime(entry.start_min);
+
+  // Push to the client's own phone (no-op unless they claimed their
+  // portal). Uses the booking's client id: a first-time waitlister's
+  // client row is created during promotion, after the entry was read.
+  const pushClientId = booking?.client_id || entry.client_id;
+  if (pushClientId) {
+    await notifyClientSafe({
+      clientId: pushClientId,
+      type: 'bookings',
+      payload: {
+        title: 'A spot opened up. You are booked!',
+        body: `${serviceName} with ${bizName} · ${dateLabel} at ${timeLabel}`,
+        url: '/me/bookings',
+        tag: `waitlist-${booking?.id || entry.id}`,
+      },
+    });
+  }
 
   if (entry.client_email) {
     const branding = await fetchBranding(workspaceId);

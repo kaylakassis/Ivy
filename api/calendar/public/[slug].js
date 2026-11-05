@@ -36,9 +36,14 @@ import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { getProvider } from '../../_lib/payments/index.js';
 import { appUrl } from '../../_lib/tokens.js';
-import { sendClientInvite } from '../../_lib/clientNotify.js';
+import { sendClientInvite, inviteNewClientsEnabled } from '../../_lib/clientNotify.js';
+import { keepAlive } from '../../_lib/keepAlive.js';
 import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
 import { loadWorkspaceAccess, archivedPayload, archivedForbidden } from '../../_lib/businessAccess.js';
+import {
+  publicPolicy, evaluateAcceptance, refusalBody, recordAcceptance, feeTerms, workspaceCurrency,
+} from '../../_lib/cancellationPolicy.js';
+import { cardOnFileCheckout } from '../../_lib/bookingFees.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -284,6 +289,9 @@ async function getCalendar(req, res) {
         // internet. Fill this only from an explicit "show my phone on my
         // booking page" choice.
         contactPhone: null,
+        // The owner's cancellation policy (1.0.5+ pages; older pages ignore
+        // it). Always the latest version. null = none written yet.
+        cancellationPolicy: await publicPolicy(s.workspace_id).catch(() => null),
       },
     });
   } catch (err) {
@@ -392,9 +400,10 @@ async function createBooking(req, res) {
     // Reject bookings on 'only_me' services (drafts the owner shouldn't
     // be receiving bookings for); 'private' is bookable by direct link.
     const svcRows = await sql`
-      SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount,
+      SELECT id, name, duration_minutes, capacity, price, deposit_type, deposit_amount,
              location_type, location_label, travel_buffer_minutes,
-             custom_fields, add_ons, visibility, availability
+             custom_fields, add_ons, visibility, availability,
+             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount
         FROM services
        WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
@@ -535,6 +544,22 @@ async function createBooking(req, res) {
       return badRequest(res, 'That slot is outside booking hours');
     }
 
+    // Cancellation policy switch: a current page must send the ticked box
+    // (policyAccepted: true + the version it showed). An older app that
+    // cannot show the box still books; the record says so.
+    const policyCheck = await evaluateAcceptance({ workspaceId, body });
+    if (policyCheck.decision === 'refused' || policyCheck.decision === 'changed') {
+      return res.status(policyCheck.status).json(refusalBody(policyCheck));
+    }
+    const policyTerms = policyCheck.required
+      ? feeTerms({
+        service: svc, bookingTotal, currency: await workspaceCurrency(workspaceId), settings: policyCheck.settings,
+        depositRequired: depositFor(svc, bookingTotal),
+        appointment: { date, startMin: start, endMin: end, timezone: workspaceTz },
+      })
+      : null;
+    const policyStatus = policyCheck.decision === 'accepted' ? 'accepted' : 'not_accepted_older_app';
+
     if (joinWaitlist) {
       // Insert a waitlist entry instead of a booking. Allowed even when
       // the slot is currently free - the client may want to be notified
@@ -564,6 +589,13 @@ async function createBooking(req, res) {
         )
         RETURNING id
       `;
+      if (policyCheck.required) {
+        await recordAcceptance({
+          workspaceId, clientId: null, bookingId: null, policy: policyCheck.policy,
+          status: policyStatus, source: 'waitlist', req, name: clientName, email: clientEmail,
+          terms: { ...policyTerms, waitlistEntryId: w.rows[0].id },
+        });
+      }
       return created(res, { waitlist: { id: w.rows[0].id, alreadyJoined: false } });
     }
 
@@ -624,9 +656,11 @@ async function createBooking(req, res) {
       `;
       clientId = newClient.rows[0].id;
       // First-time booker - email a "claim your account" invite alongside
-      // the booking confirmation that notifyNewBooking sends.
-      sendClientInvite({ workspaceId, clientId })
-        .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message));
+      // the booking confirmation that notifyNewBooking sends, when the
+      // business invites new clients automatically (default on).
+      keepAlive(inviteNewClientsEnabled(workspaceId)
+        .then((on) => (on ? sendClientInvite({ workspaceId, clientId }) : null))
+        .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message)));
       // A first booking is how most leads enter the CRM - fire the
       // owner's client_created / lead_created workflows for them, same as
       // a manual add. Fire-and-forget like the other side effects below;
@@ -742,6 +776,15 @@ async function createBooking(req, res) {
       }
     }
     const b = newBookingRow;
+    // Evidence for disputes: the exact policy text, its version, the fees
+    // in effect, time, IP and browser. Append-only.
+    if (policyCheck.required) {
+      await recordAcceptance({
+        workspaceId, clientId, bookingId: b.id, policy: policyCheck.policy,
+        status: policyStatus, source: 'booking_page', req, name: clientName, email: clientEmail,
+        terms: policyTerms,
+      });
+    }
 
     // If a deposit is required AND the workspace has its chosen payment
     // provider connected (Stripe / Square / PayPal), mint a checkout
@@ -765,16 +808,24 @@ async function createBooking(req, res) {
         // collect the deposit manually after the fact.
         const base = appUrl();
         const depositCents = Math.round(depositRequired * 100);
+        // Card on file for the cancellation policy: when this service has a
+        // late-cancel or no-show fee and payments run through Stripe, the
+        // deposit checkout also keeps the card (Stripe shows the client a
+        // "saved for future payments" note) so a later fee can be charged.
+        const keep = name === 'stripe'
+          ? await cardOnFileCheckout({ workspaceId, clientId, service: svc, mode: 'customer' }).catch(() => null)
+          : null;
         const session = await adapter.createCheckoutSession({
           workspaceId,
           settings,
+          ...(keep?.customerId ? { customerId: keep.customerId, saveCard: true } : {}),
           amountCents: depositCents,
           currency: (settings?.currency || 'usd').toUpperCase(),
           description: `Deposit · ${b.id.slice(0, 8)}`,
           // invoice_id sentinel `bookdep_<bookingId>` is recognized by
           // the webhook apply paths (stripe + square + paypal) to flip
           // bookings.deposit_paid instead of marking an invoice paid.
-          metadata: { invoice_id: `bookdep_${b.id}`, booking_id: b.id, workspace_id: workspaceId },
+          metadata: { invoice_id: `bookdep_${b.id}`, booking_id: b.id, workspace_id: workspaceId, client_id: clientId },
           successUrl: `${base}/book/${encodeURIComponent(slug)}?deposit=paid`,
           cancelUrl:  `${base}/book/${encodeURIComponent(slug)}?deposit=cancelled`,
           customerEmail: clientEmail,
@@ -788,6 +839,21 @@ async function createBooking(req, res) {
         // eslint-disable-next-line no-console
         console.warn(`[deposit] checkout session failed (provider connected?):`, err.message);
       }
+    }
+    // No deposit to pay but the service has a late-cancel or no-show fee:
+    // offer the client a secure page to keep a card on file (Stripe setup
+    // mode, nothing is charged). The confirmation screen shows the button;
+    // older pages ignore the field.
+    // A package session used when booked never carries a fee (the session
+    // is the penalty), so there is nothing a card would be needed for.
+    let cardSetupUrl = null;
+    if (!depositCheckoutUrl && !(pkgRow && packageUseMode !== 'completion')) {
+      const setup = await cardOnFileCheckout({
+        workspaceId, clientId, service: svc, mode: 'setup',
+        successUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=saved`,
+        cancelUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=skipped`,
+      }).catch(() => null);
+      cardSetupUrl = setup?.url || null;
     }
     // Side effects (thread + emails). Don't await - the public booker
     // should see "confirmed!" without waiting on Resend round-trips. Each is
@@ -820,6 +886,8 @@ async function createBooking(req, res) {
         clientPackageId: pkgRow ? clientPackageId : null,
       },
       depositCheckoutUrl,
+      cardSetupUrl,
+      policyAccepted: policyCheck.required ? policyStatus === 'accepted' : null,
       // Package bookings: the live count after this booking.
       ...(pkgRow ? {
         package: {

@@ -14,6 +14,7 @@
 import webpush from 'web-push';
 import { sql } from './db.js';
 import { isApnsConfigured, sendApnsToTokens } from './apns.js';
+import { keepAlive } from './keepAlive.js';
 
 let _configured = null;
 
@@ -45,18 +46,20 @@ export function publicVapidKey() {
 // opt-out is honored.
 export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement', 'client_optouts'];
 
-// Returns true if the user hasn't opted out of `type`. Missing key →
-// enabled by default. Failure to look up → enabled (don't drop a
+// 'ok' when the user can be pushed `type`, 'muted' when they opted out
+// of it, 'gone' when the account was deleted (its device rows may still
+// exist, but nothing may reach a deleted account). Missing pref key →
+// enabled by default. Failure to look up → 'ok' (don't drop a
 // notification because of a transient DB blip).
-async function userAllowsType(userId, type) {
-  if (!type) return true;
-  if (!NOTIFY_TYPES.includes(type)) return true;
+async function userPushState(userId, type) {
   try {
-    const { rows } = await sql`SELECT notification_prefs FROM users WHERE id = ${userId}`;
-    const prefs = rows[0]?.notification_prefs || {};
-    return prefs[type] !== false;
+    const { rows } = await sql`SELECT notification_prefs, deleted_at FROM users WHERE id = ${userId}`;
+    if (!rows[0] || rows[0].deleted_at) return 'gone';
+    if (!type || !NOTIFY_TYPES.includes(type)) return 'ok';
+    const prefs = rows[0].notification_prefs || {};
+    return prefs[type] !== false ? 'ok' : 'muted';
   } catch {
-    return true;
+    return 'ok';
   }
 }
 
@@ -176,20 +179,63 @@ export async function notifyHelper({ workspaceId, staffId, payload, type }) {
   return sendPushToUser({ userId, payload, type });
 }
 
+// Convenience: notify every helper (staff login) at this business who
+// works with this client and holds `permission` (default 'messages').
+// Same reach as the helper's own inbox: a helper with the schedule
+// permission sees every client; without it, only clients with a live
+// booking assigned to them (helperClientScope in helpers.js). Revoked,
+// inactive or unattached staff never receive anything, and a staff row
+// from another business can never match (workspace_id is in the WHERE).
+// `excludeUserId` skips the person who triggered the event.
+export async function notifyHelpersForClient({ workspaceId, clientId, permission = 'messages', payload, type, excludeUserId = null }) {
+  if (!workspaceId || !clientId) return { ok: false, reason: 'bad args', sent: 0 };
+  const perm = ['schedule', 'clients', 'messages'].includes(permission) ? permission : 'messages';
+  const { rows } = await sql`
+    SELECT DISTINCT sm.user_id
+      FROM staff_members sm
+      JOIN users u ON u.id = sm.user_id AND u.deleted_at IS NULL
+     WHERE sm.workspace_id = ${workspaceId}
+       AND sm.active = TRUE
+       AND sm.user_id IS NOT NULL
+       AND (sm.permissions ->> ${perm}) = 'true'
+       AND (${excludeUserId}::uuid IS NULL OR sm.user_id <> ${excludeUserId}::uuid)
+       AND (
+         (sm.permissions ->> 'schedule') = 'true'
+         OR EXISTS (
+           SELECT 1 FROM bookings b
+            WHERE b.workspace_id = sm.workspace_id AND b.staff_id = sm.id
+              AND b.client_id = ${clientId} AND b.cancelled_at IS NULL
+         )
+       )`;
+  let sent = 0;
+  for (const r of rows) {
+    // eslint-disable-next-line no-await-in-loop
+    await recordNotificationRow({ userId: r.user_id, workspaceId, type, payload });
+    // eslint-disable-next-line no-await-in-loop
+    const out = await sendPushToUser({ userId: r.user_id, payload, type });
+    sent += out?.sent || 0;
+  }
+  return { ok: true, sent, helpers: rows.length };
+}
+
 // Fire-and-forget wrapper. Swallows everything so callers never have to
 // guard with try/catch - push failures must never break the primary
-// action (sending a message, marking an invoice paid, etc.).
-export function notifyOwnerSafe(args)  { return notifyOwner(args).catch((e) => console.warn('[push] notifyOwner', e.message)); }
-export function notifyClientSafe(args) { return notifyClient(args).catch((e) => console.warn('[push] notifyClient', e.message)); }
-export function notifyHelperSafe(args) { return notifyHelper(args).catch((e) => console.warn('[push] notifyHelper', e.message)); }
+// action (sending a message, marking an invoice paid, etc.). keepAlive
+// holds the serverless function open until the send settles, so a push
+// fired just before the response is not dropped when the response ends.
+export function notifyOwnerSafe(args)  { return keepAlive(notifyOwner(args).catch((e) => console.warn('[push] notifyOwner', e.message))); }
+export function notifyClientSafe(args) { return keepAlive(notifyClient(args).catch((e) => console.warn('[push] notifyClient', e.message))); }
+export function notifyHelperSafe(args) { return keepAlive(notifyHelper(args).catch((e) => console.warn('[push] notifyHelper', e.message))); }
+export function notifyHelpersForClientSafe(args) { return keepAlive(notifyHelpersForClient(args).catch((e) => console.warn('[push] notifyHelpersForClient', e.message))); }
 
 export async function sendPushToUser({ userId, payload, type }) {
   if (!userId || !payload?.title) return { ok: false, reason: 'bad args', sent: 0 };
 
-  // Honor the user's per-type opt-out before any DB / network work.
-  if (type && !(await userAllowsType(userId, type))) {
-    return { ok: true, sent: 0, reason: 'muted' };
-  }
+  // Honor the user's per-type opt-out (and never reach a deleted account)
+  // before any device lookup or network work.
+  const state = await userPushState(userId, type);
+  if (state === 'gone') return { ok: true, sent: 0, reason: 'no user' };
+  if (state === 'muted') return { ok: true, sent: 0, reason: 'muted' };
 
   // Native iOS devices (APNs) ride alongside web push - one logical
   // send, two transports. Fired first (not awaited) so the web fanout

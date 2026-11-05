@@ -495,7 +495,7 @@ export async function failInvoiceAsyncPayment({ workspaceId, session }) {
 // Booking deposit from a paid session (metadata.invoice_id 'bookdep_<id>',
 // or the legacy forward pointer bookings.deposit_payment_intent = session
 // id). Idempotent: only applies while deposit_paid_at is empty.
-async function fulfillDepositSession({ workspaceId, session }) {
+async function fulfillDepositSession({ workspaceId, session, creds = null }) {
   const invoiceId = session?.metadata?.invoice_id;
   const paymentIntent = sessionPaymentIntentId(session);
   let bookingId = invoiceId && String(invoiceId).startsWith('bookdep_') ? invoiceId.slice('bookdep_'.length) : null;
@@ -517,6 +517,13 @@ async function fulfillDepositSession({ workspaceId, session }) {
     RETURNING id
   `;
   if (dep.rows.length === 0) return { ignored: 'deposit already recorded' };
+  // Card on file from the deposit checkout (cancellation policy): the
+  // booking page asks Stripe to keep the card when the service has a
+  // late-cancel or no-show fee, so those fees can be charged later.
+  await maybeStoreSavedCard({
+    creds, workspaceId, metadata: session.metadata, paymentIntentId: paymentIntent,
+    customerId: typeof session.customer === 'string' ? session.customer : session.customer?.id || null,
+  });
   notifyOwnerSafe({
     workspaceId, type: 'bookings',
     payload: { title: 'Deposit paid', body: `Booking deposit for ${String(bookingId).slice(0, 8)} just came in.`,
@@ -713,7 +720,7 @@ export async function fulfillCheckoutSession({ workspaceId, session, creds = nul
   if (purpose === 'program')   return fulfillProgramSession({ workspaceId, session });
   if (purpose === 'package')   return fulfillPackageSession({ workspaceId, session });
   if (isDeposit) {
-    const r = await fulfillDepositSession({ workspaceId, session });
+    const r = await fulfillDepositSession({ workspaceId, session, creds });
     if (!invoiceId && r.ignored === 'no booking for deposit session') return { ignored: 'no metadata' };
     return r;
   }
@@ -835,5 +842,21 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
     }
     return fully ? { applied: 'package-refund-synced', fully: true } : { applied: 'package-refund-noted', fully: false };
   }
+  // Booking deposit refunded from the payment dashboard (or the echo of
+  // a refund Ivy made): record it so the deposit is never refunded twice
+  // and the booking shows what went back. amount_refunded is cumulative,
+  // so the "less than" guard makes a re-delivery, or the echo of a refund
+  // Ivy already recorded, a no-op.
+  const dep = await sql`
+    UPDATE bookings SET
+      deposit_refunded_amount = LEAST(deposit_paid, ${refundedCents / 100}),
+      deposit_refunded_at = COALESCE(deposit_refunded_at, NOW()),
+      updated_at = NOW()
+    WHERE workspace_id = ${workspaceId} AND deposit_payment_intent = ${pi}
+      AND deposit_paid_at IS NOT NULL
+      AND ROUND(COALESCE(deposit_refunded_amount, 0) * 100) < ${refundedCents}
+    RETURNING id
+  `.catch(() => ({ rows: [] }));
+  if (dep.rows.length > 0) return { applied: 'deposit-refund-synced' };
   return { ignored: 'no purchase for payment_intent' };
 }

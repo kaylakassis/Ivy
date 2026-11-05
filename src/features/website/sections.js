@@ -113,6 +113,19 @@ export const SECTION_TYPES = {
       ],
     }),
   },
+  // Shows the owner's cancellation policy, always the latest saved
+  // version (written in Finance > Services). Only the heading is stored
+  // in the section; the text is read live, never copied in.
+  cancellation_policy: {
+    label: 'Cancellation policy',
+    icon: 'Lock',
+    desc: 'Your cancellation policy, always up to date',
+    category: 'content',
+    default: () => ({
+      headline: 'Cancellation policy',
+      sub: '',
+    }),
+  },
   faq: {
     label: 'FAQ',
     icon: 'Chat',

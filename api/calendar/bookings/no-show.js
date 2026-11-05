@@ -19,8 +19,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { loadStripeCreds } from '../../_lib/stripeCreds.js';
-import { chargeOffSession } from '../../_lib/stripe.js';
+import { chargeNoShowFee } from '../../_lib/bookingFees.js';
 import { serializeBooking } from '../../_lib/calendar.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
@@ -55,15 +54,10 @@ export default async function handler(req, res) {
       return ok(res, { booking: serializeBooking(undone.rows[0], bopts), undone: true });
     }
 
-    // Owner-side ownership check + pull the bits we need to charge.
+    // Owner-side ownership check.
     const r = await sql`
-      SELECT b.*,
-             c.stripe_customer_id, c.payment_method_id, c.email AS client_email,
-             s.name AS service_name, s.no_show_fee_amount
-        FROM bookings b
-        LEFT JOIN clients c  ON c.id = b.client_id
-        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
-       WHERE b.id = ${id} AND b.workspace_id = ${workspaceId}
+      SELECT id, cancelled_at, no_show_at FROM bookings
+       WHERE id = ${id} AND workspace_id = ${workspaceId}
        LIMIT 1
     `;
     const b = r.rows[0];
@@ -71,60 +65,42 @@ export default async function handler(req, res) {
     if (b.cancelled_at) return badRequest(res, "Can't mark a cancelled booking as a no-show");
     if (b.no_show_at)   return badRequest(res, 'Already marked as a no-show');
 
-    // Money stays with the owner: a helper (schedule permission) marks the
-    // no-show but never charges the fee.
-    const wantCharge = !req.helper && body.chargeFee !== false;
-    const feeAmount = Number(b.no_show_fee_amount || 0);
-    const chargeFee = wantCharge && feeAmount > 0
-      && b.stripe_customer_id && b.payment_method_id;
-
-    let paymentIntentId = null;
-    let chargeError = null;
-    if (chargeFee) {
-      try {
-        const creds = await loadStripeCreds(workspaceId);
-        const pi = await chargeOffSession({
-          secretKey: creds.secretKey,
-
-          stripeAccount: creds.stripeAccount,
-          customerId: b.stripe_customer_id,
-          paymentMethodId: b.payment_method_id,
-          amountCents: Math.round(feeAmount * 100),
-          currency: creds.currency,
-          description: `No-show fee - ${b.service_name || 'session'}`,
-          metadata: { booking_id: b.id, workspace_id: workspaceId, kind: 'no_show' },
-          statementDescriptor: 'NO-SHOW FEE',
-          // Shares the `fee-<booking>` key with charge-fee.js so a booking
-          // can be fee-charged at most once across both endpoints, even on
-          // retry / crash-after-charge.
-          idempotencyKey: `fee-${b.id}`,
-        });
-        paymentIntentId = pi.id;
-      } catch (err) {
-        // The no-show mark still goes through even if the charge
-        // fails - owner can chase manually. Surface the error in
-        // the response so the UI can show a warning.
-        chargeError = err.message || 'Charge failed';
-      }
-    }
-
-    const upd = await sql`
-      UPDATE bookings SET
-        no_show_at         = NOW(),
-        fee_charged_amount = CASE WHEN ${!!paymentIntentId} THEN ${feeAmount} ELSE fee_charged_amount END,
-        fee_charged_at     = CASE WHEN ${!!paymentIntentId} THEN NOW() ELSE fee_charged_at END,
-        fee_charged_kind   = CASE WHEN ${!!paymentIntentId} THEN 'no_show' ELSE fee_charged_kind END,
-        fee_payment_intent = CASE WHEN ${!!paymentIntentId} THEN ${paymentIntentId} ELSE fee_payment_intent END,
-        updated_at         = NOW()
+    // Mark first, guarded, so only one request ever goes on to charge.
+    const marked = await sql`
+      UPDATE bookings SET no_show_at = NOW(), updated_at = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
-      RETURNING *
+        AND no_show_at IS NULL AND cancelled_at IS NULL
+      RETURNING id
     `;
+    if (marked.rows.length === 0) return badRequest(res, 'Already marked as a no-show');
+
+    // Money stays with the owner: a helper (schedule permission) marks the
+    // no-show but never charges the fee. The fee follows the cancellation
+    // policy (api/_lib/bookingFees.js): a paid deposit is kept and counts
+    // toward the no-show fee; only the rest goes on the card on file. If
+    // the card can't be charged the owner is told and a draft invoice for
+    // the fee is created.
+    const wantCharge = !req.helper && body.chargeFee !== false;
+    let result = null;
+    if (wantCharge) {
+      result = await chargeNoShowFee({ workspaceId, bookingId: id })
+        .catch((err) => ({ charged: 0, error: err.message || 'Charge failed' }));
+    }
+    const upd = await sql`SELECT * FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId}`;
+    const chargedCents = result?.charged || 0;
+    const chargeError = result?.error || null;
+    const paymentIntentId = chargedCents > 0 ? result.paymentIntent : null;
+    const feeAmount = chargedCents / 100;
 
     return ok(res, {
       booking: serializeBooking(upd.rows[0], bopts),
       charged: !!paymentIntentId,
       chargeAmount: paymentIntentId ? feeAmount : 0,
       chargeError,
+      // 1.0.5+: part of the fee covered by the kept deposit, and the draft
+      // invoice made when the card could not be charged.
+      feeFromDeposit: (result?.fromDeposit || 0) / 100,
+      feeInvoice: result?.invoice || null,
     });
   } catch (err) {
     return serverError(res, err);

@@ -207,9 +207,25 @@ function renderContact(s) {
 
 function renderFooter(s) {
   const d = s.data || {};
+  const pol = LINK_CTX.cancellationPolicy;
+  const policyLink = pol && pol.showInSiteFooter && pol.policyUrl
+    ? ` · <a href="${attr(safeHref(pol.policyUrl))}">Cancellation policy</a>` : '';
   return `<footer class="ivy-footer">
-    <p>© ${esc(d.year || new Date().getFullYear())} ${esc(d.businessName || '')}${d.tagline ? ` · ${esc(d.tagline)}` : ''}</p>
+    <p>© ${esc(d.year || new Date().getFullYear())} ${esc(d.businessName || '')}${d.tagline ? ` · ${esc(d.tagline)}` : ''}${policyLink}</p>
   </footer>`;
+}
+
+// The owner's cancellation policy, always the latest saved version. Plain
+// text, escaped, line breaks kept with white-space: pre-wrap.
+function renderCancellationPolicy(s) {
+  const d = s.data || {};
+  const pol = LINK_CTX.cancellationPolicy;
+  if (!pol || !pol.text) return '';
+  return `<section class="ivy-cancellation-policy">
+    <h2>${esc(d.headline || 'Cancellation policy')}</h2>
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <div style="white-space:pre-wrap;line-height:1.6">${esc(pol.text)}</div>
+  </section>`;
 }
 
 function renderStats(s) {
@@ -457,6 +473,7 @@ const RENDERERS = {
   before_after:   renderBeforeAfter,
   social_feed:    renderSocialFeed,
   custom_html:    renderCustomHtml,
+  cancellation_policy: renderCancellationPolicy,
 };
 
 function renderSection(section, handle, index = 0) {
@@ -665,7 +682,7 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host, ord
     }),
   ].filter(Boolean).join('\n');
 
-  LINK_CTX = { anchors: sectionAnchors(visible), pages: Array.isArray(nav) ? nav : [], linkBase: `/site/${handle}`, sections: visible, bookingHref: `/book/${handle}` };
+  LINK_CTX = { anchors: sectionAnchors(visible), pages: Array.isArray(nav) ? nav : [], linkBase: `/site/${handle}`, sections: visible, bookingHref: `/book/${handle}`, cancellationPolicy: site.cancellationPolicy || null };
   const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
   const sectionsHtml = visible.map((s, i) => renderSection(s, handle, i)).join('\n');
   // No inline scripts here: the site's CSP (vercel.json script-src) has no

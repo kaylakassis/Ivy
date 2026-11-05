@@ -70,6 +70,9 @@ export function serializeSettings(row) {
     maxAdvanceDays: row.max_advance_days == null ? 60 : Number(row.max_advance_days),
     // When a package session counts as used: 'booking' | 'completion'.
     packageUseOn:   row.package_use_on === 'completion' ? 'completion' : 'booking',
+    // Portal invite for newly added clients (NULL = on). Written through
+    // /api/clients/invite-settings.
+    inviteNewClients: row.invite_new_clients !== false,
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',
@@ -229,7 +232,8 @@ export function serializeBlock(row, opts = {}) {
 export function computeBookingPayment(row) {
   const total = Number(row.booking_total || 0);
   if (total <= 0) return null;
-  const depositPaid = Number(row.deposit_paid || 0);
+  // A refunded deposit (cancellation policy) is no longer money paid.
+  const depositPaid = Math.max(0, +(Number(row.deposit_paid || 0) - Number(row.deposit_refunded_amount || 0)).toFixed(2));
   // Gift-card credit redeemed at booking time is money the business has
   // already collected (when the card was sold) - it MUST count as paid,
   // or every balance surface (owner drawer, client portal, collect
@@ -319,6 +323,23 @@ export function serializeBooking(row, opts = {}) {
     feeChargedAmount:    money(Number(row.fee_charged_amount || 0)),
     feeChargedKind:      money(row.fee_charged_kind || null),
     feeChargedAt:        money(row.fee_charged_at || null),
+    // Cancellation policy bookkeeping (api/_lib/bookingFees.js).
+    feeFromDeposit:      money(Number(row.fee_from_deposit_amount || 0)),
+    feeChargeError:      money(row.fee_charge_error || null),
+    feeInvoiceId:        money(row.fee_invoice_id || null),
+    depositRefunded:     money(Number(row.deposit_refunded_amount || 0)),
+    depositRefundedAt:   money(row.deposit_refunded_at || null),
+    depositRefundError:  money(row.deposit_refund_error || null),
+    // Pending / decided deposit refund request (owner approves with one tap).
+    depositRefundRequest: redactMoney || !row.deposit_refund_request_status ? null : {
+      status:      row.deposit_refund_request_status,
+      amount:      Number(row.deposit_refund_request_amount || 0),
+      reason:      row.deposit_refund_request_reason || '',
+      requestedAt: row.deposit_refund_requested_at || null,
+      decidedAt:   row.deposit_refund_decided_at || null,
+    },
+    cancelledBy:         row.cancelled_by || null,
+    source:              row.source || null,
     tipAmount:           money(Number(row.tip_amount || 0)),
     tipChargedAt:        money(row.tip_charged_at || null),
     completionLog:       row.completion_log || {},

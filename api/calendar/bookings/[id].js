@@ -18,8 +18,9 @@ import {
 import { notifyPackageExhausted } from '../../_lib/packageNotify.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
-import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
+import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled, notifyHelperAssigned } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
+import { settleOwnerCancellation } from '../../_lib/bookingFees.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
 
@@ -345,16 +346,35 @@ export default async function handler(req, res) {
         } else { throw e; }
       }
       syncOnBookingUpdated({ workspaceId, bookingId: id });
+      // Newly assigned to a helper: put it on their phone.
+      if ('staffId' in body && rows[0]?.staff_id && rows[0].staff_id !== found.rows[0].staff_id) {
+        notifyHelperAssigned({ workspaceId, bookingId: id });
+      }
       return ok(res, { booking: serializeBooking(rows[0], bopts) });
     }
 
     if (req.method === 'DELETE') {
       const r = await sql`
-        UPDATE bookings SET cancelled_at = NOW()
+        UPDATE bookings SET cancelled_at = NOW(), cancelled_by = 'owner'
         WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL
       `;
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
       const cancelled = found.rows[0];
+      // The business cancelled: never a fee. A paid deposit is never
+      // refunded without the owner's say-so: { refundDeposit: true } is the
+      // owner ticking "Refund the deposit now" while cancelling, false keeps
+      // it, and no answer (older apps, helpers, who never move money) opens
+      // a one-tap refund request for the owner. Only the request that won
+      // the UPDATE above gets here, so this runs once.
+      {
+        const delBody = await readBody(req).catch(() => ({}));
+        const choice = req.helper ? undefined
+          : delBody?.refundDeposit === true ? true
+            : delBody?.refundDeposit === false ? false : undefined;
+        await settleOwnerCancellation({
+          workspaceId, bookingId: id, refund: choice, userId: user.id,
+        }).catch((err) => console.error('[booking cancel] deposit settle failed:', err.message));
+      }
       syncOnBookingDeleted({ workspaceId, googleEventId: cancelled.google_event_id });
       // Fire-and-forget cancellation email/push (owner-initiated).
       notifyBookingCancellation({ workspaceId, bookingId: id, source: 'owner' });

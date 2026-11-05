@@ -331,7 +331,7 @@ async function remindClient({ r, dateISO, startMs, now, createdMs, getBranding }
       payload: {
         title: `Reminder: ${serviceName} ${describeLeft(leftMin)}`,
         body: `${businessName} · ${fmtDay(dateISO)} at ${fmtTime(r.start_min)}`,
-        url: `/me`,
+        url: '/me/bookings',
         tag: `reminder-${r.id}-${key}`,
       },
     });
@@ -411,7 +411,7 @@ async function remindTeam({ r, dateISO, startMs, now, createdMs }) {
       payload: {
         title: `Coming up ${describeLeft(leftMin)}: ${serviceName}`,
         body: `${who} · ${when}`,
-        url: `/calendar?date=${dateISO}`,
+        url: `/calendar?booking=${r.id}`,
         tag: `owner-reminder-${r.id}-${key}`,
       },
     });

@@ -95,7 +95,9 @@ export default function ClientBookings() {
       const r = await api.del('/me/bookings/' + confirming.id);
       await load();
       setConfirming(null);
-      if (r && Number(r.feeCharged) > 0) {
+      if (r && r.policyMessage) {
+        setNotice({ tone: Number(r.feeCharged) > 0 || Number(r.depositKept) > 0 ? 'warn' : 'ok', text: `Your booking is cancelled. ${r.policyMessage}` });
+      } else if (r && Number(r.feeCharged) > 0) {
         setNotice({ tone: 'warn', text: `Your booking is cancelled. A ${fmtMoney(r.feeCharged)} late-cancellation fee was charged to your saved card.` });
       } else {
         setNotice({ tone: 'ok', text: 'Your booking is cancelled. The business has been told.' });
@@ -333,6 +335,12 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
           {pay && (
             <div style={{ fontSize: 13, fontWeight: 600, color: pay.color }}>{pay.text}</div>
           )}
+          {cancelled && b.depositRefundStatus === 'pending' && (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>Your deposit refund is being reviewed by {b.businessName}.</div>
+          )}
+          {cancelled && b.depositRefundStatus === 'approved' && (
+            <div style={{ fontSize: 13, color: 'var(--ok)' }}>Your deposit was refunded.</div>
+          )}
           {b.fromPackage && !cancelled && (
             <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Uses a session from your package</div>
           )}
@@ -440,6 +448,11 @@ export function cancelPolicy(b, now = Date.now()) {
   const late = windowH > 0 && startMs < now + windowH * 3600 * 1000;
   const lines = [];
   let tone = 'calm';
+  const p = b.payment || {};
+  // A paid deposit is kept when cancelling late and counts toward the fee
+  // (api/_lib/bookingFees.js), so only the rest goes on the card.
+  const deposit = Number(p.depositPaid || 0);
+  const due = Math.max(0, Math.round((fee - deposit) * 100) / 100);
   // Package bookings: a late cancel (under the business's own fee policy)
   // keeps the session used instead of charging the card. Same rule as
   // the server (api/me/bookings/[id].js isLateCancelWithPolicy).
@@ -462,18 +475,24 @@ export function cancelPolicy(b, now = Date.now()) {
     lines.push(`${b.businessName} lets you cancel for free up to ${windowH} hours before. After that there is a ${fmtMoney(fee)} late-cancellation fee.`);
     if (late) {
       tone = 'warn';
-      lines.push(b.cardOnFile
-        ? `This appointment starts in less than ${windowH} hours, so ${fmtMoney(fee)} will be charged to the card you saved with them.`
-        : `This appointment starts in less than ${windowH} hours, so they may ask you to pay the ${fmtMoney(fee)} fee.`);
+      if (deposit > 0 && due <= 0) {
+        lines.push(`This appointment starts in less than ${windowH} hours, so your ${fmtMoney(deposit)} deposit is kept to cover the fee. Nothing more is charged.`);
+      } else {
+        const what = deposit > 0 ? `your ${fmtMoney(deposit)} deposit is kept and the other ${fmtMoney(due)}` : fmtMoney(fee);
+        lines.push(b.cardOnFile
+          ? `This appointment starts in less than ${windowH} hours, so ${what} will be charged to the card you saved with them.`
+          : `This appointment starts in less than ${windowH} hours, so ${deposit > 0 ? `your ${fmtMoney(deposit)} deposit is kept and they may ask you to pay the other ${fmtMoney(due)}` : `they may ask you to pay the ${fmtMoney(fee)} fee`}.`);
+      }
     } else {
       lines.push('You are cancelling in time, so there is no fee.');
     }
   } else {
     lines.push(`There is no cancellation fee for this appointment.`);
   }
-  const p = b.payment || {};
-  if (p.depositPaid > 0) {
-    lines.push(`Your ${fmtMoney(p.depositPaid)} deposit is not refunded automatically. Message ${b.businessName} if you would like it back.`);
+  if (deposit > 0 && !(late && fee > 0)) {
+    if (late) lines.push(`You are cancelling less than ${windowH} hours before, so your ${fmtMoney(deposit)} deposit is kept.`);
+    else if (b.depositRefundable === false) lines.push(`Your ${fmtMoney(deposit)} deposit is not refundable.`);
+    else lines.push(`Your ${fmtMoney(deposit)} deposit can be refunded. ${b.businessName} reviews the refund, and you get a receipt once it goes through.`);
   }
   if (p.giftCardCredit > 0) lines.push(`The ${fmtMoney(p.giftCardCredit)} you used from a gift card goes back on the card.`);
   if (b.fromPackage) {

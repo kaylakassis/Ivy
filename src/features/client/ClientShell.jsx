@@ -22,6 +22,8 @@ import { ViewSwitch } from '../../components/ViewToggle.jsx';
 import { initNative } from '../../lib/native.js';
 import PullToRefresh from '../../components/PullToRefresh.jsx';
 import OfflineBanner from '../../components/OfflineBanner.jsx';
+import NativePushPrompt from '../../components/NativePushPrompt.jsx';
+import { syncPushOnLaunch } from '../../lib/push.js';
 
 // Primary destinations (tab bar on phones, top of the sidebar on desktop).
 const PRIMARY = [
@@ -35,7 +37,7 @@ const SECONDARY = [
   { to: '/me/programs',      label: 'Programs',      icon: 'Trophy', hint: 'Courses and plans you have joined' },
   { to: '/me/documents',     label: 'Documents',     icon: 'Doc',    hint: 'Forms and agreements to sign', badge: 'docs' },
   { to: '/me/discover',      label: 'Discover',      icon: 'Globe',  hint: 'Find businesses on Ivy' },
-  { to: '/me/notifications', label: 'Notifications', icon: 'Bell',   hint: 'Choose what we email or text you' },
+  { to: '/me/notifications', label: 'Notifications', icon: 'Bell',   hint: 'Choose what we send you, and phone alerts' },
   { to: '/me/profile',       label: 'Profile',       icon: 'Users',  hint: 'Your details, sign-in and privacy' },
 ];
 // Old addresses that now live inside another page (titles only).
@@ -63,6 +65,9 @@ function ClientShellInner() {
   const viewport = useViewport();
   const { data, loading, refresh } = useClientPortal();
   useEffect(() => { initNative(); }, []);
+  // Clients get pushes too (messages, bookings, invoices, documents): bind
+  // this device to the signed-in client on every launch. Never prompts.
+  useEffect(() => { Promise.resolve().then(() => syncPushOnLaunch()).catch(() => {}); }, []);
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
 
@@ -124,6 +129,8 @@ function ClientShellInner() {
       )}
       <TermsAcceptModal/>
       <PrivacyUpdateNotice/>
+      {/* iPhone app: ask once (our words first, then the iOS dialog). */}
+      <NativePushPrompt audience="client" active={!loading && !!data}/>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import SyncDrawer from './SyncDrawer.jsx';
 import PackagesDrawer from './PackagesDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
+import DepositReviews from './DepositReviews.jsx';
 import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
@@ -289,6 +290,7 @@ export default function Calendar() {
 
   return (
     <div className="page-pad" style={{ paddingTop: isMobile ? 12 : 20 }}>
+      <DepositReviews/>
       {/* Toolbar */}
       {isMobile ? (
         // MOBILE: stacked rows so the controls don't overflow.
@@ -574,7 +576,7 @@ export default function Calendar() {
           onEditCompletion={editCompletion}
           onClearCompletion={clearCompletion}
           onDelete={async (e) => {
-            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id);
+            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id, { refundDeposit: !!e.refundDeposit });
             else if (e.id) await removeBlock(e.id);
           }}
           onClose={() => { setDrawer(null); setSelectedEvent(null); }}

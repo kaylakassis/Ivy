@@ -59,6 +59,15 @@ export default async function handler(req, res) {
       return badRequest(res, 'endpoint must be an https URL on a known browser push service');
     }
 
+    // One browser subscription belongs to one account: the browser that
+    // holds this endpoint is now signed in as this user, so any older
+    // binding of the same endpoint to another account is dropped. Without
+    // this, someone who signed in after another person on a shared
+    // browser received both accounts' notifications. (The endpoint is an
+    // unguessable URL only the browser knows; the keys sent with it are
+    // what the payload is encrypted to, so taking it over reveals nothing
+    // that was meant for the other account.)
+    await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint} AND user_id <> ${user.id}`;
     await sql`
       INSERT INTO push_subscriptions (user_id, endpoint, p256dh_key, auth_key, user_agent, last_used_at)
       VALUES (${user.id}, ${endpoint}, ${p256dh}, ${auth}, ${userAgent}, NOW())

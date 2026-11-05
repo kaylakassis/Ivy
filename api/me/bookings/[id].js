@@ -13,15 +13,14 @@ import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
-import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, slotEpochMs } from '../../_lib/calendar.js';
+import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, slotEpochMs, workspaceTimeZone } from '../../_lib/calendar.js';
 import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
-import { loadStripeCreds } from '../../_lib/stripeCreds.js';
-import { chargeOffSession } from '../../_lib/stripe.js';
+import { settleClientCancellation, describeClientCancellation } from '../../_lib/bookingFees.js';
 import { archivedForbidden } from '../../_lib/businessAccess.js';
 
 export default async function handler(req, res) {
@@ -52,71 +51,45 @@ export default async function handler(req, res) {
       if (booking.completion_log && Object.keys(booking.completion_log || {}).length > 0) {
         return badRequest(res, 'This session was already completed and can no longer be cancelled.');
       }
-      if (booking.date && String(booking.date).slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+      if (await sessionStarted(booking)) {
         return badRequest(res, 'This session date has already passed - contact the business directly.');
       }
 
-      // Late-cancel auto-charge. If the booking starts within the
-      // service's cancellation_window_hours AND a fee is configured AND
-      // there's a saved card on file, charge the fee off-session. The
-      // cancel itself goes through whether the charge succeeds or not
-      // (so a declined card doesn't trap the client in a session they
-      // can't make).
-      let lateCancelCharged = null;
-      let lateCancelChargeError = null;
-      // Package sessions follow the business's own late-cancel policy:
-      // cancelling in time gives the session back; cancelling late (inside
-      // the service's window, when the business has set a late-cancel fee)
-      // keeps the session used INSTEAD of charging the card a second time.
-      // No policy set = the session always comes back.
-      // A business that uses sessions on completion only HOLDS the session
-      // until the visit happens, so a cancel always releases it (their
-      // usual late-cancel fee, if any, still applies).
-      const packageKept = booking.client_package_id && booking.package_use_mode !== 'completion'
-        ? await isLateCancelWithPolicy(booking).catch(() => false)
-        : false;
-      if (!packageKept) {
-        try {
-          const policy = await maybeChargeLateCancel({
-            booking, myIds,
-          });
-          lateCancelCharged = policy.charged;
-          lateCancelChargeError = policy.error;
-        } catch {
-          // Logged inside helper. Don't block the cancel.
-        }
-      }
-
-      // Soft-cancel. Defense-in-depth: include client_id IN (...) on the
-      // UPDATE so a future regression in the ownership check above can't
-      // cancel another tenant's booking. When a late-cancel fee was
-      // charged, persist the charge fields in the same UPDATE so we
-      // don't have a window where the booking is cancelled-but-no-fee.
-      let cancelRes;
-      if (lateCancelCharged) {
-        cancelRes = await sql.query(
-          `UPDATE bookings SET
-             cancelled_at       = NOW(),
-             fee_charged_amount = $3,
-             fee_charged_at     = NOW(),
-             fee_charged_kind   = 'late_cancel',
-             fee_payment_intent = $4
-           WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
-          [id, myIds, lateCancelCharged.amount, lateCancelCharged.paymentIntent],
-        );
-      } else {
-        cancelRes = await sql.query(
-          `UPDATE bookings SET cancelled_at = NOW()
-           WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
-          [id, myIds],
-        );
-      }
+      // Soft-cancel first. Defense-in-depth: include client_id IN (...) on
+      // the UPDATE so a future regression in the ownership check above
+      // can't cancel another tenant's booking. Only the request that wins
+      // this UPDATE settles money (deposit refund / late-cancel fee), so a
+      // double tap can never charge or refund twice. The cancel always
+      // goes through, even if the card is declined.
+      const cancelRes = await sql.query(
+        `UPDATE bookings SET cancelled_at = NOW(), cancelled_by = 'client'
+         WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
+        [id, myIds],
+      );
       // Lost a race with a concurrent cancel: the other request already
       // ran the side effects (credit restore, waitlist promotion, notes).
       // Running them again would restore the package credit TWICE.
       if ((cancelRes.rowCount || 0) === 0) {
         return ok(res, { cancelled: true, deduped: true });
       }
+      // Cancellation policy money (api/_lib/bookingFees.js): before the
+      // window the deposit is refunded; inside it the deposit is kept and
+      // only the rest of the late-cancel fee goes on the saved card.
+      //
+      // Package sessions (agreed rule, api/_lib/bookingFees.js): a business
+      // that uses sessions when booked keeps the session used for a late
+      // cancel INSTEAD of charging a fee (never both); in time, the session
+      // comes back. A business that uses sessions on completion only held
+      // the session, so it always comes back and the normal late fee
+      // applies. If settling fails the session goes back (client-friendly).
+      let settled = null;
+      try {
+        settled = await settleClientCancellation({ workspaceId: booking.workspace_id, bookingId: booking.id });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[portal cancel] cancellation policy settle failed:', err.message);
+      }
+      const packageKept = !!settled?.packageSessionKept;
       // Drop a system note in the thread so the business sees the cancellation.
       await postCancellationNote({
         workspaceId: booking.workspace_id,
@@ -159,8 +132,13 @@ export default async function handler(req, res) {
       // no fee was applied so older clients keep working.
       return ok(res, {
         cancelled: true,
-        feeCharged: lateCancelCharged ? lateCancelCharged.amount : 0,
-        feeChargeError: lateCancelChargeError,
+        feeCharged: settled ? settled.feeChargedCents / 100 : 0,
+        feeChargeError: settled?.feeError || null,
+        // 1.0.5+: the deposit side and a plain sentence for the client.
+        depositRefunded: settled ? settled.depositRefundedCents / 100 : 0,
+        depositKept: settled ? settled.depositKeptCents / 100 : 0,
+        feeFromDeposit: settled ? settled.feeFromDepositCents / 100 : 0,
+        policyMessage: describeClientCancellation(settled),
         // Package bookings: whether the session went back into the package.
         ...(booking.client_package_id ? { packageSessionReturned: !packageKept } : {}),
       });
@@ -188,7 +166,7 @@ export default async function handler(req, res) {
         if (booking.completion_log && Object.keys(booking.completion_log || {}).length > 0) {
           return badRequest(res, 'This session was already completed and can no longer be rescheduled.');
         }
-        if (booking.date && String(booking.date).slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+        if (await sessionStarted(booking)) {
           return badRequest(res, 'This session date has already passed - contact the business directly.');
         }
         const r = body.rescheduleTo;
@@ -340,6 +318,13 @@ export default async function handler(req, res) {
       if (!booking.recurrence_rule) {
         return badRequest(res, 'This booking is not part of a recurring series');
       }
+      // Same window rule as reschedule: a single occurrence inside the
+      // late-cancel window can't be dropped online for free (fees are
+      // charged once per booking, so an occurrence fee has to go through
+      // the business).
+      if (await occurrenceInsideFeeWindow(booking, body.cancelOccurrence)) {
+        return badRequest(res, 'This session starts within the cancellation window and can\'t be cancelled online anymore - contact the business directly.');
+      }
       const updated = await sql.query(
         `UPDATE bookings
          SET cancelled_occurrences = CASE
@@ -368,12 +353,24 @@ export default async function handler(req, res) {
   }
 }
 
-// If the booking is being cancelled inside the service's
-// cancellation_window_hours AND the service has a non-zero fee AND
-// the client has a card on file, charge the fee off-session. Returns
-// { charged, error } where charged is { amount, paymentIntent } on
-// success or null when nothing was charged. Never throws - the cancel
-// must always go through.
+// True once the appointment's start time (in the business's time zone)
+// has passed. The old check compared the booking date with today's UTC
+// date, which blocked evening cancellations in US time zones (after
+// 4-5 PM Pacific it is already tomorrow in UTC).
+async function occurrenceInsideFeeWindow(booking, dateISO) {
+  if (!booking.service_id) return false;
+  const sv = await sql`
+    SELECT cancellation_fee_amount, cancellation_window_hours FROM services
+     WHERE id = ${booking.service_id} AND workspace_id = ${booking.workspace_id}
+  `;
+  const fee = Number(sv.rows[0]?.cancellation_fee_amount || 0);
+  const hours = Number(sv.rows[0]?.cancellation_window_hours || 0);
+  if (fee <= 0 || hours <= 0) return false;
+  const tz = await workspaceTimeZone(booking.workspace_id);
+  const startMs = slotEpochMs(dateISO, Number(booking.start_min) || 0, tz);
+  return Number.isFinite(startMs) && startMs < Date.now() + hours * 3_600_000;
+}
+
 // True when cancelling now is "late" under a policy the business chose:
 // the service has a late-cancel fee AND a free-cancel window, and the
 // booking starts inside that window (workspace time zone). Shared by the
@@ -397,64 +394,12 @@ export async function isLateCancelWithPolicy(booking, now = Date.now()) {
   return startMs < now + windowHours * 60 * 60 * 1000;
 }
 
-async function maybeChargeLateCancel({ booking, myIds }) {
-  try {
-    if (!booking.client_id) return { charged: null, error: null };
-    const r = await sql.query(
-      `SELECT s.cancellation_fee_amount, s.cancellation_window_hours, s.name AS service_name,
-              c.stripe_customer_id, c.payment_method_id
-         FROM clients c
-         LEFT JOIN services s ON s.id = $2 AND s.workspace_id = c.workspace_id
-        WHERE c.id = $1 AND c.id = ANY($3)
-        LIMIT 1`,
-      [booking.client_id, booking.service_id, myIds],
-    );
-    const row = r.rows[0];
-    if (!row) return { charged: null, error: null };
-    const feeAmount = Number(row.cancellation_fee_amount || 0);
-    const windowHours = Number(row.cancellation_window_hours || 0);
-    if (feeAmount <= 0 || windowHours <= 0) return { charged: null, error: null };
-    if (!row.stripe_customer_id || !row.payment_method_id) return { charged: null, error: null };
-
-    // "Inside the window" = booking starts before NOW + windowHours.
-    // The (date, start_min) pair is wall-clock in the workspace timezone,
-    // so the UTC epoch we compare against has to honor that tz - otherwise
-    // a non-UTC owner sees cancellation-fee math drift by several hours
-    // (same root cause as the public-booking notice-window bug).
-    const dateISO = booking.date instanceof Date
-      ? booking.date.toISOString().slice(0, 10)
-      : booking.date;
-    const tzRow = await sql`SELECT timezone FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}`;
-    const workspaceTz = tzRow.rows[0]?.timezone || null;
-    const startMs = slotEpochMs(dateISO, booking.start_min, workspaceTz);
-    const cutoffMs = Date.now() + windowHours * 60 * 60 * 1000;
-    if (startMs >= cutoffMs) return { charged: null, error: null }; // outside window - free cancel
-
-    const creds = await loadStripeCreds(booking.workspace_id);
-    const pi = await chargeOffSession({
-      secretKey: creds.secretKey,
-
-      stripeAccount: creds.stripeAccount,
-      customerId: row.stripe_customer_id,
-      paymentMethodId: row.payment_method_id,
-      amountCents: Math.round(feeAmount * 100),
-      currency: creds.currency,
-      description: `Late-cancel fee - ${row.service_name || 'session'}`,
-      metadata: { booking_id: booking.id, workspace_id: booking.workspace_id, kind: 'late_cancel' },
-      statementDescriptor: 'LATE CANCEL FEE',
-      // Shares the `fee-<booking>` key so a late-cancel fee can't be
-      // double-charged on retry / crash-after-charge.
-      idempotencyKey: `fee-${booking.id}`,
-    });
-    return {
-      charged: { amount: feeAmount, paymentIntent: pi.id },
-      error: null,
-    };
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[late-cancel charge] failed:', err.message);
-    return { charged: null, error: err.message || 'charge failed' };
-  }
+async function sessionStarted(booking) {
+  const dateISO = booking.date instanceof Date ? booking.date.toISOString().slice(0, 10) : String(booking.date || '').slice(0, 10);
+  if (!dateISO) return false;
+  const tz = await workspaceTimeZone(booking.workspace_id);
+  const startMs = slotEpochMs(dateISO, Number(booking.start_min) || 0, tz);
+  return Number.isFinite(startMs) && startMs <= Date.now();
 }
 
 async function postRescheduleNote({ workspaceId, clientId, booking, newDate, newStart, newEnd }) {

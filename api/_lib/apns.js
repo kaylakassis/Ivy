@@ -93,7 +93,13 @@ export function buildApnsBody(payload) {
 //   [{ token, kind: 'sent' | 'gone' | 'error', status?, reason? }]
 // 'gone' = Apple says the token is dead (uninstalled / expired) - the
 // caller must delete the row, mirroring web push 404/410 handling.
-export async function sendApnsToTokens({ tokens, payload }) {
+// Timeouts: each request gives up after 10s, and the whole batch after a
+// 15s ceiling (a connection that never opens fires no per-request
+// timeout). Overridable only so tests can exercise them quickly.
+export const APNS_REQUEST_TIMEOUT_MS = 10_000;
+export const APNS_BATCH_CEILING_MS = 15_000;
+
+export async function sendApnsToTokens({ tokens, payload, requestTimeoutMs = APNS_REQUEST_TIMEOUT_MS, ceilingMs = APNS_BATCH_CEILING_MS }) {
   if (!isApnsConfigured() || !tokens?.length) return [];
   const env = (process.env.APNS_ENV || 'production') === 'sandbox' ? 'sandbox' : 'production';
   const host = APNS_HOSTS[env];
@@ -134,14 +140,14 @@ export async function sendApnsToTokens({ tokens, payload }) {
       resolve({ token, kind: gone ? 'gone' : 'error', status, reason });
     });
     req.on('error', (err) => resolve({ token, kind: 'error', reason: err.message }));
-    req.setTimeout(10_000, () => { req.close(); resolve({ token, kind: 'error', reason: 'timeout' }); });
+    req.setTimeout(requestTimeoutMs, () => { req.close(); resolve({ token, kind: 'error', reason: 'timeout' }); });
     req.end(body);
   });
 
   // Overall ceiling for the batch: a connection that never opens fires no
   // per-request timeout, and a stalled send must not hang the caller.
   const ceiling = new Promise((resolve) => {
-    const t = setTimeout(() => resolve({ connectionError: new Error('APNs did not answer within 15s') }), 15_000);
+    const t = setTimeout(() => resolve({ connectionError: new Error(`APNs did not answer within ${Math.round(ceilingMs / 1000)}s`) }), ceilingMs);
     if (typeof t.unref === 'function') t.unref();
   });
   try {
@@ -153,10 +159,13 @@ export async function sendApnsToTokens({ tokens, payload }) {
     if (results?.connectionError) {
       // eslint-disable-next-line no-console
       console.warn('[apns] connection failed:', results.connectionError.message);
+      // A stalled session would keep close() waiting on its open
+      // streams; tear it down so nothing lingers past the ceiling.
+      try { client.destroy(); } catch { /* already gone */ }
       return tokens.map((t) => ({ token: t, kind: 'error', reason: 'connection failed' }));
     }
     return results;
   } finally {
-    client.close();
+    try { client.close(); } catch { /* destroyed above */ }
   }
 }

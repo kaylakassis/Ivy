@@ -27,6 +27,7 @@ import { findClientForBulk, findServiceForBulk } from './bookingImport.js';
 import { prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS } from './clientImport.js';
 import { IVY_DETAIL_PROPS, ivyDetailsToBody, clientDetailColumns, writeClientColumns } from './clientDetails.js';
 import { blockState, BLOCKED_MESSAGE } from './moderation.js';
+import { sendClientInvite, inviteNewClientsEnabled } from './clientNotify.js';
 import { validEmail } from './auth.js';
 import {
   parseAvailabilityChanges, applyAvailabilityChanges, diffAvailability, describeChange,
@@ -192,6 +193,7 @@ export const IVY_TOOLS = [
         email: { type: 'string' },
         phone: { type: 'string', description: 'Optional. E.164 format if provided.' },
         stage: { type: 'string', description: "'lead' (default) or 'active'." },
+        send_invite: { type: 'boolean', description: "Optional. Email them an invite to the client portal. Omit to follow the business setting 'Invite new clients automatically'. Only set it when the user said whether to invite them." },
         ...IVY_DETAIL_PROPS,
       },
       required: ['name'],
@@ -1486,7 +1488,7 @@ const qt = (s, n = 60) => `"${String(s ?? '').replace(/\s+/g, ' ').trim().slice(
 const numBit = (n) => (n != null && n !== '' ? ` #${n}` : '');
 // Past-tense, one line, from the tool's own result (falls back to its args).
 const DONE_TEXT = {
-  add_client: (a, r) => `Added ${r.client?.name || a.name || 'a client'} to your clients`,
+  add_client: (a, r) => `Added ${r.client?.name || a.name || 'a client'} to your clients${r.invite_sent ? ' and emailed them an invite to your client portal' : ''}`,
   update_client: (a, r) => (r.no_changes ? `Nothing needed changing for ${r.client?.name || 'that client'}` : `Updated ${r.client?.name || 'a client'}'s details`),
   mark_invoice_paid: (a, r) => `Marked invoice${numBit(r.invoice?.number)} as paid`,
   create_service: (a, r) => `Created the service ${qt(r.service?.name || a.name)}`,
@@ -1912,6 +1914,19 @@ async function send_invoice({ workspaceId, args }) {
   } catch (err) {
     sendResult = { ok: false, reason: err?.message || 'email failed' };
   }
+  // Same client push the Send button gives (api/invoices/send.js): no-op
+  // unless the client claimed their portal and allows payment pushes.
+  if (resolvedClientId) {
+    notifyClientSafe({
+      clientId: resolvedClientId, type: 'payments',
+      payload: {
+        title: `Invoice from ${bizName}`,
+        body: `${invoiceNumber} is ready to view and pay`,
+        url: '/me/invoices',
+        tag: `invoice-sent-${id}`,
+      },
+    });
+  }
   const delivered = deliveryOf(sendResult);
   if (!delivered.ok) {
     return {
@@ -1950,9 +1965,25 @@ async function add_client({ workspaceId, args }) {
   } catch (err) {
     warn(warnings, 'Your new-client automations did not start for this client.', err);
   }
+  // Portal invite: the same rule as the Add client form. An explicit
+  // send_invite wins; otherwise the business setting decides (default on).
+  let inviteSent = false;
+  if (row.email) {
+    const wantInvite = typeof args.send_invite === 'boolean' ? args.send_invite : await inviteNewClientsEnabled(workspaceId);
+    if (wantInvite) {
+      const inv = await sendClientInvite({ workspaceId, clientId: row.id });
+      inviteSent = !!inv.sent;
+      if (!inv.sent && inv.reason === 'muted') {
+        warnings.push(`${row.name} has turned off emails from your business, so no portal invite went out.`);
+      } else if (!inv.sent && inv.reason !== 'already-invited') {
+        warnings.push(`The portal invite to ${row.email} did not go out. You can resend it from their profile.`);
+      }
+    }
+  }
   return {
     ok: true,
     client: { id: row.id, name: row.name, email: row.email },
+    invite_sent: inviteSent,
     ...(wf.fired > 0 ? { workflows_fired: wf.fired } : {}),
     ...(warnings.length ? { warnings } : {}),
   };
@@ -2524,6 +2555,11 @@ async function create_booking({ workspaceId, args }) {
     )
     RETURNING id, date, start_min, end_min, client_name
   `;
+  // Same side effects as a booking the owner adds in the calendar: the
+  // client's confirmation email + push, the assigned helper's push, and
+  // the chat thread note. Fire-and-forget (kept alive past the response).
+  const { notifyNewBooking } = await import('./bookingNotify.js');
+  notifyNewBooking({ workspaceId, bookingId: rows[0].id, source: 'owner' });
   return { booking: rows[0] };
 }
 
@@ -3117,8 +3153,9 @@ async function reschedule_booking({ workspaceId, args }) {
   const startMin = clampInt(args.start_min, 0, 0, 24 * 60 - 1);
   const endMin = clampInt(args.end_min, 0, 1, 24 * 60);
   if (endMin <= startMin) throw new Error('end_min must be > start_min');
-  const b = await sql`SELECT id FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL`;
+  const b = await sql`SELECT id, date, start_min, end_min FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL`;
   if (b.rows.length === 0) throw new Error('Booking not found or cancelled');
+  const before = b.rows[0];
   const { rows } = await sql`
     UPDATE bookings SET date = ${dateStr}, start_min = ${startMin}, end_min = ${endMin}, updated_at = NOW(),
            -- New time, fresh reminder beats (same reset as the calendar's reschedule).
@@ -3127,6 +3164,15 @@ async function reschedule_booking({ workspaceId, args }) {
      WHERE id = ${id} AND workspace_id = ${workspaceId}
      RETURNING id, date, start_min, end_min, client_name
   `;
+  // Tell the client (email + push) and the assigned helper, exactly like
+  // a move in the calendar. Fire-and-forget (kept alive past the response).
+  const { notifyBookingRescheduled } = await import('./bookingNotify.js');
+  notifyBookingRescheduled({
+    workspaceId, bookingId: id,
+    oldDateISO: before.date instanceof Date ? before.date.toISOString().slice(0, 10) : before.date,
+    oldStartMin: before.start_min, oldEndMin: before.end_min,
+    source: 'owner',
+  });
   return { booking: rows[0], rescheduled: true };
 }
 
@@ -3235,6 +3281,17 @@ async function send_document({ workspaceId, args }) {
     console.error('[ivy.send_document] email failed:', e?.message);
     sendResult = { ok: false, reason: e?.message || 'email failed' };
   }
+  // Same client push the Documents send gives (sendDocumentForSigning).
+  notifyClientSafe({
+    clientId,
+    type: 'documents',
+    payload: {
+      title: 'Document needs your signature',
+      body: doc.name,
+      url: '/me/documents',
+      tag: `doc-${id}`,
+    },
+  });
   const delivered = deliveryOf(sendResult);
   if (!delivered.ok) {
     return {

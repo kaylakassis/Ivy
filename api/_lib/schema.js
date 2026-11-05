@@ -4244,6 +4244,127 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_last_sent_at TIMESTAM
 CREATE INDEX IF NOT EXISTS idx_users_signup_reminder_due
   ON users(created_at) WHERE signup_reminder_step < 3 AND deleted_at IS NULL;
 
+-- Cancellation policy (owner-written, versioned). Every edit adds a new
+-- version; old versions stay so each acceptance points at the exact words
+-- the client saw. Rows are never edited or deleted (trigger below) except
+-- when the whole workspace is deleted (ON DELETE CASCADE).
+CREATE TABLE IF NOT EXISTS cancellation_policy_versions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  version      INTEGER NOT NULL,
+  body         TEXT NOT NULL,
+  body_sha256  TEXT NOT NULL,
+  created_by   UUID,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (workspace_id, version)
+);
+
+-- Per-workspace switches. require_acceptance is the "clients must accept
+-- my cancellation policy when they book" switch (off by default).
+-- refund_deposit_outside_window: when a client cancels before the
+-- service's cancellation window, their deposit goes back automatically.
+CREATE TABLE IF NOT EXISTS cancellation_policy_settings (
+  workspace_id                  UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  require_acceptance            BOOLEAN NOT NULL DEFAULT FALSE,
+  show_on_booking_page          BOOLEAN NOT NULL DEFAULT TRUE,
+  show_in_site_footer           BOOLEAN NOT NULL DEFAULT FALSE,
+  refund_deposit_outside_window BOOLEAN NOT NULL DEFAULT TRUE,
+  updated_at                    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Evidence that a client accepted the policy (for charge disputes). One
+-- row per booking acceptance: the exact text and its hash, the fees in
+-- effect, when, from where, and what name/email they typed. status is
+-- 'accepted' or 'not_accepted_older_app' (an older app that cannot show
+-- the checkbox booked while the switch was on). client_id / booking_id
+-- carry no foreign key on purpose: the record must outlive a deleted
+-- booking or client row.
+CREATE TABLE IF NOT EXISTS cancellation_policy_acceptances (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id      UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id         UUID,
+  booking_id        UUID,
+  policy_version_id UUID REFERENCES cancellation_policy_versions(id),
+  policy_version    INTEGER,
+  policy_text       TEXT NOT NULL DEFAULT '',
+  policy_sha256     TEXT,
+  status            TEXT NOT NULL DEFAULT 'accepted',
+  source            TEXT NOT NULL DEFAULT 'booking_page',
+  accepted_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip                TEXT,
+  user_agent        TEXT,
+  name_entered      TEXT,
+  email_entered     TEXT,
+  terms             JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_cpa_client ON cancellation_policy_acceptances(workspace_id, client_id, accepted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cpa_booking ON cancellation_policy_acceptances(workspace_id, booking_id);
+
+-- "Send my policy to this client" links (owner-created bookings). Only the
+-- sha256 of the token is stored.
+CREATE TABLE IF NOT EXISTS cancellation_policy_requests (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id    UUID NOT NULL,
+  booking_id   UUID,
+  token_hash   TEXT NOT NULL UNIQUE,
+  sent_to      TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ NOT NULL,
+  accepted_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_cpr_booking ON cancellation_policy_requests(workspace_id, booking_id);
+
+-- Policy versions and acceptances are append-only. The only delete allowed
+-- is the cascade from deleting the workspace itself (the parent row is
+-- already gone when the cascade runs).
+CREATE OR REPLACE FUNCTION cancellation_policy_append_only() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM workspaces WHERE id = OLD.workspace_id) THEN
+    RETURN OLD;
+  END IF;
+  RAISE EXCEPTION 'cancellation policy records are permanent and cannot be changed';
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS cancellation_policy_versions_append_only ON cancellation_policy_versions;
+CREATE TRIGGER cancellation_policy_versions_append_only
+  BEFORE UPDATE OR DELETE ON cancellation_policy_versions
+  FOR EACH ROW EXECUTE FUNCTION cancellation_policy_append_only();
+DROP TRIGGER IF EXISTS cancellation_policy_acceptances_append_only ON cancellation_policy_acceptances;
+CREATE TRIGGER cancellation_policy_acceptances_append_only
+  BEFORE UPDATE OR DELETE ON cancellation_policy_acceptances
+  FOR EACH ROW EXECUTE FUNCTION cancellation_policy_append_only();
+
+-- Booking money bookkeeping for the cancellation policy
+-- (api/_lib/bookingFees.js). fee_claimed_at / deposit_refund_claimed_at are
+-- short-lived claims so a fee is charged, and a deposit refunded, at most
+-- once even when two requests race. fee_from_deposit_amount: the part of a
+-- late-cancel / no-show fee covered by the kept deposit (so the card is only
+-- charged the rest). fee_invoice_id: the draft invoice made when the fee
+-- could not be charged automatically. cancelled_by: 'client' | 'owner'.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_claimed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_from_deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_charge_error TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refunded_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refunded_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_claimed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_error TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_by TEXT;
+-- Deposit refunds need the owner's one-tap approval. A cancellation that
+-- makes a deposit refundable under the policy opens a request:
+-- status 'pending' -> 'approved' (refund ran) or 'kept' (owner kept it),
+-- with who decided and when. Nothing is refunded while 'pending'.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_request_status TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_request_amount NUMERIC(12,2);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_request_reason TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_requested_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_decided_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_decided_by UUID;
+CREATE INDEX IF NOT EXISTS idx_bookings_deposit_review
+  ON bookings(workspace_id, deposit_refund_requested_at) WHERE deposit_refund_request_status = 'pending';
 -- Appointment reminders (api/_lib/reminderSettings.js).
 -- calendar_settings.client_reminders: the business-wide default for client
 --   reminders { enabled, minutes[], channels { email, sms, push } }.
@@ -4372,4 +4493,8 @@ CREATE TRIGGER document_signers_token_expiry_trg
 UPDATE document_signers
    SET token_expires_at = updated_at + INTERVAL '30 days'
  WHERE sign_token_hash IS NOT NULL AND token_expires_at IS NULL;
+-- Client portal invites: does adding a client (Add client, Ivy, a booking
+-- that creates the client) email them an invite automatically? NULL means
+-- the default, yes. Imports ignore it and stay quiet unless opted in.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS invite_new_clients BOOLEAN;
 `;

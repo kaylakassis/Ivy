@@ -10,6 +10,7 @@ import { api } from '../../lib/api.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
+import PolicyAcceptances from './PolicyAcceptances.jsx';
 import ClientReminders from './ClientReminders.jsx';
 import ClientDetails from './ClientDetails.jsx';
 
@@ -217,6 +218,8 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
 
           {/* Packages */}
           <ClientPackages client={client}/>
+
+          <PolicyAcceptances clientId={client.id}/>
 
           {/* Projects tied to this client - read-only summary list with
               a "+ New project" shortcut. Full management lives at the
@@ -1178,19 +1181,26 @@ function ServiceLogEntry({ entry }) {
 function PortalInviteRow({ client }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
-  const lastSent = client.inviteSentAt
-    ? new Date(client.inviteSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  // The stamp from the last resend in this drawer (the list row the drawer
+  // reads from is not refetched), else the one the client came with.
+  const [sentAt, setSentAt] = useState(client.inviteSentAt || null);
+  useEffect(() => { setSentAt(client.inviteSentAt || null); }, [client.id, client.inviteSentAt]);
+  const lastSent = sentAt
+    ? new Date(sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
   const resend = async () => {
     setBusy(true); setMsg(null);
     try {
       const r = await api.post('/clients/' + client.id + '/resend-invite');
+      if (r.sent && r.inviteSentAt) setSentAt(r.inviteSentAt);
       setMsg(r.sent
         ? 'Invite sent.'
         : (r.reason === 'muted'
-            ? 'Client has opted out of these emails - they won\'t receive it.'
-            : 'Could not send the invite.'));
+            ? 'They have turned off emails from your business, so the invite was not sent.'
+            : r.reason === 'workspace-quota-exceeded'
+              ? "Not sent: you reached today's email limit. Try again tomorrow."
+              : 'Could not send the invite.'));
     } catch (e) {
       setMsg(e.message || 'Could not send the invite');
     } finally {
@@ -1206,7 +1216,7 @@ function PortalInviteRow({ client }) {
     }}>
       <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
         <strong style={{ color: 'var(--fg)' }}>Portal not claimed yet.</strong>{' '}
-        {lastSent ? `Last invited ${lastSent}.` : 'No invite sent.'}
+        {lastSent ? `Invite sent ${lastSent}.` : 'No invite sent yet.'}
       </div>
       <button
         type="button"
@@ -1214,7 +1224,7 @@ function PortalInviteRow({ client }) {
         onClick={resend}
         disabled={busy}
         style={{ fontSize: 12, padding: '6px 10px' }}>
-        <Icons.Mail size={12}/> {busy ? 'Sending…' : 'Resend invite'}
+        <Icons.Mail size={12}/> {busy ? 'Sending…' : (lastSent ? 'Resend invite' : 'Send invite')}
       </button>
       {msg && (
         <div style={{ width: '100%', fontSize: 11.5, color: 'var(--muted)' }}>{msg}</div>

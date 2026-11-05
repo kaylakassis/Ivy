@@ -48,7 +48,7 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
     emailTheyHaveForYou: m.clientEmail,
   }));
   if (!myIds.length) {
-    return { businesses, profile: null, bookings: [], invoices: [], documents: [], messages: [], packages: [], memberships: [], reviews: [] };
+    return { businesses, profile: null, bookings: [], invoices: [], documents: [], messages: [], packages: [], memberships: [], reviews: [], cancellationPolicyAcceptances: [] };
   }
 
   const safe = (p) => p.catch((e) => {
@@ -110,6 +110,12 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
       `SELECT client_id, rating, text, created_at FROM reviews
         WHERE client_id = ANY($1) AND reviewer_user_id = $2 ORDER BY created_at DESC LIMIT 1000`, [myIds, user.id])),
   ]);
+
+  // Cancellation policies this person accepted (their own client rows
+  // only): the exact text, version and fees they agreed to.
+  const acceptances = await safe(sql.query(
+    `SELECT client_id, booking_id, status, source, accepted_at, policy_version, policy_text, policy_sha256, terms
+       FROM cancellation_policy_acceptances WHERE client_id = ANY($1) ORDER BY accepted_at DESC LIMIT 1000`, [myIds]));
 
   const p = profile.rows[0] || null;
   return {
@@ -178,5 +184,10 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
       currentPeriodEnd: r.current_period_end, cancelAtPeriodEnd: !!r.cancel_at_period_end,
     })),
     reviews: reviews.rows.map((r) => ({ business: biz(r.client_id), rating: r.rating, text: r.text, at: r.created_at })),
+    cancellationPolicyAcceptances: acceptances.rows.map((r) => ({
+      business: biz(r.client_id), bookingId: r.booking_id || null, status: r.status, source: r.source,
+      acceptedAt: r.accepted_at, policyVersion: r.policy_version, policyText: r.policy_text,
+      policySha256: r.policy_sha256, feesInEffect: r.terms || {},
+    })),
   };
 }

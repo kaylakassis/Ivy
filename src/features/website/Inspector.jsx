@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES, ANIMATIONS } from './sections.js';
+import { CancellationPolicyEditor } from './CancellationPolicySection.jsx';
 
 export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, onMoveToPage = null, onCopyToPage = null, mobile = false, currentPage = null, onPageChange = null }) {
   if (!section) {
@@ -582,6 +583,7 @@ function Repeater({ items, onAdd, onRemove, addLabel, children }) {
 
 // ---------- Per-section editors ----------
 const EDITORS = {
+  cancellation_policy: CancellationPolicyEditor,
   hero: ({ data, update }) => (
     <>
       <Row label="Headline"><TextInput value={data.headline} onChange={(e) => update({ headline: e.target.value })} /></Row>

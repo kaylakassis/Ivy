@@ -32,6 +32,20 @@ export function nativePushSupported() {
   return isNative();
 }
 
+// "Turned off in Ivy on this device" (Account / Notifications toggle). iOS
+// permission stays granted after that, so without this flag every launch
+// would quietly register the device again.
+const OFF_KEY = 'ivy_push_off';
+export function pushTurnedOffHere() {
+  try { return localStorage.getItem(OFF_KEY) === '1'; } catch { return false; }
+}
+export function setPushTurnedOffHere(off) {
+  try {
+    if (off) localStorage.setItem(OFF_KEY, '1');
+    else localStorage.removeItem(OFF_KEY);
+  } catch { /* private mode */ }
+}
+
 // 'default' | 'granted' | 'denied' - normalized to match web
 // Notification.permission so the settings UI renders identically.
 export async function nativePermissionState() {
@@ -97,7 +111,7 @@ export async function registerNativePush() {
 // already granted (never prompts) - keeps the server's token fresh
 // across Apple's token rotations.
 export async function initNativePushOnLaunch() {
-  if (!isNative()) return;
+  if (!isNative() || pushTurnedOffHere()) return;
   try {
     const { PushNotifications: P } = await plugin();
     const { receive } = await P.checkPermissions();
@@ -108,6 +122,17 @@ export async function initNativePushOnLaunch() {
     // eslint-disable-next-line no-console
     console.warn('[nativePush] launch init failed:', err?.message);
   }
+}
+
+// Sign-out: drop this device's token from the signed-in account (the
+// session is still valid at this point) but keep the iOS registration and
+// the cached token, so whoever signs in next re-registers the same device
+// to themselves on their first launch (initNativePushOnLaunch).
+export async function detachNativePush() {
+  if (!isNative()) return;
+  let token = null;
+  try { token = localStorage.getItem('ivy_apns_token'); } catch { /* private mode */ }
+  if (token) await api.del('/push/device', { token }).catch(() => {});
 }
 
 export async function unregisterNativePush() {

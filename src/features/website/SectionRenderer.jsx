@@ -18,6 +18,7 @@ import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 ensureBuilderFonts();
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
+import CancellationPolicySection, { PolicyFooterLink } from './CancellationPolicySection.jsx';
 
 // Link context for the public site: section anchors on this page, the
 // site's pages and the link base. The editor renders without a provider,
@@ -669,6 +670,7 @@ function Footer({ data }) {
         <div style={{ fontSize: 12, color: 'var(--site-muted)' }}>
           © {data.year} {data.businessName}. Built with Ivy.
         </div>
+        <PolicyFooterLink/>
       </div>
     </footer>
   );
@@ -1663,4 +1665,5 @@ const RENDERERS = {
   before_after: BeforeAfter,
   social_feed:  SocialFeed,
   custom_html:  CustomHtml,
+  cancellation_policy: CancellationPolicySection,
 };

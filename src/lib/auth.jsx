@@ -6,6 +6,7 @@ import { setNativeAuthToken, clearNativeAuthToken } from './nativeAuth.js';
 import { clearMeCache, forgetLanding } from './landing.js';
 import { clearDeviceCache, clearSiteHistory } from './deviceCache.js';
 import { logOutIap } from './iap.js';
+import { detachPushForSignOut } from './push.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
 const Ctx = createContext(null);
@@ -161,6 +162,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Release this device's notifications from the account first, while
+    // the session is still valid: otherwise the next person to sign in on
+    // this phone or browser would keep getting this account's pushes (and
+    // their own registration would be refused as "token in use"). Never
+    // throws and never waits more than a few seconds.
+    await detachPushForSignOut().catch(() => {});
     // Always clear local auth state even if the network call fails, so the
     // user is never stuck "logged in" with no feedback when offline / on a 5xx.
     try { await api.post('/auth/logout'); }
