@@ -51,13 +51,14 @@ export default function AuthPage({ mode = 'signin' }) {
   const isSignUp = mode === 'signup';
   const canSubmit = !busy
     && (!isSignUp
-      || (name.trim().length > 0 && password.length >= 8 && acceptedTerms));
+      || (name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && password.length >= 8 && acceptedTerms));
 
   const submit = async (e) => {
     e.preventDefault();
     setErr(null);
     if (isSignUp) {
       if (!name.trim()) { setErr('Please share your name'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setErr('Please enter a valid email address'); return; }
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
       if (!acceptedTerms) {
         setErr('You must accept the Terms and Privacy Policy to continue.');
@@ -238,6 +239,11 @@ export default function AuthPage({ mode = 'signin' }) {
           {busy ? 'Working…' : (isSignUp ? 'Create account' : 'Sign in')}
           {!busy && <Icons.Arrow size={14} sw={2} />}
         </button>
+        )}
+        {!emailWarn && isSignUp && !canSubmit && !busy && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: -4 }}>
+            Fill in your name, email and password, and check the box to agree to the Terms and Privacy Policy.
+          </div>
         )}
 
         {isSignUp && role === 'owner' && (

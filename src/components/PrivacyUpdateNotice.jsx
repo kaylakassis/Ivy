@@ -3,11 +3,14 @@
 // (api/auth/me.js privacy.needsAcknowledgement). It does not list the
 // changes: it says the policy was updated, lets them read the whole policy
 // right here (loaded only when they open it), and records their acceptance
-// on "Accept". They can't use the app behind it until they accept; anyone
-// who doesn't agree is pointed to exporting their data and closing their
-// account. Never shown on top of the Terms prompt.
+// on "Accept" (opt in). "Decline" (opt out) explains that accepting is
+// required to use Ivy and offers two ways forward: review it again and
+// accept, or go to the account page to cancel the subscription, download
+// their data and close the account. While they are on that account page the
+// notice steps aside (a slim banner stays); anywhere else it returns.
+// Never shown on top of the Terms prompt.
 import React, { Suspense, lazy, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
 import { useAuth } from '../lib/auth.jsx';
 
@@ -19,15 +22,46 @@ export default function PrivacyUpdateNotice() {
   const [err, setErr] = useState(null);
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
+  const nav = useNavigate();
+  const [declined, setDeclined] = useState(() => {
+    try { return sessionStorage.getItem('ivy_privacy_declined') === '1'; } catch { return false; }
+  });
+  const markDeclined = (v) => {
+    setDeclined(v);
+    try { if (v) sessionStorage.setItem('ivy_privacy_declined', '1'); else sessionStorage.removeItem('ivy_privacy_declined'); } catch { /* private mode */ }
+  };
   // Where this person manages their account (clients and helpers have their own).
-  const accountPath = pathname.startsWith('/me') ? '/me/profile' : pathname.startsWith('/helper') ? '/helper/account' : '/account';
+  const role = pathname.startsWith('/me') ? 'client' : pathname.startsWith('/helper') ? 'helper' : 'owner';
+  const accountPath = role === 'client' ? '/me/profile' : role === 'helper' ? '/helper/account' : '/account';
   if (!user || !privacyUpdatePending) return null;
 
   const ok = async () => {
     setBusy(true); setErr(null);
-    try { await acknowledgePrivacy(); }
+    try { await acknowledgePrivacy(); markDeclined(false); }
     catch (e) { setErr(e.message || 'Could not save that. Please try again.'); setBusy(false); }
   };
+
+  const leaveOptions = role === 'owner'
+    ? 'cancel your subscription, download your data and close your account'
+    : 'download your data and close your account';
+
+  // Declined and now on their account page: let them use it, with a banner.
+  if (declined && pathname.startsWith(accountPath)) {
+    return (
+      <div role="status" style={{
+        position: 'fixed', left: 12, right: 12, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)', zIndex: 290,
+        maxWidth: 560, margin: '0 auto', padding: '12px 14px', borderRadius: 12,
+        background: 'var(--surface)', border: '1px solid var(--border-strong)', boxShadow: '0 12px 40px rgba(0,0,0,0.3)',
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, color: 'var(--fg-2)',
+      }}>
+        <span style={{ flex: '1 1 220px' }}>You declined the updated Privacy Policy. Accepting it is required to keep using Ivy.</span>
+        <button type="button" className="btn btn-primary" style={{ padding: '8px 14px', fontSize: 12.5 }}
+          onClick={() => { markDeclined(false); setOpen(true); }}>
+          Review and accept
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="privacy-update-title"
@@ -49,6 +83,32 @@ export default function PrivacyUpdateNotice() {
           background: 'var(--accent)', color: 'var(--accent-ink)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}><Icons.Lock size={19}/></div>
+{declined ? (
+        <>
+        <h2 id="privacy-update-title" style={{
+          margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500,
+          fontSize: 21, letterSpacing: '-0.02em', lineHeight: 1.25,
+        }}>Accepting the Privacy Policy is required to use Ivy</h2>
+        <p style={{ margin: 0, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          The Privacy Policy explains how Ivy keeps and uses the information that runs your account, so we need your agreement before you continue.
+          You can read it again and accept whenever you're ready. If you'd rather not, you can {leaveOptions} from your account settings.
+        </p>
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+          Questions? Email <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>.
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+          <button type="button" className="btn btn-outline" style={{ padding: '10px 16px' }}
+            onClick={() => nav(accountPath)}>
+            Go to account settings
+          </button>
+          <button type="button" className="btn btn-primary" style={{ padding: '10px 18px' }}
+            onClick={() => { markDeclined(false); setOpen(true); }}>
+            Review and accept
+          </button>
+        </div>
+        </>
+        ) : (
+        <>
         <h2 id="privacy-update-title" style={{
           margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500,
           fontSize: 21, letterSpacing: '-0.02em', lineHeight: 1.25,
@@ -74,15 +134,17 @@ export default function PrivacyUpdateNotice() {
             </Suspense>
           </div>
         )}
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-          Don't agree? You can <Link to={accountPath} style={{ color: 'var(--accent)' }}>download your data and close your account</Link>, or email <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>.
-        </p>
         {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" onClick={() => markDeclined(true)} disabled={busy} className="btn btn-outline" style={{ padding: '10px 18px' }}>
+            Decline
+          </button>
           <button type="button" onClick={ok} disabled={busy} className="btn btn-primary" style={{ padding: '10px 22px' }}>
             {busy ? 'Saving…' : 'Accept'}
           </button>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

@@ -168,8 +168,14 @@ export function PrivacyPolicyBody() {
         it.</P>
 
       <H2>Changes to this policy</H2>
-      <P>We may update this policy as the product evolves. Material changes
-        will be announced by email at least 14 days before they take effect.</P>
+      <P>We may update this policy as Ivy grows. When we make a material change,
+        the updated policy takes effect when it is posted, and the next time you
+        use Ivy we will let you know that the Privacy Policy has been updated. You
+        can read the full policy and choose to accept it (opt in) or decline it
+        (opt out). Accepting the current Privacy Policy is required to use Ivy.
+        If you decline, you can review it again and accept at any time, or you
+        can cancel your subscription, download your data and close your
+        account.</P>
 
       <H2>Contact</H2>
       <P>Questions about this policy:{' '}
