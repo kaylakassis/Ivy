@@ -408,6 +408,7 @@ export default async function handler(req, res) {
                 OR wp.ideal_client IS NOT NULL
                 OR wp.heard_from IS NOT NULL OR wp.heard_from_other IS NOT NULL
                 OR wp.stage IS NOT NULL
+                OR wp.location_state IS NOT NULL OR wp.location_country IS NOT NULL
            )::int AS answered
            FROM admin_real_workspaces w
            LEFT JOIN admin_real_workspace_profile wp ON wp.workspace_id = w.id
@@ -433,6 +434,31 @@ export default async function handler(req, res) {
         GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
       [fromIso, toIso],
     ).catch(() => ({ rows: [] }));
+
+    // "Where is your business based?" for the same cohort: a two-letter US
+    // state code, or 'intl' for a business outside the US (countries are
+    // broken out separately). Aggregate counts only. Best-effort.
+    const [locationRows, locationCountryRows] = await Promise.all([
+      sql.query(
+        `SELECT COALESCE(wp.location_state, CASE WHEN wp.location_country IS NOT NULL THEN 'intl' END) AS k,
+                COUNT(*)::int AS n
+           FROM admin_real_workspace_profile wp
+           JOIN admin_real_workspaces w ON w.id = wp.workspace_id
+          WHERE w.created_at >= $1 AND w.created_at < $2
+            AND (wp.location_state IS NOT NULL OR wp.location_country IS NOT NULL)
+          GROUP BY 1 ORDER BY 2 DESC LIMIT 60`,
+        [fromIso, toIso],
+      ).catch(() => ({ rows: [] })),
+      sql.query(
+        `SELECT INITCAP(LOWER(TRIM(wp.location_country))) AS k, COUNT(*)::int AS n
+           FROM admin_real_workspace_profile wp
+           JOIN admin_real_workspaces w ON w.id = wp.workspace_id
+          WHERE w.created_at >= $1 AND w.created_at < $2
+            AND wp.location_state IS NULL AND wp.location_country IS NOT NULL
+          GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
+        [fromIso, toIso],
+      ).catch(() => ({ rows: [] })),
+    ]);
 
     const cancelled = churnCancelledRow.rows[0]?.n || 0;
     const denom = churnActiveAtStartRow.rows[0]?.n || 0;
@@ -642,6 +668,8 @@ export default async function handler(req, res) {
         heardFrom: onbHeardRows.rows.map((r) => ({ k: r.k, n: r.n })),
         stage:     onbStageRows.rows.map((r) => ({ k: r.k, n: r.n })),
         switchFrom: switchFromRows.rows.map((r) => ({ k: r.k, n: r.n })),
+        location:   locationRows.rows.map((r) => ({ k: r.k, n: r.n })),
+        locationCountry: locationCountryRows.rows.map((r) => ({ k: r.k, n: r.n })),
       },
     });
   } catch (err) {

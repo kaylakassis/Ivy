@@ -88,6 +88,11 @@ export default function Calendar() {
       setDrawer('share');
       const next = new URLSearchParams(calParams); next.delete('share');
       setCalParams(next, { replace: true });
+    } else if (calParams.get('availability') === '1') {
+      // Dashboard "Set your weekly availability" checklist item.
+      setDrawer('availability');
+      const next = new URLSearchParams(calParams); next.delete('availability');
+      setCalParams(next, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calParams]);

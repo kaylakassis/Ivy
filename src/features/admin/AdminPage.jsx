@@ -16,6 +16,8 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
+import { US_STATE_NAME } from '../../lib/locations.js';
+import { CATEGORIES } from '../../lib/categories.js';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
@@ -896,6 +898,9 @@ const ONB_LABELS = {
     spreadsheet: 'A spreadsheet', phone: 'Phone contacts', paper: 'Paper book or notes',
     google: 'Google Calendar', other: 'Somewhere else', new: 'Just getting started',
   },
+  // Two-letter US state codes, plus 'intl' for a business outside the US.
+  location: { ...US_STATE_NAME, intl: 'Outside the US' },
+  locationCountry: {},
 };
 
 function OnboardingInsightsCard({ onboarding }) {
@@ -907,6 +912,8 @@ function OnboardingInsightsCard({ onboarding }) {
     { key: 'heardFrom', title: 'How they heard about us' },
     { key: 'stage',     title: 'Business stage' },
     { key: 'switchFrom', title: 'Switching from' },
+    { key: 'location',  title: 'Where they are based', limit: 10 },
+    ...((onboarding.locationCountry || []).length ? [{ key: 'locationCountry', title: 'Outside the US', limit: 10 }] : []),
   ];
   return (
     <div className="card" style={{ padding: 22 }}>
@@ -924,7 +931,7 @@ function OnboardingInsightsCard({ onboarding }) {
       ) : (
         <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginTop: 12 }}>
           {groups.map((g) => (
-            <DistList key={g.key} title={g.title} rows={onboarding[g.key] || []} labels={ONB_LABELS[g.key]}/>
+            <DistList key={g.key} title={g.title} rows={onboarding[g.key] || []} labels={ONB_LABELS[g.key]} limit={g.limit}/>
           ))}
         </div>
       )}
@@ -934,8 +941,10 @@ function OnboardingInsightsCard({ onboarding }) {
 
 // A single labelled distribution: option rows with a bar sized to the
 // share of the group's total, sorted by frequency (server already sorts).
-function DistList({ title, rows, labels }) {
+function DistList({ title, rows, labels, limit }) {
+  const [showAll, setShowAll] = useState(false);
   const total = rows.reduce((s, r) => s + r.n, 0);
+  const visible = limit && !showAll ? rows.slice(0, limit) : rows;
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8 }}>{title}</div>
@@ -943,12 +952,13 @@ function DistList({ title, rows, labels }) {
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>-</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {rows.map((r) => {
+          {visible.map((r) => {
             const pct = Math.round((r.n / total) * 1000) / 10;
             return (
               <div key={r.k}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12.5, marginBottom: 3 }}>
-                  <span style={{ flex: 1 }}>{labels[r.k] || r.k}</span>
+                  <span style={{ flex: 1 }}>{(labels && labels[r.k]) || r.k}</span>
+                  {limit ? <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtN(r.n)} ·</span> : null}
                   <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
                 </div>
                 <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-2)', overflow: 'hidden' }}>
@@ -957,6 +967,12 @@ function DistList({ title, rows, labels }) {
               </div>
             );
           })}
+          {limit && rows.length > limit && (
+            <button type="button" className="btn btn-ghost" onClick={() => setShowAll((v) => !v)}
+              style={{ alignSelf: 'flex-start', padding: '3px 8px', fontSize: 12, color: 'var(--muted)' }}>
+              {showAll ? 'Show fewer' : `Show all ${rows.length}`}
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -1255,6 +1271,13 @@ function UsersTab() {
   const [creating, setCreating] = useState(false);
   const [active, setActive] = useState(null);
   const [sort, setSort]     = useState('');
+  // Rows whose onboarding answers are expanded inline.
+  const [openAnswers, setOpenAnswers] = useState(() => new Set());
+  const toggleAnswers = (id) => setOpenAnswers((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   const reload = () => {
     setData(null); setErr(null);
@@ -1316,12 +1339,13 @@ function UsersTab() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>
-                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Revenue in Ivy</Th><Th>Joined</Th><Th>Last active</Th><Th>Verified</Th><Th></Th>
+                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Revenue in Ivy</Th><Th>Joined</Th><Th>Last active</Th><Th>Verified</Th><Th>Onboarding</Th><Th></Th>
                 </tr>
               </thead>
               <tbody>
                 {data.users.map((u) => (
-                  <tr key={u.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <React.Fragment key={u.id}>
+                  <tr style={{ borderTop: '1px solid var(--border)' }}>
                     <Td>{u.email}</Td>
                     <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
@@ -1345,15 +1369,36 @@ function UsersTab() {
                     <Td><span style={{ color: (u.lastActiveAt || u.lastLoginAt) ? 'inherit' : 'var(--muted)' }} title={(u.lastActiveAt || u.lastLoginAt) ? `Last active ${new Date(u.lastActiveAt || u.lastLoginAt).toLocaleString()}` : 'No activity recorded'}>{lastLoginLabel(u.lastActiveAt || u.lastLoginAt)}</span></Td>
                     <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
+                      {u.workspace ? (
+                        <button onClick={() => toggleAnswers(u.id)} className="btn btn-ghost"
+                          aria-expanded={openAnswers.has(u.id)}
+                          style={{ padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap', gap: 5 }}>
+                          {openAnswers.has(u.id) ? 'Hide answers ▴' : 'Answers ▾'}
+                        </button>
+                      ) : <span style={{ color: 'var(--muted)' }}>-</span>}
+                    </Td>
+                    <Td>
                       <button onClick={() => setActive(u)} className="btn btn-ghost"
                         style={{ padding: '4px 10px', fontSize: 12 }}>
                         Manage
                       </button>
                     </Td>
                   </tr>
+                  {openAnswers.has(u.id) && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '0 12px 14px' }}>
+                        {/* Sticky so the panel stays in view when the wide
+                            table is scrolled sideways on a phone. */}
+                        <div style={{ position: 'sticky', left: 12, maxWidth: 'min(760px, calc(100vw - 56px))' }}>
+                          <OnboardingAnswersPanel userId={u.id}/>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 ))}
                 {data.users.length === 0 && (
-                  <tr><td colSpan={8} style={{ padding: 28 }}>
+                  <tr><td colSpan={9} style={{ padding: 28 }}>
                     <EmptyNote icon="Users" title="No users match" hint="Try a different filter or search."/>
                   </td></tr>
                 )}
@@ -1463,6 +1508,130 @@ function WorkspaceMetricsPanel({ metrics, err }) {
   );
 }
 
+// Wizard step ids → the names owners see (src/features/onboarding/
+// OnboardingPage.jsx stepsFor). Unknown ids show as-is.
+const ONB_STEP_LABELS = {
+  welcome: 'Welcome', business: 'Business', about: 'About you', services: 'Services',
+  availability: 'Availability', first_product: 'First product', switch: 'Switching to Ivy?',
+  payments: 'Payments', branding: 'Branding', first_client: 'First client', website: 'Website',
+  impact: 'Your upside', ready: 'Ready', tour: 'Tour', done: 'Done',
+};
+const fmtWhen = (iso) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+
+// One owner's onboarding answers, fetched on demand from
+// /api/admin/users/:id/onboarding (super-admin only). Shown inline under a
+// row in the Users table and inside the user detail sheet. Questions an
+// older account never saw read "Not answered".
+function OnboardingAnswersPanel({ userId }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setData(null); setErr(null);
+    api.get(`/admin/users/${userId}/onboarding`)
+      .then((r) => { if (live) setData(r); })
+      .catch((e) => { if (live) setErr(e.message || 'Could not load answers'); });
+    return () => { live = false; };
+  }, [userId]);
+
+  const shell = {
+    background: 'var(--surface-2)', borderRadius: 12, border: '1px solid var(--border)',
+    padding: 14, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13,
+  };
+  if (err) return <ErrCard msg={err}/>;
+  if (!data) return <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading answers…</div>;
+  if (!data.workspace) {
+    return <div style={{ ...shell, color: 'var(--fg-2)' }}>{data.message || 'This account has no business.'}</div>;
+  }
+
+  const a = data.answers || {};
+  const none = <span style={{ color: 'var(--muted)' }}>Not answered</span>;
+  const list = (ids, labels, other, otherPrefix = 'Other') => {
+    const parts = (ids || []).map((id) => labels[id] || id);
+    if (other) parts.push(`${otherPrefix}: "${other}"`);
+    return parts.length ? parts.join(', ') : null;
+  };
+  const heard = list(a.heardFrom, ONB_LABELS.heardFrom, a.heardFromOther);
+  const location = a.locationState
+    ? `${US_STATE_NAME[a.locationState] || a.locationState}, United States`
+    : (a.locationCountry ? `Outside the US: ${a.locationCountry}` : null);
+  const categoryLabel = data.workspace.category
+    ? (CATEGORIES.find((c) => c.id === data.workspace.category)?.label || data.workspace.category)
+    : null;
+
+  const prog = data.progress || {};
+  const stamps = prog.stepTimestamps || {};
+  const stepIds = Array.from(new Set([
+    ...Object.keys(stamps), ...(prog.completedSteps || []), ...(prog.skippedSteps || []),
+  ])).sort((x, y) => String(stamps[x] || '9').localeCompare(String(stamps[y] || '9')));
+  const statusOf = (id) => {
+    if ((prog.skippedSteps || []).includes(id)) return { label: 'Skipped', color: 'var(--warn)' };
+    if ((prog.completedSteps || []).includes(id)) return { label: 'Done', color: 'var(--ok)' };
+    if (prog.currentStep === id && !prog.finishedAt) return { label: 'Here now', color: 'var(--accent)' };
+    return { label: 'Seen', color: 'var(--muted)' };
+  };
+
+  const Row = ({ k, children }) => (
+    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', padding: '3px 0' }}>
+      <div style={{ color: 'var(--muted)', flex: '0 0 150px', minWidth: 120 }}>{k}</div>
+      <div style={{ flex: '1 1 220px', minWidth: 0, overflowWrap: 'anywhere', color: 'var(--fg)' }}>{children}</div>
+    </div>
+  );
+
+  return (
+    <div style={shell} data-testid="onboarding-answers">
+      <div className="metric-label">Answers</div>
+      <Row k="How they heard">{heard || none}</Row>
+      {(a.referralName || (a.heardFrom || []).includes('referral')) && (
+        <Row k="Referred by">{a.referralName || none}</Row>
+      )}
+      {data.signupReferral && (
+        <Row k="Signed up with code">
+          {data.signupReferral.code} <span style={{ color: 'var(--muted)' }}>({data.signupReferral.kind === 'affiliate' ? 'partner' : 'friend'} link)</span>
+        </Row>
+      )}
+      <Row k="Based in">{location || none}</Row>
+      <Row k="Business stage">{list(a.stage, ONB_LABELS.stage) || none}</Row>
+      <Row k="Goals">{list(a.goals, ONB_LABELS.goal, a.goalOther) || none}</Row>
+      <Row k="Draining them">{list(a.challenges, ONB_LABELS.challenge, a.challengeOther) || none}</Row>
+      <Row k="Ideal client">{a.idealClient ? `"${a.idealClient}"` : none}</Row>
+      <Row k="Switching from">{data.switchFrom ? (ONB_LABELS.switchFrom[data.switchFrom] || data.switchFrom) : none}</Row>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Business</div>
+      <Row k="Name">{data.workspace.businessName || none}</Row>
+      <Row k="Category">{categoryLabel || none}</Row>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Progress</div>
+      <Row k="Finished">
+        {prog.finishedAt
+          ? fmtWhen(prog.finishedAt)
+          : <span style={{ color: 'var(--warn)' }}>Not yet{prog.currentStep ? ` (on ${ONB_STEP_LABELS[prog.currentStep] || prog.currentStep})` : ''}</span>}
+      </Row>
+      {stepIds.length === 0 ? (
+        <div style={{ color: 'var(--muted)' }}>No step history recorded.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {stepIds.map((id) => {
+            const s = statusOf(id);
+            return (
+              <div key={id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 12.5 }}>
+                <span style={{ flex: '0 0 130px', fontWeight: 550 }}>{ONB_STEP_LABELS[id] || id}</span>
+                <span style={{ flex: '0 0 70px', color: s.color, fontWeight: 600 }}>{s.label}</span>
+                <span style={{ color: 'var(--muted)' }}>{fmtWhen(stamps[id]) ? `first seen ${fmtWhen(stamps[id])}` : ''}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CreateUserModal({ onClose, onCreated }) {
   const [email, setEmail] = useState('');
   const [name, setName]   = useState('');
@@ -1564,6 +1733,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
   // Counts + sums only; PRIVACY: no client identities or message text
   // are returned by /api/admin/users/[id]/metrics by design.
   const [metricsOpen, setMetricsOpen] = useState(false);
+  const [answersOpen, setAnswersOpen] = useState(false);
   const [metrics, setMetrics] = useState(null);
   const [metricsErr, setMetricsErr] = useState(null);
   useEffect(() => {
@@ -1733,6 +1903,20 @@ function UserDetailModal({ user, onClose, onChanged }) {
             </button>
           )}
         </div>
+
+        {user.workspace && (
+          <>
+            <div className="metric-label" style={{ marginTop: 8 }}>Onboarding answers</div>
+            {!answersOpen ? (
+              <button onClick={() => setAnswersOpen(true)} className="btn btn-outline"
+                style={{ padding: '6px 12px', fontSize: 12, alignSelf: 'flex-start' }}>
+                <Icons.Doc size={12} sw={1.7}/> Show answers
+              </button>
+            ) : (
+              <OnboardingAnswersPanel userId={user.id}/>
+            )}
+          </>
+        )}
 
         <div className="metric-label" style={{ marginTop: 8 }}>Workspace metrics</div>
         {!metricsOpen ? (

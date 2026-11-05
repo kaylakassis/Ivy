@@ -22,9 +22,9 @@ const slugify = (s) => String(s || '')
 // shape the calendar API expects (9:00–17:00 = 540–1020).
 const NINE_TO_FIVE = [{ start: 540, end: 1020 }];
 const PRESETS = {
-  weekdays: { label: 'Weekdays, 9–5', avail: { 1: NINE_TO_FIVE, 2: NINE_TO_FIVE, 3: NINE_TO_FIVE, 4: NINE_TO_FIVE, 5: NINE_TO_FIVE } },
-  everyday: { label: 'Every day, 9–5', avail: { 0: NINE_TO_FIVE, 1: NINE_TO_FIVE, 2: NINE_TO_FIVE, 3: NINE_TO_FIVE, 4: NINE_TO_FIVE, 5: NINE_TO_FIVE, 6: NINE_TO_FIVE } },
-  weekends: { label: 'Weekends, 9–5', avail: { 0: NINE_TO_FIVE, 6: NINE_TO_FIVE } },
+  weekdays: { label: 'Weekdays, 9 to 5', avail: { 1: NINE_TO_FIVE, 2: NINE_TO_FIVE, 3: NINE_TO_FIVE, 4: NINE_TO_FIVE, 5: NINE_TO_FIVE } },
+  everyday: { label: 'Every day, 9 to 5', avail: { 0: NINE_TO_FIVE, 1: NINE_TO_FIVE, 2: NINE_TO_FIVE, 3: NINE_TO_FIVE, 4: NINE_TO_FIVE, 5: NINE_TO_FIVE, 6: NINE_TO_FIVE } },
+  weekends: { label: 'Weekends, 9 to 5', avail: { 0: NINE_TO_FIVE, 6: NINE_TO_FIVE } },
 };
 
 function IvyBubble({ children }) {
@@ -94,7 +94,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
       // 2) Your main session as a bookable service.
       const priceNum = Number(svc.price) || 0;
       const durNum = Math.max(5, Number(svc.durationMinutes) || 60);
-      mark(`Adding "${svc.name.trim() || 'Service'}" — ${durNum} min, $${priceNum}…`);
+      mark(`Adding "${svc.name.trim() || 'Service'}", ${durNum} min, $${priceNum}…`);
       await api.put('/calendar/services', {
         services: [{
           name: svc.name.trim() || 'Consultation',
@@ -107,7 +107,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
 
       // 3) Availability. Seed the booking timezone from the owner's browser so
       // their page shows correct times without them ever opening settings.
-      mark(`Setting your hours — ${PRESETS[presetKey].label}…`);
+      mark(`Setting your hours: ${PRESETS[presetKey].label}…`);
       await api.patch('/calendar', {
         availability: PRESETS[presetKey].avail,
         ...(browserTimeZone() ? { timezone: browserTimeZone() } : {}),
@@ -123,7 +123,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
 
       setPhase('done');
     } catch (e) {
-      setErr(e?.message || 'Something went wrong — you can try again or set it up manually.');
+      setErr(e?.message || 'Something went wrong. You can try again or set it up yourself.');
       setPhase('q3');
     }
   };
@@ -142,15 +142,15 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
   return (
     <div style={{ maxWidth: 560, margin: '0 auto' }}>
       <div ref={scrollRef} style={{ maxHeight: '52vh', overflowY: 'auto', padding: '4px 2px' }}>
-        <IvyBubble>Hi {firstName}! I'm Ivy 👋 I'll get you set up in about a minute — just answer a few things and I'll do the rest.</IvyBubble>
+        <IvyBubble>Hi {firstName}! I'm Ivy 👋 I'll get you set up in about a minute. Just answer a few things and I'll do the rest.</IvyBubble>
 
         {/* Q1 */}
-        <IvyBubble>First — what should we call your business?</IvyBubble>
+        <IvyBubble>First, what should we call your business?</IvyBubble>
         {phase !== 'q1' && <AnswerLine text={bizName.trim()} />}
 
         {/* Q2 */}
         {(phase === 'q2' || phase === 'q3' || phase === 'working') && (
-          <IvyBubble>Great. What's the main service you offer — its name, length, and price?</IvyBubble>
+          <IvyBubble>Great. What's the main service you offer? Its name, length, and price?</IvyBubble>
         )}
         {(phase === 'q3' || phase === 'working') && (
           <AnswerLine text={`${svc.name.trim() || 'Service'} · ${svc.durationMinutes} min · $${Number(svc.price) || 0}`} />
@@ -158,7 +158,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
 
         {/* Q3 */}
         {(phase === 'q3' || phase === 'working') && (
-          <IvyBubble>Last one — when are you generally available? I'll set it now (you can fine-tune it anytime).</IvyBubble>
+          <IvyBubble>Last one: when are you generally available? I'll set it now (you can fine-tune it anytime).</IvyBubble>
         )}
 
         {/* Working narration */}
@@ -192,7 +192,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
           {phase === 'q2' && (
             <form onSubmit={(e) => { e.preventDefault(); if (q2Valid) setPhase('q3'); }} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input className="input" autoFocus value={svc.name} onChange={(e) => setSvc({ ...svc, name: e.target.value })}
-                placeholder="Service name — e.g. Consultation" style={{ padding: '12px 14px', fontSize: 15 }} />
+                placeholder="Service name, e.g. Consultation" style={{ padding: '12px 14px', fontSize: 15 }} />
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <label style={{ flex: '1 1 120px', fontSize: 12.5, color: 'var(--muted)' }}>
                   Minutes

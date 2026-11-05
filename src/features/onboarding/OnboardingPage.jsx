@@ -21,10 +21,17 @@
 //   impact       → "here's what Ivy sees for you" personalized proof
 //   done         → celebrate + route to dashboard
 //
-// "Skip" on any optional step records the step into skippedSteps so
-// the dashboard checklist can keep nudging until it's actually done.
-// "Save & exit" exits without marking the wizard complete; the next
-// sign-in resumes here.
+// The beginning is required: welcome, business (name + handle) and the
+// About step's core questions (goals, what's draining them, stage, where
+// the business is based, how they heard about Ivy). Everything after that
+// is setup and every setup step offers "Skip for now", which records the
+// step into skippedSteps so the dashboard checklist keeps nudging until
+// it's actually done. "Save & exit" (setup steps only) exits without
+// marking the wizard complete; the next sign-in resumes here.
+//
+// Required answers are enforced HERE, in the UI. The server only checks
+// shape and allowlists, so older app builds that never send the newer
+// answers keep saving fine.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { browserTimeZone } from '../../lib/timezones.js';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -40,17 +47,23 @@ import ReadyStep from './ReadyStep.jsx';
 import { TRIAL_DAYS, IVY_PRICE, STACK_TOTAL, IVY_PRICE_MONTHLY_EQUIV } from '../../lib/pricing.js';
 import { computeImpact } from './impact.js';
 import SwitchStep from './SwitchStep.jsx';
+import {
+  OTHER, validateAbout, aboutPayload, aboutFromProfile, scrollToFirstError,
+  ChoiceField, LocationField, HeardFromField,
+} from './aboutFields.jsx';
+
+// OTHER / OUTSIDE_US sentinels, validation and the save payload for the
+// About step live in aboutFields.jsx (shared with the dashboard prompt).
+
+// Steps that must be answered before setup starts. "Save & exit" is
+// hidden on these so the core answers can't be skipped.
+const REQUIRED_STEPS = new Set(['welcome', 'business', 'about']);
 
 // Step set per business type. 'both' keeps every step so existing
 // workspaces aren't affected; 'service' removes the first_product
 // step (irrelevant to pure-service); 'product' removes services +
 // availability (they don't take appointments) and inserts a
 // lightweight first_product step in their place.
-// UI sentinel for "Other" on a preset question - kept in the same state
-// slot as a preset id. The server's allowlist maps it to null and keeps
-// the free-text answer, so no special handling is needed at save time.
-const OTHER = '__other__';
-
 function stepsFor(businessType) {
   const base = [
     { id: 'welcome',      label: 'Welcome',         optional: false },
@@ -60,12 +73,14 @@ function stepsFor(businessType) {
   // "Switching to Ivy?" sits right after services exist, so imported
   // appointments can be matched to a service.
   const SWITCH = { id: 'switch', label: 'Switching to Ivy?', optional: true };
+  // Setup steps from here on are all skippable ("Skip for now"); the
+  // dashboard's "Finish setting up" checklist picks up anything skipped.
   if (businessType === 'product') {
-    base.push({ id: 'first_product', label: 'First product', optional: false });
+    base.push({ id: 'first_product', label: 'First product', optional: true });
     base.push(SWITCH);
   } else {
-    base.push({ id: 'services',     label: 'Services',     optional: false });
-    base.push({ id: 'availability', label: 'Availability', optional: false });
+    base.push({ id: 'services',     label: 'Services',     optional: true });
+    base.push({ id: 'availability', label: 'Availability', optional: true });
     base.push(SWITCH);
     if (businessType === 'both') {
       base.push({ id: 'first_product', label: 'First product', optional: true });
@@ -119,6 +134,13 @@ function prettifyError(e) {
   return e?.message || 'Something went wrong.';
 }
 
+// No answer, or the server itself failed (not a "that handle is taken"
+// kind of answer the owner can fix).
+function isServerTrouble(e) {
+  const st = Number(e?.status);
+  return !st || st >= 500;
+}
+
 export default function OnboardingPage() {
   const [tweaks] = useTweaks();
   const { user } = useAuth();
@@ -145,6 +167,9 @@ export default function OnboardingPage() {
   // render IvyGuidedSetup instead of the manual wizard chrome. The wizard
   // stays as the "I'll set it up myself" fallback.
   const [ivyMode, setIvyMode] = useState(false);
+  // Ivy-guided path: true once the required About answers are in (asked
+  // before Ivy's chat starts).
+  const [ivyAboutDone, setIvyAboutDone] = useState(false);
   // First-product draft (only used when businessType !== 'service').
   const [productDraft, setProductDraft]     = useState({ name: '', price: '', description: '' });
   const [productCreated, setProductCreated] = useState(false);
@@ -179,9 +204,19 @@ export default function OnboardingPage() {
     goalIds: [], goalOther: '',
     challengeIds: [], challengeOther: '',
     idealClient: '',
-    heardFromIds: [], heardFromOther: '',
+    heardFromIds: [], heardFromOther: '', referralName: '',
     stageIds: [],
+    // '' | US state code | OUTSIDE_US. With OUTSIDE_US, locationCountry
+    // is a COUNTRIES entry or OTHER (then locationCountryOther is typed).
+    locationState: '', locationCountry: '', locationCountryOther: '',
   });
+  // Once the owner tries to continue the About step, show what's missing
+  // next to each question (and keep it live as they fix things).
+  const [showAboutErrors, setShowAboutErrors] = useState(false);
+  // A save on a required step failed on the server. Only then do we offer
+  // "Save & exit" there, so a broken network can never trap anyone.
+  const [requiredSaveFailed, setRequiredSaveFailed] = useState(false);
+  const [calTimezone, setCalTimezone] = useState(null);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
@@ -229,6 +264,7 @@ export default function OnboardingPage() {
       if (s.availability && Object.keys(s.availability).length > 0) {
         setAvailability(s.availability);
       }
+      setCalTimezone(s.timezone || null);
       setClientsCount((clientsRes?.clients || []).length);
       setStripeStatus(stripeRes);
       setWebsiteStatus(webRes);
@@ -236,27 +272,9 @@ export default function OnboardingPage() {
       // returning owner picked one previously) so the picker reflects state.
       if (webRes?.website?.template) setWebsiteTemplate(webRes.website.template);
       const p = profileRes?.profile;
-      if (p) {
-        // Hydrate from the *Ids arrays the server returns. When a
-        // free-text "Other" answer is stored without any preset, push
-        // the OTHER sentinel so the picker shows the Other chip + text
-        // input pre-filled (mirrors the legacy single-value behavior).
-        const withOther = (ids, other) => {
-          const a = Array.isArray(ids) ? [...ids] : [];
-          if (other && !a.includes(OTHER)) a.push(OTHER);
-          return a;
-        };
-        setAbout({
-          goalIds:      withOther(p.goalIds,      p.goalOther),
-          goalOther:    p.goalOther || '',
-          challengeIds: withOther(p.challengeIds, p.challengeOther),
-          challengeOther: p.challengeOther || '',
-          idealClient:  p.idealClient || '',
-          heardFromIds: withOther(p.heardFromIds, p.heardFromOther),
-          heardFromOther: p.heardFromOther || '',
-          stageIds:     Array.isArray(p.stageIds) ? p.stageIds : [],
-        });
-      }
+      // Hydrate from the *Ids arrays the server returns. Free-text "Other"
+      // answers bring back the Other chip with the text pre-filled.
+      if (p) setAbout(aboutFromProfile(p));
       setStateLoaded(true);
     });
     return () => { live = false; };
@@ -383,7 +401,16 @@ export default function OnboardingPage() {
       setSwitchImported(`${r.created} appointment${r.created === 1 ? '' : 's'} added. Nobody was emailed.`);
     }
   };
-  const skipStep = () => flushAndAdvance({ markCompleted: false, markSkipped: true });
+  const skipStep = () => {
+    // Skipping hours still seeds the booking timezone from the device, so
+    // the standard hours the booking page falls back to (and reminders)
+    // run in the owner's own time instead of UTC. Best-effort.
+    if (currentStep === 'availability' && browserTimeZone() && (!calTimezone || calTimezone === 'UTC')) {
+      const tz = browserTimeZone();
+      api.patch('/calendar', { timezone: tz }).then(() => setCalTimezone(tz)).catch(() => {});
+    }
+    return flushAndAdvance({ markCompleted: false, markSkipped: true });
+  };
   const goBack = () => {
     const prev = steps[stepIdx - 1];
     if (prev) setCurrentStep(prev.id);
@@ -475,65 +502,62 @@ export default function OnboardingPage() {
   // idempotent - re-clicking Continue doesn't duplicate work.
 
   const saveBusiness = async () => {
-    setBusy(true); setErr(null);
+    setErr(null);
+    const name = bizName.trim();
+    const cleanSlug = slug.trim().toLowerCase();
+    // Name + booking handle are required (they're the booking link).
+    if (!name || !cleanSlug) {
+      setErr(!name ? 'Add your business name to continue.' : 'Pick a booking page handle to continue.');
+      return;
+    }
+    setBusy(true);
     try {
       const patch = {};
-      const name = bizName.trim();
-      const cleanSlug = slug.trim().toLowerCase();
       if (name) patch.bizName = name;
       if (cleanSlug) patch.slug = cleanSlug;
       if (tagline.trim()) patch.tagline = tagline.trim();
       else if (tagline === '') patch.tagline = null;
       if (category) patch.category = category;
       if (Object.keys(patch).length > 0) await api.patch('/calendar', patch);
+      setRequiredSaveFailed(false);
       await goNext();
-    } catch (e) { setErr(prettifyError(e)); }
+    } catch (e) { setErr(prettifyError(e)); if (isServerTrouble(e)) setRequiredSaveFailed(true); }
     finally { setBusy(false); }
   };
 
-  // "About you" step. Goal + challenge are LIGHTLY REQUIRED (sunk-cost:
-  // the user names the problem they're here to solve before getting the
-  // tool) - all OTHER questions remain optional. We block advance with an
-  // inline error rather than disabling the button so the user understands
-  // why; rejection rate is tiny in practice (two clicks).
-  const saveAbout = async () => {
+  // "About you" step. The core questions are required: goals, what's
+  // draining them, stage, where the business is based and how they heard
+  // about Ivy (ideal client stays optional). Continue is never disabled;
+  // instead each unanswered question shows a short message right under it
+  // so the owner sees exactly what's missing. `after` runs once the save
+  // lands: the wizard advances, the Ivy-guided path starts Ivy's chat.
+  const saveAbout = async (after = goNext) => {
     setErr(null);
-    // "Has at least one selection that COUNTS" — a chip is picked AND if
-    // it's the Other sentinel, the free-text field is non-empty. Same
-    // sunk-cost rule as before, just over arrays now.
-    const counts = (ids, other) => (ids || []).some((id) => id !== OTHER || (other || '').trim());
-    const hasGoal = counts(about.goalIds, about.goalOther);
-    const hasChallenge = counts(about.challengeIds, about.challengeOther);
-    if (!hasGoal || !hasChallenge) {
-      setErr(!hasGoal && !hasChallenge
-        ? 'Pick at least one #1 goal and biggest challenge so Ivy can tailor your advice. The rest is optional.'
-        : !hasGoal
-          ? 'Pick at least one goal so Ivy knows what to optimize for.'
-          : 'Pick at least one challenge so Ivy knows where to focus.');
+    if (Object.keys(validateAbout(about)).length > 0) {
+      // The per-question messages and the summary under the form are
+      // computed live from the answers, so they clear as the owner fixes
+      // each one.
+      setShowAboutErrors(true);
+      scrollToFirstError();
       return;
     }
-    // Strip the OTHER sentinel from the arrays we send (the server's
-    // preset allowlist would drop it anyway); the *_other free text
-    // carries the user's custom answer instead.
-    const stripOther = (ids) => (ids || []).filter((id) => id !== OTHER);
     setBusy(true);
     try {
-      await api.patch('/onboarding/profile', {
-        goalIds:        stripOther(about.goalIds),
-        goalOther:      about.goalOther,
-        challengeIds:   stripOther(about.challengeIds),
-        challengeOther: about.challengeOther,
-        idealClient:    about.idealClient,
-        heardFromIds:   stripOther(about.heardFromIds),
-        heardFromOther: about.heardFromOther,
-        stageIds:       stripOther(about.stageIds),
-      });
-      await goNext();
-    } catch (e) { setErr(prettifyError(e)); }
+      await api.patch('/onboarding/profile', aboutPayload(about));
+      setRequiredSaveFailed(false);
+      await after();
+    } catch (e) {
+      setErr(prettifyError(e));
+      if (isServerTrouble(e)) setRequiredSaveFailed(true);
+    }
     finally { setBusy(false); }
   };
 
   const saveServices = async () => {
+    // Nothing added: same as "Skip for now", so the dashboard checklist
+    // keeps "Add at least one service" open instead of the step reading
+    // as done.
+    if (!Array.isArray(services) || services.length === 0) return skipStep();
     setBusy(true); setErr(null);
     try {
       // PUT /calendar/services is replace-all ("anything not in the list
@@ -576,6 +600,11 @@ export default function OnboardingPage() {
   };
 
   const saveAvailability = async () => {
+    const anyDay = Object.values(availability || {}).some((v) => Array.isArray(v) && v.length > 0);
+    if (!anyDay) {
+      setErr('Pick at least one day, or tap Skip for now.');
+      return;
+    }
     setBusy(true); setErr(null);
     try {
       await api.patch('/calendar', {
@@ -644,6 +673,10 @@ export default function OnboardingPage() {
 
   // ─── Render ─────────────────────────────────────────────────────────
 
+  // What's still missing on the About step, once the owner has tried to
+  // continue (live, so each message clears as it's answered).
+  const aboutErrors = showAboutErrors ? validateAbout(about) : {};
+
   if (!stateLoaded) {
     return (
       <Shell tweaks={tweaks}>
@@ -657,6 +690,41 @@ export default function OnboardingPage() {
   // "Let Ivy set me up" path: Ivy runs the setup conversationally and lands the
   // coach on their live booking link. She calls /onboarding/complete herself,
   // so onDone just navigates to the dashboard.
+  // The Ivy-guided path asks the same required About questions first (it
+  // used to skip them), unless they're already answered.
+  if (ivyMode && !ivyAboutDone) {
+    const startIvy = async () => {
+      const nextCompleted = Array.from(new Set([...completedSteps, 'about']));
+      setCompletedSteps(nextCompleted);
+      api.patch('/onboarding/state', { completedSteps: nextCompleted, businessType }).catch(() => {});
+      setIvyAboutDone(true);
+    };
+    return (
+      <Shell tweaks={tweaks}>
+        <div className="card" style={{
+          padding: 'clamp(18px, 5vw, 32px) clamp(14px, 5vw, 36px)', marginTop: 18,
+          display: 'flex', flexDirection: 'column', gap: 18,
+        }}>
+          <AboutStep about={about} setAbout={setAbout}
+            errors={aboutErrors}
+            subtitle="A few quick questions first, then Ivy sets up the rest with you."/>
+          <MissingSummary errors={aboutErrors}/>
+          {err && <ErrorBox>{err}</ErrorBox>}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => { setErr(null); setIvyMode(false); }} className="btn btn-ghost" disabled={busy}>
+              <Icons.ArrowLeft size={13}/> Back
+            </button>
+            <div style={{ flex: 1 }}/>
+            <button onClick={() => saveAbout(startIvy)} className="btn btn-primary" disabled={busy}>
+              {busy ? 'Saving…' : 'Continue'}
+              {!busy && <Icons.Arrow size={13} sw={1.8}/>}
+            </button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   if (ivyMode) {
     return (
       <Shell tweaks={tweaks}>
@@ -694,7 +762,12 @@ export default function OnboardingPage() {
         {currentStep === 'welcome'      && (
           <>
             {/* Primary path for coaches: let Ivy do the setup. */}
-            <button type="button" onClick={() => setIvyMode(true)}
+            <button type="button" onClick={() => {
+              setErr(null);
+              // Already answered (resume / replay)? Go straight to Ivy.
+              if (Object.keys(validateAbout(about)).length === 0) setIvyAboutDone(true);
+              setIvyMode(true);
+            }}
               className="btn btn-primary"
               style={{ width: '100%', justifyContent: 'center', gap: 9, padding: '14px 18px', fontSize: 15.5 }}>
               <Icons.Spark size={17} sw={2}/> Let Ivy set me up
@@ -711,7 +784,8 @@ export default function OnboardingPage() {
           slug={slug} setSlug={setSlug} setSlugTouched={setSlugTouched}
           tagline={tagline} setTagline={setTagline}
           category={category} setCategory={setCategory}/>}
-        {currentStep === 'about'        && <AboutStep about={about} setAbout={setAbout}/>}
+        {currentStep === 'about'        && <AboutStep about={about} setAbout={setAbout}
+          errors={aboutErrors}/>}
         {currentStep === 'services'     && <ServicesStep
           services={services} setServices={setServices}
           draft={draft} setDraft={setDraft} category={category}/>}
@@ -734,13 +808,8 @@ export default function OnboardingPage() {
         {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}
           trialEndsAt={ctx?.subscription?.trialEndsAt || null}/>}
 
-        {err && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: 'rgba(155,44,44,0.10)', border: '1px solid rgba(155,44,44,0.30)',
-            color: 'var(--danger)', fontSize: 13,
-          }}>{err}</div>
-        )}
+        {currentStep === 'about' && <MissingSummary errors={aboutErrors}/>}
+        {err && <ErrorBox>{err}</ErrorBox>}
 
         {/* flexWrap: on optional steps this row holds FOUR buttons
             (Back | Skip | Save & exit | Save & continue) ≈ 484px - at
@@ -760,7 +829,8 @@ export default function OnboardingPage() {
               Skip for now
             </button>
           )}
-          {currentStep !== 'done' && currentStep !== 'tour' && (
+          {currentStep !== 'done' && currentStep !== 'tour'
+            && (!REQUIRED_STEPS.has(currentStep) || requiredSaveFailed) && (
             <button onClick={saveAndExit} className="btn btn-outline" disabled={busy}
               style={{ color: 'var(--muted)' }}>
               Save & exit
@@ -772,7 +842,7 @@ export default function OnboardingPage() {
             onContinue={() => {
               if (currentStep === 'welcome')      return goNext();
               if (currentStep === 'business')     return saveBusiness();
-              if (currentStep === 'about')        return saveAbout();
+              if (currentStep === 'about')        return saveAbout(goNext);
               if (currentStep === 'services')     return saveServices();
               if (currentStep === 'first_product') return saveFirstProduct();
               if (currentStep === 'availability') return saveAvailability();
@@ -967,7 +1037,7 @@ function ServicesStep({ services, setServices, draft, setDraft, category }) {
   return (
     <>
       <StepHeader title="What do you offer?"
-        subtitle="Add 1–3 services to start. You can refine pricing + duration later from the Calendar tab."/>
+        subtitle="Add one to three services to start. You can refine pricing + duration later from the Calendar tab."/>
 
       {services.length === 0 && pack && (
         <div style={{
@@ -1133,8 +1203,8 @@ function AvailabilityStep({ availability, setAvailability }) {
         <span style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 500, marginRight: 4 }}>
           Quick set
         </span>
-        <PresetChip label="Weekdays 9–5"  onClick={() => applyPreset('weekdays')}/>
-        <PresetChip label="Every day 9–5" onClick={() => applyPreset('all')}/>
+        <PresetChip label="Weekdays 9 to 5"  onClick={() => applyPreset('weekdays')}/>
+        <PresetChip label="Every day 9 to 5" onClick={() => applyPreset('all')}/>
         <PresetChip label="Weekends only" onClick={() => applyPreset('weekends')}/>
         {anyEnabled && (
           <PresetChip label="Clear" onClick={() => applyPreset('clear')} tone="ghost"/>
@@ -1431,7 +1501,7 @@ function WebsiteStep({ websiteStatus, websiteTemplate, setWebsiteTemplate }) {
   return (
     <>
       <StepHeader title="Pick a template for your booking site"
-        subtitle="One click picks the look — your business name, services, and accent color are filled in automatically. You can refine every section, page, and color later in the full builder."/>
+        subtitle="One click picks the look. Your business name, services, and accent color are filled in automatically. You can refine every section, page, and color later in the full builder."/>
 
       {launched && (
         <div style={{
@@ -1476,7 +1546,7 @@ function WebsiteStep({ websiteStatus, websiteTemplate, setWebsiteTemplate }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
-        Skip if you already have a site — you can embed an Ivy booking widget onto it instead.
+        Skip if you already have a site. You can embed an Ivy booking widget onto it instead.
         Want to fine-tune sections, pages, colors right now? <a href="/website" onClick={() => { try { localStorage.setItem('ivy_skip_onboarding_until', String(Date.now() + 24 * 3600_000)); } catch { /* private mode */ } }} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Open the full builder</a> (you can come back to finish onboarding any time).
       </div>
     </>
@@ -1540,14 +1610,15 @@ function DoneStep({ skippedCount, trialEndsAt }) {
         You're ready.
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 480, margin: '0 auto' }}>
-        Everything's wired up. Here's how your free trial works - then hit
-        Finish to land on your dashboard.
+        {skippedCount > 0
+          ? "You're in. Here's how your free trial works. Then tap Finish to land on your dashboard."
+          : "Everything's wired up. Here's how your free trial works. Then tap Finish to land on your dashboard."}
         {skippedCount > 0 && (
           <>
             <br/><br/>
-            You skipped {skippedCount} step{skippedCount === 1 ? '' : 's'} - they'll
-            stay in the "Finish setup" checklist on your dashboard so you can come
-            back when you're ready.
+            You skipped {skippedCount} step{skippedCount === 1 ? '' : 's'} for now. Your
+            dashboard keeps a "Finish setting up" checklist, so you can come back
+            to {skippedCount === 1 ? 'it' : 'them'} anytime.
           </>
         )}
       </p>
@@ -1676,14 +1747,14 @@ function ProgressRow({ steps, currentStep, completed, skipped, onJump }) {
   );
 }
 
-// "About you" - marketing + intent questions. Every answer is optional;
-// we never block finishing setup on them. Preset answers roll up into
-// admin aggregates; the free-text + answers feed Ivy's personalization.
-function AboutStep({ about, setAbout }) {
+// "About you": the required core answers (goals, what's draining them,
+// stage, where the business is based, how they heard about Ivy) plus the
+// optional ideal client. Preset answers roll up into admin aggregates;
+// the free text feeds Ivy's personalization. `errors` maps a question to
+// its "what's missing" message (empty until the owner tries to continue).
+function AboutStep({ about, setAbout, errors = {}, subtitle }) {
   const set = (patch) => setAbout((a) => ({ ...a, ...patch }));
   // Toggle helper: add `id` to the array if missing, remove if present.
-  // Used as the onToggle handler for every multi-select ChoiceField on
-  // this step.
   const toggle = (key) => (id) => setAbout((a) => {
     const cur = a[key] || [];
     const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
@@ -1693,11 +1764,12 @@ function AboutStep({ about, setAbout }) {
     <>
       <StepHeader
         title="A little about you"
-        subtitle="A few quick picks so Ivy - your built-in AI assistant - can give advice that actually fits. Tap as many as apply."
+        subtitle={subtitle || 'A few quick questions so Ivy can give advice that fits your business. Tap as many as apply.'}
       />
 
       <ChoiceField
-        label="What are your goals with Ivy? *"
+        id="goal" required error={errors.goal}
+        label="What are your goals with Ivy?"
         hint="Pick all that apply."
         options={[
           { id: 'grow_revenue', label: 'Grow revenue' },
@@ -1709,11 +1781,13 @@ function AboutStep({ about, setAbout }) {
         onToggle={toggle('goalIds')}
         onOtherToggle={() => toggle('goalIds')(OTHER)}
         onOtherText={(v) => set({ goalOther: v })}
+        otherPlaceholder="What's your goal?"
       />
 
       <ChoiceField
-        label="What's draining you most right now? *"
-        hint="Be honest - pick all that apply. This is exactly what Ivy takes off your plate."
+        id="challenge" required error={errors.challenge}
+        label="What's draining you most right now?"
+        hint="Be honest and pick all that apply. This is exactly what Ivy takes off your plate."
         options={[
           { id: 'leads',        label: 'Not enough leads' },
           { id: 'no_shows',     label: 'No-shows & cancellations' },
@@ -1725,34 +1799,13 @@ function AboutStep({ about, setAbout }) {
         onToggle={toggle('challengeIds')}
         onOtherToggle={() => toggle('challengeIds')(OTHER)}
         onOtherText={(v) => set({ challengeOther: v })}
+        otherPlaceholder="What else is draining you?"
       />
 
       <ValidationCard challengeIds={about.challengeIds} />
 
-      <Field
-        label="Who's your ideal client?"
-        hint="Ivy uses this to tailor advice - e.g. “busy professionals who want monthly massages.”">
-        <input className="input" style={inputStyle} value={about.idealClient}
-          onChange={(e) => set({ idealClient: e.target.value.slice(0, 500) })}
-          placeholder="Describe your dream customer…"/>
-      </Field>
-
       <ChoiceField
-        label="How did you hear about us?"
-        hint="Pick all that apply."
-        options={[
-          { id: 'instagram', label: 'Instagram' },
-          { id: 'tiktok',    label: 'TikTok' },
-          { id: 'google',    label: 'Google' },
-          { id: 'referral',  label: 'Friend / referral' },
-        ]}
-        values={about.heardFromIds} other={about.heardFromOther}
-        onToggle={toggle('heardFromIds')}
-        onOtherToggle={() => toggle('heardFromIds')(OTHER)}
-        onOtherText={(v) => set({ heardFromOther: v })}
-      />
-
-      <ChoiceField
+        id="stage" required error={errors.stage}
         label="Where's your business at?"
         hint="Pick all that apply."
         options={[
@@ -1764,48 +1817,27 @@ function AboutStep({ about, setAbout }) {
         values={about.stageIds}
         onToggle={toggle('stageIds')}
       />
-    </>
-  );
-}
 
-// Preset chips with multi-select. `values` is the array of selected ids;
-// `onToggle(id)` flips a chip's state. The optional "Other" chip pushes
-// the OTHER sentinel into the same array and reveals a free-text input.
-function ChoiceField({ label, hint, options, values, other, onToggle, onOtherToggle, onOtherText }) {
-  const selected = Array.isArray(values) ? values : [];
-  const otherActive = selected.includes(OTHER);
-  return (
-    <Field label={label} hint={hint}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {options.map((o) => {
-          const on = selected.includes(o.id);
-          return (
-            <button key={o.id} type="button" onClick={() => onToggle(o.id)}
-              aria-pressed={on}
-              className={`btn ${on ? 'btn-primary' : 'btn-outline'}`}
-              style={{ padding: '7px 13px', fontSize: 12.5 }}>
-              {on && <span style={{ marginRight: 6, fontWeight: 700 }}>✓</span>}
-              {o.label}
-            </button>
-          );
-        })}
-        {onOtherToggle && (
-          <button type="button" onClick={onOtherToggle}
-            aria-pressed={otherActive}
-            className={`btn ${otherActive ? 'btn-primary' : 'btn-outline'}`}
-            style={{ padding: '7px 13px', fontSize: 12.5 }}>
-            {otherActive && <span style={{ marginRight: 6, fontWeight: 700 }}>✓</span>}
-            Other
-          </button>
-        )}
-      </div>
-      {onOtherToggle && otherActive && (
-        <input className="input" autoFocus style={{ ...inputStyle, marginTop: 8 }}
-          value={other || ''}
-          onChange={(e) => onOtherText(e.target.value.slice(0, 500))}
-          placeholder="Tell us…"/>
-      )}
-    </Field>
+      <LocationField value={about} error={errors.location}
+        onChange={(next) => set({
+          locationState: next.locationState,
+          locationCountry: next.locationCountry,
+          locationCountryOther: next.locationCountryOther,
+        })}/>
+
+      <HeardFromField about={about} error={errors.heardFrom}
+        onToggle={toggle('heardFromIds')}
+        onOtherText={(v) => set({ heardFromOther: v })}
+        onReferralName={(v) => set({ referralName: v })}/>
+
+      <Field
+        label="Who's your ideal client? (optional)"
+        hint="Ivy uses this to tailor advice, e.g. “busy professionals who want monthly massages.”">
+        <input className="input" style={inputStyle} value={about.idealClient}
+          onChange={(e) => set({ idealClient: e.target.value.slice(0, 500) })}
+          placeholder="Describe your dream customer…"/>
+      </Field>
+    </>
   );
 }
 
@@ -1919,6 +1951,22 @@ function ImpactStep({ about, businessType }) {
         not a reading of your account.
       </div>
     </div>
+  );
+}
+
+function MissingSummary({ errors }) {
+  const n = Object.keys(errors || {}).length;
+  if (!n) return null;
+  return <ErrorBox>{n === 1 ? 'One answer is missing. It is marked above.' : `${n} answers are missing. They are marked above.`}</ErrorBox>;
+}
+
+function ErrorBox({ children }) {
+  return (
+    <div role="alert" style={{
+      padding: '8px 12px', borderRadius: 8,
+      background: 'rgba(155,44,44,0.10)', border: '1px solid rgba(155,44,44,0.30)',
+      color: 'var(--danger)', fontSize: 13,
+    }}>{children}</div>
   );
 }
 

@@ -158,7 +158,7 @@ function BookingLinkCard({ status, needsName, needsService, onAnswer, busy, inde
   if (needsService) {
     return (
       <CardShell icon="Calendar" title="Your booking link" index={index}>
-        <p style={subStyle}>Clients book a service. What is the main one you offer?</p>
+        <p style={subStyle}>Clients book a service, and you haven't added one yet. Add your main one here, or later from the setup checklist on your dashboard.</p>
         <form onSubmit={(e) => { e.preventDefault(); if (svc.name.trim()) onAnswer({ service: { name: svc.name.trim(), durationMinutes: Number(svc.durationMinutes) || 60, price: Number(svc.price) || 0 } }); }}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <input className="input" value={svc.name} onChange={(e) => setSvc({ ...svc, name: e.target.value })} placeholder="Service name" autoFocus/>

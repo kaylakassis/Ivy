@@ -14,7 +14,8 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { US_STATE_CODES, US_COUNTRY } from '../../src/lib/locations.js';
 
 // Allowed preset option ids per question. Free-text fields are length-
 // capped but otherwise unconstrained. Keeping the allowlist server-side
@@ -48,10 +49,26 @@ function cleanPresetArray(field, arr) {
   }
   return out;
 }
-function cleanText(v) {
-  if (v == null) return null;
-  const s = String(v).trim();
-  return s ? s.slice(0, FREE_TEXT_MAX) : null;
+function cleanText(v, max = FREE_TEXT_MAX) {
+  if (v == null || typeof v === 'object') return null;
+  // Control characters out, whitespace collapsed: these strings are shown
+  // back in the admin view and fed to Ivy as plain text.
+  // eslint-disable-next-line no-control-regex
+  const s = String(v).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return s ? s.slice(0, max) : null;
+}
+const COUNTRY_MAX = 80;
+const REFERRAL_NAME_MAX = 120;
+const has = (o, ...keys) => keys.some((k) => Object.prototype.hasOwnProperty.call(o, k));
+// "Where is your business based?" A US state code from the allowlist wins
+// (country is then the US); otherwise the typed or picked country.
+// Unknown codes are dropped like unknown presets, never a 400.
+function cleanLocation(body) {
+  const rawState = body.locationState ?? body.location_state;
+  const code = typeof rawState === 'string' ? rawState.trim().toUpperCase() : '';
+  if (US_STATE_CODES.has(code)) return { state: code, country: US_COUNTRY };
+  const country = cleanText(body.locationCountry ?? body.location_country, COUNTRY_MAX);
+  return { state: null, country };
 }
 
 export default async function handler(req, res) {
@@ -65,7 +82,8 @@ export default async function handler(req, res) {
       const { rows } = await sql`
         SELECT goal, goal_other, challenge, challenge_other, ideal_client,
                heard_from, heard_from_other, stage,
-               goal_ids, challenge_ids, heard_from_ids, stage_ids
+               goal_ids, challenge_ids, heard_from_ids, stage_ids,
+               location_state, location_country, referral_name
           FROM workspace_profile WHERE workspace_id = ${workspaceId}
       `;
       return ok(res, { profile: serialize(rows[0] || null) });
@@ -95,18 +113,35 @@ export default async function handler(req, res) {
       const challenge     = challengeArr[0] || null;
       const heardFrom     = heardArr[0]     || null;
       const stage         = stageArr[0]     || null;
-      // "_other" free text only kept when the matching preset is unset
-      // (the UI shows the Other field in place of a preset choice).
-      const goalOther      = goal ? null : cleanText(body.goalOther ?? body.goal_other);
-      const challengeOther = challenge ? null : cleanText(body.challengeOther ?? body.challenge_other);
-      const heardOther     = heardFrom ? null : cleanText(body.heardFromOther ?? body.heard_from_other);
+      // "_other" free text is kept whenever it was typed, even alongside
+      // presets: the questions are multi-select, so "Instagram + Other:
+      // my cousin's podcast" is one answer. (It used to be dropped when
+      // any preset was also picked.)
+      const goalOther      = cleanText(body.goalOther ?? body.goal_other);
+      const challengeOther = cleanText(body.challengeOther ?? body.challenge_other);
+      const heardOther     = cleanText(body.heardFromOther ?? body.heard_from_other);
       const idealClient    = cleanText(body.idealClient ?? body.ideal_client);
+      // Newer answers. Only written when the request carries them, so an
+      // older app build (which never sends them) re-saving the About step
+      // can't wipe what a newer build stored.
+      const locationSent = has(body, 'locationState', 'location_state', 'locationCountry', 'location_country');
+      const loc = locationSent ? cleanLocation(body) : { state: null, country: null };
+      // The referrer's name only means something next to "Friend / referral":
+      // cleared when that isn't picked, kept as stored when an older build
+      // re-saves with referral still picked but no name field.
+      const referralPicked = heardArr.includes('referral');
+      const referralSent = has(body, 'referralName', 'referral_name');
+      const referralName = referralSent && referralPicked
+        ? cleanText(body.referralName ?? body.referral_name, REFERRAL_NAME_MAX)
+        : null;
+      const referralKeep = referralPicked && !referralSent;
 
       const { rows } = await sql`
         INSERT INTO workspace_profile (
           workspace_id, goal, goal_other, challenge, challenge_other,
           ideal_client, heard_from, heard_from_other, stage,
-          goal_ids, challenge_ids, heard_from_ids, stage_ids, updated_at
+          goal_ids, challenge_ids, heard_from_ids, stage_ids,
+          location_state, location_country, referral_name, updated_at
         ) VALUES (
           ${workspaceId}, ${goal}, ${goalOther}, ${challenge}, ${challengeOther},
           ${idealClient}, ${heardFrom}, ${heardOther}, ${stage},
@@ -114,6 +149,7 @@ export default async function handler(req, res) {
           ${JSON.stringify(challengeArr)}::jsonb,
           ${JSON.stringify(heardArr)}::jsonb,
           ${JSON.stringify(stageArr)}::jsonb,
+          ${loc.state}, ${loc.country}, ${referralName},
           NOW()
         )
         ON CONFLICT (workspace_id) DO UPDATE SET
@@ -129,10 +165,14 @@ export default async function handler(req, res) {
           challenge_ids    = EXCLUDED.challenge_ids,
           heard_from_ids   = EXCLUDED.heard_from_ids,
           stage_ids        = EXCLUDED.stage_ids,
+          location_state   = CASE WHEN ${locationSent} THEN EXCLUDED.location_state   ELSE workspace_profile.location_state END,
+          location_country = CASE WHEN ${locationSent} THEN EXCLUDED.location_country ELSE workspace_profile.location_country END,
+          referral_name    = CASE WHEN ${referralKeep} THEN workspace_profile.referral_name ELSE EXCLUDED.referral_name END,
           updated_at       = NOW()
         RETURNING goal, goal_other, challenge, challenge_other, ideal_client,
                   heard_from, heard_from_other, stage,
-                  goal_ids, challenge_ids, heard_from_ids, stage_ids
+                  goal_ids, challenge_ids, heard_from_ids, stage_ids,
+                  location_state, location_country, referral_name
       `;
       return ok(res, { profile: serialize(rows[0]) });
     }
@@ -166,5 +206,8 @@ function serialize(r) {
     heardFromIds:   asArr(r.heard_from_ids, r.heard_from),
     stage:          r.stage || null,
     stageIds:       asArr(r.stage_ids,      r.stage),
+    locationState:   r.location_state || null,
+    locationCountry: r.location_country || null,
+    referralName:    r.referral_name || null,
   };
 }

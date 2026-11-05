@@ -4093,4 +4093,19 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS private_notes TEXT;
 UPDATE bookings SET private_notes = notes, notes = NULL
  WHERE source = 'import' AND notes IS NOT NULL AND private_notes IS NULL
    AND created_at < TIMESTAMPTZ '2026-11-05 00:00:00+00';
+
+-- Onboarding "About you": where the business is based and who referred
+-- the owner. location_state is a two-letter US code (50 states, DC, PR)
+-- or NULL; location_country is 'United States' for a US state, otherwise
+-- the country the owner picked or typed. referral_name is the optional
+-- "Who referred you?" text shown when "Friend / referral" is picked.
+-- Separate from the ?ref= signup code (affiliate_uses / referrals).
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS location_state   TEXT;
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS location_country TEXT;
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS referral_name    TEXT;
+-- p.* is expanded when a view is created, so refresh the admin view to
+-- pick up the columns above (new columns append at the end, which
+-- CREATE OR REPLACE VIEW allows).
+CREATE OR REPLACE VIEW admin_real_workspace_profile AS
+  SELECT p.* FROM workspace_profile p WHERE p.workspace_id IN (SELECT id FROM admin_real_workspaces);
 `;

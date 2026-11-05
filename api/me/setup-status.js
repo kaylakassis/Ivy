@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     } };
     // Sample data (clients.source = 'demo' and everything linked to it) never
     // completes a step: the checklist is about the owner's real business.
-    const [cs, sv, fs, ws2, cl, bk, inv, shared] = await Promise.all([
+    const [cs, sv, fs, ws2, cl, bk, inv, shared, onb] = await Promise.all([
       safe(sql`SELECT biz_name, slug, availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
       safe(sql`SELECT COUNT(*)::int AS n FROM services WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
       safe(sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status FROM finance_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
@@ -72,6 +72,8 @@ export default async function handler(req, res) {
       safe(sql`SELECT COUNT(*)::int AS n FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
                 WHERE i.workspace_id = ${workspaceId} AND i.status <> 'draft' AND (c.source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
       safe(sql`SELECT booking_link_shared_at, first_booking_celebrated_at FROM workspaces WHERE id = ${workspaceId}`, { rows: [] }),
+      // Wizard steps the owner chose "Skip for now" on.
+      safe(sql`SELECT onboarding_state->'skippedSteps' AS skipped FROM users WHERE id = ${user.id}`, { rows: [] }),
     ]);
     const settings = cs.rows[0] || {};
     const serviceCount = sv.rows[0]?.n || 0;
@@ -93,6 +95,12 @@ export default async function handler(req, res) {
     const hasAvailabilityWindow = Object.values(availability).some(
       (v) => Array.isArray(v) && v.length > 0,
     );
+    // Skipping the Hours step leaves the standard weekday hours every new
+    // business starts with, so the booking page still has slots. That isn't
+    // the owner's real schedule, so the item stays open until they save
+    // their hours (PATCH /calendar with availability clears the skip).
+    const skippedSteps = Array.isArray(onb.rows[0]?.skipped) ? onb.rows[0].skipped : [];
+    const availabilitySkipped = skippedSteps.includes('availability');
 
     const items = [
       // ── Required: minimum to take a real booking ──
@@ -134,10 +142,12 @@ export default async function handler(req, res) {
       {
         id: 'availability',
         label: 'Set your weekly availability',
-        done: hasAvailabilityWindow,
+        done: hasAvailabilityWindow && !availabilitySkipped,
         required: true,
-        href: '/calendar',
-        why: 'Without availability windows, your booking page shows zero open slots.',
+        href: '/calendar?availability=1',
+        why: hasAvailabilityWindow && availabilitySkipped
+          ? 'Your booking page is using standard weekday hours for now. Set the days and times you really work.'
+          : 'Without availability windows, your booking page shows zero open slots.',
       },
 
       // ── Recommended: ready for real business ──

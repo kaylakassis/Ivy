@@ -245,6 +245,26 @@ export default async function handler(req, res) {
       // ownsWorkspace's SELECT, so both keys need eviction.
       invalidateCalendarSettings(workspaceId);
       invalidateOwnerWorkspace(user.id);
+      // Hours saved: if the owner skipped the Hours step in onboarding, that
+      // skip is now done with, so the dashboard checklist ticks it off.
+      if ('availability' in body) {
+        try {
+          await sql`
+            UPDATE users u
+               SET onboarding_state = jsonb_set(
+                     u.onboarding_state, '{skippedSteps}',
+                     COALESCE((SELECT jsonb_agg(x) FROM jsonb_array_elements(u.onboarding_state->'skippedSteps') x
+                                WHERE x <> '"availability"'::jsonb), '[]'::jsonb))
+              FROM workspaces w
+             WHERE w.id = ${workspaceId} AND u.id = w.owner_id
+               AND jsonb_typeof(u.onboarding_state->'skippedSteps') = 'array'
+               AND u.onboarding_state->'skippedSteps' @> '["availability"]'::jsonb
+          `;
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('[calendar PATCH] clearing skipped availability failed (non-blocking):', e.message);
+        }
+      }
       return ok(res, { settings: serializeSettings(rows[0]) });
     }
 
