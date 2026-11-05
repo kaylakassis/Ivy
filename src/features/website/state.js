@@ -16,6 +16,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { api } from '../../lib/api.js';
 import { SITE_HISTORY_PREFIX } from '../../lib/deviceCache.js';
+import { IVY_ACTIONS_RAN_EVENT } from '../ivy/openIvy.js';
 import * as H from './history.js';
 import {
   cloneSection, moveSectionWithinPage, uniquePageSlug,
@@ -140,7 +141,14 @@ function useDebouncedPut(delay = 600, onSaved = null) {
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  return { schedule, flush, cancel, saving, error };
+  // An edit waiting for its debounce timer (not yet sent).
+  const hasPending = useCallback(() => !!pendingRef.current, []);
+  // Wait for a save already on the wire, without sending a queued one.
+  const settle = useCallback(async () => {
+    if (inflightRef.current) { try { await inflightRef.current; } catch { /* reported by flush */ } }
+  }, []);
+
+  return { schedule, flush, cancel, saving, error, hasPending, settle };
 }
 
 const withHomeMirror = (next) => {
@@ -162,6 +170,26 @@ function writeStored(key, value) {
     // stale one behind. Undo still works for this session.
     try { localStorage.removeItem(key); } catch { /* ignore */ }
   }
+}
+
+// True when `server` is just what the editor saved for `local`, with the
+// shaping PUT /api/website applies to pages (sanitizePage drops empty SEO
+// fields and normalises inNav), so a round trip is not mistaken for an
+// outside change.
+function canonPages(pages) {
+  return JSON.stringify((pages || []).map((p) => {
+    const o = { id: p.id, slug: p.slug || '', title: p.title || 'Untitled', sections: p.sections || [], inNav: p.inNav !== false };
+    for (const k of ['metaTitle', 'metaDescription', 'ogImage']) if (p[k]) o[k] = p[k];
+    return o;
+  }));
+}
+function sameAsSaved(local, server) {
+  const a = H.draftOf(local), b = H.draftOf(server);
+  for (const k of Object.keys(a)) {
+    if (k === 'pages') { if (canonPages(a.pages) !== canonPages(b.pages)) return false; }
+    else if (JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null) && (a[k] || b[k])) return false;
+  }
+  return true;
 }
 
 // `target` is a page id, or { title } to create a new page first (the new
@@ -217,7 +245,7 @@ export function useWebsite({ userId = null } = {}) {
     }
     persistHistory();
   }, [persistHistory]);
-  const { schedule, flush, cancel, saving, error: saveErr } = useDebouncedPut(600, onSaved);
+  const { schedule, flush, cancel, saving, error: saveErr, hasPending, settle } = useDebouncedPut(600, onSaved);
 
   const setSite = useCallback((next) => {
     siteRef.current = next;
@@ -597,6 +625,77 @@ export function useWebsite({ userId = null } = {}) {
     return r;
   }, [flush, setSite, setHistory, persistHistory]);
 
+  // Ivy edits the same draft on the server (after the owner approves), and
+  // so can another device. When the owner approves an Ivy action, or comes
+  // back to this tab, adopt the server's draft if it differs from the one on
+  // screen. The draft that was on screen becomes one undo step, so Ivy's
+  // change can be undone here like any other. If the owner is mid-edit (a
+  // save still queued) we skip this round: their save goes out and wins,
+  // exactly as it would have before.
+  const syncingRef = useRef(false);
+  const lastSyncRef = useRef(0);
+  const syncFromServer = useCallback(async ({ force = false } = {}) => {
+    if (!loadedRef.current || syncingRef.current) return;
+    if (!force && Date.now() - lastSyncRef.current < 3000) return;
+    syncingRef.current = true;
+    lastSyncRef.current = Date.now();
+    try {
+      await settle();
+      if (hasPending()) return;
+      const r = await api.get('/website');
+      // A legacy single-page site (no pages saved yet) gets fresh page ids
+      // from normalize on every read, so it can never be compared; Ivy
+      // always saves pages, so its edits are never in that shape.
+      if (!r?.website || !Array.isArray(r.website.pages) || r.website.pages.length === 0) return;
+      if (hasPending()) return; // the owner typed while we were reading
+      const n = normalize(r.website);
+      const prevSnap = snapRef.current;
+      const cur = siteRef.current;
+      // Server-managed fields always follow the server.
+      const next = withHomeMirror({ ...cur, ...n });
+      const nextSnap = H.snapshotOf(next);
+      setDirty(!!r.website.hasUnpublishedChanges);
+      if (nextSnap === prevSnap || sameAsSaved(cur, next)) {
+        if (n.publishedAt !== cur.publishedAt || n.scheduledPublishAt !== cur.scheduledPublishAt) {
+          setSite({ ...cur, launched: n.launched, publishedAt: n.publishedAt, scheduledPublishAt: n.scheduledPublishAt });
+        }
+        return;
+      }
+      setSite(next);
+      snapRef.current = nextSnap;
+      if (n.publishedAt && n.publishedAt !== historyRef.current.publishedAt) {
+        // Published from elsewhere (Ivy): that is the new save point.
+        setHistory(H.markPublished(historyRef.current, n.publishedAt));
+      } else if (prevSnap != null) {
+        setHistory(H.recordDiscrete(historyRef.current, prevSnap));
+      }
+      if (!next.pages.some((p) => p.id === currentPageIdRef.current)) {
+        const home = next.pages.find((p) => p.slug === '') || next.pages[0];
+        setCurrentPageId(home?.id || null);
+      }
+      persistHistory();
+    } catch {
+      // Offline or a hiccup: the next focus or approval tries again.
+    } finally {
+      syncingRef.current = false;
+    }
+  }, [settle, hasPending, setSite, setHistory, persistHistory]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onIvy = () => { syncFromServer({ force: true }); };
+    const onFocus = () => { syncFromServer(); };
+    const onVis = () => { if (document.visibilityState === 'visible') syncFromServer(); };
+    window.addEventListener(IVY_ACTIONS_RAN_EVENT, onIvy);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener(IVY_ACTIONS_RAN_EVENT, onIvy);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [syncFromServer]);
+
   // Schedule the CURRENT draft to go live at `whenISO`. We snapshot the
   // current pages into scheduled_pages so later draft edits don't change
   // what gets published at the scheduled time; the cron promotes it.
@@ -621,7 +720,7 @@ export function useWebsite({ userId = null } = {}) {
     addPage, removePage, renamePage, movePage, movePageTo,
     set, setSection, addSection, removeSection, moveSection, moveSectionTo, duplicateSection,
     moveSectionToPage, copySectionToPage,
-    reset, publish, flush, discardChanges, restoreVersion,
+    reset, publish, flush, discardChanges, restoreVersion, syncFromServer,
     undo, redo, canUndo, canRedo,
   };
 }

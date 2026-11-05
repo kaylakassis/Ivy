@@ -11,7 +11,7 @@ import Drawer, { inputSty } from './Drawer.jsx';
 import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 
-export default function PackagesDrawer({ services, onClose, inline = false }) {
+export default function PackagesDrawer({ services, settings = null, onPatchSettings = null, onClose, inline = false }) {
   const [packages, setPackages] = useState(null);
   const [editing, setEditing]   = useState(null); // null = list view, {} = new, row = edit
   const [confirmDelete, setConfirmDelete] = useState(null); // { pkg, outstanding }
@@ -68,9 +68,14 @@ export default function PackagesDrawer({ services, onClose, inline = false }) {
   const sub = editing
     ? <PackageEditor pkg={editing} services={services} onCancel={() => setEditing(null)}
         onSaved={async () => { await load(); setEditing(null); }}/>
-    : <PackageList packages={packages} services={services}
-        onNew={() => setEditing({})} onEdit={(p) => setEditing(p)}
-        onHide={hide} onDelete={startDelete}/>;
+    : <>
+        <PackageList packages={packages} services={services}
+          onNew={() => setEditing({})} onEdit={(p) => setEditing(p)}
+          onHide={hide} onDelete={startDelete}/>
+        {settings && onPatchSettings && (
+          <UseOnSetting value={settings.packageUseOn || 'booking'} onSave={onPatchSettings}/>
+        )}
+      </>;
 
   return (
     <Drawer title="Packages"
@@ -191,8 +196,8 @@ function PackageList({ packages, services, onNew, onEdit, onHide, onDelete }) {
                   {' · '}${Number(p.price).toFixed(0)}
                   {p.expiryDays ? ` · expires after ${p.expiryDays}d` : ''}
                   {p.serviceIds?.length > 0
-                    ? ` · ${p.serviceIds.map((id) => serviceById.get(id)?.name || '?').join(', ')}`
-                    : ' · any service'}
+                    ? ` · Good for: ${p.serviceIds.map((id) => serviceById.get(id)?.name).filter(Boolean).join(', ') || 'a removed service'}`
+                    : ' · Good for: any service'}
                 </div>
                 {p.description && (
                   <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 4 }}>{p.description}</div>
@@ -231,6 +236,10 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
   const [price, setPrice]               = useState(pkg.price ?? '');
   const [expiryDays, setExpiryDays]     = useState(pkg.expiryDays ?? '');
   const [serviceIds, setServiceIds]     = useState(pkg.serviceIds || []);
+  // 'any' = every service (stored as an empty list), 'some' = only the
+  // ticked ones. Kept separately so "Only these" with nothing ticked yet
+  // doesn't silently mean "any".
+  const [scope, setScope]               = useState((pkg.serviceIds || []).length > 0 ? 'some' : 'any');
   const [active, setActive]             = useState(pkg.active !== false);
   const [visibility, setVisibility]     = useState(pkg.visibility || 'public');
   const [busy, setBusy] = useState(false);
@@ -238,6 +247,10 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (scope === 'some' && serviceIds.length === 0) {
+      setErr('Tick at least one service, or choose Any service.');
+      return;
+    }
     setBusy(true); setErr(null);
     try {
       const body = {
@@ -246,7 +259,7 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
         sessionCount: Number(sessionCount),
         price: Number(price || 0),
         expiryDays: expiryDays === '' ? null : Number(expiryDays),
-        serviceIds,
+        serviceIds: scope === 'any' ? [] : serviceIds,
         active,
         visibility,
       };
@@ -301,8 +314,12 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
           style={{ ...inputSty, resize: 'vertical', fontFamily: 'inherit' }}/>
       </Field>
 
-      <Field label="Valid for">
-        <ServicePicker services={services} selected={serviceIds} onChange={setServiceIds}/>
+      <Field label="Which services can it be used for?"
+        hint={isNew
+          ? 'Clients can only book these services with this package.'
+          : 'Changes apply to packages you sell from now on. Packages already sold keep the services they were bought for.'}>
+        <ServicePicker services={services} scope={scope} onScope={setScope}
+          selected={serviceIds} onChange={setServiceIds}/>
       </Field>
 
       <Field label="Visibility"
@@ -345,43 +362,62 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
   );
 }
 
-function ServicePicker({ services, selected, onChange }) {
+function ServicePicker({ services, scope, onScope, selected, onChange }) {
   const all = services || [];
-  const allSelected = selected.length === 0;
   const toggle = (id) => {
     if (selected.includes(id)) onChange(selected.filter((x) => x !== id));
     else onChange([...selected, id]);
   };
+  const choice = (value, label, sub) => {
+    const on = scope === value;
+    return (
+      <label style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 10,
+        border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border)'),
+        background: on ? 'var(--accent-soft)' : 'var(--surface)', cursor: 'pointer',
+      }}>
+        <input type="radio" name="pkg-scope" checked={on} onChange={() => onScope(value)} style={{ marginTop: 2 }}/>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: on ? 'var(--accent)' : 'var(--fg)' }}>{label}</span>
+          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{sub}</span>
+        </span>
+      </label>
+    );
+  };
+  const picked = all.filter((s) => selected.includes(s.id)).map((s) => s.name);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <button type="button" onClick={() => onChange([])}
-        style={{
-          textAlign: 'left', padding: '6px 10px', borderRadius: 8,
-          background: allSelected ? 'var(--accent-soft)' : 'transparent',
-          color: allSelected ? 'var(--accent)' : 'var(--fg-2)',
-          fontSize: 12.5, fontWeight: allSelected ? 600 : 500, border: 0, cursor: 'pointer',
-        }}>
-        Any service in your workspace
-      </button>
-      {all.length > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 4px 4px' }}>
-          Or limit to specific services:
-        </div>
-      )}
-      {all.map((s) => {
-        const on = selected.includes(s.id);
-        return (
-          <label key={s.id} style={{
-            display: 'flex', alignItems: 'center', gap: 8, padding: '4px 10px',
-            borderRadius: 8, background: on ? 'var(--surface-2)' : 'transparent',
-            cursor: 'pointer', fontSize: 12.5,
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {choice('any', 'Any service', 'Good for every service you offer, now and later.')}
+      {choice('some', 'Only certain services', picked.length > 0
+        ? `Good for: ${picked.join(', ')}`
+        : 'Pick the services below.')}
+      {scope === 'some' && (
+        all.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--muted)', padding: '4px 10px' }}>
+            Add a service first, then come back to limit this package.
+          </div>
+        ) : (
+          <div role="group" aria-label="Services this package covers" style={{
+            display: 'flex', flexDirection: 'column', gap: 2, padding: 6,
+            border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2)',
           }}>
-            <input type="checkbox" checked={on} onChange={() => toggle(s.id)}/>
-            <span style={{ flex: 1 }}>{s.name}</span>
-            <span style={{ color: 'var(--muted)' }}>${Number(s.price || 0).toFixed(0)}</span>
-          </label>
-        );
-      })}
+            {all.map((s) => {
+              const on = selected.includes(s.id);
+              return (
+                <label key={s.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', minHeight: 40,
+                  borderRadius: 8, background: on ? 'var(--surface)' : 'transparent',
+                  cursor: 'pointer', fontSize: 13,
+                }}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(s.id)}/>
+                  <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{s.name}</span>
+                  <span style={{ color: 'var(--muted)' }}>${Number(s.price || 0).toFixed(0)}</span>
+                </label>
+              );
+            })}
+          </div>
+        )
+      )}
     </div>
   );
 }
@@ -392,6 +428,58 @@ function Field({ label, hint, children }) {
       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 4 }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+// Business setting: when does a package session count as used?
+//   booking     (default) the session is used when the visit is booked
+//   completion  the session is held when booked and counts as used once
+//               the visit is marked complete (or a no-show); cancelling
+//               releases it
+// Bookings keep the rule they were made under, so switching is safe.
+function UseOnSetting({ value, onSave }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const pick = async (v) => {
+    if (v === value || busy) return;
+    setBusy(true); setErr(null);
+    try { await onSave({ packageUseOn: v }); }
+    catch (e) { setErr(e.message || 'Could not save'); }
+    finally { setBusy(false); }
+  };
+  const opt = (v, title, sub) => {
+    const on = value === v;
+    return (
+      <label style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', borderRadius: 10,
+        border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border)'),
+        background: on ? 'var(--accent-soft)' : 'var(--surface)', cursor: busy ? 'default' : 'pointer',
+      }}>
+        <input type="radio" name="pkg-use-on" checked={on} disabled={busy} onChange={() => pick(v)} style={{ marginTop: 2 }}/>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: on ? 'var(--accent)' : 'var(--fg)' }}>{title}</span>
+          <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>{sub}</span>
+        </span>
+      </label>
+    );
+  };
+  return (
+    <div className="card" style={{ padding: 14, marginTop: 16 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 4 }}>Use package sessions when</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.45 }}>
+        Either way, a client can never book more sessions than they have left.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {opt('booking', 'The booking is made',
+          'A session is used as soon as the visit is booked. Cancelling in time gives it back.')}
+        {opt('completion', 'The session is completed',
+          'A session is held when the visit is booked and counts as used when you mark it complete. A no-show also uses it. Cancelling always gives it back.')}
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.45 }}>
+        Changing this only affects new bookings. Existing bookings keep the rule they were made with.
+      </div>
+      {err && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{err}</div>}
     </div>
   );
 }

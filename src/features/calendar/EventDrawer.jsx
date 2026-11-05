@@ -98,7 +98,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   };
   const cancelSeries = async () => {
     setBusy(true);
-    try { await onCancelSeries({ ...event, id: masterId, keepDeposit: keep.keepDeposit }); onClose(); } finally { setBusy(false); }
+    try { await onCancelSeries({ ...event, id: masterId, refundDeposit: keep.refundNow }); onClose(); } finally { setBusy(false); }
   };
   const saveRecurrence = async () => {
     setBusy(true);
@@ -121,6 +121,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       <InfoRow label="Date"    value={parseISO(occurrenceISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
       <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '-'}/>
+      <PackageSection event={event} occurrenceISO={occurrenceISO} onBookingChanged={onBookingChanged}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
       {event.privateNotes && <InfoRow label="Private note (only you see this)" value={event.privateNotes}/>}
 
@@ -247,12 +248,16 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
             <span style={{ fontSize: 13, color: 'var(--fg-2)', flex: 1 }}>
               {isRecurring
                 ? `${ruleLabel(event.recurrenceRule)}${event.recurrenceUntil ? `, until ${event.recurrenceUntil}` : ', no end date'}`
-                : "Doesn't repeat"}
+                : event.clientPackageId
+                  ? "Doesn't repeat (a package session covers one visit)"
+                  : "Doesn't repeat"}
             </span>
-            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }}
-              onClick={() => setEditingRecurrence(true)}>
-              {isRecurring ? 'Change' : 'Add recurrence'}
-            </button>
+            {(isRecurring || !event.clientPackageId) && (
+              <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }}
+                onClick={() => setEditingRecurrence(true)}>
+                {isRecurring ? 'Change' : 'Add recurrence'}
+              </button>
+            )}
           </div>
         ) : (
           <div style={{
@@ -1173,5 +1178,84 @@ function MissingEmail({ event }) {
       </div>
       {err && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>}
     </form>
+  );
+}
+
+
+// Package line for a booking: which package paid (and, for a business
+// that counts sessions on completion, whether the session is still only
+// held), or, when the booking was made without one and the client has a
+// package covering this service, a one-tap "Use a session from X?".
+// After the visit is marked complete that question is asked outright so
+// a forgotten package is caught (PATCH { applyClientPackageId }, which
+// uses exactly one session and never twice).
+function PackageSection({ event, occurrenceISO, onBookingChanged }) {
+  const [pkgs, setPkgs] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [declined, setDeclined] = useState(false);
+  const clientId = event.clientId;
+  React.useEffect(() => {
+    let live = true;
+    if (!clientId || event.cancelledAt) { setPkgs([]); return undefined; }
+    api.get(`/clients/${clientId}/packages`)
+      .then((r) => { if (live) setPkgs(r.packages || []); })
+      .catch(() => { if (live) setPkgs([]); });
+    return () => { live = false; };
+  }, [clientId, event.cancelledAt, event.clientPackageId]);
+
+  if (!pkgs || event.cancelledAt) return null;
+  const completed = !!(event.completionLog || {})[occurrenceISO];
+
+  if (event.clientPackageId) {
+    const p = pkgs.find((x) => x.id === event.clientPackageId);
+    const held = event.packageUseMode === 'completion' && !completed && !event.noShowAt;
+    return (
+      <InfoRow label="Paid with" value={
+        `${p ? p.name : 'A package session'}${held ? ' (held, counts when you mark it complete)' : ''}`
+        + (p ? ` · ${p.creditsRemaining} left${p.sessionsBooked > 0 ? `, ${p.sessionsBooked} booked` : ''}` : '')
+      }/>
+    );
+  }
+  if (event.recurrenceRule || declined) return null;
+  const eligible = pkgs.filter((p) => (p.state || 'active') === 'active' && p.creditsRemaining > 0
+    && (!p.serviceIds?.length || p.serviceIds.includes(event.serviceId)));
+  if (eligible.length === 0) return null;
+  const p = eligible[0];
+  const apply = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.patch(`/calendar/bookings/${event.id}`, { applyClientPackageId: p.id });
+      if (r?.booking) onBookingChanged?.(r.booking);
+    } catch (e) {
+      setErr(e.message || 'Could not use the package');
+    } finally { setBusy(false); }
+  };
+  return (
+    <div role="status" style={{
+      marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.5,
+      background: completed ? 'color-mix(in srgb, var(--accent-soft) 60%, var(--surface))' : 'var(--surface-2)',
+      border: '1px solid ' + (completed ? 'var(--accent)' : 'var(--border)'),
+    }}>
+      <div style={{ fontWeight: 600, color: 'var(--fg)' }}>
+        Use a session from {p.name}? ({p.creditsRemaining} left)
+      </div>
+      <div style={{ color: 'var(--muted)', marginTop: 2 }}>
+        {completed
+          ? 'This visit was booked without the package.'
+          : 'This booking will be billed normally unless you use the package.'}
+      </div>
+      {err && <div style={{ color: 'var(--danger)', marginTop: 6 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" className="btn btn-primary" disabled={busy} onClick={apply}
+          style={{ flex: 1, justifyContent: 'center', fontSize: 12.5 }}>
+          {busy ? 'Saving…' : 'Yes, use 1 session'}
+        </button>
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={() => setDeclined(true)}
+          style={{ flex: 1, justifyContent: 'center', fontSize: 12.5 }}>
+          No
+        </button>
+      </div>
+    </div>
   );
 }

@@ -13,7 +13,7 @@ import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/
 function validateServiceIds(input) {
   if (input == null) return { ok: true, value: [] };
   if (!Array.isArray(input)) return { ok: false, error: 'serviceIds must be an array' };
-  const ids = input.map((s) => String(s)).filter(Boolean);
+  const ids = [...new Set(input.map((s) => String(s)).filter(Boolean))];
   if (ids.some((id) => !/^[0-9a-fA-F-]{36}$/.test(id))) {
     return { ok: false, error: 'serviceIds must be UUIDs' };
   }

@@ -16,6 +16,7 @@ import { sessionsAsCalendarBlocks } from '../_lib/programEvents.js';
 import { validateAvailability, validateTimezone } from '../_lib/settingsValidation.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
+import { clientRemindersFrom } from '../_lib/reminderSettings.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -94,7 +95,9 @@ export default async function handler(req, res) {
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),
-          services: services.rows.map(serializeService),
+          services: services.rows.map((r) => serializeService(r, {
+            reminderDefaultMinutes: clientRemindersFrom(settings?.client_reminders ?? null).minutes,
+          })),
           blocks:   [...blocks.rows.map(serializeBlock), ...sessionBlocks],
           // Helper mode (schedule permission): the calendar without revenue.
           bookings: bookings.rows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
@@ -138,6 +141,11 @@ export default async function handler(req, res) {
         const n = Number(body.bufferMinutes);
         if (!Number.isInteger(n) || n < 0 || n > 240) return badRequest(res, 'bufferMinutes must be 0–240');
         push('buffer_minutes', n);
+      }
+      if ('packageUseOn' in body) {
+        const v = String(body.packageUseOn || '');
+        if (!['booking', 'completion'].includes(v)) return badRequest(res, 'packageUseOn must be booking or completion');
+        push('package_use_on', v);
       }
       if ('minNoticeHours' in body) {
         // Minimum advance notice before a client can book (0 = allow

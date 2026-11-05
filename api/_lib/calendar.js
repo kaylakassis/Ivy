@@ -2,6 +2,7 @@
 // Used by both the owner-side API (validate booking before insert) and frontend.
 import { sql } from './db.js';
 import { getOrSet, invalidate as cacheInvalidate } from './hotCache.js';
+import { serviceFollowsDefault } from './reminderSettings.js';
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export const VALID_HANDLE = HANDLE_RE;
@@ -67,6 +68,8 @@ export function serializeSettings(row) {
     bufferMinutes:  row.buffer_minutes,
     minNoticeHours: row.min_notice_hours == null ? 24 : Number(row.min_notice_hours),
     maxAdvanceDays: row.max_advance_days == null ? 60 : Number(row.max_advance_days),
+    // When a package session counts as used: 'booking' | 'completion'.
+    packageUseOn:   row.package_use_on === 'completion' ? 'completion' : 'booking',
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',
@@ -111,8 +114,14 @@ export const DISCOVER_CATEGORIES = [
 ];
 export const DISCOVER_CATEGORY_SET = new Set(DISCOVER_CATEGORIES);
 
-export function serializeService(row) {
+// opts.reminderDefaultMinutes: the business's default client reminder
+// schedule. A service that follows the default reports it as its
+// reminderMinutes, so older app versions (which only know reminderMinutes)
+// show and save back the schedule clients really get.
+export function serializeService(row, opts = {}) {
   if (!row) return null;
+  const followsDefault = serviceFollowsDefault(row);
+  const defaultMins = Array.isArray(opts.reminderDefaultMinutes) ? opts.reminderDefaultMinutes : null;
   return {
     id:                row.id,
     name:              row.name,
@@ -122,7 +131,12 @@ export function serializeService(row) {
     description:       row.description || '',
     photoUrl:          row.photo_url || '',
     prepInstructions:  row.prep_instructions || '',
-    reminderMinutes:   row.reminder_minutes || DEFAULT_REMINDERS.slice(),
+    reminderMinutes:   (followsDefault && defaultMins)
+      ? defaultMins.slice()
+      : (row.reminder_minutes || DEFAULT_REMINDERS.slice()),
+    // true = this service follows the business reminder default
+    // (Calendar > Reminders); false = its own reminderMinutes.
+    reminderUseDefault: followsDefault,
     capacity:          row.capacity || 1,
     intakeFormTemplateIds: row.intake_form_template_ids || [],
     depositType:       row.deposit_type || 'none',
@@ -290,6 +304,8 @@ export function serializeBooking(row, opts = {}) {
     recurrenceUntil,
     cancelledOccurrences,
     clientPackageId:     money(row.client_package_id || null),
+    // 'booking' | 'completion' | null: when this booking's package session counts as used.
+    packageUseMode:      money(row.client_package_id ? (row.package_use_mode || 'booking') : null),
     staffId:             row.staff_id || null,
     depositRequired:     Number(row.deposit_required || 0),
     depositPaid:         money(Number(row.deposit_paid || 0)),
@@ -311,6 +327,14 @@ export function serializeBooking(row, opts = {}) {
     depositRefunded:     money(Number(row.deposit_refunded_amount || 0)),
     depositRefundedAt:   money(row.deposit_refunded_at || null),
     depositRefundError:  money(row.deposit_refund_error || null),
+    // Pending / decided deposit refund request (owner approves with one tap).
+    depositRefundRequest: redactMoney || !row.deposit_refund_request_status ? null : {
+      status:      row.deposit_refund_request_status,
+      amount:      Number(row.deposit_refund_request_amount || 0),
+      reason:      row.deposit_refund_request_reason || '',
+      requestedAt: row.deposit_refund_requested_at || null,
+      decidedAt:   row.deposit_refund_decided_at || null,
+    },
     cancelledBy:         row.cancelled_by || null,
     source:              row.source || null,
     tipAmount:           money(Number(row.tip_amount || 0)),

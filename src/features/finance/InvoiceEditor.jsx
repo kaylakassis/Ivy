@@ -9,6 +9,7 @@ import { useSuccessFlash } from '../../components/motion/useSuccessFlash.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { fireConfetti } from '../../lib/celebrate.js';
 import InvoicePreviewModal from './InvoicePreviewModal.jsx';
+import { invoiceMoney, invoiceActions, invoiceStatusLine } from '../../lib/invoiceRules.js';
 
 // Labels for paid_method / payment_claimed_method values. Mirrors
 // PAID_METHOD_LABELS in api/_lib/finance.js.
@@ -18,7 +19,7 @@ const METHOD_LABELS = {
 };
 const methodLabel = (m) => METHOD_LABELS[m] || m || 'another method';
 
-export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund, onClearClaim }) {
+export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund, onClearClaim, onArchive, onOpenRecurring }) {
   // Slide out (140ms) before the parent unmounts us.
   const { closing, close: onClose } = useAnimatedClose(onCloseNow);
   // "Save draft" pulses green once when the save lands.
@@ -48,7 +49,14 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
   const remaining = Math.max(0, refundBasis - refundedAmount);
   const giftCredit = Number(invoice.giftCardCreditCents || 0) / 100;
   const giftRestored = Number(invoice.giftCardCreditRestoredCents || 0) / 100;
-  const refundable = (invoice.status === 'paid' || invoice.status === 'refunded') && remaining > 0;
+  // Which actions the server will accept right now (src/lib/invoiceRules.js).
+  // The server sends `allowed`; older payloads fall back to the same rules.
+  const allowed = invoice.allowed || invoiceActions(invoice);
+  const money = invoice.money || invoiceMoney(invoice);
+  const statusLine = invoiceStatusLine(invoice);
+  const refundable = !!allowed.refund?.ok && remaining > 0;
+  const [notifyVoid, setNotifyVoid] = useState(false);
+  const canEmailClient = !!invoice.sentAt && !!invoice.clientEmail;
   const [items, setItems]         = useState(invoice.items || []);
   const [taxRate, setTaxRate]     = useState(invoice.taxRate ?? 0);
   const [discount, setDiscount]   = useState(invoice.discount ?? 0);
@@ -58,6 +66,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
   const [busy, setBusy]           = useState(false);
   const [err, setErr]             = useState(null);
   const [confirm, setConfirm]     = useState(null);  // 'delete' | 'void' | 'paid' | 'refund' | null
+  const [notice, setNotice]       = useState(null);  // short "done" line after archive / void
   const [paidMethod, setPaidMethod] = useState('card');
   const [refundAmount, setRefundAmount] = useState('');
   const [refundReason, setRefundReason] = useState('');
@@ -197,6 +206,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                 {invoice.status === 'paid'   && 'Paid - invoice is locked.'}
                 {invoice.status === 'voided' && 'Voided - invoice is locked. Restore it to edit or resend.'}
                 {invoice.status === 'refunded' && 'Refunded - invoice is locked.'}
+                {invoice.archivedAt && ' Archived (hidden from the main list).'}
               </span>
               {invoice.status === 'voided' && (
                 <button className="btn btn-outline" disabled={busy}
@@ -210,6 +220,41 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                   }}
                   style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}>
                   Restore to draft
+                </button>
+              )}
+            </div>
+          )}
+
+          {invoice.status !== 'draft' && (
+            <div data-testid="invoice-money" style={{
+              padding: '12px 14px', borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+              display: 'flex', flexDirection: 'column', gap: 8,
+            }}>
+              <div data-testid="invoice-status-line" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--fg)' }}>{statusLine}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 18px', fontSize: 12.5, color: 'var(--fg-2)' }}>
+                <MoneyBit label="Total" value={fmtMoney(money.total)}/>
+                {money.giftCard > 0 && <MoneyBit label="Gift card" value={fmtMoney(money.giftCard)}/>}
+                <MoneyBit label="Paid" value={fmtMoney(money.paid)}/>
+                {money.refunded > 0 && <MoneyBit label="Refunded" value={fmtMoney(money.refunded)}/>}
+                <MoneyBit label="Net" value={fmtMoney(money.net)}/>
+                <MoneyBit label="Owed" value={fmtMoney(money.owed)} strong={money.owed > 0}/>
+              </div>
+            </div>
+          )}
+          {invoice.fromRecurring && (
+            <div data-testid="recurring-note" style={{
+              padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
+              fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            }}>
+              <Icons.Repeat size={13}/>
+              <span style={{ flex: '1 1 200px', lineHeight: 1.5 }}>
+                This invoice came from a recurring series. Voiding or deleting it only changes this one; the next invoices still go out.
+              </span>
+              {onOpenRecurring && (
+                <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}
+                  onClick={() => { onClose(); onOpenRecurring(); }}>
+                  Manage the series
                 </button>
               )}
             </div>
@@ -368,6 +413,12 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
           )}
         </div>
 
+        {!confirm && (invoice.status === 'paid' || invoice.status === 'refunded') && (
+          <div data-testid="no-delete-hint" style={{ padding: '10px 24px 0', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+            Paid and refunded invoices can't be deleted because money moved{allowed.archive?.ok ? ', but you can archive this one to hide it.' : '.'}
+            {invoice.status === 'paid' && money.net > 0 ? ' To give money back, use Refund.' : ''}
+          </div>
+        )}
         <div style={{
           padding: '14px 24px', borderTop: '1px solid var(--border)',
           display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
@@ -382,15 +433,30 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
               }}
               busy={busy}/>
           ) : confirm === 'void' ? (
-            <ConfirmRow text="Void this invoice? The view link stops working."
-              onCancel={() => setConfirm(null)}
-              onConfirm={async () => {
-                setBusy(true); setErr(null);
-                try { await onVoid(); setConfirm(null); }
-                catch (e) { setErr(e.message || 'Void failed'); }
-                finally { setBusy(false); }
-              }}
-              busy={busy}/>
+            <>
+              <span style={{ fontSize: 12, color: 'var(--fg-2)', width: '100%', lineHeight: 1.5 }}>
+                Void this invoice? It stays in your records marked Void, the client's link stops taking payment, and nothing is owed.
+              </span>
+              {canEmailClient && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, width: '100%', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={notifyVoid} onChange={(e) => setNotifyVoid(e.target.checked)}/>
+                  Email {invoice.clientName || 'the client'} that it was voided
+                </label>
+              )}
+              <ConfirmRow text=""
+                onCancel={() => setConfirm(null)}
+                onConfirm={async () => {
+                  setBusy(true); setErr(null);
+                  try {
+                    const r = await onVoid({ notifyClient: canEmailClient && notifyVoid });
+                    setConfirm(null);
+                    setNotice(r?.clientNotified ? 'Voided. The client was emailed.' : 'Voided. Nothing is owed.');
+                  }
+                  catch (e) { setErr(e.message || 'Void failed'); }
+                  finally { setBusy(false); }
+                }}
+                busy={busy}/>
+            </>
           ) : confirm === 'paid' ? (
             <>
               <select value={paidMethod} onChange={(e) => setPaidMethod(e.target.value)} style={inputS}>
@@ -458,16 +524,30 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
             </>
           ) : (
             <>
-              {invoice.status === 'draft' && (
+              {allowed.delete?.ok && (
                 <button className="btn btn-ghost" onClick={() => setConfirm('delete')}
                   style={{ color: 'var(--danger)' }}>
                   <Icons.Trash size={13}/> Delete
                 </button>
               )}
-              {!isLocked && invoice.status !== 'draft' && (
+              {allowed.void?.ok && !allowed.delete?.ok && (
                 <button className="btn btn-ghost" onClick={() => setConfirm('void')}
                   style={{ color: 'var(--danger)' }}>
                   Void
+                </button>
+              )}
+              {(allowed.archive?.ok || allowed.unarchive?.ok) && onArchive && (
+                <button className="btn btn-ghost" data-testid="invoice-archive" disabled={busy}
+                  onClick={async () => {
+                    setBusy(true); setErr(null);
+                    try {
+                      const r = await onArchive(!!allowed.archive?.ok);
+                      if (r?.changed === 0 && r?.skipped?.length) setErr(r.skipped[0].why);
+                      else setNotice(allowed.archive?.ok ? 'Archived. Find it under the Archived filter.' : 'Back in your main list.');
+                    } catch (e) { setErr(e.message || 'Could not archive'); }
+                    finally { setBusy(false); }
+                  }}>
+                  <Icons.Folder size={13}/> {allowed.archive?.ok ? 'Archive' : 'Unarchive'}
                 </button>
               )}
               {refundable && (
@@ -479,6 +559,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
               )}
               <div style={{ flex: 1 }}/>
               {err && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</span>}
+              {!err && notice && <span data-testid="invoice-notice" style={{ fontSize: 11.5, color: 'var(--ok)' }}>{notice}</span>}
               {/* Preview: the invoice and the email exactly as the client
                   gets them. Saves the draft first so the server renders
                   the current line items. */}
@@ -545,6 +626,15 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
         />
       )}
     </div>
+  );
+}
+
+function MoneyBit({ label, value, strong }) {
+  return (
+    <span style={{ whiteSpace: 'nowrap' }}>
+      <span style={{ color: 'var(--muted)' }}>{label}</span>{' '}
+      <span className="mono-num" style={{ fontWeight: strong ? 700 : 600, color: strong ? 'var(--fg)' : 'inherit' }}>{value}</span>
+    </span>
   );
 }
 

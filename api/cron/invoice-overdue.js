@@ -13,7 +13,7 @@ import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyClientSafe, notifyOwnerSafe } from '../_lib/push.js';
-import { notifyInvoiceOverdue } from '../_lib/invoiceNotify.js';
+import { notifyInvoiceOverdue, reminderOwed } from '../_lib/invoiceNotify.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -70,12 +70,13 @@ async function handler(req, res) {
         // eslint-disable-next-line no-await-in-loop
         const { rows } = await sql.query(
           `SELECT
-             i.id, i.workspace_id, i.client_id, i.client_name, i.client_email,
-             i.number, i.due_date,
+             i.*,
              EXTRACT(DAY FROM NOW() - i.due_date::timestamp)::int AS days_overdue
            FROM invoices i
            LEFT JOIN calendar_settings cs ON cs.workspace_id = i.workspace_id
            WHERE i.status IN ('sent', 'overdue')
+             AND i.payment_processing_at IS NULL
+             AND i.archived_at IS NULL
              AND i.due_date IS NOT NULL
              AND i.due_date < (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
              AND i.client_email IS NOT NULL
@@ -93,6 +94,13 @@ async function handler(req, res) {
         batches += 1;
         for (const r of rows) {
           try {
+            // Nothing left to pay (a gift card or part payments cover it):
+            // no reminder. Stamp it so it is not picked up every run.
+            if (reminderOwed(r) <= 0) {
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE invoices SET last_overdue_reminder_at = NOW() WHERE id = ${r.id}`;
+              continue;
+            }
             const days = Math.max(1, r.days_overdue || 1);
             // Mint a fresh view link so the email lands cleanly even if
             // the prior token was misplaced.
@@ -105,6 +113,7 @@ async function handler(req, res) {
             const minted = await sql`
               UPDATE invoices SET view_token_hash = ${hash}
                WHERE id = ${r.id} AND status IN ('sent', 'overdue')
+                 AND payment_processing_at IS NULL
                RETURNING id
             `;
             if (minted.rows.length === 0) continue;

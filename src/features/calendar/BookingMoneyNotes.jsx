@@ -6,6 +6,7 @@
 import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { DepositDecisionButtons } from './DepositReviews.jsx';
 
 const usd = (n) => `$${Number(n || 0).toFixed(2)}`;
 
@@ -15,18 +16,20 @@ function heldDeposit(event) {
   return Math.max(0, Math.round((paid - refunded) * 100) / 100);
 }
 
-// For the cancel confirmation: "Refund the $25.00 deposit" (on by default).
+// For the cancel confirmation: "Refund the $25.00 deposit now" (off by
+// default). Ticking it is the owner's approval; left unticked, the deposit
+// becomes a one-tap refund request in "Deposits to review".
 export function useKeepDeposit(event) {
-  const [refund, setRefund] = useState(true);
+  const [refund, setRefund] = useState(false);
   const held = heldDeposit(event);
   const control = held > 0 && !event.cancelledAt ? (
     <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5, padding: '6px 2px', cursor: 'pointer' }}>
       <input type="checkbox" checked={refund} onChange={(e) => setRefund(e.target.checked)}
         style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--accent)' }}/>
-      <span>Refund the {usd(held)} deposit to the client. You are cancelling, so no fee is charged.</span>
+      <span>Refund the {usd(held)} deposit now. You are cancelling, so no fee is charged. If you leave this off, you can decide later in Deposits to review.</span>
     </label>
   ) : null;
-  return { keepDeposit: held > 0 && !refund, control };
+  return { refundNow: held > 0 && refund, control };
 }
 
 export default function BookingMoneyNotes({ event, onBookingChanged }) {
@@ -48,8 +51,11 @@ export default function BookingMoneyNotes({ event, onBookingChanged }) {
   const problems = [];
   if (event.feeChargeError) problems.push(`The fee was not charged: ${event.feeChargeError}${event.feeInvoiceId ? ' A draft invoice for it is waiting in Finance, Invoices.' : ''}`);
   if (event.depositRefundError) problems.push(`The deposit refund did not go through: ${event.depositRefundError}`);
-  const canRefund = !!event.cancelledAt && refundable > 0;
-  if (!lines.length && !problems.length && !canRefund) return null;
+  const reqd = event.depositRefundRequest || null;
+  const pending = reqd?.status === 'pending';
+  if (reqd?.status === 'kept') lines.push(`Deposit kept (you decided ${new Date(reqd.decidedAt).toLocaleDateString()})`);
+  const canRefund = !!event.cancelledAt && refundable > 0 && !pending;
+  if (!lines.length && !problems.length && !canRefund && !pending) return null;
 
   const refund = async () => {
     setBusy(true); setNote(null);
@@ -71,6 +77,14 @@ export default function BookingMoneyNotes({ event, onBookingChanged }) {
           <Icons.X size={12} sw={2.4} style={{ marginTop: 4, flexShrink: 0 }}/> <span>{p}</span>
         </div>
       ))}
+      {pending && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ fontWeight: 600, color: 'var(--fg)', marginBottom: 6 }}>
+            Refund the {usd(reqd.amount)} deposit? ({reqd.reason})
+          </div>
+          <DepositDecisionButtons bookingId={event.id} size="small" onDone={(r) => { if (r.booking) onBookingChanged?.(r.booking); setNote(r.kept ? 'Deposit kept.' : r.alreadyDecided ? 'Already decided.' : `Refunded ${usd(r.refunded)}.`); }}/>
+        </div>
+      )}
       {canRefund && (
         <button type="button" className="btn btn-outline" onClick={refund} disabled={busy} style={{ marginTop: 8, fontSize: 12 }}>
           {busy ? 'Refunding…' : `Refund ${usd(refundable)} deposit`}

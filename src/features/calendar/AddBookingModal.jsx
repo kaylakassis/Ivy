@@ -1,7 +1,7 @@
 // Owner-side "Add booking" modal - service, client, date/time, optional
 // recurrence, optional package-credit consumption when the matching
 // client has an active bundle covering the chosen service.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { TimeInput, inputSty } from './Drawer.jsx';
@@ -54,6 +54,14 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   // null = haven't looked up yet.
   const [eligiblePackages, setEligiblePackages] = useState(null);
   const [clientPackageId, setClientPackageId]   = useState(null);
+  // The client's packages for this service that can't be used any more
+  // (used up / expired), so the owner sees why there's no package choice.
+  const [spentPackages, setSpentPackages]       = useState([]);
+  // Set once the owner picks "bill normally" so a later re-lookup doesn't
+  // flip the choice back to the package.
+  const [packageTouched, setPackageTouched]     = useState(false);
+  const packageTouchedRef = useRef(false);
+  packageTouchedRef.current = packageTouched;
   const [staffId, setStaffId]                   = useState(null);
   const [staffOptions, setStaffOptions]         = useState([]);
 
@@ -62,39 +70,51 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   // service. Debounced so each keystroke isn't a request.
   useEffect(() => {
     const email = clientEmail.trim().toLowerCase();
-    if (!email || !email.includes('@') || !serviceId) {
+    if ((!email || !email.includes('@')) && !defaultClientId) {
       setEligiblePackages(null);
+      setSpentPackages([]);
+      setClientPackageId(null);
+      return;
+    }
+    if (!serviceId) {
+      setEligiblePackages(null);
+      setSpentPackages([]);
       setClientPackageId(null);
       return;
     }
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const r = await api.get('/clients?email=' + encodeURIComponent(email));
-        const c = r.clients?.[0];
-        if (!c) { if (!cancelled) setEligiblePackages([]); return; }
-        const cp = await api.get(`/clients/${c.id}/packages`);
+        let cid = null;
+        if (email && email.includes('@')) {
+          const r = await api.get('/clients?email=' + encodeURIComponent(email));
+          cid = r.clients?.[0]?.id || null;
+        }
+        if (!cid && defaultClientId) cid = defaultClientId;
+        if (!cid) { if (!cancelled) { setEligiblePackages([]); setSpentPackages([]); } return; }
+        const cp = await api.get(`/clients/${cid}/packages`);
         if (cancelled) return;
-        const eligible = (cp.packages || []).filter((p) =>
-          p.status === 'active'
-          && p.creditsRemaining > 0
-          && (!p.expiresAt || new Date(p.expiresAt).getTime() > Date.now())
-          && (p.serviceIds.length === 0 || p.serviceIds.includes(serviceId))
-        );
+        const covers = (p) => !p.serviceIds?.length || p.serviceIds.includes(serviceId);
+        const stateOf = (p) => p.state || (p.status === 'cancelled' ? 'ended'
+          : (p.creditsRemaining <= 0 || p.status === 'exhausted') ? 'used_up'
+          : (p.expiresAt && new Date(p.expiresAt).getTime() <= Date.now()) ? 'expired' : 'active');
+        const eligible = (cp.packages || []).filter((p) => covers(p) && stateOf(p) === 'active');
         setEligiblePackages(eligible);
-        // Use the functional setState form so we don't read a stale
-        // clientPackageId from this effect's closure when the user
-        // picks a package and then changes service in quick succession.
+        setSpentPackages(eligible.length > 0 ? [] : (cp.packages || [])
+          .filter((p) => covers(p) && (stateOf(p) === 'used_up' || stateOf(p) === 'expired'))
+          .map((p) => ({ ...p, state: stateOf(p) })));
+        // Default to the package (owners forget to pick it). Functional
+        // form so a quick service change can't read a stale choice.
         setClientPackageId((current) => {
-          if (!current) return current;
-          return eligible.some((p) => p.id === current) ? current : null;
+          if (current && eligible.some((p) => p.id === current)) return current;
+          return packageTouchedRef.current ? null : (eligible[0]?.id || null);
         });
       } catch {
-        if (!cancelled) setEligiblePackages([]);
+        if (!cancelled) { setEligiblePackages([]); setSpentPackages([]); }
       }
     }, 350);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [clientEmail, serviceId]);
+  }, [clientEmail, serviceId, defaultClientId]);
 
   const svc = services.find((s) => s.id === serviceId);
   const end = svc ? start + svc.durationMinutes : start + 60;
@@ -120,8 +140,10 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
         startMin: start,
         endMin: end,
         notes: notes.trim() || null,
-        recurrenceRule,
-        recurrenceUntil: recurrenceUntil || null,
+        // A package session pays for one visit, so a package booking
+        // never repeats (the server refuses the combination too).
+        recurrenceRule: clientPackageId ? null : recurrenceRule,
+        recurrenceUntil: clientPackageId ? null : (recurrenceUntil || null),
         skipConflictCheck: override,
         clientPackageId: clientPackageId || null,
         staffId: staffId || null,
@@ -206,35 +228,47 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
                 style={{ ...inputSty, resize: 'vertical', fontFamily: 'inherit' }}/>
             </Field>
 
-            <Field label="Repeats">
-              <select value={recurrenceRule || ''} onChange={(e) => setRecurrenceRule(e.target.value || null)} style={inputSty}>
+            {eligiblePackages && eligiblePackages.length > 0 && (
+              <Field label="Payment"
+                hint={clientPackageId
+                  ? 'Uses one session from this package. Pick "Bill normally" to charge instead.'
+                  : 'Pick a package to use one of their sessions for this visit.'}>
+                <select value={clientPackageId || ''} aria-label="Payment"
+                  onChange={(e) => { setPackageTouched(true); setClientPackageId(e.target.value || null); }}
+                  style={inputSty}>
+                  {eligiblePackages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      Use package: {p.name} ({p.creditsRemaining} left{p.sessionsBooked > 0 ? `, ${p.sessionsBooked} booked` : ''})
+                      {p.expiresAt ? ` · expires ${new Date(p.expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}
+                    </option>
+                  ))}
+                  <option value="">Bill normally</option>
+                </select>
+              </Field>
+            )}
+            {(!eligiblePackages || eligiblePackages.length === 0) && spentPackages.length > 0 && (
+              <div role="status" style={{
+                marginBottom: 14, padding: '10px 12px', borderRadius: 10, fontSize: 12.5, lineHeight: 1.5,
+                background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--fg-2)',
+              }}>
+                {spentPackages[0].name} is {spentPackages[0].state === 'expired' ? 'expired' : 'used up (0 sessions left)'}.
+                {' '}This visit will be billed normally. Offer a new package from their client page.
+              </div>
+            )}
+
+            <Field label="Repeats" hint={clientPackageId ? 'A package session covers one visit, so package bookings do not repeat.' : null}>
+              <select value={clientPackageId ? '' : (recurrenceRule || '')} disabled={!!clientPackageId}
+                onChange={(e) => setRecurrenceRule(e.target.value || null)} style={inputSty}>
                 {RECURRENCE_OPTIONS.map((r) => (
                   <option key={r.value || 'none'} value={r.value || ''}>{r.label}</option>
                 ))}
               </select>
             </Field>
 
-            {recurrenceRule && (
+            {recurrenceRule && !clientPackageId && (
               <Field label="Repeat until (optional)" hint="Leave blank for indefinite. Series stops on this date inclusive.">
                 <input type="date" value={recurrenceUntil} onChange={(e) => setRecurrenceUntil(e.target.value)}
                   min={date} style={inputSty}/>
-              </Field>
-            )}
-
-            {eligiblePackages && eligiblePackages.length > 0 && (
-              <Field label="Apply package credit"
-                hint="Decrements one credit from the chosen bundle. Skip to charge normally.">
-                <select value={clientPackageId || ''}
-                  onChange={(e) => setClientPackageId(e.target.value || null)}
-                  style={inputSty}>
-                  <option value="">No - bill normally</option>
-                  {eligiblePackages.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} - {p.creditsRemaining} of {p.creditsTotal} left
-                      {p.expiresAt ? ` · expires ${new Date(p.expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}
-                    </option>
-                  ))}
-                </select>
               </Field>
             )}
 

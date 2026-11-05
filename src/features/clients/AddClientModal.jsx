@@ -2,6 +2,9 @@
 // service businesses have phone-only and walk-in clients, so email
 // alone can't be the gate. Portal-invite email is a visible,
 // uncheckable choice, never a silent side effect.
+// "More details" (closed by default, so a quick add stays quick): notes,
+// address, birthday, gender or pronouns, emergency contact, preferred
+// contact, work and the business's custom fields (ClientDetailsForm.jsx).
 // Photo upload + per-client attachments live in the full ClientDrawer
 // once the lead exists, since upload-then-cancel without a row leaves
 // orphan files in Blob.
@@ -9,6 +12,8 @@ import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
+import { DetailsFields, draftFrom, detailsPatch, draftProblem } from './ClientDetailsForm.jsx';
+import { useClientFields } from './clientFields.js';
 
 const SOURCES = ['Referral', 'Instagram', 'Website', 'Email', 'Walk-in', 'Other'];
 
@@ -26,6 +31,10 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
   const [sendInvite, setSendInvite] = useState(true);
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [notes, setNotes]   = useState('');
+  const [details, setDetails] = useState(() => draftFrom({}));
+  const { fields } = useClientFields();
 
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
@@ -40,10 +49,14 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!canAdd) return;
+    const problem = draftProblem(details);
+    if (problem) { setMoreOpen(true); setErr(problem); return; }
     setBusy(true);
     setErr(null);
     try {
       await onAdd({
+        ...detailsPatch(details, draftFrom({}), fields),
+        ...(notes.trim() ? { notes: notes.trim() } : {}),
         name: trimmedName,
         email: trimmedEmail || null,
         phone: trimmedPhone || null,
@@ -64,7 +77,7 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="card motion-modal" style={{ padding: 28, width: '100%', maxWidth: 460 }}>
+        className="card motion-modal" style={{ padding: 'clamp(18px, 5vw, 28px)', width: '100%', maxWidth: 460, maxHeight: '92vh', overflowY: 'auto', overscrollBehavior: 'contain' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 10,
@@ -120,6 +133,21 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
               ))}
             </div>
           </Field>
+          <button type="button" className="btn btn-ghost" onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            style={{ padding: '6px 4px', fontSize: 13, color: 'var(--accent)', alignSelf: 'flex-start' }}>
+            {moreOpen ? <Icons.ArrowUp size={12}/> : <Icons.ArrowDown size={12}/>}
+            {moreOpen ? 'Fewer details' : 'More details: notes, address, birthday, emergency contact'}
+          </button>
+          {moreOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+              <Field label="Notes (only you see these)">
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={4000}
+                  placeholder="Goals, injuries, preferences…" style={{ ...inputS, resize: 'vertical', fontFamily: 'inherit' }}/>
+              </Field>
+              <DetailsFields draft={details} onChange={setDetails} fields={fields} showSource={false}/>
+            </div>
+          )}
           {/\S+@\S+\.\S+/.test(trimmedEmail) && (
             <label style={{
               display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 12.5,

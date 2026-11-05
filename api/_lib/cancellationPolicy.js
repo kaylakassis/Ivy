@@ -358,7 +358,7 @@ export function termsLines(terms) {
   out.push(['Late cancellation fee', Number(t.lateCancelFee) > 0 ? money(t.lateCancelFee, c) : 'None']);
   out.push(['No-show fee', Number(t.noShowFee) > 0 ? money(t.noShowFee, c) : 'None']);
   if (Number(t.deposit) > 0) {
-    out.push(['Deposit if cancelled before the window', t.depositRefundedBeforeWindow === false ? 'Not refunded' : 'Refunded']);
+    out.push(['Deposit if cancelled before the window', t.depositRefundedBeforeWindow === false ? 'Not refunded' : 'Refundable (the business approves each refund)']);
   }
   if (t.appointment?.date) {
     out.push(['Appointment', `${t.appointment.date}${t.appointment.startMin != null ? ` at ${minToLabel(t.appointment.startMin)}` : ''}${t.appointment.timezone ? ` (${t.appointment.timezone})` : ''}`]);

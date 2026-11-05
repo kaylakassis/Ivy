@@ -4353,4 +4353,103 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_id TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_claimed_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_error TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_by TEXT;
+-- Deposit refunds need the owner's one-tap approval. A cancellation that
+-- makes a deposit refundable under the policy opens a request:
+-- status 'pending' -> 'approved' (refund ran) or 'kept' (owner kept it),
+-- with who decided and when. Nothing is refunded while 'pending'.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_request_status TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_request_amount NUMERIC(12,2);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_request_reason TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_requested_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_decided_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_refund_decided_by UUID;
+CREATE INDEX IF NOT EXISTS idx_bookings_deposit_review
+  ON bookings(workspace_id, deposit_refund_requested_at) WHERE deposit_refund_request_status = 'pending';
+-- Appointment reminders (api/_lib/reminderSettings.js).
+-- calendar_settings.client_reminders: the business-wide default for client
+--   reminders { enabled, minutes[], channels { email, sms, push } }.
+--   NULL = never customised = on, 1 day / 8 hours / 1 hour before.
+-- calendar_settings.owner_reminders: the owner's own reminders about their
+--   appointments { enabled, minutes[], channels { email, push } }.
+--   NULL = on, 1 day and 1 hour before. Never affects clients.
+-- services.reminders_use_default: TRUE = follow the business default,
+--   FALSE = use services.reminder_minutes. NULL (saved before this existed)
+--   = follow the default only while reminder_minutes is still the old
+--   built-in {10080,2880,1440,120}.
+-- clients.reminder_settings: per-client override, NULL = business default,
+--   { "mode": "off" } or { "mode": "custom", "minutes": [...] }.
+-- bookings.push_sent / owner_reminders_sent: per-beat claim maps, same
+--   shape as reminders_sent, for client push and the owner/helper beats.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS client_reminders JSONB;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS owner_reminders JSONB;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS reminders_use_default BOOLEAN;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS reminder_settings JSONB;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS push_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS owner_reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Invoice clean-up (src/lib/invoiceRules.js). archived_at hides a paid,
+-- refunded or void invoice from the owner's main Finance list. It is a
+-- view setting only: the row, its payments and refunds stay, revenue
+-- history never changes, and unarchiving puts it back. NULL = not archived.
+-- recurring_invoice_id links an invoice to the recurring series that made
+-- it, so the owner sees that voiding one invoice does not stop the series.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS recurring_invoice_id UUID REFERENCES recurring_invoices(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_ws_archived
+  ON invoices(workspace_id, archived_at) WHERE archived_at IS NOT NULL;
+
+-- Richer client record (api/_lib/clientDetails.js). Address in parts (the
+-- one-line clients.address stays, rewritten from the parts, for older app
+-- builds and the client portal), birthday as month + day with an optional
+-- year, gender or pronouns, emergency contact, preferred contact method,
+-- company or occupation, and the business's own custom fields
+-- (custom_fields JSONB keyed by client_field_definitions.id). Owner data:
+-- helpers without the clients permission and public pages never get it.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_street TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_city TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_region TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_postal_code TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address_country TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_month SMALLINT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_day SMALLINT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS birth_year SMALLINT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS pronouns TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS occupation TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS preferred_contact TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS emergency_name TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS emergency_phone TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS emergency_relationship TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Fields an owner defines once for their business (Clients > Custom
+-- fields). type: text | number | date | boolean (yes/no) | select
+-- (dropdown, options = ["..."]). At most 25 per business (enforced in
+-- api/clients/fields.js). Deleting one removes its values from every client.
+CREATE TABLE IF NOT EXISTS client_field_definitions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  label        TEXT NOT NULL,
+  type         TEXT NOT NULL CHECK (type IN ('text','number','date','boolean','select')),
+  options      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  position     INTEGER NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_client_field_defs_ws ON client_field_definitions(workspace_id, position);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_client_field_defs_label ON client_field_definitions(workspace_id, LOWER(label));
+-- Packages: when a package session counts as used. 'booking' (default):
+-- the session is used when the booking is made. 'completion': the
+-- session is held when booked and counts as used once the visit is
+-- marked complete (or a no-show); cancelling releases it. Each booking
+-- records the mode it was made under, so switching the setting never
+-- changes bookings that already exist (NULL = made before this setting
+-- existed = 'booking').
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS package_use_on TEXT NOT NULL DEFAULT 'booking';
+DO $$ BEGIN
+  ALTER TABLE calendar_settings ADD CONSTRAINT calendar_settings_package_use_on_chk
+    CHECK (package_use_on IN ('booking', 'completion'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS package_use_mode TEXT;
+DO $$ BEGIN
+  ALTER TABLE bookings ADD CONSTRAINT bookings_package_use_mode_chk
+    CHECK (package_use_mode IS NULL OR package_use_mode IN ('booking', 'completion'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 `;

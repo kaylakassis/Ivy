@@ -13,12 +13,14 @@ import {
   expandedBookings,
 } from './utils.js';
 import AvailabilityDrawer from './AvailabilityDrawer.jsx';
+import RemindersDrawer from './RemindersDrawer.jsx';
 import ShareDrawer from './ShareDrawer.jsx';
 import StaffDrawer from './StaffDrawer.jsx';
 import SyncDrawer from './SyncDrawer.jsx';
 import PackagesDrawer from './PackagesDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
+import DepositReviews from './DepositReviews.jsx';
 import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
@@ -92,6 +94,11 @@ export default function Calendar() {
       // Dashboard "Set your weekly availability" checklist item.
       setDrawer('availability');
       const next = new URLSearchParams(calParams); next.delete('availability');
+      setCalParams(next, { replace: true });
+    } else if (calParams.get('reminders') === '1') {
+      // Links from the service editor, client drawer and Account page.
+      setDrawer('reminders');
+      const next = new URLSearchParams(calParams); next.delete('reminders');
       setCalParams(next, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,6 +290,7 @@ export default function Calendar() {
 
   return (
     <div className="page-pad" style={{ paddingTop: isMobile ? 12 : 20 }}>
+      <DepositReviews/>
       {/* Toolbar */}
       {isMobile ? (
         // MOBILE: stacked rows so the controls don't overflow.
@@ -351,6 +359,9 @@ export default function Calendar() {
               still resolves (now redirected to /finance). */}
           <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
             <Icons.Clock size={14}/> {!isTablet && 'Availability'}
+          </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('reminders')} aria-label="Reminders">
+            <Icons.Bell size={14}/> {!isTablet && 'Reminders'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('share')}
             data-tour="calendar-share">
@@ -535,7 +546,11 @@ export default function Calendar() {
         <SyncDrawer onClose={() => setDrawer(null)}/>
       )}
       {drawer === 'packages' && (
-        <PackagesDrawer services={cal.services} onClose={() => setDrawer(null)}/>
+        <PackagesDrawer services={cal.services} settings={cal.settings} onPatchSettings={patchSettings}
+          onClose={() => setDrawer(null)}/>
+      )}
+      {drawer === 'reminders' && (
+        <RemindersDrawer onClose={() => setDrawer(null)}/>
       )}
       {drawer === 'staff' && (
         <StaffDrawer onClose={() => setDrawer(null)} onChanged={refresh}/>
@@ -561,7 +576,7 @@ export default function Calendar() {
           onEditCompletion={editCompletion}
           onClearCompletion={clearCompletion}
           onDelete={async (e) => {
-            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id, { keepDeposit: !!e.keepDeposit });
+            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id, { refundDeposit: !!e.refundDeposit });
             else if (e.id) await removeBlock(e.id);
           }}
           onClose={() => { setDrawer(null); setSelectedEvent(null); }}
@@ -744,6 +759,7 @@ function ActionSheet({ onClose, onPick }) {
   const items = [
     { id: 'staff',        label: 'Staff',        icon: 'Users' },
     { id: 'availability', label: 'Availability', icon: 'Clock' },
+    { id: 'reminders',    label: 'Reminders',    icon: 'Bell' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
     { id: 'sync',         label: 'Calendar sync', icon: 'Arrow' },
     { id: 'block',        label: 'Add event',    icon: 'Clock' },

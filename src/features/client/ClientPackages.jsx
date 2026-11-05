@@ -10,13 +10,73 @@ import PolicyConsent, { usePolicyConsent } from '../calendar/PolicyConsent.jsx';
 import { api } from '../../lib/api.js';
 import { Sheet, ErrorNote, actionBtn, bookHref, plural, fmtDate } from './portalUi.jsx';
 
+// The used-up / expired prompt: shown on the package card and in the
+// booking sheet when a package can't be used any more. "Buy again" opens
+// the business's own package checkout on their booking page; "See all
+// services" opens the booking page.
+export function RepurchasePrompt({ pkg: p, compact = false }) {
+  const expired = p.state === 'expired';
+  const slug = p.bookingSlug;
+  const buyHref = slug && p.buyAgainPackageId
+    ? `/book/${encodeURIComponent(slug)}?buy=${encodeURIComponent(p.buyAgainPackageId)}`
+    : null;
+  const allHref = slug ? bookHref(slug) : null;
+  return (
+    <div role="status" style={{
+      marginTop: compact ? 0 : 12, padding: 12, borderRadius: 12,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+      fontSize: 13.5, lineHeight: 1.5, color: 'var(--fg)',
+    }}>
+      <div>
+        {expired
+          ? 'This package has expired. Buy it again or see other services.'
+          : "You've used all your sessions. Buy this package again or see other services."}
+      </div>
+      {(buyHref || allHref) && !p.archived && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
+          {buyHref && (
+            <Link to={buyHref} className="btn btn-primary" style={{ ...actionBtn, textDecoration: 'none' }}>
+              <Icons.Gift size={14} sw={1.8}/> Buy again
+            </Link>
+          )}
+          {allHref && (
+            <Link to={allHref} className="btn btn-outline" style={{ ...actionBtn, textDecoration: 'none' }}>
+              See all services
+            </Link>
+          )}
+        </div>
+      )}
+      {!buyHref && !p.archived && (
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
+          {p.businessName ? `Message ${p.businessName}` : 'Message the business'} to get a new package.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Older servers don't send `state`; derive it the same way.
+export function pkgState(p) {
+  if (p.state) return p.state;
+  if (p.status === 'cancelled') return 'ended';
+  if (p.creditsRemaining <= 0 || p.status === 'exhausted') return 'used_up';
+  if (p.status === 'expired' || (p.expiresAt && new Date(p.expiresAt).getTime() <= Date.now())) return 'expired';
+  return 'active';
+}
+
 export function PackageCard({ pkg: p, onBook }) {
+  const state = pkgState(p);
   const ratio = p.creditsTotal > 0 ? p.creditsRemaining / p.creditsTotal : 0;
-  const inactive = p.status !== 'active' || p.creditsRemaining === 0;
+  const inactive = state !== 'active';
   const low = !inactive && p.creditsRemaining <= Math.max(1, Math.min(2, Math.floor(p.creditsTotal / 5)));
   const canBook = !inactive && p.bookingSlug && !p.archived;
+  const buyHref = p.bookingSlug && p.buyAgainPackageId
+    ? `/book/${encodeURIComponent(p.bookingSlug)}?buy=${encodeURIComponent(p.buyAgainPackageId)}`
+    : (p.bookingSlug ? bookHref(p.bookingSlug) : null);
+  const left = Math.max(0, Number(p.creditsRemaining) || 0);
+  const booked = Number(p.sessionsBooked) || 0;
   return (
-    <div className="card" style={{ padding: 16, opacity: inactive ? 0.75 : 1 }}>
+    <div className="card" style={{ padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 15, fontWeight: 650, overflowWrap: 'anywhere' }}>{p.name}</div>
@@ -25,18 +85,32 @@ export function PackageCard({ pkg: p, onBook }) {
         {inactive && (
           <span style={{
             fontSize: 11, fontWeight: 650, padding: '2px 8px', borderRadius: 99,
-            background: 'var(--surface-2)', color: 'var(--muted)',
-          }}>{p.creditsRemaining === 0 ? 'Used up' : p.status === 'expired' ? 'Expired' : 'Ended'}</span>
+            background: 'var(--surface-2)', color: 'var(--muted)', flexShrink: 0,
+          }}>{state === 'used_up' ? 'Used up' : state === 'expired' ? 'Expired' : 'Ended'}</span>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 10, fontSize: 14 }}>
-        <strong style={{ fontSize: 20 }}>{p.creditsRemaining}</strong>
-        <span style={{ color: 'var(--fg-2)' }}>of {plural(p.creditsTotal, 'session')} left</span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 10, fontSize: 14, flexWrap: 'wrap', opacity: inactive ? 0.75 : 1 }}>
+        <strong style={{ fontSize: 20 }}>{left}</strong>
+        <span style={{ color: 'var(--fg-2)' }}>
+          {left === 1 ? 'session left' : 'sessions left'} of {p.creditsTotal}
+          {booked > 0 ? ` · ${booked} booked` : ''}
+        </span>
       </div>
       <div style={{ marginTop: 8, height: 6, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}
-        role="progressbar" aria-valuemin={0} aria-valuemax={p.creditsTotal} aria-valuenow={p.creditsRemaining}>
+        role="progressbar" aria-label={`${left} of ${p.creditsTotal} sessions left`}
+        aria-valuemin={0} aria-valuemax={p.creditsTotal} aria-valuenow={left}>
         <div style={{ width: `${Math.round(ratio * 100)}%`, height: '100%', background: inactive ? 'var(--muted)' : 'var(--accent)' }}/>
       </div>
+      {(p.serviceNames?.length > 0 || p.anyService) && (
+        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)', overflowWrap: 'anywhere' }}>
+          Good for: {p.serviceNames?.length > 0 ? p.serviceNames.join(', ') : 'any service'}
+        </div>
+      )}
+      {Number(p.sessionsHeld) > 0 && (
+        <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
+          Booked sessions are held for you and count once you attend.
+        </div>
+      )}
       {!inactive && p.expiresAt && p.daysToExpiry != null && p.daysToExpiry <= 30 && (
         <div style={{ marginTop: 8, fontSize: 13, color: 'var(--warn)' }}>
           {p.daysToExpiry > 0 ? `Use by ${fmtDate(p.expiresAt)} (${plural(p.daysToExpiry, 'day')} left)` : 'Expires today'}
@@ -44,10 +118,11 @@ export function PackageCard({ pkg: p, onBook }) {
       )}
       {low && p.bookingSlug && !p.archived && (
         <div style={{ marginTop: 8, fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5 }}>
-          {p.creditsRemaining === 1 ? 'This is your last session.' : `Only ${p.creditsRemaining} sessions left.`}{' '}
-          <Link to={bookHref(p.bookingSlug)} style={{ color: 'var(--accent)', fontWeight: 600 }}>Buy another package</Link>
+          {left === 1 ? '1 session left. This is your last one.' : `Only ${left} sessions left.`}{' '}
+          {buyHref && <Link to={buyHref} style={{ color: 'var(--accent)', fontWeight: 600 }}>Buy another package</Link>}
         </div>
       )}
+      {(state === 'used_up' || state === 'expired') && <RepurchasePrompt pkg={p}/>}
       {canBook && (
         <div style={{ marginTop: 12 }}>
           <button type="button" onClick={() => onBook(p)} className="btn btn-outline" style={actionBtn}>
@@ -78,6 +153,9 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
   const [occurrences, setOccurrences] = useState(Math.min(4, pkg.creditsRemaining));
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState(null);
+  // Set when the server says the package can't be used any more (someone
+  // else took the last session, or it expired while the sheet was open).
+  const [blocked, setBlocked] = useState(() => (pkgState(pkg) === 'active' ? null : pkgState(pkg)));
 
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +190,13 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
       onBooked?.(j);
     } catch (ex) {
       consent.handleError(ex);
-      setErr(ex.message || 'Could not book');
+      const code = ex?.details?.code;
+      if (code === 'package_used_up' || code === 'package_expired') {
+        setBlocked(code === 'package_expired' ? 'expired' : 'used_up');
+        setErr(null);
+      } else {
+        setErr(ex.message || 'Could not book');
+      }
       setSubmitting(false);
     }
   };
@@ -129,7 +213,7 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 id="redeem-title" style={{ margin: 0, fontSize: 16, fontWeight: 650 }}>Book with your package</h3>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-              {pkg.name} · {plural(pkg.creditsRemaining, 'session')} left
+              {pkg.name} · {blocked === 'used_up' ? '0 sessions' : plural(pkg.creditsRemaining, 'session')} left
             </div>
           </div>
           <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
@@ -137,15 +221,19 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
           </button>
         </div>
 
-        <ErrorNote>{loadErr}</ErrorNote>
-        {!calendar && !loadErr && <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Loading…</div>}
-        {calendar && services.length === 0 && (
+        {blocked && (
+          <RepurchasePrompt compact pkg={{ ...pkg, state: blocked, creditsRemaining: blocked === 'used_up' ? 0 : pkg.creditsRemaining }}/>
+        )}
+        {!blocked && <ErrorNote>{loadErr}</ErrorNote>}
+        {!blocked && !calendar && !loadErr && <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>Loading…</div>}
+        {!blocked && calendar && services.length === 0 && (
           <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>
-            This package does not cover any of the business's current services. Message them to book.
+            This package does not cover any of the business's current services. Message them to book,
+            or <Link to={bookHref(pkg.bookingSlug)} style={{ color: 'var(--accent)', fontWeight: 600 }}>see all services</Link>.
           </div>
         )}
 
-        {calendar && services.length > 0 && (
+        {!blocked && calendar && services.length > 0 && (
           <>
             <Field label="Service">
               <select value={serviceId || ''} onChange={(e) => setServiceId(e.target.value)} className="input" required style={{ fontSize: 15 }}>

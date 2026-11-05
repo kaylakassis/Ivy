@@ -241,7 +241,7 @@ export async function buildWeekStats({ workspaceId, from, to }) {
     // paid_amount is the snapshot written at payment time; older rows
     // fall back to the invoice total.
     safeQ(sql`
-      SELECT COALESCE(SUM(COALESCE(paid_amount, total)), 0)::numeric AS total
+      SELECT COALESCE(SUM(GREATEST(COALESCE(paid_amount, total) - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS total
         FROM invoices
        WHERE workspace_id = ${workspaceId}
          AND status = 'paid'

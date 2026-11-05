@@ -39,9 +39,9 @@ export function depositRuleLine(svc, policy, total) {
   if (!(dep > 0)) return null;
   const win = windowLabel(svc.cancellationWindowHours ?? 24);
   if (policy && policy.refundDepositOutsideWindow === false) return 'Your deposit is not refundable.';
-  if (!win) return 'If you cancel, your deposit is refunded.';
+  if (!win) return 'If you cancel, your deposit can be refunded once the business approves it.';
   const fee = Number(svc.cancellationFeeAmount || 0);
-  return `Cancel at least ${win} ahead and your deposit is refunded. Cancel later and the deposit is kept${fee > 0 ? ' and counts toward the late-cancellation fee' : ''}.`;
+  return `Cancel at least ${win} ahead and your deposit is refunded once the business approves it. Cancel later and the deposit is kept${fee > 0 ? ' and counts toward the late-cancellation fee' : ''}.`;
 }
 
 export function usePolicyConsent(cal) {

@@ -1,5 +1,5 @@
 // /api/invoices
-//   GET  → list invoices for current workspace (filterable by status)
+//   GET  → list invoices for current workspace (?status=, ?archived=only|all)
 //   POST → create a new draft invoice (auto-numbered)
 
 import { sql } from '../_lib/db.js';
@@ -34,25 +34,23 @@ export default async function handler(req, res) {
           : 0;
         const probeLimit = limit + 1;
 
-        const status = req.query.status;
-        let rows;
-        if (status && VALID_STATUS.has(status)) {
-          const r = await sql`
-            SELECT * FROM invoices
-            WHERE workspace_id = ${workspaceId} AND status = ${status}
+        // Archived invoices (settled ones the owner hid) are left out by
+        // default, so older app builds show the tidy list too.
+        //   ?archived=only → just the archived ones
+        //   ?archived=all  → everything (the current Finance page)
+        const status = req.query.status && VALID_STATUS.has(req.query.status) ? req.query.status : null;
+        const archivedMode = ['only', 'all'].includes(String(req.query.archived || '')) ? String(req.query.archived) : 'none';
+        const { rows } = await sql.query(
+          `SELECT * FROM invoices
+            WHERE workspace_id = $1
+              AND ($2::text IS NULL OR status = $2::text)
+              AND (CASE $3::text WHEN 'only' THEN archived_at IS NOT NULL
+                                 WHEN 'all'  THEN TRUE
+                                 ELSE archived_at IS NULL END)
             ORDER BY issue_date DESC, created_at DESC
-            LIMIT ${probeLimit} OFFSET ${offset}
-          `;
-          rows = r.rows;
-        } else {
-          const r = await sql`
-            SELECT * FROM invoices
-            WHERE workspace_id = ${workspaceId}
-            ORDER BY issue_date DESC, created_at DESC
-            LIMIT ${probeLimit} OFFSET ${offset}
-          `;
-          rows = r.rows;
-        }
+            LIMIT $4 OFFSET $5`,
+          [workspaceId, status, archivedMode, probeLimit, offset],
+        );
         const hasMore = rows.length > limit;
         const page = hasMore ? rows.slice(0, limit) : rows;
         return ok(res, {

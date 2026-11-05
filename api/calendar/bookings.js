@@ -16,7 +16,9 @@ import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { notifyPackageExhausted } from '../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
-import { consumeCredit, restoreCredit } from '../_lib/packages.js';
+import {
+  consumeCredit, restoreCredit, sendPackageRefusal, refusalForFailedConsume, packageUseModeFor,
+} from '../_lib/packages.js';
 import { attachIntakeForms } from '../_lib/intake.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
@@ -140,9 +142,18 @@ export default async function handler(req, res) {
     // when the owner explicitly chose a package.
     const clientPackageId = body.clientPackageId ? String(body.clientPackageId) : null;
     let packageExhaustionEvent = null;
+    // The mode this booking is made under (kept even if the business
+    // later switches "use package sessions when").
+    const packageUseMode = clientPackageId ? await packageUseModeFor(workspaceId) : null;
     if (clientPackageId) {
       if (!resolvedClientId) {
         return badRequest(res, 'Package bookings require a client');
+      }
+      // One package session pays for one visit. A repeating booking is a
+      // single row that stands for many visits, so it can't be paid with
+      // one session (it used to silently take just one).
+      if (recurrenceRule) {
+        return sendPackageRefusal(res, { code: 'package_recurring_unsupported', cp: null, audience: 'owner' });
       }
       const consumeResult = await consumeCredit({
         workspaceId,
@@ -151,7 +162,11 @@ export default async function handler(req, res) {
         serviceId,
       });
       if (!consumeResult.ok) {
-        return badRequest(res, 'Package has no credits left, is expired, or doesn\'t cover this service');
+        // Same atomic guard as every other path; re-read to say why
+        // (used up, expired, not this service, not this client).
+        return refusalForFailedConsume(res, {
+          workspaceId, clientPackageId, clientId: resolvedClientId, serviceId, audience: 'owner',
+        });
       }
       // Stash the exhaustion signal - fired AFTER the booking row is
       // inserted so the owner notification reflects the final state.
@@ -186,12 +201,12 @@ export default async function handler(req, res) {
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email,
         date, start_min, end_min, notes, recurrence_rule, recurrence_until,
-        client_package_id, staff_id, video_room_url
+        client_package_id, staff_id, video_room_url, package_use_mode
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${resolvedClientId}, ${clientName}, ${clientEmail || null},
         ${date}, ${start}, ${end}, ${notes}, ${recurrenceRule}, ${recurrenceUntil},
-        ${clientPackageId}, ${staffId}, ${videoRoomUrl}
+        ${clientPackageId}, ${staffId}, ${videoRoomUrl}, ${packageUseMode}
       )
       RETURNING *
     `;

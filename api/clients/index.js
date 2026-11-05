@@ -10,6 +10,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { serializeClient, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
 import { helperClientScope } from '../_lib/helpers.js';
 import { normalizePhone } from '../_lib/sms.js';
+import { clientDetailColumns, loadFieldDefs, mergeCustomFields, writeClientColumns } from '../_lib/clientDetails.js';
 import { sendClientInvite } from '../_lib/clientNotify.js';
 import { celebrateFirstClient } from '../_lib/milestones.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
@@ -132,6 +133,18 @@ export default async function handler(req, res) {
       }
       const smsConsentAt = body.smsConsent && phone ? new Date().toISOString() : null;
 
+      // "More details" from the add form (all optional; older app builds
+      // send none of them).
+      const details = clientDetailColumns(body);
+      if (details.errors.length) return badRequest(res, details.errors[0]);
+      const extra = { ...details.cols };
+      if (body.notes != null && String(body.notes).trim()) extra.notes = String(body.notes).slice(0, 4000);
+      if ('customFields' in body) {
+        const merged = mergeCustomFields({}, body.customFields, await loadFieldDefs(workspaceId));
+        if (merged.errors.length) return badRequest(res, merged.errors[0]);
+        if (Object.keys(merged.values).length) extra.custom_fields = merged.values;
+      }
+
       // One person, one record. A second add with the same email (or the
       // same phone when there is no email) points the owner at the
       // existing client instead of creating a lookalike that splits
@@ -165,6 +178,10 @@ export default async function handler(req, res) {
         )
         RETURNING *
       `;
+      if (Object.keys(extra).length) {
+        const withDetails = await writeClientColumns(rows[0].id, workspaceId, extra);
+        if (withDetails) rows[0] = withDetails;
+      }
       // Best-effort invite. Skip when no email, already invited, or the
       // owner unchecked "Email them an invite" in the add modal
       // (body.sendInvite === false). Default stays ON for single adds.

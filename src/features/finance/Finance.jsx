@@ -28,6 +28,7 @@ import PointOfSale from './PointOfSale.jsx';
 import FinanceServices from './Services.jsx';
 import FinancePackages from './Packages.jsx';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { invoiceMoney, invoiceActions } from '../../lib/invoiceRules.js';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -41,7 +42,7 @@ const STATUS_META = {
 export default function Finance() {
   const {
     invoices, summary, loading, error,
-    create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
+    create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim, archive,
     hasMore, loadMore, loadingMore,
     reload: reloadInvoices,
   } = useInvoices();
@@ -72,8 +73,10 @@ export default function Finance() {
     window.location.href = path + (path.includes('?') ? '&' : '?') + 'year=' + y;
   };
 
+  // Archived invoices (settled ones the owner hid) only show under the
+  // Archived tab; every other tab and count leaves them out.
   const counts = useMemo(() => ({
-    all:     invoices.length,
+    all:     summary?.counts?.all ?? invoices.filter((i) => !i.archivedAt).length,
     // Fully-optional chain: a summary without counts (defensive against
     // schema drift) falls through to the local recount instead of
     // throwing on .counts.draft of undefined.
@@ -82,11 +85,15 @@ export default function Finance() {
     overdue: summary?.counts?.overdue ?? invoices.filter((i) => i.status === 'overdue').length,
     paid:    summary?.counts?.paid    ?? invoices.filter((i) => i.status === 'paid').length,
     voided:  summary?.counts?.voided  ?? invoices.filter((i) => i.status === 'voided').length,
+    refunded: summary?.counts?.refunded ?? invoices.filter((i) => i.status === 'refunded' && !i.archivedAt).length,
+    archived: summary?.counts?.archived ?? invoices.filter((i) => i.archivedAt).length,
   }), [summary, invoices]);
 
   const rows = useMemo(() => {
-    if (tab === 'all') return invoices;
-    return invoices.filter((i) => i.status === tab);
+    if (tab === 'archived') return invoices.filter((i) => i.archivedAt);
+    const live = invoices.filter((i) => !i.archivedAt);
+    if (tab === 'all') return live;
+    return live.filter((i) => i.status === tab);
   }, [invoices, tab]);
 
   const openInv = invoices.find((i) => i.id === openId) || null;
@@ -150,7 +157,7 @@ export default function Finance() {
     // ?filter=<status> - invoice status filter (weekly recap "Chase them"
     // link uses ?filter=overdue). Only known statuses are honored.
     const filterParam = params.get('filter');
-    const filterOk = filterParam && ['all', 'draft', 'sent', 'overdue', 'paid', 'voided'].includes(filterParam);
+    const filterOk = filterParam && ['all', 'draft', 'sent', 'overdue', 'paid', 'refunded', 'voided', 'archived'].includes(filterParam);
     if (filterOk) { setTab(filterParam); setSection('invoices'); }
     if (sectionParam) setSection(sectionParam);
     if (sectionParam || filterParam) {
@@ -310,6 +317,7 @@ export default function Finance() {
           setOpenId={setOpenId} setSending={setSending}
           update={update} remove={remove} send={send} resend={resend}
           markPaid={markPaid} voidInvoice={voidInvoice} refund={refund} clearClaim={clearClaim}
+          archive={archive} onOpenRecurring={() => { setOpenId(null); setSection('recurring'); }}
           hasMore={hasMore} loadMore={loadMore} loadingMore={loadingMore}
         />
       )}
@@ -321,11 +329,44 @@ export default function Finance() {
 function InvoicesSection({
   invoices, summary, counts, rows, tab, setTab, openInv, sendingInv,
   setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund, clearClaim,
+  archive, onOpenRecurring,
   hasMore, loadMore, loadingMore,
 }) {
   // On phones the 7-column invoice grid forces sideways scrolling to see
   // status/total. Below this width we render each invoice as a stacked card.
   const { isMobile } = useViewport();
+  // Bulk archive: "Select" turns on checkboxes for the rows that can be
+  // archived (paid, refunded, void) or, on the Archived tab, brought back.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNote, setBulkNote] = useState(null);
+  const unarchiving = tab === 'archived';
+  const canPick = (i) => {
+    const a = i.allowed || invoiceActions(i);
+    return unarchiving ? !!a.unarchive?.ok : !!a.archive?.ok;
+  };
+  const pickable = rows.filter(canPick);
+  useEffect(() => { setSelecting(false); setSelected(new Set()); setBulkNote(null); }, [tab]);
+  const toggle = (id) => setSelected((cur) => {
+    const next = new Set(cur);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const runBulk = async () => {
+    if (selected.size === 0) return;
+    setBulkBusy(true); setBulkNote(null);
+    try {
+      const r = await archive([...selected], !unarchiving);
+      const skipped = r.skipped || [];
+      setBulkNote(`${unarchiving ? 'Brought back' : 'Archived'} ${r.changed} invoice${r.changed === 1 ? '' : 's'}.`
+        + (skipped.length ? ` ${skipped.length} skipped: ${skipped[0].why}` : ''));
+      setSelected(new Set()); setSelecting(false);
+    } catch (e) {
+      setBulkNote(e.message || 'Could not update those invoices.');
+    } finally { setBulkBusy(false); }
+  };
+  const showArchiveExplainer = ['paid', 'refunded', 'voided', 'archived'].includes(tab);
   return (
     <>
       <PaymentProviderCard/>
@@ -360,9 +401,11 @@ function InvoicesSection({
           { id: 'sent', label: 'Sent' },
           { id: 'overdue', label: 'Overdue' },
           { id: 'paid', label: 'Paid' },
+          { id: 'refunded', label: 'Refunded' },
           { id: 'voided', label: 'Voided' },
+          { id: 'archived', label: 'Archived' },
         ].map(({ id, label }) => (
-          <button key={id} onClick={() => setTab(id)} style={{
+          <button key={id} onClick={() => setTab(id)} data-tab={id} style={{
             padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
             background: tab === id ? 'var(--surface)' : 'transparent',
             color: tab === id ? 'var(--fg)' : 'var(--muted)',
@@ -378,6 +421,44 @@ function InvoicesSection({
           </button>
         ))}
       </div>
+
+      {(showArchiveExplainer || pickable.length > 0 || bulkNote) && (
+        <div className="card" data-testid="archive-bar" style={{
+          padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          fontSize: 12.5, color: 'var(--fg-2)',
+        }}>
+          {selecting ? (
+            <>
+              <span style={{ fontWeight: 600 }}>{selected.size} selected</span>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}
+                onClick={() => setSelected(new Set(pickable.map((i) => i.id)))}>
+                Select all {pickable.length}
+              </button>
+              <div style={{ flex: 1 }}/>
+              <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}
+                onClick={() => { setSelecting(false); setSelected(new Set()); }} disabled={bulkBusy}>Cancel</button>
+              <button type="button" className="btn btn-primary" data-testid="bulk-archive" style={{ fontSize: 12, padding: '6px 12px' }}
+                onClick={runBulk} disabled={bulkBusy || selected.size === 0}>
+                <Icons.Folder size={13}/> {bulkBusy ? 'Working…' : `${unarchiving ? 'Unarchive' : 'Archive'} ${selected.size || ''}`.trim()}
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ flex: '1 1 220px', lineHeight: 1.5 }}>
+                {bulkNote || (unarchiving
+                  ? 'Archived invoices are hidden from your other lists. Nothing was deleted and your revenue is unchanged.'
+                  : "Paid and refunded invoices can't be deleted because money moved, but you can archive them to hide them. Archiving never changes your revenue.")}
+              </span>
+              {pickable.length > 0 && (
+                <button type="button" className="btn btn-outline" data-testid="select-archive" style={{ fontSize: 12, padding: '6px 12px' }}
+                  onClick={() => { setSelecting(true); setBulkNote(null); }}>
+                  <Icons.Folder size={13}/> {unarchiving ? 'Select to unarchive' : 'Select to archive'}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Table (desktop) / stacked cards (mobile) */}
       {/* table-scroll forces a 760px minimum on phones (for real tables);
@@ -399,14 +480,19 @@ function InvoicesSection({
             <div style={{ padding: 48 }}>
               <EmptyNote
                 icon="Dollar"
-                title={tab === 'all' ? 'No invoices yet' : `No ${tab}`}
+                title={tab === 'all' ? 'No invoices yet' : tab === 'archived' ? 'Nothing archived' : `No ${tab === 'draft' ? 'drafts' : tab} invoices`}
                 hint={tab === 'all'
                   ? 'Click "New invoice" to send your first.'
-                  : 'Try a different tab.'}
+                  : tab === 'archived'
+                    ? 'Paid, refunded and void invoices you archive show up here. Archiving hides them without deleting anything.'
+                    : 'Try a different tab.'}
               />
             </div>
           ) : rows.map((i, idx) => (
-            <InvoiceRow key={i.id} invoice={i} first={idx === 0} index={idx} isMobile={isMobile} onOpen={() => setOpenId(i.id)} onMarkPaid={(method) => markPaid(i.id, method)}/>
+            <InvoiceRow key={i.id} invoice={i} first={idx === 0} index={idx} isMobile={isMobile}
+              onOpen={() => (selecting ? (canPick(i) && toggle(i.id)) : setOpenId(i.id))}
+              onMarkPaid={(method) => markPaid(i.id, method)}
+              selecting={selecting} selectable={canPick(i)} selected={selected.has(i.id)}/>
           ))}
 
           {/* Load more - only when the server reports a page past
@@ -437,9 +523,11 @@ function InvoicesSection({
           onSend={() => setSending(openInv.id)}
           onResend={async () => { await resend(openInv.id); }}
           onMarkPaid={(method) => markPaid(openInv.id, method)}
-          onVoid={() => voidInvoice(openInv.id)}
+          onVoid={(opts) => voidInvoice(openInv.id, opts)}
           onRefund={(args) => refund(openInv.id, args)}
           onClearClaim={(message) => clearClaim(openInv.id, message)}
+          onArchive={(archived) => archive([openInv.id], archived)}
+          onOpenRecurring={onOpenRecurring}
         />
       )}
       {sendingInv && (
@@ -521,9 +609,31 @@ function MarkPaidMenu({ invoice, onMarkPaid, compact }) {
   );
 }
 
-function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
-  const canMarkPaid = !!onMarkPaid && (invoice.status === 'sent' || invoice.status === 'overdue');
+function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid, selecting, selectable, selected }) {
+  const canMarkPaid = !selecting && !!onMarkPaid && (invoice.status === 'sent' || invoice.status === 'overdue');
   const meta = STATUS_META[invoice.status] || STATUS_META.draft;
+  // Under the total: what was refunded / what is still owed, so a refunded
+  // invoice reads "Net $0.00" instead of looking like money owed.
+  const money = invoice.money || invoiceMoney(invoice);
+  const moneyNote = money.refunded > 0
+    ? `${fmtMoney(money.refunded, invoice.currency)} refunded · net ${fmtMoney(money.net, invoice.currency)}`
+    : (invoice.status === 'sent' || invoice.status === 'overdue') && money.owed < money.total
+      ? `${fmtMoney(money.owed, invoice.currency)} owed`
+      : invoice.status === 'voided' ? 'Nothing owed' : null;
+  const checkbox = selecting ? (
+    <span aria-hidden="true" style={{
+      width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+      border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--border-strong)'}`,
+      background: selected ? 'var(--accent)' : 'transparent', opacity: selectable ? 1 : 0.35,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-ink, #fff)',
+    }}>{selected && <Icons.Check size={12} sw={2.6}/>}</span>
+  ) : null;
+  const archivedPill = invoice.archivedAt ? (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
+      fontSize: 10.5, fontWeight: 600, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--muted)',
+    }}>Archived</span>
+  ) : null;
   // The client tapped "I've sent it" on a manual method and the owner has
   // not confirmed yet. Only meaningful while the invoice is still unpaid.
   const saysPaid = !!invoice.paymentClaimedAt && (invoice.status === 'sent' || invoice.status === 'overdue');
@@ -555,6 +665,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
         <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
       </span>
       {saysPaidPill}
+      {archivedPill}
     </span>
   );
 
@@ -562,12 +673,13 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
     // Stacked card: number + status on top, client, then due date + total.
     // Min 44px tall for a comfortable tap target.
     return (
-      <div onClick={onOpen} style={{
+      <div onClick={onOpen} data-invoice={invoice.number} role={selecting ? 'checkbox' : undefined} aria-checked={selecting ? !!selected : undefined} style={{
         padding: '14px 16px', cursor: 'pointer', minHeight: 44,
         borderTop: first ? 'none' : '1px solid var(--border)',
         display: 'flex', flexDirection: 'column', gap: 6, ...stagger(index),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {checkbox}
           <span className="mono-num" style={{ fontSize: 13, fontWeight: 600 }}>{invoice.number}</span>
           <span style={{ marginLeft: 'auto' }}>{statusPill}</span>
         </div>
@@ -582,6 +694,9 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
             {fmtMoney(invoice.total, invoice.currency)}
           </span>
         </div>
+        {moneyNote && (
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', textAlign: 'right' }}>{moneyNote}</div>
+        )}
         {canMarkPaid && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
             <MarkPaidMenu invoice={invoice} onMarkPaid={onMarkPaid} compact/>
@@ -592,7 +707,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
   }
 
   return (
-    <div onClick={onOpen} style={{
+    <div onClick={onOpen} data-invoice={invoice.number} role={selecting ? 'checkbox' : undefined} aria-checked={selecting ? !!selected : undefined} style={{
       display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 104px 40px',
       padding: '14px 20px', alignItems: 'center', cursor: 'pointer',
       borderTop: first ? 'none' : '1px solid var(--border)',
@@ -601,7 +716,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
     >
-      <div className="mono-num" style={{ fontSize: 13, fontWeight: 600 }}>{invoice.number}</div>
+      <div className="mono-num" style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{checkbox}{invoice.number}</div>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {invoice.clientName || <span style={{ color: 'var(--muted-2)' }}>No client yet</span>}
@@ -619,6 +734,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
       </div>
       <div className="mono-num" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }}>
         {fmtMoney(invoice.total, invoice.currency)}
+        {moneyNote && <div style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap' }}>{moneyNote}</div>}
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         {canMarkPaid && <MarkPaidMenu invoice={invoice} onMarkPaid={onMarkPaid}/>}

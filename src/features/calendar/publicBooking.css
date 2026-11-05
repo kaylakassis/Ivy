@@ -378,3 +378,14 @@ textarea.pb-input { font-family: inherit; resize: vertical; line-height: 1.45; }
 }
 /* The embed is often a narrow column on someone's site. */
 .pb-embedded .pb-services { grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); }
+
+/* Package choice + used-up prompt on the details step. */
+.pb-pkg-option { align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); margin: 0; }
+.pb-pkg-option[data-on] { background: var(--accent-soft); border-color: var(--accent); }
+.pb-pkg-option b { display: block; font-size: 14px; color: var(--fg); font-weight: 600; overflow-wrap: anywhere; }
+.pb-pkg-option small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.pb-pkg-prompt { margin: 0 0 16px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13.5px; line-height: 1.5; }
+.pb-pkg-prompt p { margin: 6px 0 10px; color: var(--fg-2); }
+.pb-pkg-title { display: flex; align-items: center; gap: 6px; font-weight: 650; color: var(--fg); overflow-wrap: anywhere; }
+.pb-pkg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pb-pkg-actions .pb-btn { flex: 1 1 140px; }

@@ -8,6 +8,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useCalendar } from '../calendar/state.js';
 import ServicesDrawer from '../calendar/ServicesDrawer.jsx';
 import CancellationPolicyCard from './CancellationPolicyCard.jsx';
+import DepositReviews from '../calendar/DepositReviews.jsx';
 
 export default function FinanceServices() {
   const { cal, saveServices, loading } = useCalendar();
@@ -29,6 +30,7 @@ export default function FinanceServices() {
   }
   return (
     <>
+      <DepositReviews/>
       <CancellationPolicyCard/>
       <ServicesDrawer
         initial={cal?.services || []}

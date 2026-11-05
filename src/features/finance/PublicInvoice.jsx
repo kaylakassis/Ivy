@@ -12,6 +12,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import InvoiceDocument, { printInvoice } from './InvoiceDocument.jsx';
+import { invoiceMoney, invoiceStatusLine } from '../../lib/invoiceRules.js';
 
 const MANUAL_LABELS = { zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', cash: 'Cash', check: 'Check', other: 'Other' };
 const manualLabel = (t) => MANUAL_LABELS[t] || 'Other';
@@ -289,11 +290,50 @@ export default function PublicInvoice() {
     );
   }
 
+  // Void, paid or refunded: read only, with one plain line that says where
+  // it stands. No pay buttons, no other ways to pay.
+  if (inv.closed) {
+    const title = inv.status === 'voided' ? 'This invoice was voided'
+      : inv.status === 'refunded' ? 'This invoice was refunded'
+      : 'This invoice is paid';
+    return (
+      <PageWrap tweaks={tweaks}>
+        <div className="print-hide" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+          <div>
+            <div className="metric-label">Invoice from</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>{inv.business?.name || 'An Ivy business'}</div>
+          </div>
+          <button type="button" onClick={printInvoice} className="btn btn-outline" title="Print or save as PDF" style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}>
+            <Icons.Doc size={12}/> Print / PDF
+          </button>
+        </div>
+        <div className="card print-hide" role="status" data-testid="invoice-closed" style={{ padding: '16px 20px', marginBottom: 16, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: 99, flexShrink: 0,
+            background: inv.status === 'paid' ? 'var(--ok)' : 'var(--surface-2)',
+            color: inv.status === 'paid' ? '#fff' : 'var(--muted)',
+            border: inv.status === 'paid' ? 0 : '1px solid var(--border)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>{inv.status === 'paid' ? <Icons.Check size={16} sw={2.4}/> : <Icons.X size={15} sw={2.2}/>}</div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 650 }}>{title}</div>
+            <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>
+              {invoiceStatusLine(inv)} You don't need to do anything.
+            </div>
+          </div>
+        </div>
+        <InvoiceDocument invoice={inv} business={inv.business}/>
+      </PageWrap>
+    );
+  }
+
   // Currency-aware formatter scoped to this invoice. Falls back to
   // USD on legacy rows that predate the invoices.currency column.
   const fmtMoney = makeFmt(inv.currency);
   const giftCredit = Number(inv.giftCardCreditCents || 0) / 100;
-  const remaining = Math.max(0, inv.total - (Number(inv.paidAmount) || 0) - giftCredit);
+  // What is still owed: after a gift card and any part payment, net of
+  // refunds (shared math in src/lib/invoiceRules.js).
+  const remaining = invoiceMoney(inv).owed;
   const manualMethods = Array.isArray(inv.manualMethods) ? inv.manualMethods : [];
   const businessName = inv.business?.name || 'The business';
   const showClaimThanks = !!claimed && !changing;

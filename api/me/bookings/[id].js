@@ -75,6 +75,13 @@ export default async function handler(req, res) {
       // Cancellation policy money (api/_lib/bookingFees.js): before the
       // window the deposit is refunded; inside it the deposit is kept and
       // only the rest of the late-cancel fee goes on the saved card.
+      //
+      // Package sessions (agreed rule, api/_lib/bookingFees.js): a business
+      // that uses sessions when booked keeps the session used for a late
+      // cancel INSTEAD of charging a fee (never both); in time, the session
+      // comes back. A business that uses sessions on completion only held
+      // the session, so it always comes back and the normal late fee
+      // applies. If settling fails the session goes back (client-friendly).
       let settled = null;
       try {
         settled = await settleClientCancellation({ workspaceId: booking.workspace_id, bookingId: booking.id });
@@ -82,6 +89,7 @@ export default async function handler(req, res) {
         // eslint-disable-next-line no-console
         console.error('[portal cancel] cancellation policy settle failed:', err.message);
       }
+      const packageKept = !!settled?.packageSessionKept;
       // Drop a system note in the thread so the business sees the cancellation.
       await postCancellationNote({
         workspaceId: booking.workspace_id,
@@ -93,8 +101,11 @@ export default async function handler(req, res) {
       notifyBookingCancellation({
         workspaceId: booking.workspace_id, bookingId: booking.id, source: 'client',
       });
-      // Refund any consumed package credit.
-      await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
+      // Give the package session back, unless this was a late cancel
+      // under the business's policy (see packageKept above).
+      if (!packageKept) {
+        await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
+      }
       // Put any gift-card credit back on the card (exactly-once inside).
       await restoreGiftCardCreditForBooking({ workspaceId: booking.workspace_id, bookingId: booking.id })
         .catch((err) => console.error('[portal cancel] gift card restore failed:', err.message));
@@ -128,6 +139,8 @@ export default async function handler(req, res) {
         depositKept: settled ? settled.depositKeptCents / 100 : 0,
         feeFromDeposit: settled ? settled.feeFromDepositCents / 100 : 0,
         policyMessage: describeClientCancellation(settled),
+        // Package bookings: whether the session went back into the package.
+        ...(booking.client_package_id ? { packageSessionReturned: !packageKept } : {}),
       });
     }
 
@@ -245,7 +258,9 @@ export default async function handler(req, res) {
              start_min       = $4,
              end_min         = $5,
              reminders_sent  = '{}'::jsonb,
-             sms_sent        = '{}'::jsonb
+             sms_sent        = '{}'::jsonb,
+             push_sent       = '{}'::jsonb,
+             owner_reminders_sent = '{}'::jsonb
            WHERE id = $1 AND client_id = ANY($2)
            RETURNING *`,
           [id, myIds, newDate, newStart, newEnd],
@@ -354,6 +369,29 @@ async function occurrenceInsideFeeWindow(booking, dateISO) {
   const tz = await workspaceTimeZone(booking.workspace_id);
   const startMs = slotEpochMs(dateISO, Number(booking.start_min) || 0, tz);
   return Number.isFinite(startMs) && startMs < Date.now() + hours * 3_600_000;
+}
+
+// True when cancelling now is "late" under a policy the business chose:
+// the service has a late-cancel fee AND a free-cancel window, and the
+// booking starts inside that window (workspace time zone). Shared by the
+// portal (to warn before cancelling) through the same numbers the
+// bookings list sends: cancellationFeeAmount / cancellationWindowHours.
+export async function isLateCancelWithPolicy(booking, now = Date.now()) {
+  if (!booking.service_id) return false;
+  const r = await sql`
+    SELECT s.cancellation_fee_amount, s.cancellation_window_hours, cs.timezone
+      FROM services s
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = s.workspace_id
+     WHERE s.id = ${booking.service_id} AND s.workspace_id = ${booking.workspace_id}
+  `;
+  const row = r.rows[0];
+  if (!row) return false;
+  const fee = Number(row.cancellation_fee_amount || 0);
+  const windowHours = Number(row.cancellation_window_hours || 0);
+  if (fee <= 0 || windowHours <= 0) return false;
+  const dateISO = booking.date instanceof Date ? booking.date.toISOString().slice(0, 10) : booking.date;
+  const startMs = slotEpochMs(dateISO, booking.start_min, row.timezone || null);
+  return startMs < now + windowHours * 60 * 60 * 1000;
 }
 
 async function sessionStarted(booking) {

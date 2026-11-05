@@ -22,7 +22,9 @@ export function useInvoices() {
 
   const load = useCallback(async (isLive = () => true) => {
     await Promise.all([
-      api.get('/invoices').then((r) => {
+      // archived=all: the page filters archived ones itself (the Archived
+      // tab), so one list serves every tab.
+      api.get('/invoices?archived=all').then((r) => {
         if (!isLive()) return;
         setInvoices(r.invoices || []);
         setHasMore(!!r.hasMore);
@@ -48,7 +50,7 @@ export function useInvoices() {
     if (!hasMore || nextOffset == null || loadingMore) return;
     setLoadingMore(true);
     try {
-      const r = await api.get(`/invoices?offset=${nextOffset}`);
+      const r = await api.get(`/invoices?archived=all&offset=${nextOffset}`);
       const existing = new Set(invoices.map((i) => i.id));
       const fresh = (r.invoices || []).filter((i) => !existing.has(i.id));
       setInvoices((prev) => [...prev, ...fresh]);
@@ -104,11 +106,21 @@ export function useInvoices() {
     return r.invoice;
   }, [refreshSummary]);
 
-  const voidInvoice = useCallback(async (id) => {
-    const r = await api.post('/invoices/void', { id });
+  const voidInvoice = useCallback(async (id, { notifyClient = false } = {}) => {
+    const r = await api.post('/invoices/void', { id, notifyClient });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
-    return r.invoice;
+    return r;
+  }, [refreshSummary]);
+
+  // Archive (hide) or bring back settled invoices. Nothing is deleted and
+  // revenue does not change. Returns { changed, skipped: [{ id, number, why }] }.
+  const archive = useCallback(async (ids, archived = true) => {
+    const r = await api.post('/invoices/archive', { ids, archived });
+    const byId = new Map((r.invoices || []).map((i) => [i.id, i]));
+    setInvoices((xs) => xs.map((i) => byId.get(i.id) || i));
+    await refreshSummary();
+    return r;
   }, [refreshSummary]);
 
   const refund = useCallback(async (id, { amount, reason } = {}) => {
@@ -128,7 +140,7 @@ export function useInvoices() {
 
   return {
     invoices, summary, loading, error,
-    create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
+    create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim, archive,
     hasMore, loadMore, loadingMore, reload,
   };
 }

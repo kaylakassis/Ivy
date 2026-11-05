@@ -5,15 +5,19 @@
 //
 // The rules (shown to clients on the booking page and the policy record):
 //   • Client cancels BEFORE the service's cancellation window: no fee, and
-//     the deposit is refunded automatically (unless the owner turned
-//     "refund deposits" off, then it is kept).
+//     when the policy refunds deposits, a refund REQUEST is opened for the
+//     owner's one-tap approval (Refund / Keep deposit). Nothing is
+//     refunded until the owner approves.
 //   • Client cancels INSIDE the window: the deposit is kept and counts
 //     toward the late-cancellation fee; only the rest of the fee (if any)
 //     is charged to the card on file. A client is never charged more than
 //     the fee they agreed to when they booked (lower of agreed and current).
 //   • No-show (owner marks it): same, with the no-show fee.
-//   • The business cancels: never a fee; the deposit is refunded unless the
-//     owner chooses to keep it.
+//   • Package sessions: "used when booked" late cancel or no-show keeps the
+//     session used and charges NO fee (never both); "used when completed"
+//     releases the held session on cancel and the normal fee applies once.
+//   • The business cancels: never a fee; the deposit goes back when the
+//     owner says so (in the cancel itself, or from the refund request).
 //
 // Exactly once: a fee is guarded by a claim (bookings.fee_claimed_at) plus
 // a "not already charged" condition, and the processor call carries an
@@ -111,6 +115,13 @@ export function isInsideWindow(ctx, windowHours, nowMs = Date.now()) {
   return startMs < nowMs + h * 3_600_000;
 }
 
+// A package booking whose session counted as used when it was booked
+// (calendar_settings.package_use_on 'booking', stamped on the booking as
+// package_use_mode; older package bookings without a stamp are 'booking').
+export function isPackageUsedWhenBooked(ctx) {
+  return !!ctx?.client_package_id && ctx.package_use_mode !== 'completion';
+}
+
 export function depositHeldCents(ctx) {
   return Math.max(0, toCents(ctx.deposit_paid) - toCents(ctx.deposit_refunded_amount));
 }
@@ -142,7 +153,7 @@ async function emailClient(ctx, { subject, heading, lines, note }) {
   }
 }
 
-async function emailOwner(ctx, { subject, heading, text }) {
+async function emailOwner(ctx, { subject, heading, text, ctaUrl = null }) {
   try {
     const { rows } = await sql`
       SELECT u.id, u.email FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE w.id = ${ctx.workspace_id}
@@ -152,8 +163,8 @@ async function emailOwner(ctx, { subject, heading, text }) {
     const html = emailShell({
       heading,
       body: `<p>${escapeHtml(text)}</p>`,
-      ctaText: 'Open the calendar',
-      ctaUrl: `${appUrl()}/calendar`,
+      ctaText: ctaUrl ? 'Review it' : 'Open the calendar',
+      ctaUrl: ctaUrl || `${appUrl()}/calendar`,
     });
     await sendEmailToUser({ userId: owner.id, type: 'bookings', to: owner.email, subject, html });
   } catch (err) {
@@ -346,7 +357,11 @@ export async function refundDeposit({ ctx, amountCents = null, reason = 'request
         -- have recorded this same refund (checkoutFulfillment.js).
         deposit_refunded_amount = GREATEST(COALESCE(deposit_refunded_amount, 0), ${(already + amount) / 100}),
         deposit_refunded_at = NOW(), deposit_refund_id = ${out?.id || null},
-        deposit_refund_claimed_at = NULL, deposit_refund_error = NULL, updated_at = NOW()
+        deposit_refund_claimed_at = NULL, deposit_refund_error = NULL,
+        deposit_refund_request_status = CASE WHEN deposit_refund_request_status = 'pending' THEN 'approved'
+                                             ELSE deposit_refund_request_status END,
+        deposit_refund_decided_at = COALESCE(deposit_refund_decided_at, NOW()),
+        updated_at = NOW()
       WHERE id = ${ctx.id} AND workspace_id = ${workspaceId}
     `;
     await emailClient(ctx, {
@@ -401,12 +416,12 @@ export async function settleClientCancellation({ workspaceId, bookingId, nowMs =
     late, windowHours: terms.windowHours, currency: ctx.currency,
     feeChargedCents: 0, feeFromDepositCents: 0, feeError: null, invoice: null,
     depositRefundedCents: 0, depositKeptCents: 0, depositRefundError: null,
+    packageSessionKept: false, depositRefundRequestedCents: 0, businessName: ctx.biz_name || null,
   };
   if (!late) {
     if (held > 0 && terms.refundDepositOutsideWindow) {
-      const r = await refundDeposit({ ctx, who: 'policy' });
-      out.depositRefundedCents = r.refunded || 0;
-      out.depositRefundError = r.error || null;
+      const r = await requestDepositRefund({ ctx, by: 'client', nowMs });
+      out.depositRefundRequestedCents = r.requestedCents || 0;
     } else {
       out.depositKeptCents = held;
     }
@@ -414,6 +429,14 @@ export async function settleClientCancellation({ workspaceId, bookingId, nowMs =
   }
   out.depositKeptCents = held;
   const feeCents = toCents(terms.lateFee);
+  // Package session under "used when booked": the late cancel keeps the
+  // session used INSTEAD of a fee (the session is the penalty, never
+  // both). Under "used when completed" the session was only held, so the
+  // caller releases it and the normal late fee below applies once.
+  if (feeCents > 0 && isPackageUsedWhenBooked(ctx)) {
+    out.packageSessionKept = true;
+    return out;
+  }
   if (feeCents > 0) {
     const fromDep = Math.min(held, feeCents);
     const r = await chargeFee({ ctx, kind: 'late_cancel', dueCents: feeCents - fromDep, fromDepositCents: fromDep });
@@ -425,16 +448,129 @@ export async function settleClientCancellation({ workspaceId, bookingId, nowMs =
   return out;
 }
 
-// The business cancelled. Never a fee; the deposit goes back unless the
-// owner chose to keep it.
-export async function settleOwnerCancellation({ workspaceId, bookingId, refund = true }) {
+// The business cancelled. Never a fee. refund: true = the owner ticked
+// "Refund the deposit" while cancelling (that tap is the approval, refund
+// now); false = keep it; undefined (older apps, Ivy) = open a refund
+// request for one-tap approval.
+export async function settleOwnerCancellation({ workspaceId, bookingId, refund, userId = null }) {
   const ctx = await loadFeeContext({ workspaceId, bookingId });
   if (!ctx) return null;
   const held = depositHeldCents(ctx);
   if (held <= 0) return { depositRefundedCents: 0, depositKeptCents: 0 };
-  if (!refund) return { depositRefundedCents: 0, depositKeptCents: held };
-  const r = await refundDeposit({ ctx, reason: 'requested_by_customer', who: 'owner' });
-  return { depositRefundedCents: r.refunded || 0, depositKeptCents: r.refunded ? 0 : held, depositRefundError: r.error || null };
+  if (refund === false) return { depositRefundedCents: 0, depositKeptCents: held };
+  if (refund === true) {
+    const r = await refundDeposit({ ctx, reason: 'requested_by_customer', who: 'owner' });
+    if (r.refunded && userId) {
+      await sql`UPDATE bookings SET deposit_refund_decided_by = ${userId} WHERE id = ${ctx.id} AND workspace_id = ${workspaceId}`;
+    }
+    return { depositRefundedCents: r.refunded || 0, depositKeptCents: r.refunded ? 0 : held, depositRefundError: r.error || null };
+  }
+  const q = await requestDepositRefund({ ctx, by: 'owner' });
+  return { depositRefundedCents: 0, depositKeptCents: 0, depositRefundRequestedCents: q.requestedCents || 0 };
+}
+
+function aheadLabel(ms) {
+  const h = Math.floor(ms / 3_600_000);
+  if (h >= 48) return `${Math.floor(h / 24)} days ahead`;
+  if (h >= 24) return '1 day ahead';
+  if (h >= 1) return `${h} hour${h === 1 ? '' : 's'} ahead`;
+  return 'shortly before';
+}
+
+// Open a pending deposit refund request (never refunds by itself) and ask
+// the owner: push + email + the "Deposits to review" list. At most one
+// pending request per booking.
+export async function requestDepositRefund({ ctx, by = 'client', nowMs = Date.now() }) {
+  const held = depositHeldCents(ctx);
+  if (held <= 0 || !ctx.deposit_payment_intent || !ctx.deposit_paid_at) return { requestedCents: 0 };
+  const startMs = slotEpochMs(isoDate(ctx.date), Number(ctx.start_min), ctx.timezone || null);
+  const reason = by === 'owner'
+    ? 'you cancelled the booking'
+    : `cancelled ${Number.isFinite(startMs) ? aheadLabel(startMs - nowMs) : 'in time'}, your policy refunds it`;
+  const upd = await sql`
+    UPDATE bookings SET
+      deposit_refund_request_status = 'pending',
+      deposit_refund_request_amount = ${held / 100},
+      deposit_refund_request_reason = ${reason},
+      deposit_refund_requested_at = NOW(),
+      deposit_refund_decided_at = NULL, deposit_refund_decided_by = NULL,
+      updated_at = NOW()
+    WHERE id = ${ctx.id} AND workspace_id = ${ctx.workspace_id}
+      AND deposit_refund_request_status IS DISTINCT FROM 'pending'
+    RETURNING id
+  `;
+  if (upd.rows.length === 0) return { requestedCents: 0, deduped: true };
+  const currency = String(ctx.currency || 'USD').toUpperCase();
+  const first = String(ctx.c_name || ctx.client_name || 'Your client').trim().split(/\s+/)[0];
+  const question = `Refund ${first}'s ${fmtMoney(held, currency)} deposit? (${reason})`;
+  notifyOwnerSafe({
+    workspaceId: ctx.workspace_id, type: 'payments',
+    payload: { title: 'Deposit refund to review', body: question, url: `/calendar?depositReview=${ctx.id}`, tag: `depreview-${ctx.id}` },
+  });
+  await emailOwner(ctx, {
+    subject: question,
+    heading: 'A deposit refund is waiting for you',
+    text: `${question} ${apptLabel(ctx)}. Nothing has been refunded yet. Open your calendar to tap Refund or Keep deposit.`,
+    ctaUrl: `${appUrl()}/calendar?depositReview=${ctx.id}`,
+  });
+  return { requestedCents: held };
+}
+
+// The owner's one tap. decision 'refund' runs the refund exactly once
+// (the status flip is the claim; a double tap finds it already decided);
+// 'keep' records that the deposit stays, with who and when.
+export async function decideDepositRefund({ workspaceId, bookingId, decision, userId = null }) {
+  if (decision !== 'refund' && decision !== 'keep') return { invalid: true };
+  const next = decision === 'refund' ? 'approved' : 'kept';
+  const flip = await sql`
+    UPDATE bookings SET deposit_refund_request_status = ${next},
+      deposit_refund_decided_at = NOW(), deposit_refund_decided_by = ${userId}, updated_at = NOW()
+    WHERE id = ${bookingId} AND workspace_id = ${workspaceId}
+      AND deposit_refund_request_status = 'pending'
+    RETURNING deposit_refund_request_amount
+  `;
+  if (flip.rows.length === 0) {
+    const cur = await sql`SELECT deposit_refund_request_status FROM bookings WHERE id = ${bookingId} AND workspace_id = ${workspaceId}`;
+    if (!cur.rows[0]) return { notFound: true };
+    return { alreadyDecided: true, status: cur.rows[0].deposit_refund_request_status || null };
+  }
+  if (decision === 'keep') return { kept: true };
+  const ctx = await loadFeeContext({ workspaceId, bookingId });
+  const r = await refundDeposit({
+    ctx, amountCents: toCents(flip.rows[0].deposit_refund_request_amount),
+    who: ctx.cancelled_by === 'owner' ? 'owner' : 'policy',
+  });
+  if (!r.refunded) {
+    // Refund did not go through: back to pending so the owner can retry.
+    await sql`
+      UPDATE bookings SET deposit_refund_request_status = 'pending', deposit_refund_decided_at = NULL, deposit_refund_decided_by = NULL
+      WHERE id = ${bookingId} AND workspace_id = ${workspaceId} AND deposit_refund_request_status = 'approved'
+        AND ROUND(COALESCE(deposit_refunded_amount, 0) * 100) = ${toCents(ctx.deposit_refunded_amount)}
+    `;
+    return { refunded: 0, error: r.error || 'The refund did not go through.' };
+  }
+  return { refunded: r.refunded };
+}
+
+// Pending requests for the "Deposits to review" list.
+export async function listDepositReviews(workspaceId) {
+  const { rows } = await sql`
+    SELECT b.id, b.client_id, b.client_name, b.date, b.start_min, b.cancelled_at, b.cancelled_by,
+           b.deposit_refund_request_amount, b.deposit_refund_request_reason, b.deposit_refund_requested_at,
+           s.name AS service_name, COALESCE(fs.currency, 'USD') AS currency
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN finance_settings fs ON fs.workspace_id = b.workspace_id
+     WHERE b.workspace_id = ${workspaceId} AND b.deposit_refund_request_status = 'pending'
+     ORDER BY b.deposit_refund_requested_at ASC
+     LIMIT 100
+  `;
+  return rows.map((r) => ({
+    bookingId: r.id, clientId: r.client_id, clientName: r.client_name, serviceName: r.service_name || null,
+    date: isoDate(r.date), startMin: r.start_min, cancelledBy: r.cancelled_by || null,
+    amount: Number(r.deposit_refund_request_amount || 0), currency: String(r.currency).toUpperCase(),
+    reason: r.deposit_refund_request_reason || '', requestedAt: r.deposit_refund_requested_at,
+  }));
 }
 
 // No-show fee (owner marked the booking). The kept deposit counts first.
@@ -444,6 +580,10 @@ export async function chargeNoShowFee({ workspaceId, bookingId }) {
   const [accepted, settings] = await Promise.all([
     acceptedTermsForBooking({ workspaceId, bookingId }), getPolicySettings(workspaceId),
   ]);
+  // Package session under "used when booked": the used session is the
+  // penalty, no no-show fee. Under "used when completed" the no-show uses
+  // the held session AND the no-show fee applies once.
+  if (isPackageUsedWhenBooked(ctx)) return { charged: 0, fromDeposit: 0, noFee: true, packageSession: true };
   const terms = effectiveTerms(ctx, accepted, settings);
   const feeCents = toCents(terms.noShowFee);
   if (feeCents <= 0) return { charged: 0, fromDeposit: 0, noFee: true };
@@ -498,7 +638,9 @@ export function describeClientCancellation(o) {
   if (!o) return null;
   const c = String(o.currency || 'USD').toUpperCase();
   const parts = [];
+  if (o.packageSessionKept) parts.push(`You cancelled inside the ${o.windowHours}-hour window, so this session stays used from your package. No fee is charged.`);
   if (o.depositRefundedCents > 0) parts.push(`Your ${fmtMoney(o.depositRefundedCents, c)} deposit is being refunded.`);
+  if (o.depositRefundRequestedCents > 0) parts.push(`Your ${fmtMoney(o.depositRefundRequestedCents, c)} deposit refund is being reviewed by ${o.businessName || 'the business'}. You will get a receipt once it is approved.`);
   if (o.late && o.depositKeptCents > 0) parts.push(`You cancelled inside the ${o.windowHours}-hour window, so the ${fmtMoney(o.depositKeptCents, c)} deposit is kept.`);
   if (o.feeChargedCents > 0) parts.push(`A ${fmtMoney(o.feeChargedCents, c)} late-cancellation fee was charged to your card.`);
   if (o.feeError) parts.push('The late-cancellation fee could not be charged to your card. The business may send you an invoice.');

@@ -155,8 +155,8 @@ export default function CancellationPolicyCard() {
               sub='You can also add a "Cancellation policy" section to any page of your website. It always shows the latest version.'
               checked={settings.showInSiteFooter} disabled={busy || !policy}
               onChange={(v) => save({ showInSiteFooter: v })}/>
-            <SwitchRow title="Refund deposits when clients cancel in time"
-              sub="When a client cancels before the service's cancellation window, their deposit goes back to them automatically. Late cancellations keep the deposit, and it counts toward the late fee."
+            <SwitchRow title="Deposits are refundable when clients cancel in time"
+              sub="When a client cancels before the service's cancellation window, you get a one-tap Refund or Keep deposit request. Nothing is refunded until you tap Refund. Late cancellations keep the deposit, and it counts toward the late fee."
               checked={settings.refundDepositOutsideWindow} disabled={busy}
               onChange={(v) => save({ refundDepositOutsideWindow: v })}/>
           </div>

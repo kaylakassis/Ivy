@@ -1,5 +1,7 @@
 // /api/invoice-view/:token  (public, no auth)
-//   GET   → public invoice payload (only if status='sent' or 'overdue')
+//   GET   → public invoice payload. Open (sent / overdue) invoices can be
+//           paid; void, paid and refunded ones come back read only with
+//           closed: true so the page can say where they stand.
 //   POST  → "I've paid" claim. Doesn't settle the invoice; the live pay
 //           flow is /api/invoice-pay/[token] (Stripe/Square/PayPal). This
 //           records "client says paid" + notifies the owner, the same way
@@ -22,16 +24,26 @@ function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
-async function fetchByToken(rawToken) {
+async function fetchByToken(rawToken, { includeClosed = false } = {}) {
   if (typeof rawToken !== 'string' || rawToken.length < 16) return null;
   const tokenHash = hashToken(rawToken);
   const { rows } = await sql`
     SELECT * FROM invoices
     WHERE view_token_hash = ${tokenHash}
-      AND status IN ('sent', 'overdue')
+      AND (status IN ('sent', 'overdue')
+           OR (${includeClosed} AND status IN ('paid', 'refunded', 'voided')))
     LIMIT 1
   `;
   return rows[0] || null;
+}
+
+// A link to an invoice that is void, paid or refunded shows where it
+// stands, read only: "This invoice was voided", "Refunded in full on ...
+// Nothing owed." No pay buttons, no ways to pay, no saved card.
+async function closedInvoicePayload(inv) {
+  const business = await loadBusinessMeta(inv.workspace_id);
+  const pub = serializeInvoicePublic(inv, { business, paymentEnabled: false, manualMethods: [] });
+  return { ...pub, closed: true };
 }
 
 // Name, logo and the owner's invoice design (font, layout, color, footer,
@@ -92,8 +104,11 @@ async function getInvoice(req, res) {
     if (blocked) return;
 
     const token = (req.query.token || '').toString();
-    const inv = await fetchByToken(token);
+    const inv = await fetchByToken(token, { includeClosed: true });
     if (!inv) return notFound(res, 'This invoice link is invalid, has expired, or was already paid.');
+    if (inv.status === 'paid' || inv.status === 'refunded' || inv.status === 'voided') {
+      return ok(res, { invoice: await closedInvoicePayload(inv) });
+    }
 
     // Self-heal: if this still-unpaid invoice has a completed Stripe
     // checkout session, mark it paid now rather than waiting on a webhook

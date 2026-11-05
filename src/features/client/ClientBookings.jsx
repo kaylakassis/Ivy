@@ -335,6 +335,12 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
           {pay && (
             <div style={{ fontSize: 13, fontWeight: 600, color: pay.color }}>{pay.text}</div>
           )}
+          {cancelled && b.depositRefundStatus === 'pending' && (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>Your deposit refund is being reviewed by {b.businessName}.</div>
+          )}
+          {cancelled && b.depositRefundStatus === 'approved' && (
+            <div style={{ fontSize: 13, color: 'var(--ok)' }}>Your deposit was refunded.</div>
+          )}
           {b.fromPackage && !cancelled && (
             <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Uses a session from your package</div>
           )}
@@ -447,6 +453,24 @@ export function cancelPolicy(b, now = Date.now()) {
   // (api/_lib/bookingFees.js), so only the rest goes on the card.
   const deposit = Number(p.depositPaid || 0);
   const due = Math.max(0, Math.round((fee - deposit) * 100) / 100);
+  // Package bookings: a late cancel (under the business's own fee policy)
+  // keeps the session used instead of charging the card. Same rule as
+  // the server (api/me/bookings/[id].js isLateCancelWithPolicy).
+  if (b.fromPackage && b.packageUseMode !== 'completion') {
+    const pkg = b.packageName ? `your ${b.packageName} package` : 'your package';
+    if (fee > 0 && windowH > 0) {
+      lines.push(`${b.businessName} lets you cancel for free up to ${windowH} hours before.`);
+      if (late) {
+        tone = 'warn';
+        lines.push(`This appointment starts in less than ${windowH} hours, so the session from ${pkg} stays used. Your card is not charged.`);
+      } else {
+        lines.push(`You are cancelling in time, so the session goes back into ${pkg}.`);
+      }
+    } else {
+      lines.push(`The session goes back into ${pkg}.`);
+    }
+    return { lines, tone, late: late && fee > 0, fee: 0 };
+  }
   if (fee > 0 && windowH > 0) {
     lines.push(`${b.businessName} lets you cancel for free up to ${windowH} hours before. After that there is a ${fmtMoney(fee)} late-cancellation fee.`);
     if (late) {
@@ -468,10 +492,13 @@ export function cancelPolicy(b, now = Date.now()) {
   if (deposit > 0 && !(late && fee > 0)) {
     if (late) lines.push(`You are cancelling less than ${windowH} hours before, so your ${fmtMoney(deposit)} deposit is kept.`);
     else if (b.depositRefundable === false) lines.push(`Your ${fmtMoney(deposit)} deposit is not refundable.`);
-    else lines.push(`Your ${fmtMoney(deposit)} deposit is refunded to your card automatically.`);
+    else lines.push(`Your ${fmtMoney(deposit)} deposit can be refunded. ${b.businessName} reviews the refund, and you get a receipt once it goes through.`);
   }
   if (p.giftCardCredit > 0) lines.push(`The ${fmtMoney(p.giftCardCredit)} you used from a gift card goes back on the card.`);
-  if (b.fromPackage) lines.push('The session goes back into your package.');
+  if (b.fromPackage) {
+    // Business counts sessions when you attend: the session was only held.
+    lines.push(`The session goes back into ${b.packageName ? `your ${b.packageName} package` : 'your package'}.`);
+  }
   return { lines, tone, late, fee };
 }
 

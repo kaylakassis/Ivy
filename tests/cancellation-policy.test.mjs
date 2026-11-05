@@ -14,7 +14,9 @@
 //   [7]  client data export holds only the client's own acceptances
 //   [8]  deposits: saved card at deposit checkout, card setup when no
 //        deposit, webhook stores the card
-//   [9]  client cancels before the window: deposit refunded exactly once
+//   [9]  client cancels before the window: NO refund until the owner taps
+//        Refund (pending request, owner told); approve refunds exactly once;
+//        Keep records who/when
 //  [10]  client cancels inside the window: deposit kept, rest of the fee
 //        charged exactly once (concurrent double cancel)
 //  [11]  deposit larger than fee: nothing charged
@@ -24,7 +26,9 @@
 //  [14]  owner cancels: never a fee, deposit refunded (or kept on request)
 //  [15]  client agreed to a lower fee than today's: charged the agreed fee
 //  [16]  time zones for the window
-//  [17]  package booking late cancel: credit back once, fee once, no deposit
+//  [17]  package sessions (agreed rule): "used when booked" late cancel /
+//        no-show keeps the session and charges no fee; "used when
+//        completed" releases the session and charges the fee once
 //  [18]  dashboard refund (charge.refunded) is recorded, never refunded twice
 //  [19]  currency follows the business
 //  [20]  waitlist acceptance follows the promoted booking
@@ -51,6 +55,7 @@ import ownerBookingHandler from '../api/calendar/bookings/[id].js';
 import noShowHandler from '../api/calendar/bookings/no-show.js';
 import chargeFeeHandler from '../api/calendar/bookings/charge-fee.js';
 import refundDepositHandler from '../api/calendar/bookings/refund-deposit.js';
+import depositReviewsHandler from '../api/calendar/bookings/deposit-reviews.js';
 import meBookHandler from '../api/me/packages/[id]/book.js';
 import platformWebhook from '../api/webhooks/stripe-platform.js';
 import { buildClientPortalExport } from '../api/_lib/clientExport.js';
@@ -410,33 +415,70 @@ async function run() {
     policyAccepted: true, policyVersionId: v2.id } }));
   assert(r.statusCode === 201 && !r.body.cardSetupUrl && stripe.calls.length === 0, 'client with a card on file is not offered a replacement card');
 
-  console.log('\n[9] client cancels BEFORE the window: deposit refunded exactly once');
+  console.log('\n[9] client cancels BEFORE the window: one-tap owner approval, refunded exactly once');
   const cli = await mkClient('cancel', A);
   let booking = await mkBooking(A, cli, { hours: 72, depositPaid: 25 });
   stripe.calls.length = 0;
+  emails.length = 0;
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: cli.cookie, query: { id: booking.id } }));
-  assert(r.statusCode === 200 && r.body.cancelled === true && r.body.depositRefunded === 25 && r.body.feeCharged === 0, `cancelled, $25 deposit refunded, no fee (${JSON.stringify(r.body)})`);
-  assert(refunds().length === 1 && refunds()[0].body.amount === '2500' && refunds()[0].body.payment_intent === booking.deposit_payment_intent, 'one $25.00 refund of the deposit payment');
-  assert(charges().length === 0, 'no card charge');
+  assert(r.statusCode === 200 && r.body.cancelled === true && r.body.depositRefunded === 0 && r.body.feeCharged === 0, `cancelled, no fee, nothing refunded yet (${JSON.stringify(r.body)})`);
+  assert(refunds().length === 0 && charges().length === 0, 'no money moves without the owner');
+  assert(/deposit refund is being reviewed by a Studio/.test(r.body.policyMessage || '') && noDash(r.body.policyMessage), `client is told it is being reviewed (${r.body.policyMessage})`);
   b = await bk(booking.id);
-  assert(Number(b.deposit_refunded_amount) === 25 && b.deposit_refund_id && b.cancelled_by === 'client', 'refund recorded on the booking');
+  assert(b.deposit_refund_request_status === 'pending' && Number(b.deposit_refund_request_amount) === 25 && /cancelled 3 days ahead, your policy refunds it/.test(b.deposit_refund_request_reason) && b.cancelled_by === 'client', `pending request on the booking (${b.deposit_refund_request_reason})`);
+  await settle();
+  assert(emails.some((e) => /^Refund Casey's \$25\.00 deposit\? \(cancelled 3 days ahead, your policy refunds it\)$/.test(e.subject || '') && [].concat(e.to).includes(`cp-a-${STAMP}@example.com`)), 'owner is emailed "Refund Casey\'s $25.00 deposit? (cancelled 3 days ahead, your policy refunds it)"');
+  assert(/depositReview=/.test(JSON.stringify(emails.find((e) => /^Refund Casey/.test(e.subject || ''))?.html || '')), 'the email deep-links to the review');
+  assert(!emails.some((e) => [].concat(e.to).includes(cli.email) && /refunded/i.test(e.subject || '')), 'client gets no receipt yet');
   r = await call(meBookingsHandler, req({ cookie: cli.cookie }));
-  const mine = [...(r.body.cancelled || []), ...(r.body.upcoming || []), ...(r.body.past || [])].find((x) => x.id === booking.id);
-  assert(mine && mine.depositRefundable === true && (!mine.payment || mine.payment.depositPaid === 0), 'client portal: refunded deposit no longer counts as paid; refund rule exposed');
+  let mine = [...(r.body.cancelled || []), ...(r.body.upcoming || []), ...(r.body.past || [])].find((x) => x.id === booking.id);
+  assert(mine?.depositRefundStatus === 'pending', 'client portal shows the refund under review');
+  r = await call(depositReviewsHandler, req({ cookie: A.cookie }));
+  assert(r.statusCode === 200 && r.body.reviews.some((x) => x.bookingId === booking.id && x.amount === 25), 'owner sees it in Deposits to review');
+  r = await call(depositReviewsHandler, req({ cookie: B.cookie }));
+  assert(r.body.reviews.every((x) => x.bookingId !== booking.id), "owner B does not see A's review");
+  r = await call(depositReviewsHandler, req({ method: 'POST', cookie: B.cookie, body: { id: booking.id, decision: 'refund' } }));
+  assert(r.statusCode === 404 && refunds().length === 0, "owner B cannot approve A's refund");
+  r = await call(depositReviewsHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id, decision: 'maybe' } }));
+  assert(r.statusCode === 400, 'unknown decision refused');
+  const [ap1, ap2] = await Promise.all([
+    call(depositReviewsHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id, decision: 'refund' } })),
+    call(depositReviewsHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id, decision: 'refund' } })),
+  ]);
+  assert([ap1, ap2].filter((x) => x.body.refunded === 25).length === 1 && [ap1, ap2].filter((x) => x.body.alreadyDecided).length === 1, 'double tap on Refund: one refund, one "already decided"');
+  assert(refunds().length === 1 && refunds()[0].body.amount === '2500' && refunds()[0].body.payment_intent === booking.deposit_payment_intent, 'exactly one $25.00 refund of the deposit payment');
+  b = await bk(booking.id);
+  assert(Number(b.deposit_refunded_amount) === 25 && b.deposit_refund_request_status === 'approved' && b.deposit_refund_decided_by === A.userId && b.deposit_refund_decided_at, 'approved by the owner, recorded with who and when');
+  r = await call(depositReviewsHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id, decision: 'keep' } }));
+  assert(r.body.alreadyDecided === true && r.body.status === 'approved', 'a later Keep tap changes nothing');
+  await settle();
+  assert(emails.some((e) => /deposit was refunded/i.test(e.subject || '') && [].concat(e.to).includes(cli.email)), 'client gets the refund receipt once approved');
+  r = await call(meBookingsHandler, req({ cookie: cli.cookie }));
+  mine = [...(r.body.cancelled || []), ...(r.body.upcoming || []), ...(r.body.past || [])].find((x) => x.id === booking.id);
+  assert(mine && mine.depositRefundStatus === 'approved' && mine.depositRefundable === true && (!mine.payment || mine.payment.depositPaid === 0), 'client portal: refunded, and no longer counted as paid');
   r = await fire('charge.refunded', { id: 'ch_echo', payment_intent: booking.deposit_payment_intent, amount: 2500, amount_refunded: 2500 }, A.acct);
   assert(Number((await bk(booking.id)).deposit_refunded_amount) === 25, 'the processor echo of our own refund does not double count it');
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: cli.cookie, query: { id: booking.id } }));
   assert(r.statusCode === 400 && refunds().length === 1, 'cancelling again changes nothing');
   r = await call(refundDepositHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id } }));
   assert(r.statusCode === 400 && refunds().length === 1, 'owner "refund deposit" on an already refunded deposit is refused');
-  await settle();
-  assert(emails.some((e) => /deposit was refunded/i.test(e.subject || '') && [].concat(e.to).includes(cli.email)), 'client gets a refund receipt');
-  // Owner turned refunds off → deposit kept.
+  // Keep deposit.
+  booking = await mkBooking(A, cli, { hours: 50, depositPaid: 25 });
+  r = await call(meBookingHandler, req({ method: 'DELETE', cookie: cli.cookie, query: { id: booking.id } }));
+  stripe.calls.length = 0;
+  r = await call(depositReviewsHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id, decision: 'keep' } }));
+  b = await bk(booking.id);
+  assert(r.statusCode === 200 && r.body.kept === true && b.deposit_refund_request_status === 'kept' && b.deposit_refund_decided_by === A.userId && b.deposit_refund_decided_at && Number(b.deposit_refunded_amount) === 0 && refunds().length === 0, 'Keep deposit: recorded with who and when, nothing refunded');
+  r = await call(depositReviewsHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id, decision: 'refund' } }));
+  assert(r.body.alreadyDecided === true && refunds().length === 0, 'Refund after Keep changes nothing');
+  assert((await sql`SELECT COUNT(*)::int AS n FROM audit_events WHERE workspace_id = ${A.wid} AND action IN ('booking.deposit_refund_approved', 'booking.deposit_kept')`).rows[0].n === 2, 'both decisions in the audit trail');
+  // Policy says deposits are not refundable → kept, no request.
   await call(policyHandler, req({ method: 'PUT', cookie: A.cookie, body: { refundDepositOutsideWindow: false } }));
   booking = await mkBooking(A, cli, { hours: 96, depositPaid: 25 });
   stripe.calls.length = 0;
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: cli.cookie, query: { id: booking.id } }));
-  assert(r.body.depositRefunded === 0 && r.body.depositKept === 25 && refunds().length === 0, 'refunds off: deposit kept, nothing refunded');
+  b = await bk(booking.id);
+  assert(r.body.depositRefunded === 0 && r.body.depositKept === 25 && refunds().length === 0 && !b.deposit_refund_request_status, 'non-refundable policy: deposit kept, no request');
   await call(policyHandler, req({ method: 'PUT', cookie: A.cookie, body: { refundDepositOutsideWindow: true } }));
 
   console.log('\n[10] client cancels INSIDE the window: deposit kept, rest of the fee charged once');
@@ -532,13 +574,18 @@ async function run() {
   booking = await mkBooking(A, oc, { hours: 2, depositPaid: 25 });
   stripe.calls.length = 0;
   r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: A.cookie, query: { id: booking.id } }));
-  assert(r.statusCode === 204 && charges().length === 0 && refunds().length === 1 && refunds()[0].body.amount === '2500', 'owner cancel inside the window: no fee, deposit refunded');
   b = await bk(booking.id);
-  assert(b.cancelled_by === 'owner' && Number(b.deposit_refunded_amount) === 25, 'recorded as cancelled by the business');
+  assert(r.statusCode === 204 && charges().length === 0 && refunds().length === 0 && b.deposit_refund_request_status === 'pending' && b.deposit_refund_request_reason === 'you cancelled the booking', 'owner cancel without a choice (older app): no fee, refund request opened, nothing refunded');
+  assert(b.cancelled_by === 'owner', 'recorded as cancelled by the business');
+  booking = await mkBooking(A, oc, { hours: 3, depositPaid: 25 });
+  stripe.calls.length = 0;
+  r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: A.cookie, query: { id: booking.id }, body: { refundDeposit: true } }));
+  b = await bk(booking.id);
+  assert(r.statusCode === 204 && charges().length === 0 && refunds().length === 1 && refunds()[0].body.amount === '2500' && Number(b.deposit_refunded_amount) === 25 && b.deposit_refund_decided_by === A.userId, 'owner ticked "Refund the deposit now": refunded once (that tap is the approval)');
   booking = await mkBooking(A, oc, { hours: 30, depositPaid: 25 });
   stripe.calls.length = 0;
   r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: A.cookie, query: { id: booking.id }, body: { refundDeposit: false } }));
-  assert(r.statusCode === 204 && refunds().length === 0 && charges().length === 0, 'owner chose to keep the deposit: nothing moves');
+  assert(r.statusCode === 204 && refunds().length === 0 && charges().length === 0 && !(await bk(booking.id)).deposit_refund_request_status, 'owner chose to keep the deposit: nothing moves, no request');
   r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: B.cookie, query: { id: booking.id } }));
   assert(r.statusCode === 404, "owner B cannot cancel A's booking");
 
@@ -577,12 +624,61 @@ async function run() {
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: pkgBooking } }));
   assert(r.statusCode === 200 && r.body.feeCharged === 0, 'package session far ahead: no fee');
   assert((await sql`SELECT credits_remaining FROM client_packages WHERE id = ${cp}`).rows[0].credits_remaining === 5, 'credit back');
+  const credits = async () => (await sql`SELECT credits_remaining FROM client_packages WHERE id = ${cp}`).rows[0].credits_remaining;
+  // "Used when booked" (the default): the late cancel keeps the session
+  // used INSTEAD of a fee - never both.
   booking = await mkBooking(A, casey, { hours: 3, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE bookings SET package_use_mode = 'booking' WHERE id = ${booking.id}`;
   await sql`UPDATE client_packages SET credits_remaining = 4 WHERE id = ${cp}`;
   stripe.calls.length = 0;
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: booking.id } }));
-  assert(r.body.feeCharged === 40 && charges().length === 1 && charges()[0].body.amount === '4000', 'late package cancel: the $40 fee once, nothing from a deposit');
-  assert((await sql`SELECT credits_remaining FROM client_packages WHERE id = ${cp}`).rows[0].credits_remaining === 5, 'the credit comes back once (fee instead of losing the session, never both)');
+  assert(r.statusCode === 200 && r.body.feeCharged === 0 && charges().length === 0, 'used-when-booked late cancel: no fee charged');
+  assert(r.body.packageSessionReturned === false && await credits() === 4, 'used-when-booked late cancel: the session stays used');
+  assert(/stays used from your package/.test(r.body.policyMessage || '') && noDash(r.body.policyMessage), `client is told plainly (${r.body.policyMessage})`);
+  b = await bk(booking.id);
+  assert(!b.fee_charged_kind && Number(b.fee_charged_amount) === 0 && !b.fee_invoice_id, 'no fee recorded and no invoice made');
+  // Older package bookings (no stamp) behave as "used when booked".
+  booking = await mkBooking(A, casey, { hours: 3, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE client_packages SET credits_remaining = 3 WHERE id = ${cp}`;
+  r = await call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: booking.id } }));
+  assert(r.body.feeCharged === 0 && charges().length === 0 && await credits() === 3, 'unstamped package booking: same rule (no fee, session kept)');
+  // "Used when completed" (hold): cancelling releases the held session and
+  // the normal late fee applies once.
+  booking = await mkBooking(A, casey, { hours: 3, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE bookings SET package_use_mode = 'completion' WHERE id = ${booking.id}`;
+  await sql`UPDATE client_packages SET credits_remaining = 2 WHERE id = ${cp}`;
+  stripe.calls.length = 0;
+  const [h1, h2] = await Promise.all([
+    call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: booking.id } })),
+    call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: booking.id } })),
+  ]);
+  const hw = h1.body.deduped ? h2 : h1;
+  assert(hw.body.feeCharged === 40 && charges().length === 1 && charges()[0].body.amount === '4000', 'used-when-completed late cancel: the $40 fee once (double tap)');
+  assert(hw.body.packageSessionReturned === true && await credits() === 3, 'used-when-completed: the held session is released once');
+  // In time, used-when-booked: session back, no fee.
+  booking = await mkBooking(A, casey, { hours: 72, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE bookings SET package_use_mode = 'booking' WHERE id = ${booking.id}`;
+  await sql`UPDATE client_packages SET credits_remaining = 2 WHERE id = ${cp}`;
+  stripe.calls.length = 0;
+  r = await call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: booking.id } }));
+  assert(r.body.feeCharged === 0 && charges().length === 0 && await credits() === 3, 'in time: session back, no fee');
+  // No-show: used-when-booked → no fee; used-when-completed → fee once.
+  booking = await mkBooking(A, casey, { hours: -2, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE bookings SET package_use_mode = 'booking' WHERE id = ${booking.id}`;
+  stripe.calls.length = 0;
+  r = await call(noShowHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id } }));
+  assert(r.statusCode === 200 && r.body.charged === false && charges().length === 0, 'used-when-booked no-show: no fee (the session is the penalty)');
+  booking = await mkBooking(A, casey, { hours: -3, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE bookings SET package_use_mode = 'completion' WHERE id = ${booking.id}`;
+  r = await call(noShowHandler, req({ method: 'POST', cookie: A.cookie, body: { id: booking.id } }));
+  assert(r.statusCode === 200 && r.body.chargeAmount === 30 && charges().length === 1 && charges()[0].body.amount === '3000', 'used-when-completed no-show: the $30 no-show fee once');
+  // Business cancels a package booking inside the window: session back, no fee.
+  booking = await mkBooking(A, casey, { hours: 2, serviceId: A.svcNoDep, total: 0, clientPackageId: cp });
+  await sql`UPDATE bookings SET package_use_mode = 'booking' WHERE id = ${booking.id}`;
+  const beforeOwner = await credits();
+  stripe.calls.length = 0;
+  r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: A.cookie, query: { id: booking.id } }));
+  assert(r.statusCode === 204 && charges().length === 0 && await credits() === Math.min(5, beforeOwner + 1), 'business cancels: session back, never a fee');
 
   console.log('\n[18] dashboard refund of a deposit is recorded');
   const dash = await mkClient('dash', A);

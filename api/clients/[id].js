@@ -1,6 +1,8 @@
 // /api/clients/:id
 //   GET    → single client (workspace-scoped)
-//   PATCH  → update name / email / stage / tags / notes / lifetime_value / last_seen_at
+//   PATCH  → update name / email / stage / tags / notes / lifetime_value / last_seen_at,
+//            and the richer record (addressParts, birthday, pronouns,
+//            emergencyContact, preferredContact, occupation, customFields)
 //   DELETE → remove
 
 import crypto from 'node:crypto';
@@ -13,6 +15,8 @@ import { fetchOwnedClient, serializeClient, serializeClientMinimal, helperSeesMi
 import { helperClientScope } from '../_lib/helpers.js';
 import { blobPathnameForWorkspace } from '../_lib/blobScope.js';
 import { normalizePhone } from '../_lib/sms.js';
+import { cleanClientOverride } from '../_lib/reminderSettings.js';
+import { clientDetailColumns, loadFieldDefs, mergeCustomFields } from '../_lib/clientDetails.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -103,9 +107,33 @@ export default async function handler(req, res) {
         }
         push('referred_by_client_id', ref);
       }
+      if ('reminderSettings' in body) {
+        // Per-client appointment reminders: { mode: 'default' | 'off' |
+        // 'custom', minutes? }. 'default' (or null) clears the override.
+        // The client's own portal opt-out is separate and is never
+        // changed from here.
+        const r = cleanClientOverride(body.reminderSettings);
+        if (r.error) return badRequest(res, r.error);
+        values.push(r.value ? JSON.stringify(r.value) : null);
+        sets.push(`reminder_settings = $${values.length}::jsonb`);
+      }
       if ('lastSeenAt' in body) push('last_seen_at', body.lastSeenAt ? new Date(body.lastSeenAt).toISOString() : null);
-      if ('address' in body) {
+      // The richer record (address parts, birthday, emergency contact...).
+      // addressParts also rewrites the one-line `address`; a bare `address`
+      // (older app builds) replaces the parts, which then read as empty.
+      const details = clientDetailColumns(body);
+      if (details.errors.length) return badRequest(res, details.errors[0]);
+      for (const [col, val] of Object.entries(details.cols)) push(col, val);
+      if ('address' in body && !('addressParts' in body)) {
         push('address', body.address ? String(body.address).trim().slice(0, 500) : null);
+        for (const col of ['address_street', 'address_city', 'address_region', 'address_postal_code', 'address_country']) push(col, null);
+      }
+      if ('customFields' in body) {
+        const defs = await loadFieldDefs(workspaceId);
+        const merged = mergeCustomFields(existing.custom_fields, body.customFields, defs);
+        if (merged.errors.length) return badRequest(res, merged.errors[0]);
+        values.push(JSON.stringify(merged.values));
+        sets.push(`custom_fields = $${values.length}::jsonb`);
       }
       if ('photoUrl' in body) {
         push('photo_url', body.photoUrl ? String(body.photoUrl).slice(0, 1000) : null);

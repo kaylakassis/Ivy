@@ -1,5 +1,6 @@
 // Shared serializers + helpers for invoices.
 import { sql } from './db.js';
+import { invoiceMoney, invoiceActions, invoiceStatusLine } from '../../src/lib/invoiceRules.js';
 
 export const VALID_STATUS = new Set(['draft', 'sent', 'paid', 'overdue', 'voided', 'refunded']);
 export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'transfer', 'zelle', 'venmo', 'cashapp', 'other']);
@@ -171,6 +172,18 @@ export function serializeInvoice(row) {
     total:        totals.total,
     createdAt:    row.created_at,
     updatedAt:    row.updated_at,
+    // Added fields (older app builds ignore them). archivedAt hides a
+    // settled invoice from the main list; money is paid / refunded / net /
+    // owed in one place (src/lib/invoiceRules.js) so every screen agrees;
+    // allowed says which actions the server will accept and, when not,
+    // why in plain words; statusLine is the one-sentence summary.
+    archivedAt:   row.archived_at || null,
+    recurringInvoiceId: row.recurring_invoice_id || null,
+    fromRecurring: !!row.recurring_invoice_id
+      || (Array.isArray(row.activity) && row.activity.some((a) => a && a.kind === 'auto-created')),
+    money:        invoiceMoney({ ...row, total: totals.total }),
+    allowed:      invoiceActions({ ...row, total: totals.total }),
+    statusLine:   invoiceStatusLine({ ...row, total: totals.total }),
   };
 }
 
@@ -180,6 +193,11 @@ export function serializeInvoicePublic(row, workspaceMeta = {}) {
   const inv = serializeInvoice(row);
   delete inv.id; // public viewer references by token, not raw id
   delete inv.paymentClaimedNote; // the client's own note - no need to echo it
+  delete inv.allowed; // owner actions, not for the client
+  delete inv.archivedAt;
+  delete inv.recurringInvoiceId;
+  delete inv.fromRecurring;
+  delete inv.stripePaymentIntent;
   const unpaid = row.status === 'sent' || row.status === 'overdue';
   return {
     ...inv,

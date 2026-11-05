@@ -7,6 +7,9 @@
 //          booking horizon can be shown without another request.
 //   POST → create a booking via the public link. Body:
 //          { serviceId, date, startMin, endMin, clientName, clientEmail, notes? }
+//          A signed-in client can add { clientPackageId } to pay with one
+//          session from their package at this business (the name/email
+//          then come from their client record; no deposit, no gift card).
 
 import { sql, warmupDbOnce } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
@@ -19,7 +22,13 @@ import {
   slotEpochMs,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
-import { validEmail } from '../../_lib/auth.js';
+import { validEmail, requireUser } from '../../_lib/auth.js';
+import { myClientIds } from '../../_lib/clientPortal.js';
+import {
+  consumeCredit, restoreCredit, packageBlockCode, sendPackageRefusal, refusalForFailedConsume,
+  packageUseModeFor,
+} from '../../_lib/packages.js';
+import { notifyPackageExhausted } from '../../_lib/packageNotify.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { loadBookingForInvite, calendarLinksFor } from '../../_lib/calendarLinks.js';
@@ -326,8 +335,9 @@ async function createBooking(req, res) {
     const start = Number(body.startMin);
     const end = Number(body.endMin);
     const serviceId = (body.serviceId || '').toString();
-    const clientName = (body.clientName || '').toString().trim().slice(0, 120);
-    const clientEmail = (body.clientEmail || '').toString().trim().toLowerCase();
+    let clientName = (body.clientName || '').toString().trim().slice(0, 120);
+    let clientEmail = (body.clientEmail || '').toString().trim().toLowerCase();
+    const clientPackageId = body.clientPackageId ? String(body.clientPackageId) : null;
     const notes = body.notes ? String(body.notes).slice(0, 1000) : null;
     // Phone is optional - only normalized if the field was non-empty so
     // bookings without phones still succeed.
@@ -354,9 +364,36 @@ async function createBooking(req, res) {
     if (alignTo > 0 && start % alignTo !== 0) {
       return badRequest(res, `Start time must align to ${alignTo}-minute increments`);
     }
+    if (!serviceId) return badRequest(res, 'Pick a service');
+
+    // Paying with a package session: only the signed-in client who owns
+    // the package at THIS business can spend it. Their client record
+    // supplies the name + email (the form may be hidden).
+    let pkgRow = null;
+    if (clientPackageId) {
+      if (!/^[0-9a-fA-F-]{36}$/.test(clientPackageId)) return badRequest(res, 'Invalid package');
+      if (joinWaitlist) return badRequest(res, 'Join the waitlist without a package. You can use it when a spot opens.');
+      if (body.giftCardCode) return badRequest(res, 'Use either a package session or a gift card, not both.');
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const mine = (await myClientIds(user)).filter((m) => m.workspaceId === workspaceId);
+      const mineIds = mine.map((m) => m.clientId);
+      const found = mineIds.length === 0 ? { rows: [] } : await sql.query(
+        `SELECT cp.*, c.name AS client_name, c.email AS client_email
+           FROM client_packages cp JOIN clients c ON c.id = cp.client_id
+          WHERE cp.id = $1 AND cp.workspace_id = $2 AND cp.client_id = ANY($3)`,
+        [clientPackageId, workspaceId, mineIds],
+      );
+      pkgRow = found.rows[0] || null;
+      if (!pkgRow) return sendPackageRefusal(res, { code: 'package_not_found', cp: null, status: 404 });
+      const code = packageBlockCode(pkgRow, serviceId);
+      if (code) return sendPackageRefusal(res, { code, cp: pkgRow });
+      clientName = (pkgRow.client_name || clientName || '').slice(0, 120);
+      clientEmail = (pkgRow.client_email || clientEmail || '').toLowerCase();
+    }
+
     if (!clientName) return badRequest(res, 'Your name is required');
     if (!validEmail(clientEmail)) return badRequest(res, 'A valid email is required');
-    if (!serviceId) return badRequest(res, 'Pick a service');
 
     // Verify service belongs to this workspace and duration matches.
     // Reject bookings on 'only_me' services (drafts the owner shouldn't
@@ -396,7 +433,9 @@ async function createBooking(req, res) {
       return badRequest(res, 'Slot duration does not match service + add-ons');
     }
     const addOnTotal = selectedAddOns.reduce((s, a) => s + Number(a.price || 0), 0);
-    const bookingTotal = Number(svc.price || 0) + addOnTotal;
+    // A package session covers the service itself; add-ons are still
+    // paid for at the appointment.
+    const bookingTotal = (pkgRow ? 0 : Number(svc.price || 0)) + addOnTotal;
 
     // Custom intake fields: validate required fields present, types ok.
     const customFields = Array.isArray(svc.custom_fields) ? svc.custom_fields : [];
@@ -432,7 +471,7 @@ async function createBooking(req, res) {
     // Recompute deposit using the booking total (service + add-ons),
     // not just service.price - owners expect a 25% deposit on a $200
     // service+add-on combo to be $50, not $50 of just the service.
-    let depositRequired = depositFor(svc, bookingTotal);
+    let depositRequired = pkgRow ? 0 : depositFor(svc, bookingTotal);
 
     // Optional gift card application. Resolved up-front (before insert)
     // so we know how much credit to apply + how much deposit remains
@@ -573,12 +612,15 @@ async function createBooking(req, res) {
     // row so future bookings + reminders pick it up by default. Same
     // for SMS consent - never silently flip to TRUE; only stamp the
     // timestamp if the form explicitly opted in.
-    let clientId = null;
-    const existing = await sql`
+    let clientId = pkgRow ? pkgRow.client_id : null;
+    const existing = pkgRow ? { rows: [] } : await sql`
       SELECT id, phone, sms_consent_at FROM clients
       WHERE workspace_id = ${workspaceId} AND email = ${clientEmail} LIMIT 1
     `;
-    if (existing.rows.length > 0) {
+    if (pkgRow) {
+      // Signed-in package holder: their record already exists; never
+      // create a lead or fire new-client flows.
+    } else if (existing.rows.length > 0) {
       const ec = existing.rows[0];
       clientId = ec.id;
       // Anyone who knows a client's email can submit this form, so a
@@ -629,25 +671,50 @@ async function createBooking(req, res) {
     // reused for a future session with a different client).
     const videoRoomUrl = videoRoomUrlForService(svc);
 
-    const insert = await sql`
-      INSERT INTO bookings (
-        workspace_id, service_id, client_id, client_name, client_email, client_phone,
-        date, start_min, end_min, notes, deposit_required, location_address,
-        video_room_url, custom_field_values, add_on_ids, booking_total,
-        gift_card_credit_cents, source
-      )
-      VALUES (
-        ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
-        ${date}, ${start}, ${end}, ${notes}, ${depositRequired}, ${locationAddress},
-        ${videoRoomUrl},
-        ${JSON.stringify(cleanedCustomValues)}::jsonb,
-        ${JSON.stringify(requestedAddOnIds)}::jsonb,
-        ${bookingTotal},
-        ${giftCardCreditCents},
-        'client'
-      )
-      RETURNING *
-    `;
+    // Spend the package session first, with the same atomic guarded
+    // decrement as every other path: two tabs racing for the last
+    // session cannot both win. Given back if the booking doesn't stick.
+    let pkgConsumed = null;
+    const packageUseMode = pkgRow ? await packageUseModeFor(workspaceId) : null;
+    if (pkgRow) {
+      pkgConsumed = await consumeCredit({ workspaceId, clientPackageId, clientId: pkgRow.client_id, serviceId });
+      if (!pkgConsumed.ok) {
+        return refusalForFailedConsume(res, { workspaceId, clientPackageId, clientId: pkgRow.client_id, serviceId });
+      }
+    }
+    const giveBack = async () => {
+      if (!pkgConsumed?.ok) return;
+      try { await restoreCredit({ workspaceId, clientPackageId }); }
+      catch (e) { console.error('[public booking] restoreCredit failed:', e.message); }
+    };
+
+    let insert;
+    try {
+      insert = await sql`
+        INSERT INTO bookings (
+          workspace_id, service_id, client_id, client_name, client_email, client_phone,
+          date, start_min, end_min, notes, deposit_required, location_address,
+          video_room_url, custom_field_values, add_on_ids, booking_total,
+          gift_card_credit_cents, source, client_package_id, package_use_mode
+        )
+        VALUES (
+          ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
+          ${date}, ${start}, ${end}, ${notes}, ${depositRequired}, ${locationAddress},
+          ${videoRoomUrl},
+          ${JSON.stringify(cleanedCustomValues)}::jsonb,
+          ${JSON.stringify(requestedAddOnIds)}::jsonb,
+          ${bookingTotal},
+          ${giftCardCreditCents},
+          'client',
+          ${pkgRow ? clientPackageId : null},
+          ${packageUseMode}
+        )
+        RETURNING *
+      `;
+    } catch (e) {
+      await giveBack();
+      throw e;
+    }
     const newBookingRow = insert.rows[0];
 
     // Optimistic double-booking resolution (see losesBookingRace). The
@@ -666,9 +733,14 @@ async function createBooking(req, res) {
       return false;
     })) {
       await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
+      await giveBack();
       return badRequest(res, serviceCapacity > 1
         ? 'That class just filled up - please pick another time'
         : 'That slot was just taken - please pick another time');
+    }
+    if (pkgConsumed?.exhausted) {
+      notifyPackageExhausted({ workspaceId, clientPackageId, clientId: pkgRow.client_id })
+        .catch((e) => console.error('[booking] notifyPackageExhausted failed:', e?.message));
     }
 
     // Atomically debit the gift card after the booking row exists. If
@@ -769,8 +841,10 @@ async function createBooking(req, res) {
     // offer the client a secure page to keep a card on file (Stripe setup
     // mode, nothing is charged). The confirmation screen shows the button;
     // older pages ignore the field.
+    // A package session used when booked never carries a fee (the session
+    // is the penalty), so there is nothing a card would be needed for.
     let cardSetupUrl = null;
-    if (!depositCheckoutUrl) {
+    if (!depositCheckoutUrl && !(pkgRow && packageUseMode !== 'completion')) {
       const setup = await cardOnFileCheckout({
         workspaceId, clientId, service: svc, mode: 'setup',
         successUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=saved`,
@@ -806,10 +880,21 @@ async function createBooking(req, res) {
         locationType,
         depositRequired,
         calendar,
+        clientPackageId: pkgRow ? clientPackageId : null,
       },
       depositCheckoutUrl,
       cardSetupUrl,
       policyAccepted: policyCheck.required ? policyStatus === 'accepted' : null,
+      // Package bookings: the live count after this booking.
+      ...(pkgRow ? {
+        package: {
+          id: clientPackageId,
+          name: pkgRow.name,
+          creditsRemaining: pkgConsumed.creditsRemaining,
+          creditsTotal: Number(pkgRow.credits_total),
+          state: pkgConsumed.creditsRemaining > 0 ? 'active' : 'used_up',
+        },
+      } : {}),
     });
   } catch (err) {
     return serverError(res, err);

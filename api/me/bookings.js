@@ -27,8 +27,8 @@ export default async function handler(req, res) {
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               b.video_room_url, b.location_address, b.tip_amount,
               b.completion_log, b.booking_total, b.deposit_paid,
-              b.gift_card_credit_cents, b.recurrence_rule, b.client_package_id,
-              b.deposit_refunded_amount, cps.refund_deposit_outside_window,
+              b.gift_card_credit_cents, b.recurrence_rule, b.client_package_id, b.package_use_mode,
+              b.deposit_refunded_amount, cps.refund_deposit_outside_window, b.deposit_refund_request_status,
               b.created_at, b.updated_at,
               s.name AS service_name,
               s.location_type, s.location_label,
@@ -38,13 +38,15 @@ export default async function handler(req, res) {
               cs.slug AS biz_slug, cs.timezone AS biz_timezone, cs.timezone, cs.biz_name,
               ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount,
               cs.address_label AS biz_address,
-              (c.stripe_customer_id IS NOT NULL AND c.payment_method_id IS NOT NULL) AS card_on_file
+              (c.stripe_customer_id IS NOT NULL AND c.payment_method_id IS NOT NULL) AS card_on_file,
+              pk.name AS package_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
        LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
        LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
        LEFT JOIN cancellation_policy_settings cps ON cps.workspace_id = b.workspace_id
+       LEFT JOIN client_packages pk ON pk.id = b.client_package_id AND pk.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,
@@ -98,6 +100,9 @@ export default async function handler(req, res) {
         // Cancellation policy (api/_lib/bookingFees.js): whether a paid
         // deposit comes back when cancelling before the window.
         depositRefundable: r.refund_deposit_outside_window !== false,
+        // 'pending' while the business reviews a deposit refund, then
+        // 'approved' (refunded) or 'kept'. Null when there was none.
+        depositRefundStatus: r.deposit_refund_request_status || null,
         videoRoomUrl: r.video_room_url || null,
         locationAddress: r.location_address || null,
         tipAmount: Number(r.tip_amount || 0),
@@ -128,6 +133,8 @@ export default async function handler(req, res) {
         cardOnFile: !!r.card_on_file,
         // Paid with a package session (cancelling gives the session back).
         fromPackage: !!r.client_package_id,
+        packageName: r.client_package_id ? (r.package_name || null) : null,
+        packageUseMode: r.client_package_id ? (r.package_use_mode || 'booking') : null,
       };
       if (r.cancelled_at) cancelled.push(item);
       else if (dateISO >= today) upcoming.push(item);

@@ -200,14 +200,15 @@ export async function materializeOne(scheduleId) {
     INSERT INTO invoices (
       workspace_id, number, client_id, client_name, client_email,
       issue_date, due_date, items, tax_rate, discount, notes, currency,
-      status, activity
+      status, activity, recurring_invoice_id
     ) VALUES (
       ${s.workspace_id}, ${number}, ${s.client_id}, ${s.client_name}, ${s.client_email},
       ${issueDate}, ${dueDate}, ${JSON.stringify(s.items || [])}::jsonb,
       ${s.tax_rate}, ${s.discount}, ${s.notes},
       COALESCE(${s.currency ?? null}, (SELECT currency FROM finance_settings WHERE workspace_id = ${s.workspace_id}), 'USD'),
       'draft',
-      ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Auto-created from recurring: ${s.name}` }])}::jsonb
+      ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Auto-created from recurring: ${s.name}` }])}::jsonb,
+      ${s.id}
     )
     RETURNING *
   `;

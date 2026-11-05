@@ -17,13 +17,15 @@ import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './c
 import { invalidateOwnerWorkspace } from './clientPortal.js';
 import { validateAvailability, availabilityFromPreset, validateBookingRules, validateBusinessBasics, AVAILABILITY_PRESETS } from './settingsValidation.js';
 import { sendEmail, emailShell } from './email.js';
-import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction } from './ivyWebsiteTools.js';
+import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction, refuseWebsiteAction } from './ivyWebsiteTools.js';
+import { OWNER_TOOLS, OWNER_HANDLERS, OWNER_SENSITIVE, OWNER_READ_ONLY, describeOwnerAction, refuseOwnerAction } from './ivyOwnerTools.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
 import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
 import { fireClientCreatedWorkflows } from './workflows.js';
 import { findClientForBulk, findServiceForBulk } from './bookingImport.js';
 import { prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS } from './clientImport.js';
+import { IVY_DETAIL_PROPS, ivyDetailsToBody, clientDetailColumns, writeClientColumns } from './clientDetails.js';
 import { blockState, BLOCKED_MESSAGE } from './moderation.js';
 import { validEmail } from './auth.js';
 import {
@@ -36,6 +38,7 @@ import crypto from 'node:crypto';
 
 export const IVY_TOOLS = [
   ...WEBSITE_TOOLS,
+  ...OWNER_TOOLS,
   {
     name: 'list_quiet_clients',
     description: "Lists clients who haven't been messaged or seen in a while. Use when the user asks who they should follow up with, who's gone quiet, or to draft a check-in.",
@@ -189,6 +192,7 @@ export const IVY_TOOLS = [
         email: { type: 'string' },
         phone: { type: 'string', description: 'Optional. E.164 format if provided.' },
         stage: { type: 'string', description: "'lead' (default) or 'active'." },
+        ...IVY_DETAIL_PROPS,
       },
       required: ['name'],
     },
@@ -257,7 +261,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'search_invoices',
-    description: "Search invoices by number or client name. Use to locate a specific invoice before acting on it.",
+    description: "Search invoices by number or client name. Use to locate a specific invoice before acting on it. Each result has its money (total, paid, refunded, net, owed), a plain status_line to quote, archived, and allowed: which of delete / void / refund / archive / unarchive the owner can do now and, when not, why. Always check allowed before offering an action.",
     input_schema: {
       type: 'object',
       properties: { query: { type: 'string' } },
@@ -341,8 +345,9 @@ export const IVY_TOOLS = [
               name:      { type: 'string' },
               email:     { type: 'string', description: 'Only if shown.' },
               phone:     { type: 'string', description: 'Only if shown, as written.' },
-              notes:     { type: 'string', description: 'Anything else written next to them (birthday, preferences, last visit).' },
+              notes:     { type: 'string', description: 'Anything else written next to them (preferences, last visit).' },
               uncertain: { type: 'string', description: 'Why this row needs a second look, if it does.' },
+              ...IVY_DETAIL_PROPS,
             },
             required: ['name'],
           },
@@ -491,6 +496,7 @@ export const IVY_TOOLS = [
         tags:           { type: 'array', items: { type: 'string' } },
         notes:          { type: 'string' },
         lifetime_value: { type: 'number' },
+        ...IVY_DETAIL_PROPS,
       },
       required: ['client_id'],
     },
@@ -518,13 +524,35 @@ export const IVY_TOOLS = [
   },
   {
     name: 'void_invoice',
-    description: "Void an invoice. Confirm WITH THE OWNER first - voiding is reversible by re-marking as draft, but the client may have already seen it. Reserve for genuine cancellations.",
+    description: "APPROVAL-GATED. Void an UNPAID invoice (draft, sent or overdue, nothing paid on it). It stays on record marked Void, the client's link says it was voided and can't take a payment, reminders stop, and nothing is owed. Set notify_client to also email the client that it was voided. Refused for paid invoices (refund instead), refunded ones (nothing owed; archive instead) and invoices with a part payment (refund that payment first). Voiding one invoice from a recurring series does not stop the series.",
     input_schema: {
       type: 'object',
       properties: {
         invoice_id: { type: 'string' },
+        notify_client: { type: 'boolean', description: 'Also email the client that the invoice was voided. Default false.' },
       },
       required: ['invoice_id'],
+    },
+  },
+  {
+    name: 'delete_invoice',
+    description: "APPROVAL-GATED. Permanently delete a DRAFT invoice that was never sent and has no payment. Anything the client was sent stays on record: void it instead. Paid or refunded invoices can never be deleted (money moved); archive them to hide them.",
+    input_schema: {
+      type: 'object',
+      properties: { invoice_id: { type: 'string' } },
+      required: ['invoice_id'],
+    },
+  },
+  {
+    name: 'archive_invoices',
+    description: "APPROVAL-GATED. Archive (hide) paid, refunded or void invoices from the main Finance list, or bring them back with unarchive: true. Archiving deletes nothing and never changes revenue, refunds or tax exports; the owner sees them under the Archived filter. Use this when the owner wants to clean up or 'delete' a paid or refunded invoice.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        invoice_ids: { type: 'array', items: { type: 'string' }, description: 'Up to 200 invoice ids.' },
+        unarchive: { type: 'boolean', description: 'true to bring archived invoices back into the main list.' },
+      },
+      required: ['invoice_ids'],
     },
   },
   {
@@ -754,7 +782,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'refund_invoice',
-    description: 'APPROVAL-GATED. Refund a paid invoice (real money out - card refund via the connected processor, or a recorded manual refund). The server holds the call for the owner to approve with one tap in the chat; it never runs directly.',
+    description: 'APPROVAL-GATED. Refund a paid invoice, in full or part (real money out - card refund via the connected processor, or a recorded manual refund for cash, check, Zelle and so on). Also refunds a part payment on an invoice that is still open, so it can then be voided. After a full refund the invoice shows Refunded, net $0, nothing owed; offer to archive it if the owner wants it out of the list. The server holds the call for the owner to approve with one tap in the chat; it never runs directly.',
     input_schema: {
       type: 'object',
       properties: {
@@ -869,6 +897,7 @@ export const IVY_TOOLS = [
 // Claude can decide whether to retry or explain.
 export const HANDLERS = {
   ...WEBSITE_HANDLERS,
+  ...OWNER_HANDLERS,
   // Reads - existing
   list_quiet_clients,
   list_overdue_invoices,
@@ -915,6 +944,8 @@ export const HANDLERS = {
   complete_task,
   cancel_booking,
   void_invoice,
+  delete_invoice,
+  archive_invoices,
   toggle_workflow,
   // Writes - expanded creates
   create_quote,
@@ -949,8 +980,12 @@ export const HANDLERS = {
 // ignored, so instructions hidden in client data, uploaded files or earlier
 // tool results cannot self-approve a send / cancel / void.
 export const SENSITIVE_TOOLS = new Set([
-  // Website: a template build replaces the draft; publishing goes public.
+  // Website: every write to the site (draft edits, pages, look, publish,
+  // discard, restore) waits for the owner's Approve.
   ...WEBSITE_SENSITIVE,
+  // Services, reviews, blocked time, appointment status, tasks, automations,
+  // coupon codes (api/_lib/ivyOwnerTools.js): every write is approved.
+  ...OWNER_SENSITIVE,
   // Many appointments (and possibly new clients) at once, read from a photo.
   'add_bookings_from_list',
   // Many clients at once, read from a file, a screenshot or a photo.
@@ -959,6 +994,9 @@ export const SENSITIVE_TOOLS = new Set([
   'send_invoice',
   'cancel_booking',
   'void_invoice',
+  // Invoice clean-up: removing a draft for good, hiding settled invoices.
+  'delete_invoice',
+  'archive_invoices',
   'send_quote',
   'send_campaign',
   'reschedule_booking',
@@ -1103,8 +1141,10 @@ async function documentLabel(ctx, id) {
 // (names, numbers, amounts, how many clients a campaign will email). Scoped
 // to the workspace via ctx; never trusts caller-supplied workspace ids.
 async function describeSensitiveAction(name, a, ctx = {}) {
-  const web = describeWebsiteAction(name, a || {});
+  const web = await describeWebsiteAction(name, a || {}, ctx);
   if (web) return web;
+  const own = await describeOwnerAction(name, a || {}, ctx);
+  if (own) return own;
   switch (name) {
     case 'add_bookings_from_list':
       return describeBulkBookings(a, ctx);
@@ -1117,7 +1157,15 @@ async function describeSensitiveAction(name, a, ctx = {}) {
     case 'cancel_booking':
       return `Cancel ${await bookingLabel(ctx, a.booking_id)}${a.notify ? ' and notify the client' : ''}`;
     case 'void_invoice':
-      return `Void ${await invoiceLabel(ctx, a.invoice_id)}`;
+      return `Void ${await invoiceLabel(ctx, a.invoice_id)}. It stays on record marked Void, the client's link stops taking payment and nothing is owed${a.notify_client ? '. The client gets an email saying it was voided' : '. The client is not emailed'}`;
+    case 'delete_invoice':
+      return `Delete the draft ${await invoiceLabel(ctx, a.invoice_id)} for good`;
+    case 'archive_invoices': {
+      const ids = Array.isArray(a.invoice_ids) ? a.invoice_ids.slice(0, 200) : [];
+      const verb = a.unarchive ? 'Bring back' : 'Archive';
+      if (ids.length === 1) return `${verb} ${await invoiceLabel(ctx, ids[0])}${a.unarchive ? ' to the main Finance list' : ' (hidden from the main Finance list; revenue and records unchanged)'}`;
+      return `${verb} ${ids.length} invoices${a.unarchive ? ' to the main Finance list' : ' (hidden from the main Finance list; revenue and records unchanged)'}`;
+    }
     case 'send_quote':
       return `Email ${await quoteLabel(ctx, a.quote_id)}${a.client_id ? ` to ${await clientLabel(ctx, a.client_id)}` : ''}`;
     case 'reschedule_booking':
@@ -1314,6 +1362,10 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
 // shown to the owner as "Replace the weekly booking hours with ...", so the
 // approve path (opts.approved) does not re-check and they still run.
 async function refuseBeforeApproval(name, a, ctx) {
+  // Website and owner-parity tools dry-run their plan against the owner's
+  // current data: an unknown section, page, service, review... is refused.
+  const planned = (await refuseWebsiteAction(name, a, ctx)) || (await refuseOwnerAction(name, a, ctx));
+  if (planned) return planned;
   if (name === 'set_availability' && a.replace_all !== true) {
     if (await workspaceIsOnboarded(ctx?.workspaceId)) {
       return 'set_availability replaces the whole weekly schedule and was not used. For a change to particular days or times '
@@ -1395,13 +1447,14 @@ const READ_ONLY_TOOLS = new Set([
   'list_staff', 'list_tasks', 'search_invoices', 'search_bookings', 'get_dashboard_summary',
   'list_expenses', 'get_pl_summary', 'list_reviews', 'list_leads',
   'remember', 'forget', 'list_memories', 'explain_workflow_suggestion',
-  'get_website', 'get_availability',
+  'get_website', 'get_availability', ...OWNER_READ_ONLY,
 ]);
 const ACTION_KINDS = {
   add_bookings_from_list: 'booking',
   import_clients_from_list: 'other',
   create_invoice: 'invoice', send_invoice: 'invoice', create_recurring_invoice: 'invoice',
   mark_invoice_paid: 'invoice', void_invoice: 'invoice', refund_invoice: 'invoice',
+  delete_invoice: 'invoice', archive_invoices: 'invoice',
   create_quote: 'invoice', send_quote: 'invoice',
   send_message_to_client: 'message', send_campaign: 'message', send_review_request: 'message',
   create_campaign: 'message',
@@ -1448,7 +1501,9 @@ const DONE_TEXT = {
   create_suggested_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name)}`,
   create_document_from_template: (a, r) => `Drafted the document ${qt(r.document?.name)} (not sent)`,
   cancel_booking: (a, r) => `Cancelled ${r.booking?.client_name || 'the'} appointment on ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told the client' : ''}`,
-  void_invoice: (a, r) => `Voided invoice${numBit(r.invoice?.number)}`,
+  void_invoice: (a, r) => `Voided invoice${numBit(r.invoice?.number)}. It stays on record, its link no longer takes payment and nothing is owed${r.client_notified ? '. The client was emailed' : ''}`,
+  delete_invoice: (a, r) => `Deleted the draft invoice${numBit(r.number)}`,
+  archive_invoices: (a, r) => `${a.unarchive ? 'Brought back' : 'Archived'} ${Number(r.changed) || 0} invoice${Number(r.changed) === 1 ? '' : 's'}${a.unarchive ? '' : ' (hidden from the main list; revenue unchanged)'}${r.skipped?.length ? `. ${r.skipped.length} could not be changed: ${r.skipped[0].why}` : ''}`,
   toggle_workflow: (a, r) => `Turned ${r.workflow?.enabled ? 'on' : 'off'} the automation ${qt(r.workflow?.name)}`,
   create_quote: (a, r) => `Drafted estimate${numBit(r.quote?.number)} (not sent)`,
   create_product: (a, r) => `Created the product ${qt(r.product?.name || a.name)}`,
@@ -1465,7 +1520,12 @@ const DONE_TEXT = {
   send_review_request: (a, r) => `Asked ${r.sent_to} for a review`,
   send_campaign: (a, r) => `Sent the campaign to ${Number(r.sent) || 0} of ${Number(r.recipients) || 0} clients`,
   reschedule_booking: (a, r) => `Moved ${r.booking?.client_name || 'the'} appointment to ${fmtDay(r.booking?.date)} at ${fmtMinAsTime(r.booking?.start_min)}`,
-  refund_invoice: () => 'Refunded the invoice',
+  refund_invoice: (a, r) => {
+    const amt = Number(r.refund?.amount);
+    const money = Number.isFinite(amt) ? `$${amt.toFixed(2)}` : 'the payment';
+    const line = r.status_line ? ` ${r.status_line}` : (r.refund?.fullyRefunded ? ' Refunded in full. Nothing owed.' : '');
+    return `Refunded ${money} on invoice${numBit(r.invoice_number)}.${line}`;
+  },
   update_settings: (a, r) => (Number(r.updated) ? `Updated your settings (${(r.changed_fields || []).join(', ').replace(/_/g, ' ')})` : 'No settings needed changing'),
   set_availability: (a, r) => `Replaced your weekly hours (${Number(r.days_open) || 0} day${Number(r.days_open) === 1 ? '' : 's'} open)`,
   adjust_availability: (a, r) => `Changed your weekly hours: ${(r.changed_days || []).map((d) => `${d.day} now ${d.after}`).join('; ') || 'no day needed changing'}. Every other day stayed the same`,
@@ -1474,11 +1534,9 @@ const DONE_TEXT = {
   complete_onboarding: () => 'Finished your setup and published your booking page',
   remember: (a, r) => `Saved to Ivy's memory: ${qt(r.remembered || a.fact, 120)}`,
   forget: () => "Removed a note from Ivy's memory",
-  create_website: () => 'Built your website draft',
-  edit_website_section: () => 'Edited your website draft',
-  edit_website_page: () => 'Edited your website pages (draft)',
-  update_website: () => 'Updated your website draft',
-  publish_website: (a, r) => `Published your website${r.url ? ` at ${r.url}` : ''}`,
+  // Website and owner-parity tools: each plan words its own past-tense line
+  // from the real change (ivyWebsiteTools.js / ivyOwnerTools.js).
+  ...Object.fromEntries([...WEBSITE_SENSITIVE, ...OWNER_SENSITIVE].map((n) => [n, (a, r) => r.done || `Did: ${n.replace(/_/g, ' ')}`])),
 };
 // What it would have done, for a failure line ("Didn't work: add client Jane").
 const ATTEMPT_TEXT = {
@@ -1488,9 +1546,16 @@ const ATTEMPT_TEXT = {
   complete_task: 'Mark the task done', create_service: 'Create the service', create_workflow: 'Create the automation',
   create_suggested_workflow: 'Create the suggested automation', toggle_workflow: 'Switch the automation',
   mark_invoice_paid: 'Mark the invoice paid', send_invoice: 'Send the invoice', send_quote: 'Send the estimate',
+  void_invoice: 'Void the invoice', delete_invoice: 'Delete the draft invoice', refund_invoice: 'Refund the invoice',
+  archive_invoices: 'Archive the invoices',
   send_message_to_client: 'Send the message', cancel_booking: 'Cancel the appointment', reschedule_booking: 'Move the appointment',
   block_calendar_time: 'Block off the time', set_availability: 'Replace your weekly hours', adjust_availability: 'Change your weekly hours',
   update_settings: 'Update your settings', update_booking_rules: 'Update your booking rules', remember: "Save to Ivy's memory",
+  create_website: 'Build the website', edit_website_section: 'Change the website section', edit_website_page: 'Change the website page',
+  update_website: 'Change the website settings', publish_website: 'Publish the website', restore_website: 'Restore the website',
+  manage_service: 'Change the service', reply_to_review: 'Reply to the review', unblock_calendar_time: 'Unblock the time',
+  update_booking_status: "Update the appointment's status", manage_task: 'Change the task', delete_workflow: 'Delete the automation',
+  create_coupon: 'Create the coupon code',
 };
 function attemptText(name, a) {
   const who = a?.name || a?.title || a?.subject || '';
@@ -1607,7 +1672,10 @@ async function list_overdue_invoices({ workspaceId, args }) {
   const tz = await workspaceTimeZone(workspaceId);
   const { rows } = await sql.query(
     `SELECT id, number, status, client_id, client_name, client_email,
-            issue_date, due_date, total
+            issue_date, due_date, total,
+            GREATEST(total
+              - GREATEST(gift_card_credit_cents - gift_card_credit_restored_cents, 0) / 100.0
+              - GREATEST(COALESCE(paid_amount, 0) - COALESCE(refunded_amount, 0), 0), 0) AS owed
        FROM invoices
        WHERE workspace_id = $1
          AND status IN ('sent', 'overdue')
@@ -1616,7 +1684,7 @@ async function list_overdue_invoices({ workspaceId, args }) {
        LIMIT $2`,
     [workspaceId, limit, tz],
   );
-  const total = rows.reduce((s, r) => s + Number(r.total || 0), 0);
+  const total = rows.reduce((s, r) => s + Number(r.owed ?? r.total ?? 0), 0);
   return {
     count: rows.length,
     total_owed: Math.round(total * 100) / 100,
@@ -1625,6 +1693,7 @@ async function list_overdue_invoices({ workspaceId, args }) {
       client_id: r.client_id, client_name: r.client_name, client_email: r.client_email,
       issue_date: r.issue_date, due_date: r.due_date,
       total: Math.round(Number(r.total || 0) * 100) / 100,
+      owed: Math.round(Number(r.owed ?? r.total ?? 0) * 100) / 100,
     })),
   };
 }
@@ -1740,14 +1809,21 @@ async function mark_invoice_paid({ workspaceId, args }) {
     ? String(args.method) : 'other';
   if (!id) throw new Error('invoice_id is required');
 
+  // Only an unpaid invoice can be marked paid: never a void one (restore it
+  // first) or a refunded one (that would count refunded money as income).
+  // paid_amount and the activity line match the owner's Mark paid button.
   const r = await sql`
     UPDATE invoices SET
       status = 'paid', paid_at = NOW(), paid_method = ${method},
+      paid_amount = GREATEST(total - gift_card_credit_cents / 100.0, 0),
+      activity = activity || jsonb_build_array(jsonb_build_object(
+        'ts', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+        'kind', 'paid', 'text', ${`Marked paid by ${method} (via Ivy)`}::text)),
       view_token_hash = NULL, updated_at = NOW()
-    WHERE id = ${id} AND workspace_id = ${workspaceId} AND status <> 'paid'
+    WHERE id = ${id} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
     RETURNING id, number, status
   `;
-  if (r.rows.length === 0) throw new Error('Invoice not found, not in this workspace, or already paid');
+  if (r.rows.length === 0) throw new Error('Invoice not found, or it is not unpaid (already paid, refunded or void)');
   return { ok: true, invoice: r.rows[0], method };
 }
 
@@ -1854,13 +1930,15 @@ async function add_client({ workspaceId, args }) {
   const email = args.email ? String(args.email).trim().toLowerCase() : null;
   const phone = args.phone ? String(args.phone).trim() : null;
   const stage = args.stage === 'active' ? 'active' : 'lead';
+  const details = clientDetailColumns(ivyDetailsToBody(args));
+  if (details.errors.length) throw new Error(details.errors[0]);
 
   const ins = await sql`
     INSERT INTO clients (workspace_id, name, email, phone, stage, source)
     VALUES (${workspaceId}, ${name}, ${email}, ${phone}, ${stage}, 'Ivy')
     RETURNING *
   `;
-  const row = ins.rows[0];
+  const row = (await writeClientColumns(ins.rows[0].id, workspaceId, details.cols)) || ins.rows[0];
   // Same automations a manual add fires (client_created; lead_created
   // for leads). Awaited so the run exists by the time Ivy reports back.
   // The client is saved at this point; an automation that fails to start is
@@ -1992,13 +2070,28 @@ async function search_invoices({ workspaceId, args }) {
   if (!q) return { invoices: [] };
   const like = `%${q}%`;
   const { rows } = await sql`
-    SELECT id, number, status, client_name, client_id, issue_date, due_date, items
+    SELECT *
       FROM invoices
      WHERE workspace_id = ${workspaceId}
        AND (LOWER(number) LIKE ${like} OR LOWER(COALESCE(client_name,'')) LIKE ${like})
      ORDER BY created_at DESC LIMIT 25
   `;
-  return { invoices: rows };
+  const { invoiceMoney, invoiceActions, invoiceStatusLine } = await import('../../src/lib/invoiceRules.js');
+  const tz = await workspaceTimeZone(workspaceId);
+  return {
+    invoices: rows.map((r) => {
+      const acts = invoiceActions(r);
+      const allowed = {};
+      for (const k of ['delete', 'void', 'refund', 'archive', 'unarchive']) allowed[k] = acts[k].ok ? true : acts[k].why;
+      return {
+        id: r.id, number: r.number, status: r.status, client_name: r.client_name, client_id: r.client_id,
+        issue_date: r.issue_date, due_date: r.due_date, items: r.items,
+        money: invoiceMoney(r), status_line: invoiceStatusLine(r, { timeZone: tz }),
+        archived: !!r.archived_at, from_recurring: !!r.recurring_invoice_id,
+        allowed,
+      };
+    }),
+  };
 }
 
 async function search_bookings({ workspaceId, args }) {
@@ -2026,7 +2119,7 @@ async function get_dashboard_summary({ workspaceId }) {
   const [revenue, clients, bookings, invoices, ltv] = await Promise.all([
     // Revenue this month (sum of paid invoice totals). `total` is the
     // trigger-maintained canonical computeTotals value (clamped + taxed).
-    sql`SELECT COALESCE(SUM(total), 0)::numeric AS total
+    sql`SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS total
         FROM invoices
         WHERE workspace_id = ${workspaceId}
           AND status = 'paid'
@@ -2046,7 +2139,10 @@ async function get_dashboard_summary({ workspaceId }) {
           -- total is trigger-maintained via the canonical computeTotals
           -- math (discount clamped at 0, tax included) - never re-derive
           -- it here with different rounding/clamping.
-          COALESCE(SUM(total) FILTER (WHERE status IN ('sent','overdue')), 0)::numeric AS open_value
+          COALESCE(SUM(GREATEST(total
+            - GREATEST(gift_card_credit_cents - gift_card_credit_restored_cents, 0) / 100.0
+            - GREATEST(COALESCE(paid_amount, 0) - COALESCE(refunded_amount, 0), 0), 0))
+            FILTER (WHERE status IN ('sent','overdue')), 0)::numeric AS open_value
         FROM invoices WHERE workspace_id = ${workspaceId}`,
     sql`SELECT COALESCE(AVG(lifetime_value), 0)::numeric AS avg_ltv
         FROM clients WHERE workspace_id = ${workspaceId} AND lifetime_value > 0`,
@@ -2091,8 +2187,8 @@ async function get_pl_summary({ workspaceId }) {
   // Ivy already quotes). Expenses = expenses.amount. Profit = revenue - expenses.
   const [rev, exp] = await Promise.all([
     sql`SELECT
-          COALESCE(SUM(total) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
-          COALESCE(SUM(total) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
+          COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
+          COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
                                         AND paid_at <  date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS last_month
         FROM invoices
         WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL`,
@@ -2316,12 +2412,13 @@ function cleanClientImportArgs(args) {
       name, email, notes,
       phone: c?.phone ? String(c.phone).trim().slice(0, 40) : null,
       uncertain: c?.uncertain ? String(c.uncertain).replace(/\s+/g, ' ').trim().slice(0, 120) : null,
+      details: ivyDetailsToBody(c || {}),
     };
   });
 }
 
 function clientImportRows(list) {
-  return list.map((c) => ({ name: c.name, email: c.email, phone: c.phone, notes: c.notes, stage: 'active' }));
+  return list.map((c) => ({ ...c.details, name: c.name, email: c.email, phone: c.phone, notes: c.notes, stage: 'active' }));
 }
 
 function moreBit(n) {
@@ -2635,6 +2732,9 @@ async function update_client({ workspaceId, args }) {
     if (!Number.isFinite(n) || n < 0) throw new Error('lifetime_value must be a non-negative number');
     push('lifetime_value', n);
   }
+  const details = clientDetailColumns(ivyDetailsToBody(args));
+  if (details.errors.length) throw new Error(details.errors[0]);
+  for (const [col, val] of Object.entries(details.cols)) push(col, val);
   if (sets.length === 0) return { ok: true, no_changes: true };
   sets.push('updated_at = NOW()');
   values.push(args.client_id, workspaceId);
@@ -2685,16 +2785,35 @@ async function cancel_booking({ workspaceId, args }) {
   return { booking: rows[0], cancelled: true, client_notified: notified, ...(warnings.length ? { warnings } : {}) };
 }
 
+// Invoice clean-up runs the same cores as the owner's buttons
+// (api/_lib/invoiceActions.js): same rules, same gift card and stock
+// handling, same refusals in plain words.
 async function void_invoice({ workspaceId, args }) {
   if (!args?.invoice_id) throw new Error('invoice_id is required');
-  const { rows } = await sql`
-    UPDATE invoices SET status = 'voided', updated_at = NOW()
-     WHERE id = ${args.invoice_id} AND workspace_id = ${workspaceId}
-       AND status NOT IN ('paid','voided')
-     RETURNING id, number, status
-  `;
-  if (rows.length === 0) throw new Error('Invoice not found, already voided, or already paid');
-  return { invoice: rows[0] };
+  const { voidInvoiceCore } = await import('./invoiceActions.js');
+  const out = await voidInvoiceCore({ workspaceId, id: String(args.invoice_id), notifyClient: args.notify_client === true });
+  return {
+    invoice: { id: out.invoice.id, number: out.invoice.number, status: out.invoice.status },
+    status_line: out.invoice.statusLine, client_notified: out.clientNotified,
+  };
+}
+
+async function delete_invoice({ workspaceId, args }) {
+  if (!args?.invoice_id) throw new Error('invoice_id is required');
+  const { deleteInvoiceCore } = await import('./invoiceActions.js');
+  return deleteInvoiceCore({ workspaceId, id: String(args.invoice_id) });
+}
+
+async function archive_invoices({ workspaceId, args }) {
+  const ids = Array.isArray(args?.invoice_ids) ? args.invoice_ids : (args?.invoice_id ? [args.invoice_id] : []);
+  const { setInvoicesArchived } = await import('./invoiceActions.js');
+  const out = await setInvoicesArchived({ workspaceId, ids, archived: !args?.unarchive });
+  if (out.changed === 0 && out.skipped.length) throw new Error(out.skipped[0].why);
+  return {
+    changed: out.changed,
+    invoices: out.invoices.map((i) => ({ id: i.id, number: i.number, status: i.status })),
+    skipped: out.skipped,
+  };
 }
 
 async function toggle_workflow({ workspaceId, args }) {
@@ -3001,7 +3120,10 @@ async function reschedule_booking({ workspaceId, args }) {
   const b = await sql`SELECT id FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL`;
   if (b.rows.length === 0) throw new Error('Booking not found or cancelled');
   const { rows } = await sql`
-    UPDATE bookings SET date = ${dateStr}, start_min = ${startMin}, end_min = ${endMin}, updated_at = NOW()
+    UPDATE bookings SET date = ${dateStr}, start_min = ${startMin}, end_min = ${endMin}, updated_at = NOW(),
+           -- New time, fresh reminder beats (same reset as the calendar's reschedule).
+           reminders_sent = '{}'::jsonb, sms_sent = '{}'::jsonb,
+           push_sent = '{}'::jsonb, owner_reminders_sent = '{}'::jsonb
      WHERE id = ${id} AND workspace_id = ${workspaceId}
      RETURNING id, date, start_min, end_min, client_name
   `;
@@ -3194,7 +3316,11 @@ async function refund_invoice({ workspaceId, args }) {
   const result = await refundInvoice({
     workspaceId, id, amount: args.amount, reason: args.reason,
   });
-  return { ok: true, invoice_id: id, refund: result.refund };
+  return {
+    ok: true, invoice_id: id, invoice_number: result.invoice?.number,
+    refund: result.refund, status_line: result.invoice?.statusLine,
+    money: result.invoice?.money,
+  };
 }
 
 // Settings update covering business info + booking config + email
@@ -3339,7 +3465,7 @@ async function get_availability({ workspaceId, args }) {
   const avail = await currentAvailability(workspaceId);
   const tz = await workspaceTimeZone(workspaceId).catch(() => null);
   const blocks = await sql`
-    SELECT date, start_min, end_min, all_day, label FROM calendar_blocks
+    SELECT id, date, start_min, end_min, all_day, label FROM calendar_blocks
      WHERE workspace_id = ${workspaceId}
        AND date >= CURRENT_DATE - 1 AND date <= CURRENT_DATE + ${days}::int
        AND COALESCE(blocks_bookings, TRUE) = TRUE
@@ -3349,6 +3475,7 @@ async function get_availability({ workspaceId, args }) {
     time_zone: tz || null,
     weekly_hours: scheduleByDay(avail),
     blocked_dates: blocks.rows.map((b) => ({
+      id: b.id,
       date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10),
       time: b.all_day ? 'all day' : `${fmtMinAsTime(b.start_min)} to ${fmtMinAsTime(b.end_min)}`,
       label: b.label || null,

@@ -869,7 +869,7 @@ function DigestPrefs() {
 // the next page load.
 const PUSH_LABELS = {
   messages:  { label: 'Messages',  hint: 'New chat messages from clients (or businesses, if you\'re a client).' },
-  bookings:  { label: 'Booking alerts',  hint: 'Whether you GET notified about new bookings + session reminders. (How far ahead reminders fire is set per service in Calendar → Services.)' },
+  bookings:  { label: 'Booking alerts',  hint: 'New bookings and reminders about your upcoming appointments. Choose when reminders come in Calendar > Reminders.' },
   documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
   support:   { label: 'Support',   hint: 'When Ivy Support replies to your conversation.' },
@@ -877,7 +877,7 @@ const PUSH_LABELS = {
   client_optouts: { label: 'Client email opt-outs', hint: 'When a client unsubscribes from your emails.' },
 };
 const EMAIL_LABELS = {
-  bookings:  { label: 'Booking alerts',  hint: 'Whether confirmation / reminder / cancellation emails are sent. (Reminder timing is per service in Calendar → Services.)' },
+  bookings:  { label: 'Booking alerts',  hint: 'Booking, cancellation and reminder emails about your appointments. Choose when reminders come in Calendar > Reminders.' },
   invoices:  { label: 'Invoices',  hint: 'Invoices and quotes you receive, plus paid-receipt emails.' },
   documents: { label: 'Documents', hint: 'Signature requests + reminders when a document is waiting.' },
   messages:  { label: 'Messages',  hint: 'When the other side of a chat thread replies.' },

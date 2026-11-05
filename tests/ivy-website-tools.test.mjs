@@ -23,7 +23,7 @@ async function run() {
   console.log('\n[1] tools are registered and gated');
   const names = new Set(IVY_TOOLS.map((t) => t.name));
   assert(['get_website', 'create_website', 'edit_website_section', 'edit_website_page', 'update_website', 'publish_website'].every((n) => names.has(n)), 'six website tools exposed to the model');
-  assert(SENSITIVE_TOOLS.has('create_website') && SENSITIVE_TOOLS.has('publish_website') && !SENSITIVE_TOOLS.has('edit_website_section'), 'build + publish need approval; draft edits do not');
+  assert(['create_website', 'edit_website_section', 'edit_website_page', 'update_website', 'publish_website', 'restore_website'].every((n) => SENSITIVE_TOOLS.has(n)) && !SENSITIVE_TOOLS.has('get_website'), 'every website write needs approval; reading does not');
 
   console.log('\n[2] get_website on a fresh workspace');
   let r = await executeIvyTool('get_website', {}, ctx);
@@ -42,23 +42,33 @@ async function run() {
   const heroId = home.sections.find((s) => s.type === 'hero').id;
   assert(!!heroId, 'home page has a hero with an id');
 
+  // A draft edit waits for Approve (nothing saved before), then runs.
+  const gated = async (name, args) => {
+    const before = JSON.stringify((await sql`SELECT pages FROM websites WHERE workspace_id = ${a.workspaceId}`).rows[0].pages);
+    const held = await executeIvyTool(name, args, ctx);
+    if (held.error) return held;
+    const after = JSON.stringify((await sql`SELECT pages FROM websites WHERE workspace_id = ${a.workspaceId}`).rows[0].pages);
+    assert(held.needs_confirmation === true && before === after, `${name} ${args.action || ''}: held for approval, draft unchanged`);
+    return runApprovedTool(name, args, ctx);
+  };
   console.log('\n[4] edit the draft: copy, add a section, hide one, add a page');
-  r = await executeIvyTool('edit_website_section', { page_slug: '', action: 'update', section_id: heroId, data: { headline: 'Portraits with soul.', sub: 'Austin, TX', bogus: 'ignored' } }, ctx);
-  const hero = r.sections.find((s) => s.id === heroId);
+  r = await gated('edit_website_section', { page_slug: '', action: 'update', section_id: heroId, data: { headline: 'Portraits with soul.', sub: 'Austin, TX', bogus: 'ignored' } });
+  const hero = r.pages.find((p) => p.slug === '').sections.find((s) => s.id === heroId);
   assert(hero.headline === 'Portraits with soul.' && hero.sub === 'Austin, TX', 'hero copy updated');
   const saved = (await sql`SELECT pages FROM websites WHERE workspace_id = ${a.workspaceId}`).rows[0].pages;
   const savedHero = saved.find((p) => p.slug === '').sections.find((s) => s.id === heroId);
   assert(!('bogus' in savedHero.data), 'unknown fields are dropped');
-  r = await executeIvyTool('edit_website_section', { page_slug: '', action: 'add', type: 'faq', position: 1, data: { headline: 'Questions?' } }, ctx);
-  assert(r.added.type === 'faq' && r.sections[1].type === 'faq', 'FAQ added at position 1');
-  const logos = r.sections.find((s) => s.type === 'logos');
-  r = await executeIvyTool('edit_website_section', { page_slug: '', action: 'hide', section_id: logos.id }, ctx);
-  assert(r.sections.find((s) => s.id === logos.id).visible === false, 'logos hidden');
-  r = await executeIvyTool('edit_website_page', { action: 'add', slug: 'pricing', title: 'Pricing', section_types: ['hero', 'pricing', 'footer'] }, ctx);
+  r = await gated('edit_website_section', { page_slug: '', action: 'add', type: 'faq', position: 1, data: { headline: 'Questions?' } });
+  const homeSecs = () => r.pages.find((p) => p.slug === '').sections;
+  assert(r.added.type === 'faq' && homeSecs()[1].type === 'faq', 'FAQ added at position 1');
+  const logos = homeSecs().find((s) => s.type === 'logos');
+  r = await gated('edit_website_section', { page_slug: '', action: 'hide', section_id: logos.id });
+  assert(homeSecs().find((s) => s.id === logos.id).visible === false, 'logos hidden');
+  r = await gated('edit_website_page', { action: 'add', slug: 'pricing', title: 'Pricing', section_types: ['hero', 'pricing', 'footer'] });
   assert(r.ok && r.page.sections.map((s) => s.type).join(',') === 'hero,pricing,footer', 'pricing page added with its sections');
-  r = await executeIvyTool('edit_website_page', { action: 'remove', slug: '' }, ctx);
-  assert(/home page cannot/i.test(r.error || ''), 'home page cannot be removed');
-  r = await executeIvyTool('update_website', { seo_title: 'Market Theory · Portrait photography' }, ctx);
+  r = await gated('edit_website_page', { action: 'remove', slug: '' });
+  assert(/home page cannot/i.test(r.error || ''), 'home page cannot be removed (refused before any card)');
+  r = await gated('update_website', { seo_title: 'Market Theory · Portrait photography' });
   assert(r.ok && r.website.pages.length === 4, 'site-level update keeps the 4 pages');
 
   console.log('\n[5] publish is gated, then goes live');

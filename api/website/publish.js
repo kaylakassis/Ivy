@@ -6,6 +6,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { saveWebsiteVersion } from '../_lib/websiteVersions.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -20,38 +21,10 @@ export default async function handler(req, res) {
     if (!rows[0].handle) return badRequest(res, 'Set a handle before publishing');
     const site = rows[0];
 
-    // Snapshot the current live state into website_versions BEFORE
-    // flipping the publish flag. Owners get a roll-back point for
-    // every publish, capped at the last 50 entries to keep the table
-    // bounded (we prune older ones below).
-    const snapshot = {
-      template:        site.template,
-      sections:        site.sections,
-      pages:           site.pages,
-      custom_css:      site.custom_css,
-      font_pair:       site.font_pair,
-      seo_title:       site.seo_title,
-      seo_description: site.seo_description,
-      seo_og_image:    site.seo_og_image,
-      favicon_url:     site.favicon_url,
-      redirects:       site.redirects,
-      exit_intent_popup: site.exit_intent_popup,
-      sticky_cta:      site.sticky_cta,
-    };
-    await sql`
-      INSERT INTO website_versions (website_id, snapshot, created_by)
-      VALUES (${site.id}, ${JSON.stringify(snapshot)}::jsonb, ${user.id})
-    `;
-    // Prune to the most recent 50 - cheap, infrequent, keeps storage flat.
-    await sql`
-      DELETE FROM website_versions
-      WHERE website_id = ${site.id}
-        AND id NOT IN (
-          SELECT id FROM website_versions
-          WHERE website_id = ${site.id}
-          ORDER BY created_at DESC LIMIT 50
-        )
-    `;
+    // Snapshot the current state into website_versions BEFORE flipping
+    // the publish flag, so every publish is a roll-back point (the newest
+    // 50 are kept). Shared with Ivy's publish (api/_lib/websiteVersions.js).
+    await saveWebsiteVersion(site, user.id);
 
     const updated = await sql`
       UPDATE websites SET

@@ -2,6 +2,9 @@
 //   PATCH  → edit fields (notes, recurrence rule, etc.), cancel a single
 //            occurrence by passing { cancelOccurrence: 'YYYY-MM-DD' }, OR
 //            reschedule by passing { rescheduleTo: { date, startMin, endMin } }
+//            or use a package session for a booking made without one:
+//            { applyClientPackageId } (exactly once: only while the
+//            booking has no package yet)
 //   DELETE → soft-cancel the entire booking (and its series if recurring)
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
@@ -9,7 +12,10 @@ import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
-import { restoreCredit } from '../../_lib/packages.js';
+import {
+  consumeCredit, restoreCredit, sendPackageRefusal, refusalForFailedConsume, packageUseModeFor,
+} from '../../_lib/packages.js';
+import { notifyPackageExhausted } from '../../_lib/packageNotify.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
@@ -144,6 +150,8 @@ export default async function handler(req, res) {
             end_min         = ${newEnd},
             reminders_sent  = '{}'::jsonb,
             sms_sent        = '{}'::jsonb,
+            push_sent       = '{}'::jsonb,
+            owner_reminders_sent = '{}'::jsonb,
             updated_at      = NOW()
           WHERE id = ${id} AND workspace_id = ${workspaceId}
           RETURNING *
@@ -194,6 +202,71 @@ export default async function handler(req, res) {
         return ok(res, { booking: serializeBooking(updated.rows[0], bopts) });
       }
 
+      // Use a package session for a booking that was made without one
+      // (the owner forgot to pick it, or is logging an attended visit).
+      // Exactly once: the decrement is the same atomic guarded UPDATE as
+      // at booking time, and the link is only written while the booking
+      // has no package. A lost race gives the session straight back.
+      if (body.applyClientPackageId) {
+        const cpId = String(body.applyClientPackageId);
+        if (!/^[0-9a-fA-F-]{36}$/.test(cpId)) return badRequest(res, 'Invalid package');
+        if (booking.cancelled_at) return badRequest(res, "Can't use a package on a cancelled booking");
+        if (!booking.client_id) return badRequest(res, 'This booking has no client record');
+        if (booking.recurrence_rule) {
+          return sendPackageRefusal(res, { code: 'package_recurring_unsupported', cp: null, audience: 'owner' });
+        }
+        if (booking.client_package_id) {
+          if (booking.client_package_id === cpId) return ok(res, { booking: serializeBooking(booking, bopts), alreadyApplied: true });
+          return badRequest(res, 'This booking already uses a package session');
+        }
+        // The package must be this client's, at this business.
+        const own = await sql`
+          SELECT id FROM client_packages
+           WHERE id = ${cpId} AND workspace_id = ${workspaceId} AND client_id = ${booking.client_id}
+        `;
+        if (own.rows.length === 0) {
+          return sendPackageRefusal(res, { code: 'package_not_found', cp: null, audience: 'owner' });
+        }
+        // Claim the booking first (only while it has no package), then
+        // spend the session. Two taps at once: one claims, the other sees
+        // it already applied. A failed spend un-claims.
+        const useMode = await packageUseModeFor(workspaceId);
+        const claimed = await sql`
+          UPDATE bookings SET client_package_id = ${cpId}, package_use_mode = ${useMode}
+           WHERE id = ${id} AND workspace_id = ${workspaceId}
+             AND client_package_id IS NULL AND cancelled_at IS NULL
+          RETURNING *
+        `;
+        if (claimed.rows.length === 0) {
+          const now = await sql`SELECT * FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId}`;
+          const cur = now.rows[0];
+          if (cur?.client_package_id === cpId) {
+            return ok(res, { booking: serializeBooking(cur, bopts), alreadyApplied: true });
+          }
+          return badRequest(res, cur?.cancelled_at ? "Can't use a package on a cancelled booking" : 'This booking already uses a package session');
+        }
+        const consumed = await consumeCredit({
+          workspaceId, clientPackageId: cpId, clientId: booking.client_id, serviceId: booking.service_id,
+        });
+        if (!consumed.ok) {
+          await sql`
+            UPDATE bookings SET client_package_id = NULL, package_use_mode = NULL
+             WHERE id = ${id} AND workspace_id = ${workspaceId} AND client_package_id = ${cpId}
+          `;
+          return refusalForFailedConsume(res, {
+            workspaceId, clientPackageId: cpId, clientId: booking.client_id,
+            serviceId: booking.service_id, audience: 'owner',
+          });
+        }
+        if (consumed.exhausted) {
+          notifyPackageExhausted({ workspaceId, clientPackageId: cpId, clientId: booking.client_id });
+        }
+        return ok(res, {
+          booking: serializeBooking(claimed.rows[0], bopts),
+          package: { id: cpId, creditsRemaining: consumed.creditsRemaining, state: consumed.creditsRemaining > 0 ? 'active' : 'used_up' },
+        });
+      }
+
       // Convenience: cancel a single occurrence in a recurring series.
       if (body.cancelOccurrence) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(body.cancelOccurrence)) {
@@ -225,6 +298,10 @@ export default async function handler(req, res) {
       if ('notes' in body)            push('notes', body.notes == null ? null : String(body.notes).slice(0, 4000));
       if ('recurrenceRule' in body) {
         if (!VALID_RECURRENCE.has(body.recurrenceRule)) return badRequest(res, 'Invalid recurrence rule');
+        // A booking paid with one package session stays a single visit.
+        if (body.recurrenceRule && found.rows[0].client_package_id) {
+          return sendPackageRefusal(res, { code: 'package_recurring_unsupported', cp: null, audience: 'owner' });
+        }
         push('recurrence_rule', body.recurrenceRule);
       }
       if ('recurrenceUntil' in body) {
@@ -279,21 +356,32 @@ export default async function handler(req, res) {
       `;
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
       const cancelled = found.rows[0];
-      // The business cancelled: never a fee. A paid deposit goes back to
-      // the client unless the owner asked to keep it ({ refundDeposit:
-      // false }). Helpers never move money. Only the request that won the
-      // UPDATE above gets here, so the refund runs once.
-      if (!req.helper) {
+      // The business cancelled: never a fee. A paid deposit is never
+      // refunded without the owner's say-so: { refundDeposit: true } is the
+      // owner ticking "Refund the deposit now" while cancelling, false keeps
+      // it, and no answer (older apps, helpers, who never move money) opens
+      // a one-tap refund request for the owner. Only the request that won
+      // the UPDATE above gets here, so this runs once.
+      {
         const delBody = await readBody(req).catch(() => ({}));
+        const choice = req.helper ? undefined
+          : delBody?.refundDeposit === true ? true
+            : delBody?.refundDeposit === false ? false : undefined;
         await settleOwnerCancellation({
-          workspaceId, bookingId: id, refund: delBody?.refundDeposit !== false,
+          workspaceId, bookingId: id, refund: choice, userId: user.id,
         }).catch((err) => console.error('[booking cancel] deposit settle failed:', err.message));
       }
       syncOnBookingDeleted({ workspaceId, googleEventId: cancelled.google_event_id });
       // Fire-and-forget cancellation email/push (owner-initiated).
       notifyBookingCancellation({ workspaceId, bookingId: id, source: 'owner' });
-      // Refund the package credit if this booking consumed one.
-      await restoreCredit({ workspaceId, clientPackageId: cancelled.client_package_id });
+      // Owner cancels give the package session back (the owner chose to
+      // cancel), unless the visit already counted: a no-show, or a visit
+      // marked complete. Same in both "use sessions when" modes.
+      const visitCounted = !!cancelled.no_show_at
+        || Object.keys(cancelled.completion_log || {}).length > 0;
+      if (!visitCounted) {
+        await restoreCredit({ workspaceId, clientPackageId: cancelled.client_package_id });
+      }
       // Put any gift-card credit back on the card (exactly-once inside).
       await restoreGiftCardCreditForBooking({ workspaceId, bookingId: id })
         .catch((err) => console.error('[booking cancel] gift card restore failed:', err.message));
