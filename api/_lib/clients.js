@@ -1,5 +1,6 @@
 // Shared serializer + helpers for the clients table.
 import { sql } from './db.js';
+import { clientOverrideFrom } from './reminderSettings.js';
 
 export function serializeClient(row) {
   if (!row) return null;
@@ -33,6 +34,12 @@ export function serializeClient(row) {
     // When the owner's "I've moved to Ivy" email went to this client
     // (POST /api/clients/announce-move), so the sheet can leave them out.
     moveAnnouncedAt: row.move_announced_at || null,
+    // Appointment reminders for this client: { mode: 'default' } (follow
+    // the service / business schedule), { mode: 'off' } or
+    // { mode: 'custom', minutes: [...] }. remindersOptedOut = the client
+    // turned reminders off in their own portal, which always wins.
+    reminderSettings: clientOverrideFrom(row.reminder_settings),
+    remindersOptedOut: (row.notification_prefs || {}).reminders === false,
   };
 }
 

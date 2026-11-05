@@ -10,6 +10,7 @@ import { api } from '../../lib/api.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
+import ClientReminders from './ClientReminders.jsx';
 
 export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
   // Slide out (140ms) before the parent unmounts us; every close path in
@@ -181,6 +182,9 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
 
           {/* Email opt-outs (read-only; only the client can resubscribe). */}
           <EmailOptOutRow clientId={client.id}/>
+
+          {/* Appointment reminders for this client (default / off / custom). */}
+          <ClientReminders client={client} onSave={safeUpdate}/>
 
           {/* KPIs - lifetime value editable, others read-only */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>

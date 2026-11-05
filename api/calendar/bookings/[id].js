@@ -143,6 +143,8 @@ export default async function handler(req, res) {
             end_min         = ${newEnd},
             reminders_sent  = '{}'::jsonb,
             sms_sent        = '{}'::jsonb,
+            push_sent       = '{}'::jsonb,
+            owner_reminders_sent = '{}'::jsonb,
             updated_at      = NOW()
           WHERE id = ${id} AND workspace_id = ${workspaceId}
           RETURNING *

@@ -262,7 +262,9 @@ export default async function handler(req, res) {
              start_min       = $4,
              end_min         = $5,
              reminders_sent  = '{}'::jsonb,
-             sms_sent        = '{}'::jsonb
+             sms_sent        = '{}'::jsonb,
+             push_sent       = '{}'::jsonb,
+             owner_reminders_sent = '{}'::jsonb
            WHERE id = $1 AND client_id = ANY($2)
            RETURNING *`,
           [id, myIds, newDate, newStart, newEnd],

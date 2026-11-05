@@ -13,6 +13,7 @@ import { fetchOwnedClient, serializeClient, serializeClientMinimal, helperSeesMi
 import { helperClientScope } from '../_lib/helpers.js';
 import { blobPathnameForWorkspace } from '../_lib/blobScope.js';
 import { normalizePhone } from '../_lib/sms.js';
+import { cleanClientOverride } from '../_lib/reminderSettings.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -102,6 +103,16 @@ export default async function handler(req, res) {
           if (owns.rows.length === 0) return badRequest(res, 'Unknown referring client');
         }
         push('referred_by_client_id', ref);
+      }
+      if ('reminderSettings' in body) {
+        // Per-client appointment reminders: { mode: 'default' | 'off' |
+        // 'custom', minutes? }. 'default' (or null) clears the override.
+        // The client's own portal opt-out is separate and is never
+        // changed from here.
+        const r = cleanClientOverride(body.reminderSettings);
+        if (r.error) return badRequest(res, r.error);
+        values.push(r.value ? JSON.stringify(r.value) : null);
+        sets.push(`reminder_settings = $${values.length}::jsonb`);
       }
       if ('lastSeenAt' in body) push('last_seen_at', body.lastSeenAt ? new Date(body.lastSeenAt).toISOString() : null);
       if ('address' in body) {
