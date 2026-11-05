@@ -17,7 +17,8 @@ import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './c
 import { invalidateOwnerWorkspace } from './clientPortal.js';
 import { validateAvailability, availabilityFromPreset, validateBookingRules, validateBusinessBasics, AVAILABILITY_PRESETS } from './settingsValidation.js';
 import { sendEmail, emailShell } from './email.js';
-import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction } from './ivyWebsiteTools.js';
+import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction, refuseWebsiteAction } from './ivyWebsiteTools.js';
+import { OWNER_TOOLS, OWNER_HANDLERS, OWNER_SENSITIVE, OWNER_READ_ONLY, describeOwnerAction, refuseOwnerAction } from './ivyOwnerTools.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
 import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
@@ -36,6 +37,7 @@ import crypto from 'node:crypto';
 
 export const IVY_TOOLS = [
   ...WEBSITE_TOOLS,
+  ...OWNER_TOOLS,
   {
     name: 'list_quiet_clients',
     description: "Lists clients who haven't been messaged or seen in a while. Use when the user asks who they should follow up with, who's gone quiet, or to draft a check-in.",
@@ -869,6 +871,7 @@ export const IVY_TOOLS = [
 // Claude can decide whether to retry or explain.
 export const HANDLERS = {
   ...WEBSITE_HANDLERS,
+  ...OWNER_HANDLERS,
   // Reads - existing
   list_quiet_clients,
   list_overdue_invoices,
@@ -949,8 +952,12 @@ export const HANDLERS = {
 // ignored, so instructions hidden in client data, uploaded files or earlier
 // tool results cannot self-approve a send / cancel / void.
 export const SENSITIVE_TOOLS = new Set([
-  // Website: a template build replaces the draft; publishing goes public.
+  // Website: every write to the site (draft edits, pages, look, publish,
+  // discard, restore) waits for the owner's Approve.
   ...WEBSITE_SENSITIVE,
+  // Services, reviews, blocked time, appointment status, tasks, automations,
+  // coupon codes (api/_lib/ivyOwnerTools.js): every write is approved.
+  ...OWNER_SENSITIVE,
   // Many appointments (and possibly new clients) at once, read from a photo.
   'add_bookings_from_list',
   // Many clients at once, read from a file, a screenshot or a photo.
@@ -1103,8 +1110,10 @@ async function documentLabel(ctx, id) {
 // (names, numbers, amounts, how many clients a campaign will email). Scoped
 // to the workspace via ctx; never trusts caller-supplied workspace ids.
 async function describeSensitiveAction(name, a, ctx = {}) {
-  const web = describeWebsiteAction(name, a || {});
+  const web = await describeWebsiteAction(name, a || {}, ctx);
   if (web) return web;
+  const own = await describeOwnerAction(name, a || {}, ctx);
+  if (own) return own;
   switch (name) {
     case 'add_bookings_from_list':
       return describeBulkBookings(a, ctx);
@@ -1314,6 +1323,10 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
 // shown to the owner as "Replace the weekly booking hours with ...", so the
 // approve path (opts.approved) does not re-check and they still run.
 async function refuseBeforeApproval(name, a, ctx) {
+  // Website and owner-parity tools dry-run their plan against the owner's
+  // current data: an unknown section, page, service, review... is refused.
+  const planned = (await refuseWebsiteAction(name, a, ctx)) || (await refuseOwnerAction(name, a, ctx));
+  if (planned) return planned;
   if (name === 'set_availability' && a.replace_all !== true) {
     if (await workspaceIsOnboarded(ctx?.workspaceId)) {
       return 'set_availability replaces the whole weekly schedule and was not used. For a change to particular days or times '
@@ -1395,7 +1408,7 @@ const READ_ONLY_TOOLS = new Set([
   'list_staff', 'list_tasks', 'search_invoices', 'search_bookings', 'get_dashboard_summary',
   'list_expenses', 'get_pl_summary', 'list_reviews', 'list_leads',
   'remember', 'forget', 'list_memories', 'explain_workflow_suggestion',
-  'get_website', 'get_availability',
+  'get_website', 'get_availability', ...OWNER_READ_ONLY,
 ]);
 const ACTION_KINDS = {
   add_bookings_from_list: 'booking',
@@ -1474,11 +1487,9 @@ const DONE_TEXT = {
   complete_onboarding: () => 'Finished your setup and published your booking page',
   remember: (a, r) => `Saved to Ivy's memory: ${qt(r.remembered || a.fact, 120)}`,
   forget: () => "Removed a note from Ivy's memory",
-  create_website: () => 'Built your website draft',
-  edit_website_section: () => 'Edited your website draft',
-  edit_website_page: () => 'Edited your website pages (draft)',
-  update_website: () => 'Updated your website draft',
-  publish_website: (a, r) => `Published your website${r.url ? ` at ${r.url}` : ''}`,
+  // Website and owner-parity tools: each plan words its own past-tense line
+  // from the real change (ivyWebsiteTools.js / ivyOwnerTools.js).
+  ...Object.fromEntries([...WEBSITE_SENSITIVE, ...OWNER_SENSITIVE].map((n) => [n, (a, r) => r.done || `Did: ${n.replace(/_/g, ' ')}`])),
 };
 // What it would have done, for a failure line ("Didn't work: add client Jane").
 const ATTEMPT_TEXT = {
@@ -1491,6 +1502,11 @@ const ATTEMPT_TEXT = {
   send_message_to_client: 'Send the message', cancel_booking: 'Cancel the appointment', reschedule_booking: 'Move the appointment',
   block_calendar_time: 'Block off the time', set_availability: 'Replace your weekly hours', adjust_availability: 'Change your weekly hours',
   update_settings: 'Update your settings', update_booking_rules: 'Update your booking rules', remember: "Save to Ivy's memory",
+  create_website: 'Build the website', edit_website_section: 'Change the website section', edit_website_page: 'Change the website page',
+  update_website: 'Change the website settings', publish_website: 'Publish the website', restore_website: 'Restore the website',
+  manage_service: 'Change the service', reply_to_review: 'Reply to the review', unblock_calendar_time: 'Unblock the time',
+  update_booking_status: "Update the appointment's status", manage_task: 'Change the task', delete_workflow: 'Delete the automation',
+  create_coupon: 'Create the coupon code',
 };
 function attemptText(name, a) {
   const who = a?.name || a?.title || a?.subject || '';
@@ -3339,7 +3355,7 @@ async function get_availability({ workspaceId, args }) {
   const avail = await currentAvailability(workspaceId);
   const tz = await workspaceTimeZone(workspaceId).catch(() => null);
   const blocks = await sql`
-    SELECT date, start_min, end_min, all_day, label FROM calendar_blocks
+    SELECT id, date, start_min, end_min, all_day, label FROM calendar_blocks
      WHERE workspace_id = ${workspaceId}
        AND date >= CURRENT_DATE - 1 AND date <= CURRENT_DATE + ${days}::int
        AND COALESCE(blocks_bookings, TRUE) = TRUE
@@ -3349,6 +3365,7 @@ async function get_availability({ workspaceId, args }) {
     time_zone: tz || null,
     weekly_hours: scheduleByDay(avail),
     blocked_dates: blocks.rows.map((b) => ({
+      id: b.id,
       date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10),
       time: b.all_day ? 'all day' : `${fmtMinAsTime(b.start_min)} to ${fmtMinAsTime(b.end_min)}`,
       label: b.label || null,

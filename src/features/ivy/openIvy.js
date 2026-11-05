@@ -22,3 +22,15 @@ export function openIvy({ prompt = '', photo = false, navigate } = {}) {
   if (navigate) navigate(to);
   else if (typeof window !== 'undefined') window.location.assign(to);
 }
+
+// Fired after the owner approves an Ivy action (a tap on the approval
+// card). Screens that show data Ivy may have just changed (the Website
+// editor) listen and reload from the server. detail: { tools: string[] }.
+export const IVY_ACTIONS_RAN_EVENT = 'ivy:actions-ran';
+
+export function announceIvyActionsRan(tools = []) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new CustomEvent(IVY_ACTIONS_RAN_EVENT, { detail: { tools: tools.filter(Boolean).map(String) } }));
+  } catch { /* old browser: the editor still reloads on focus */ }
+}

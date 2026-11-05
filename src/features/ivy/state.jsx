@@ -14,6 +14,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef } f
 import { api } from '../../lib/api.js';
 import { streamReply } from './stream.js';
 import { recoverTurn } from './recover.js';
+import { announceIvyActionsRan } from './openIvy.js';
 
 const EMPTY_CTX = {
   revenueThisMonth: 0, openInvoices: 0, activeClients: 0,
@@ -279,6 +280,8 @@ function useIvyState({ enabled = true } = {}) {
         appendServerMessage(r?.message || (r?.outcome
           ? { id: 'outcome-' + id, role: 'ivy', text: r.outcome, createdAt: new Date().toISOString() }
           : null));
+        // Let open screens (the Website editor) pick up what just changed.
+        if (method === 'approve') announceIvyActionsRan((r?.message?.actions || []).map((x) => x?.tool));
       } catch (e) {
         if (method === 'approve') {
           // A lost connection or a server error can arrive after the action

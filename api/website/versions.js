@@ -14,6 +14,7 @@ import { readBody } from '../_lib/body.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { restoreWebsiteVersion } from '../_lib/websiteVersions.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -55,44 +56,9 @@ export default async function handler(req, res) {
       if (found.rows.length === 0) return badRequest(res, 'Version not found');
 
       // Snapshot the CURRENT state first so the roll-back is itself
-      // roll-back-able.
+      // roll-back-able (api/_lib/websiteVersions.js, shared with Ivy).
       const cur = await sql`SELECT * FROM websites WHERE id = ${siteId}`;
-      const cs = cur.rows[0];
-      await sql`
-        INSERT INTO website_versions (website_id, snapshot, created_by)
-        VALUES (${siteId}, ${JSON.stringify({
-          template: cs.template, sections: cs.sections, pages: cs.pages,
-          custom_css: cs.custom_css, font_pair: cs.font_pair,
-          seo_title: cs.seo_title, seo_description: cs.seo_description,
-          seo_og_image: cs.seo_og_image, favicon_url: cs.favicon_url,
-          redirects: cs.redirects, exit_intent_popup: cs.exit_intent_popup,
-          sticky_cta: cs.sticky_cta,
-        })}::jsonb, ${user.id})
-      `;
-
-      const snap = found.rows[0].snapshot;
-      // Same JSONB gotcha as the PUT in index.js: JSON.stringify(null) is
-      // the string 'null' → jsonb null (NOT SQL NULL) → COALESCE selects it
-      // and wipes the column when the snapshot lacks a field. `jp` maps
-      // absent/null to SQL NULL so COALESCE genuinely keeps the current value.
-      const jp = (v) => (v === undefined || v === null ? null : JSON.stringify(v));
-      await sql`
-        UPDATE websites SET
-          template          = COALESCE(${snap.template ?? null}, template),
-          sections          = COALESCE(${jp(snap.sections)}::jsonb, sections),
-          pages             = COALESCE(${jp(snap.pages)}::jsonb, pages),
-          custom_css        = COALESCE(${snap.custom_css ?? null}, custom_css),
-          font_pair         = COALESCE(${snap.font_pair ?? null}, font_pair),
-          seo_title         = COALESCE(${snap.seo_title ?? null}, seo_title),
-          seo_description   = COALESCE(${snap.seo_description ?? null}, seo_description),
-          seo_og_image      = COALESCE(${snap.seo_og_image ?? null}, seo_og_image),
-          favicon_url       = COALESCE(${snap.favicon_url ?? null}, favicon_url),
-          redirects         = COALESCE(${jp(snap.redirects)}::jsonb, redirects),
-          exit_intent_popup = COALESCE(${jp(snap.exit_intent_popup)}::jsonb, exit_intent_popup),
-          sticky_cta        = COALESCE(${jp(snap.sticky_cta)}::jsonb, sticky_cta),
-          updated_at        = NOW()
-        WHERE id = ${siteId}
-      `;
+      await restoreWebsiteVersion(cur.rows[0], found.rows[0].snapshot, user.id);
       return ok(res, { restored: true });
     }
 
