@@ -20,7 +20,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedDoc, serializeDoc, sendDocumentForSigning } from '../_lib/documents.js';
+import { fetchOwnedDoc, serializeDoc, sendDocumentForSigning, fieldProblemsForSend } from '../_lib/documents.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { withIdempotency } from '../_lib/idempotency.js';
 import { methodNotAllowed, serverError } from '../_lib/json.js';
@@ -93,6 +93,12 @@ export default async function handler(req, res) {
       if (!email) return { status: 400, body: { error: `Client ${name || cid} has no email` } };
       resolved.push({ clientId: cid, name, email });
     }
+
+    // Every signer must have something to sign, and every placed field
+    // must belong to someone on the list (otherwise the document could
+    // never be completed).
+    const problem = fieldProblemsForSend(doc, resolved.length);
+    if (problem) return { status: 400, body: { error: problem } };
 
     // Signer rows + token + 'sent' flip + email + thread message all live
     // in the shared sendDocumentForSigning (api/_lib/documents.js) so the

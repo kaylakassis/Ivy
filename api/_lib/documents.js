@@ -5,10 +5,23 @@ import { generateRawToken, appUrl } from './tokens.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { notifyClientSafe } from './push.js';
+import { docFileUrl } from './docFiles.js';
 
 export const VALID_KINDS  = new Set(['written', 'pdf']);
 export const VALID_STATUS = new Set(['draft', 'sent', 'completed', 'voided', 'declined']);
-export const VALID_FIELD_TYPES = new Set(['signature', 'date', 'text', 'initial']);
+// Field palette (DocuSign style). 'date' is "Date signed": the server
+// fills it with the signing date, whatever the browser sent. 'email' is
+// the signer's own address. 'checkbox' stores 'true' or ''. 'dropdown'
+// must be one of the field's options.
+export const VALID_FIELD_TYPES = new Set([
+  'signature', 'initial', 'date', 'name', 'email', 'company', 'title',
+  'text', 'checkbox', 'dropdown',
+]);
+export const MAX_FIELDS = 150;
+const MAX_OPTIONS = 50;
+const SIG_MAX_CHARS = 400_000;   // a drawn signature PNG as a data URL
+const TEXT_MAX_CHARS = 500;
+const FIELD_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
 
 export function serializeDoc(row, signers = []) {
   if (!row) return null;
@@ -19,7 +32,12 @@ export function serializeDoc(row, signers = []) {
     contentHtml:         row.content_html,
     fileUrl:             row.file_url,
     pdfBlobPathname:     row.pdf_blob_pathname || null,
-    finalPdfUrl:         row.final_pdf_url || null,
+    // A short-lived signed link (api/_lib/docFiles.js), never the raw
+    // storage address. Same field name and meaning as before: "open the
+    // signed PDF".
+    finalPdfUrl:         row.final_pdf_url ? docFileUrl(row.id, 'final') : null,
+    sourcePdfSha256:     row.source_pdf_sha256 || null,
+    finalPdfSha256:      row.final_pdf_sha256 || null,
     pageCount:           row.page_count,
     fields:              row.fields || [],
     recipientClientId:   row.recipient_client_id,
@@ -55,6 +73,9 @@ export function serializeSigner(row) {
     declineReason: row.decline_reason || null,
     ip:            row.ip || null,
     userAgent:     row.user_agent || null,
+    viewedAt:      row.viewed_at || null,
+    consentAt:     row.consent_at || null,
+    linkExpiresAt: row.token_expires_at || null,
   };
 }
 
@@ -65,7 +86,8 @@ export async function fetchSigners(documentId) {
   if (!documentId) return [];
   const { rows } = await sql`
     SELECT id, order_index, client_id, is_owner, name, email, status,
-           signed_at, declined_at, decline_reason, ip, user_agent
+           signed_at, declined_at, decline_reason, ip, user_agent,
+           viewed_at, consent_at, token_expires_at
       FROM document_signers
      WHERE document_id = ${documentId}
      ORDER BY order_index ASC
@@ -79,7 +101,8 @@ export async function fetchSignersBulk(docIds) {
   if (!Array.isArray(docIds) || docIds.length === 0) return new Map();
   const { rows } = await sql.query(
     `SELECT id, document_id, order_index, client_id, is_owner, name, email, status,
-            signed_at, declined_at, decline_reason, ip, user_agent
+            signed_at, declined_at, decline_reason, ip, user_agent,
+            viewed_at, consent_at, token_expires_at
        FROM document_signers
       WHERE document_id = ANY($1)
       ORDER BY document_id, order_index ASC`,
@@ -101,8 +124,9 @@ export function serializeDocPublic(row) {
     name:         row.name,
     kind:         row.kind,
     contentHtml:  row.content_html,
-    fileUrl:      row.file_url,
-    finalPdfUrl:  row.final_pdf_url || null,
+    // Signed, expiring links to the PDFs (see api/_lib/docFiles.js).
+    fileUrl:      row.file_url ? docFileUrl(row.id, 'source') : null,
+    finalPdfUrl:  row.final_pdf_url ? docFileUrl(row.id, 'final') : null,
     pageCount:    row.page_count,
     fields:       row.fields || [],
     recipientName: row.recipient_name,
@@ -128,34 +152,201 @@ export async function fetchOwnedDoc({ id, workspaceId }) {
 
 // Validate the user-submitted fields list. Returns the cleaned array or
 // null if invalid (caller should badRequest).
-export function cleanFields(input) {
+//
+// Positions: x/y/w/h are 0..1 fractions of the page as displayed (after
+// the page's own rotation, inside its crop box), top-left origin. They
+// are independent of zoom and screen size; pdfStamp.js maps them back to
+// PDF points on the real page, rotation included.
+//
+// `opts.pageCount` (when known) rejects fields placed on a page the PDF
+// doesn't have.
+export function cleanFields(input, opts = {}) {
   if (!Array.isArray(input)) return null;
-  if (input.length > 50) return null;
+  if (input.length > MAX_FIELDS) return null;
+  const pageCount = Number.isInteger(opts.pageCount) && opts.pageCount > 0 ? opts.pageCount : null;
   const out = [];
+  const seen = new Set();
   for (let i = 0; i < input.length; i++) {
-    const f = input[i] || {};
+    const f = input[i];
+    if (!f || typeof f !== 'object') return null;
     const type = (f.type || '').toString();
     if (!VALID_FIELD_TYPES.has(type)) return null;
-    // x/y/w/h are 0..1 fractions of the rendered page (top-left origin).
     // signerIndex maps a field to a specific signer (0-based). Default
     // 0 = first signer fills it, matching the legacy single-signer
-    // behavior. Out-of-range indexes get clamped on read.
+    // behavior.
     const x = typeof f.x === 'number' ? clamp01(f.x) : null;
-    const y = typeof f.y === 'number' ? clamp01(f.y) : null;
-    const w = typeof f.w === 'number' ? clamp01(f.w) : null;
-    const h = typeof f.h === 'number' ? clamp01(f.h) : null;
-    out.push({
-      id:    f.id || `f${i}_${Math.random().toString(36).slice(2, 8)}`,
+    let y = typeof f.y === 'number' ? clamp01(f.y) : null;
+    let w = typeof f.w === 'number' ? clamp01(f.w) : null;
+    let h = typeof f.h === 'number' ? clamp01(f.h) : null;
+    if (w !== null) w = Math.max(0.005, x !== null ? Math.min(w, 1 - x) : w);
+    if (h !== null) h = Math.max(0.005, h);
+    if (y !== null && h !== null && y + h > 1) y = Math.max(0, 1 - h);
+    const page = Number.isInteger(f.page) ? Math.max(0, Math.min(f.page, 999)) : 0;
+    if (pageCount && page >= pageCount) return null;
+    // Ids are referenced by signer submissions and rendered as DOM keys:
+    // keep them short and plain, and never let two fields share one.
+    let id = typeof f.id === 'string' && FIELD_ID_RE.test(f.id) ? f.id : null;
+    if (!id || seen.has(id)) id = `f${i}_${crypto.randomBytes(4).toString('hex')}`;
+    seen.add(id);
+    const cleaned = {
+      id,
       type,
       label: (f.label || '').toString().slice(0, 120),
       required: f.required !== false,  // default to required
-      value: typeof f.value === 'string' ? f.value : '',
-      page:  Number.isInteger(f.page) ? Math.max(0, f.page) : 0,
-      signerIndex: Number.isInteger(f.signerIndex) ? Math.max(0, f.signerIndex) : 0,
+      value: typeof f.value === 'string' ? f.value.slice(0, type === 'signature' || type === 'initial' ? SIG_MAX_CHARS : TEXT_MAX_CHARS) : '',
+      page,
+      signerIndex: Number.isInteger(f.signerIndex) ? Math.max(0, Math.min(f.signerIndex, 9)) : 0,
       x, y, w, h,
-    });
+    };
+    if (type === 'dropdown') {
+      const raw = Array.isArray(f.options) ? f.options : [];
+      const uniq = [];
+      for (const o of raw) {
+        const v = String(o ?? '').replace(/\s+/g, ' ').trim().slice(0, 100);
+        if (v && !uniq.includes(v)) uniq.push(v);
+        if (uniq.length >= MAX_OPTIONS) break;
+      }
+      cleaned.options = uniq;
+    }
+    out.push(cleaned);
   }
   return out;
+}
+
+const fieldOwner = (f) => (Number.isInteger(f.signerIndex) ? f.signerIndex : 0);
+
+export const FIELD_TYPE_LABEL = {
+  signature: 'Signature', initial: 'Initials', date: 'Date signed', name: 'Full name',
+  email: 'Email', company: 'Company', title: 'Title', text: 'Text', checkbox: 'Checkbox',
+  dropdown: 'Dropdown',
+};
+const labelOf = (f) => f.label || FIELD_TYPE_LABEL[f.type] || 'Field';
+
+// "Nov 5, 2026" in the business's time zone: what a Date signed field
+// shows. The server always decides this value.
+export function formatSignedDate(when = new Date(), timeZone) {
+  try {
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: timeZone || 'UTC' }).format(when);
+  } catch {
+    return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(when);
+  }
+}
+
+const PNG_DATA_URL = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/;
+const EMAIL_RE = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
+
+function validDrawn(value) {
+  if (!PNG_DATA_URL.test(value)) return false;
+  try {
+    const head = Buffer.from(value.slice(22, 22 + 16), 'base64');
+    return head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+  } catch { return false; }
+}
+
+// Merge one signer's submission onto the stored fields.
+//
+// The server is the authority here, not the browser:
+//   - only fields assigned to this signer (signerIndex === myIdx) take a
+//     submitted value; anything sent for someone else's field is ignored
+//   - Date signed is set to today (business time zone), Email to the
+//     signer's own address
+//   - required fields must be filled (a required checkbox must be ticked)
+//   - dropdown answers must be one of the options; text is length capped;
+//     a signature is either a drawn PNG or typed text
+// Returns { merged } or { error } (a plain-language message).
+export function applySignerValues({ stored, submitted, myIdx, signer = {}, signedDate }) {
+  const byId = new Map();
+  for (const s of (Array.isArray(submitted) ? submitted : [])) {
+    if (s && typeof s.id === 'string') byId.set(s.id, s);
+  }
+  const merged = [];
+  for (const f of (stored || [])) {
+    if (!VALID_FIELD_TYPES.has(f.type)) return { error: 'This document has a field type that can no longer be signed. Please ask the sender to resend it.' };
+    if (fieldOwner(f) !== myIdx) { merged.push({ ...f, value: f.value || '' }); continue; }
+    const sub = byId.get(f.id);
+    let v = sub && typeof sub.value === 'string' ? sub.value : '';
+    const required = f.required !== false;
+    switch (f.type) {
+      case 'date':
+        v = signedDate || formatSignedDate();
+        break;
+      case 'email':
+        v = String(signer.email || v || '').trim().slice(0, 200);
+        if (v && !EMAIL_RE.test(v)) return { error: `Please enter a valid email for "${labelOf(f)}"` };
+        break;
+      case 'checkbox':
+        v = (v === 'true' || v === 'on' || v === '1' || v === 'yes') ? 'true' : '';
+        if (required && !v) return { error: `Please tick "${labelOf(f)}"` };
+        break;
+      case 'dropdown': {
+        v = v.trim();
+        const options = Array.isArray(f.options) ? f.options : [];
+        if (v && !options.includes(v)) return { error: `Please pick one of the choices for "${labelOf(f)}"` };
+        break;
+      }
+      case 'signature':
+      case 'initial': {
+        if (v.startsWith('data:')) {
+          if (v.length > SIG_MAX_CHARS || !validDrawn(v)) return { error: `Please sign "${labelOf(f)}" again` };
+        } else {
+          v = v.replace(/\s+/g, ' ').trim().slice(0, f.type === 'initial' ? 8 : 120);
+        }
+        break;
+      }
+      default:
+        v = v.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim().slice(0, TEXT_MAX_CHARS);
+    }
+    if (required && !v) {
+      return { error: `Please fill in "${labelOf(f)}"` };
+    }
+    merged.push({ ...f, value: v });
+  }
+  return { merged };
+}
+
+// Checks before a send: every signer has something to sign and every
+// field belongs to someone who is actually signing. Returns an error
+// message or null.
+export function fieldProblemsForSend(doc, signerCount) {
+  const fields = Array.isArray(doc?.fields) ? doc.fields : [];
+  if (doc?.kind === 'pdf' && !doc.file_url) return 'Upload the PDF before sending.';
+  if (doc?.kind === 'pdf' && fields.length === 0) return 'Add at least one field (like a Signature) to the PDF before sending.';
+  const highest = fields.reduce((m, f) => Math.max(m, fieldOwner(f)), -1);
+  if (highest >= signerCount) {
+    return `This document has fields for signer ${highest + 1}, but you picked ${signerCount} signer${signerCount === 1 ? '' : 's'}. Add another signer or move those fields.`;
+  }
+  for (let i = 0; i < signerCount; i++) {
+    if (!fields.some((f) => fieldOwner(f) === i)) {
+      return `Signer ${i + 1} has no fields to fill in. Add a Signature for them, or remove them from the list.`;
+    }
+  }
+  const emptyDropdown = fields.find((f) => f.type === 'dropdown' && !(Array.isArray(f.options) && f.options.length));
+  if (emptyDropdown) return `The dropdown "${labelOf(emptyDropdown)}" has no choices yet. Add some in the field settings.`;
+  return null;
+}
+
+// Copy a document (or template) into a new row for this workspace. Used
+// for "Save as template" and "Send a template to clients". Field values
+// are blanked; the PDF file is shared (it is never modified in place, and
+// blob-prune keeps it while any row references its pathname).
+export async function cloneDocument({ workspaceId, src, name, asTemplate = false, client = null }) {
+  const fields = (Array.isArray(src.fields) ? src.fields : []).map((f) => ({ ...f, value: '' }));
+  const { rows } = await sql`
+    INSERT INTO documents (
+      workspace_id, name, kind, content_html, file_url, pdf_blob_pathname, page_count,
+      source_pdf_sha256, fields, is_template, template_id,
+      recipient_client_id, recipient_name, recipient_email
+    ) VALUES (
+      ${workspaceId}, ${String(name || src.name || 'Untitled').slice(0, 200)}, ${src.kind || 'written'},
+      ${src.content_html || null}, ${src.file_url || null}, ${src.pdf_blob_pathname || null},
+      ${src.page_count || 1}, ${src.source_pdf_sha256 || null},
+      ${JSON.stringify(fields)}::jsonb, ${!!asTemplate},
+      ${asTemplate ? null : (src.is_template ? src.id : (src.template_id || null))},
+      ${client?.id || null}, ${client?.name || null}, ${client?.email || null}
+    )
+    RETURNING *
+  `;
+  return rows[0];
 }
 
 function escapeHtml(s) {

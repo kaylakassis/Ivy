@@ -10,12 +10,7 @@
 import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 
-const FIELD_META = {
-  signature: { label: 'Signature',     icon: 'Edit'   },
-  initial:   { label: 'Initials',      icon: 'Edit'   },
-  date:      { label: 'Date',          icon: 'Calendar' },
-  text:      { label: 'Text response', icon: 'Doc'    },
-};
+import { FIELD_META } from './fieldTypes.js';
 
 export default function DocumentPreview({
   name, body, fields, businessName,
@@ -155,12 +150,32 @@ function FieldVisual({ field, index }) {
           }}>Required</span>
         )}
       </div>
-      <FieldControl type={field.type}/>
+      <FieldControl type={field.type} options={field.options}/>
     </div>
   );
 }
 
-function FieldControl({ type }) {
+function FieldControl({ type, options }) {
+  if (type === 'checkbox') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9F9F9F', fontSize: 12.5 }}>
+        <span style={{ width: 18, height: 18, borderRadius: 4, border: '2px solid #C9C9C9', background: '#FAFAFA' }}/>
+        They tick this box
+      </div>
+    );
+  }
+  if (type === 'dropdown') {
+    return (
+      <div style={{
+        height: 38, borderRadius: 6, border: '1px solid #D5D5D5', background: '#FAFAFA',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px',
+        color: '#9F9F9F', fontSize: 12.5, maxWidth: 280,
+      }}>
+        {(options && options.length) ? `Choose: ${options.slice(0, 3).join(', ')}${options.length > 3 ? '…' : ''}` : 'Add choices for this dropdown'}
+        <Icons.ArrowDown size={12} sw={1.7} stroke="#9F9F9F"/>
+      </div>
+    );
+  }
   if (type === 'signature') {
     return (
       <div style={{
@@ -199,7 +214,7 @@ function FieldControl({ type }) {
         maxWidth: 220,
       }}>
         <Icons.Calendar size={13} sw={1.7} stroke="#9F9F9F"/>
-        MM / DD / YYYY
+        Filled in when they sign
       </div>
     );
   }
@@ -211,7 +226,7 @@ function FieldControl({ type }) {
       padding: '10px 14px',
       color: '#9F9F9F', fontSize: 12.5, lineHeight: 1.5,
     }}>
-      Their answer goes here.
+      {type === 'email' ? 'Their email, filled in for them' : type === 'name' ? 'Their full name' : type === 'company' ? 'Their company' : type === 'title' ? 'Their title' : 'Their answer goes here.'}
     </div>
   );
 }

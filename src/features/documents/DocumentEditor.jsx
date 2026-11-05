@@ -15,15 +15,9 @@ import RichTextEditor from './RichTextEditor.jsx';
 import DocumentPreview from './DocumentPreview.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { FIELD_TYPES } from './fieldTypes.js';
 
-const FIELD_TYPES = [
-  { id: 'signature', label: 'Signature',     icon: 'Edit'     },
-  { id: 'initial',   label: 'Initial',       icon: 'Edit'     },
-  { id: 'date',      label: 'Date',          icon: 'Calendar' },
-  { id: 'text',      label: 'Text response', icon: 'Doc'      },
-];
-
-export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf, onVoid, onSelfSign }) {
+export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf, onVoid, onSelfSign, onSaveTemplate, onSendTemplate }) {
   const { ctx } = useUserContext();
   const businessName = ctx?.bizName || null;
 
@@ -38,6 +32,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
   // shows the live paper page. On desktop both panes render side-by-side
   // and this state is irrelevant.
   const [mobileTab, setMobileTab] = useState('edit');
+  const [note, setNote] = useState(null);
   const fileInputRef = useRef(null);
 
   useEscapeKey(onClose);
@@ -62,7 +57,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
     e.target.value = '';
     if (!file) return;
     setUploading(true); setErr(null);
-    try { await onUploadPdf(file); }
+    try { await onUploadPdf(file); setNote('PDF uploaded. Now drag fields onto it.'); }
     catch (ex) { setErr(ex.message || 'Could not upload PDF'); }
     finally { setUploading(false); }
   };
@@ -76,7 +71,8 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
 
   const addField = (type = 'signature') => setFields((xs) => [...xs, {
     id: `f_${Math.random().toString(36).slice(2, 8)}`,
-    type, label: '', required: true, value: '',
+    type, label: '', required: type !== 'checkbox', value: '',
+    ...(type === 'dropdown' ? { options: ['Option 1', 'Option 2'] } : {}),
   }]);
   const updateField = (i, patch) => setFields((xs) => xs.map((f, j) => j === i ? { ...f, ...patch } : f));
   const removeField = (i) => setFields((xs) => xs.filter((_, j) => j !== i));
@@ -138,6 +134,14 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
           </button>
         </div>
 
+        {doc.isTemplate && (
+          <div style={{
+            padding: '10px 22px', background: 'var(--accent-soft)', borderBottom: '1px solid var(--border)',
+            fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <Icons.Copy size={13}/> This is a template. Changes here apply to copies you send from now on.
+          </div>
+        )}
         {/* Lock banner if not editable */}
         {!isEditable && (
           <div style={{
@@ -265,7 +269,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 13.5 }}>Signed PDF ready</div>
                   <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-                    Flattened with every signature, date, and the audit page.
+                    Every signature and answer stamped in place, plus a certificate of completion.
                   </div>
                 </div>
                 <Icons.Arrow size={14} stroke="var(--muted)"/>
@@ -325,16 +329,42 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
               )}
               <div style={{ flex: 1 }}/>
               {err && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</span>}
+              {note && !err && <span style={{ fontSize: 11.5, color: 'var(--ok)' }}>{note}</span>}
+              {isEditable && !doc.isTemplate && onSaveTemplate && (isPdf || doc.kind !== 'pdf') && (
+                <button className="btn btn-ghost" disabled={busy}
+                  title="Keep a copy of this document, fields and all, to send again later"
+                  onClick={async () => {
+                    setBusy(true); setErr(null); setNote(null);
+                    try {
+                      await onSave({ name: name.trim() || 'Untitled', contentHtml: body, fields });
+                      await onSaveTemplate();
+                      setNote('Saved to your templates');
+                    } catch (e) { setErr(e.message || 'Could not save the template'); }
+                    finally { setBusy(false); }
+                  }}>
+                  <Icons.Copy size={13}/> Save as template
+                </button>
+              )}
               {isEditable && (
                 <>
                   <button className="btn btn-outline" onClick={save} disabled={busy}>
-                    {busy ? 'Saving…' : 'Save draft'}
+                    {busy ? 'Saving…' : doc.isTemplate ? 'Save template' : 'Save draft'}
                   </button>
-                  <button className="btn btn-primary"
-                    onClick={async () => { await save(); onSend(); }}
-                    disabled={busy || !name.trim()}>
-                    <Icons.Mail size={13}/> Send for signing
-                  </button>
+                  {doc.isTemplate ? (
+                    onSendTemplate && (
+                      <button className="btn btn-primary"
+                        onClick={async () => { await save(); onSendTemplate(); }}
+                        disabled={busy || !name.trim()}>
+                        <Icons.Mail size={13}/> Send to clients
+                      </button>
+                    )
+                  ) : (
+                    <button className="btn btn-primary"
+                      onClick={async () => { await save(); onSend(); }}
+                      disabled={busy || !name.trim()}>
+                      <Icons.Mail size={13}/> Send for signing
+                    </button>
+                  )}
                 </>
               )}
               {myTurn && onSelfSign && (
@@ -400,7 +430,7 @@ function Section({ title, trailing, children }) {
 
 function FieldQuickAdd({ onAdd }) {
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
       {FIELD_TYPES.map((t) => {
         const Icon = Icons[t.icon] || Icons.Plus;
         return (
@@ -413,7 +443,7 @@ function FieldQuickAdd({ onAdd }) {
               background: 'var(--surface)',
               gap: 5,
             }}>
-            <Icon size={11} sw={1.7}/> {t.label.split(' ')[0]}
+            <Icon size={11} sw={1.7}/> {t.short}
           </button>
         );
       })}
@@ -422,7 +452,7 @@ function FieldQuickAdd({ onAdd }) {
 }
 
 function FieldRow({ field, index, count, isEditable, onUpdate, onMove, onRemove }) {
-  const meta = FIELD_TYPES.find((t) => t.id === field.type) || FIELD_TYPES[3];
+  const meta = FIELD_TYPES.find((t) => t.id === field.type) || FIELD_TYPES[7];
   const Icon = Icons[meta.icon] || Icons.Doc;
   return (
     <div style={{
@@ -470,6 +500,17 @@ function FieldRow({ field, index, count, isEditable, onUpdate, onMove, onRemove 
             background: 'transparent', color: 'var(--fg)',
             fontSize: 13, fontWeight: 500,
           }}/>
+        {field.type === 'dropdown' && (
+          <input defaultValue={(field.options || []).join(', ')}
+            onChange={(e) => onUpdate({ options: e.target.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 50) })}
+            disabled={!isEditable}
+            placeholder="Choices, separated by commas"
+            aria-label="Dropdown choices"
+            style={{
+              width: '100%', padding: '4px 0', border: 0, borderTop: '1px dashed var(--border)', outline: 'none',
+              background: 'transparent', color: 'var(--fg-2)', fontSize: 12.5,
+            }}/>
+        )}
       </div>
       {isEditable && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -559,6 +600,13 @@ function PdfPane({ doc, fields, onChange, isEditable, fileInputRef, onPickPdf, u
           </>
         )}
       </div>
+      {isEditable && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 10 }}>
+          Signer 1 signs first, then Signer 2, in the order you pick when you send. Usually your
+          client is Signer 1. If you countersign, put your fields on Signer 2 and add yourself
+          when you send.
+        </div>
+      )}
       <PdfFieldEditor
         pdfUrl={doc.fileUrl}
         fields={fields}
@@ -591,7 +639,7 @@ function SignersPanel({ doc }) {
         {signers.map((s, i) => (
           <div key={s.id || i} style={{
             display: 'grid',
-            gridTemplateColumns: '24px minmax(0, 1.4fr) 90px minmax(0, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))',
             gap: 12, alignItems: 'center',
             padding: '10px 12px', borderRadius: 10,
             background: 'var(--surface-2)', border: '1px solid var(--border)',
@@ -627,6 +675,13 @@ function SignersPanel({ doc }) {
                   "{s.declineReason}"
                 </div>
               )}
+              {s.viewedAt && s.status !== 'completed' && (
+                <div>Opened {new Date(s.viewedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+              )}
+              {s.consentAt && <div>Agreed to sign electronically</div>}
+              {(s.status === 'awaiting' || s.status === 'viewed') && s.linkExpiresAt && (
+                <div>Link works until {new Date(s.linkExpiresAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</div>
+              )}
               {s.ip && <div>IP {s.ip}</div>}
             </div>
           </div>
@@ -646,11 +701,22 @@ function SignersPanel({ doc }) {
             color: 'var(--fg-2)', fontFamily: 'ui-monospace, monospace',
           }}>{doc.completionHash}</code>
           <div style={{ marginTop: 6, color: 'var(--muted)', lineHeight: 1.5 }}>
-            SHA-256 over the document body and every signer's name, email,
-            field values, and timestamps. If anything changes after this
-            point, recomputing won't match - store this hash for any
-            future dispute.
+            SHA-256 over the document and every signer's name, email,
+            answers and times. If anything changes after this point,
+            recomputing won't match. Keep it with your records.
           </div>
+          {doc.sourcePdfSha256 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ color: 'var(--fg-2)', fontWeight: 600 }}>Original PDF fingerprint</div>
+              <code style={{ display: 'block', wordBreak: 'break-all', fontSize: 11, color: 'var(--fg-2)', fontFamily: 'ui-monospace, monospace' }}>{doc.sourcePdfSha256}</code>
+            </div>
+          )}
+          {doc.finalPdfSha256 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ color: 'var(--fg-2)', fontWeight: 600 }}>Signed PDF fingerprint</div>
+              <code style={{ display: 'block', wordBreak: 'break-all', fontSize: 11, color: 'var(--fg-2)', fontFamily: 'ui-monospace, monospace' }}>{doc.finalPdfSha256}</code>
+            </div>
+          )}
         </div>
       )}
     </div>

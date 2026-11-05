@@ -11,6 +11,7 @@
 // Used by GET /api/me/export (the portal's download button) and by the
 // client_portal section of the owner account export.
 import { sql } from './db.js';
+import { docFileUrl } from './docFiles.js';
 import { myClientIds } from './clientPortal.js';
 import { serializeClientDetails, formatBirthday } from './clientDetails.js';
 
@@ -161,7 +162,8 @@ export async function buildClientPortalExport(user, { memberships } = {}) {
     documents: documents.rows.map((r) => ({
       business: biz(r.client_id), name: r.name, kind: r.kind, status: r.status,
       sentAt: r.sent_at, completedAt: r.completed_at, declinedAt: r.declined_at,
-      signedCopy: r.final_pdf_url || null,
+      // A signed link valid for 30 days, not the storage address.
+      signedCopy: r.final_pdf_url && r.status === 'completed' ? docFileUrl(r.id, 'final', 30 * 24 * 60 * 60) : null,
     })),
     messages: messages.rows.map((r) => ({
       business: biz(r.client_id), from: r.sender, text: r.text, kind: r.kind, at: r.created_at,
