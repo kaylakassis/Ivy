@@ -65,7 +65,7 @@ const VALID_BUSINESS_TYPES = new Set(['service', 'product', 'both']);
 // Keep in sync with SWITCH_SOURCES in src/features/onboarding/switchSources.js.
 export const VALID_SWITCH_FROM = new Set([
   'square', 'acuity', 'vagaro', 'glossgenius', 'booksy', 'calendly', 'mindbody', 'fresha',
-  'spreadsheet', 'phone', 'paper', 'google', 'other', 'new',
+  'ptminder', 'futureform', 'momence', 'spreadsheet', 'phone', 'paper', 'google', 'other', 'new',
 ]);
 
 function normalizeState(raw) {

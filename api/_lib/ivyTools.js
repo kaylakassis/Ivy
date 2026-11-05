@@ -24,6 +24,7 @@ import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
 import { fireClientCreatedWorkflows } from './workflows.js';
 import { findClientForBulk, findServiceForBulk } from './bookingImport.js';
 import { prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS } from './clientImport.js';
+import { IVY_DETAIL_PROPS, ivyDetailsToBody, clientDetailColumns, writeClientColumns } from './clientDetails.js';
 import { blockState, BLOCKED_MESSAGE } from './moderation.js';
 import { validEmail } from './auth.js';
 import {
@@ -189,6 +190,7 @@ export const IVY_TOOLS = [
         email: { type: 'string' },
         phone: { type: 'string', description: 'Optional. E.164 format if provided.' },
         stage: { type: 'string', description: "'lead' (default) or 'active'." },
+        ...IVY_DETAIL_PROPS,
       },
       required: ['name'],
     },
@@ -341,8 +343,9 @@ export const IVY_TOOLS = [
               name:      { type: 'string' },
               email:     { type: 'string', description: 'Only if shown.' },
               phone:     { type: 'string', description: 'Only if shown, as written.' },
-              notes:     { type: 'string', description: 'Anything else written next to them (birthday, preferences, last visit).' },
+              notes:     { type: 'string', description: 'Anything else written next to them (preferences, last visit).' },
               uncertain: { type: 'string', description: 'Why this row needs a second look, if it does.' },
+              ...IVY_DETAIL_PROPS,
             },
             required: ['name'],
           },
@@ -491,6 +494,7 @@ export const IVY_TOOLS = [
         tags:           { type: 'array', items: { type: 'string' } },
         notes:          { type: 'string' },
         lifetime_value: { type: 'number' },
+        ...IVY_DETAIL_PROPS,
       },
       required: ['client_id'],
     },
@@ -1854,13 +1858,15 @@ async function add_client({ workspaceId, args }) {
   const email = args.email ? String(args.email).trim().toLowerCase() : null;
   const phone = args.phone ? String(args.phone).trim() : null;
   const stage = args.stage === 'active' ? 'active' : 'lead';
+  const details = clientDetailColumns(ivyDetailsToBody(args));
+  if (details.errors.length) throw new Error(details.errors[0]);
 
   const ins = await sql`
     INSERT INTO clients (workspace_id, name, email, phone, stage, source)
     VALUES (${workspaceId}, ${name}, ${email}, ${phone}, ${stage}, 'Ivy')
     RETURNING *
   `;
-  const row = ins.rows[0];
+  const row = (await writeClientColumns(ins.rows[0].id, workspaceId, details.cols)) || ins.rows[0];
   // Same automations a manual add fires (client_created; lead_created
   // for leads). Awaited so the run exists by the time Ivy reports back.
   // The client is saved at this point; an automation that fails to start is
@@ -2316,12 +2322,13 @@ function cleanClientImportArgs(args) {
       name, email, notes,
       phone: c?.phone ? String(c.phone).trim().slice(0, 40) : null,
       uncertain: c?.uncertain ? String(c.uncertain).replace(/\s+/g, ' ').trim().slice(0, 120) : null,
+      details: ivyDetailsToBody(c || {}),
     };
   });
 }
 
 function clientImportRows(list) {
-  return list.map((c) => ({ name: c.name, email: c.email, phone: c.phone, notes: c.notes, stage: 'active' }));
+  return list.map((c) => ({ ...c.details, name: c.name, email: c.email, phone: c.phone, notes: c.notes, stage: 'active' }));
 }
 
 function moreBit(n) {
@@ -2635,6 +2642,9 @@ async function update_client({ workspaceId, args }) {
     if (!Number.isFinite(n) || n < 0) throw new Error('lifetime_value must be a non-negative number');
     push('lifetime_value', n);
   }
+  const details = clientDetailColumns(ivyDetailsToBody(args));
+  if (details.errors.length) throw new Error(details.errors[0]);
+  for (const [col, val] of Object.entries(details.cols)) push(col, val);
   if (sets.length === 0) return { ok: true, no_changes: true };
   sets.push('updated_at = NOW()');
   values.push(args.client_id, workspaceId);

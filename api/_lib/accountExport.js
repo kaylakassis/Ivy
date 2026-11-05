@@ -50,7 +50,7 @@ export async function buildAccountExport(user) {
     bookings, messageThreads, messages, documents,
     financeSettings, invoices, tasks, goals,
     rewardSettings, rewardRules, rewardRedemptions,
-    ivySessions, ivyMessages, ivyUsage, website,
+    ivySessions, ivyMessages, ivyUsage, website, clientFields,
   ] = await Promise.all([
     sql`SELECT id, email, name, created_at, updated_at, email_verified_at
         FROM users WHERE id = ${user.id}`,
@@ -88,6 +88,10 @@ export async function buildAccountExport(user) {
           FROM ivy_usage WHERE workspace_id = ${workspaceId}
          GROUP BY day ORDER BY day`,
     sql`SELECT * FROM websites         WHERE workspace_id = ${workspaceId}`,
+    // The business's own client fields (clients.custom_fields is keyed by
+    // these ids). Tolerates a database without the table yet.
+    sql`SELECT id, label, type, options, position, created_at FROM client_field_definitions
+         WHERE workspace_id = ${workspaceId} ORDER BY position`.catch(() => ({ rows: [] })),
   ]);
 
   // Records where THIS user is a CUSTOMER of other businesses (their portal
@@ -110,6 +114,7 @@ export async function buildAccountExport(user) {
     workspace:          stripSensitive(workspace.rows[0] || null),
     website:            stripSensitive(website.rows[0] || null),
     clients:            stripRows(clients.rows),
+    client_field_definitions: clientFields.rows,
     services:           stripRows(services.rows),
     calendar_settings:  stripSensitive(calendarSettings.rows[0] || null),
     calendar_blocks:    stripRows(calendarBlocks.rows),

@@ -62,7 +62,7 @@ async function run() {
     }
     const raw = await sql`SELECT onboarding_state FROM users WHERE id = ${a.uid}`;
     assert(!JSON.stringify(raw.rows[0].onboarding_state).includes('script'), 'nothing unlisted reaches the stored JSON');
-    assert(VALID_SWITCH_FROM.has('square') && VALID_SWITCH_FROM.has('new') && VALID_SWITCH_FROM.size === 14, 'whitelist has the 14 choices');
+    assert(VALID_SWITCH_FROM.has('square') && VALID_SWITCH_FROM.has('new') && VALID_SWITCH_FROM.size === 17 && VALID_SWITCH_FROM.has('ptminder'), 'whitelist has the 17 choices (incl. PTminder, FutureForm, Momence)');
 
     console.log('\n[3] other PATCHes keep the answer; null clears it');
     await a.call('PATCH', { switchFrom: 'acuity' });

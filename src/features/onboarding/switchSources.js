@@ -5,7 +5,11 @@
 // Export directions were checked against each app's own help center in
 // November 2026 (Square, Acuity, Vagaro, Calendly, Mindbody, Fresha, Booksy,
 // Apple, Google). Where an app's own docs do not describe a self-serve
-// export (GlossGenius), the wording stays general on purpose. Two short
+// export (GlossGenius), the wording stays general on purpose. PTminder,
+// FutureForm and Momence (trainer and studio apps) were added later; we
+// could not confirm their exact export menus from their public help pages,
+// so their directions stay general too, and their files are matched by the
+// generic column detection in src/lib/clientColumns.js. Two short
 // lines each: line 1 is clients, line 2 is appointments or the next step.
 //
 // `actions` decides the buttons on the step:
@@ -69,6 +73,27 @@ export const SWITCH_SOURCES = [
     guide: [
       'Clients: open Clients, tap Options at the top right, then choose CSV.',
       'Appointments: send Ivy a screenshot of your upcoming calendar.',
+    ],
+  },
+  {
+    id: 'ptminder', label: 'PTminder', actions: ['file'],
+    guide: [
+      'Clients: on a computer, open your client list and look for an Export or download option (CSV or Excel).',
+      'Ivy reads the status, birthday, address and emergency contact columns. No export? Send Ivy a screenshot.',
+    ],
+  },
+  {
+    id: 'futureform', label: 'FutureForm', actions: ['file'],
+    guide: [
+      'Clients: look for Export in your client list, or ask FutureForm support for a CSV of your clients.',
+      'Ivy matches the status column for you, so inactive clients do not come in as active.',
+    ],
+  },
+  {
+    id: 'momence', label: 'Momence', actions: ['file'],
+    guide: [
+      'Customers: on a computer, open your customer list or reports and look for Export to CSV.',
+      'Open the file here and check how Ivy matched each column before anything is added.',
     ],
   },
   {

@@ -12,6 +12,13 @@
 // SKIPPED, never updated, so an import can never silently change data the
 // owner curated by hand.
 //
+// Rows may also carry the richer record (addressParts, birthday, pronouns,
+// emergencyContact, preferredContact, occupation) and customFields keyed by
+// a field id, or by a `ref` from opts.fieldRefs (fields the CSV importer
+// just created from unmapped columns). A value that does not fit (a bad
+// birthday, "maybe" in a yes/no field) never loses the person: it is kept
+// in their notes as written.
+//
 // Quiet imports (opts.quiet) send nothing at all: no portal invites, no
 // client_created / lead_created automations. Moving a whole book into Ivy
 // must not look like "new leads arriving" to anyone.
@@ -21,6 +28,7 @@ import { VALID_STAGES, serializeClient } from './clients.js';
 import { normalizePhone } from './sms.js';
 import { sendClientInvite } from './clientNotify.js';
 import { fireClientCreatedWorkflows, hasClientCreatedWorkflows } from './workflows.js';
+import { clientDetailColumns, mergeCustomFields, DETAIL_COLUMNS } from './clientDetails.js';
 
 export const CLIENT_IMPORT_MAX_ROWS = 2000;
 const NAME_MAX = 120;
@@ -61,12 +69,16 @@ async function loadExisting(workspaceId) {
 //     importer) or 'note' (keep the person, put the number as written into
 //     notes; Ivy reading a photo, where a smudged digit must not lose them).
 //   opts.defaultSource: clients.source when the row gives none.
+//   opts.fieldDefs: the business's custom field definitions (for
+//     customFields); opts.fieldRefs: Map(ref → definition).
 // Returns { toInsert, duplicates: [{ index, name, reason, existingName }],
 //           invalid: [{ index, error }], total }.
 export async function prepareClientImport(workspaceId, rows, opts = {}) {
   const onBadPhone = opts.onBadPhone === 'note' ? 'note' : 'reject';
   const defaultSource = opts.defaultSource || 'CSV import';
   const { byEmail, byPhone } = await loadExisting(workspaceId);
+  const fieldDefs = Array.isArray(opts.fieldDefs) ? opts.fieldDefs : [];
+  const fieldRefs = opts.fieldRefs instanceof Map ? opts.fieldRefs : new Map();
   const toInsert = [];
   const duplicates = [];
   const invalid = [];
@@ -82,6 +94,24 @@ export async function prepareClientImport(workspaceId, rows, opts = {}) {
     const tags = Array.isArray(r.tags)
       ? r.tags.map((t) => String(t).trim().slice(0, 60)).filter(Boolean).slice(0, 20)
       : [];
+
+    // The richer record. Lenient: a value that does not fit is kept in
+    // notes as written rather than failing the row.
+    const det = clientDetailColumns(r, { lenient: true });
+    let custom = {};
+    const extraNotes = [...det.asWritten];
+    if (r.customFields && typeof r.customFields === 'object' && fieldDefs.length) {
+      const keyed = {};
+      for (const [k, v] of Object.entries(r.customFields).slice(0, 60)) {
+        const def = fieldRefs.get(k);
+        keyed[def ? def.id : k] = v;
+      }
+      const m = mergeCustomFields({}, keyed, fieldDefs, { lenient: true });
+      if (m.errors.length) extraNotes.push('Some custom field values were too long to keep');
+      else custom = m.values;
+      extraNotes.push(...m.asWritten);
+    }
+    if (extraNotes.length) notes = (notes ? `${notes}\n${extraNotes.join('\n')}` : extraNotes.join('\n')).slice(0, NOTES_MAX);
 
     if (!name || name.length > NAME_MAX) {
       invalid.push({ index: i, error: `Name is required (max ${NAME_MAX} chars)` });
@@ -121,7 +151,7 @@ export async function prepareClientImport(workspaceId, rows, opts = {}) {
     const marker = { name, email, phone };
     if (email) byEmail.set(email, marker);
     if (pKey && !byPhone.has(pKey)) byPhone.set(pKey, marker);
-    toInsert.push({ index: i, name, email, phone, stage, tags, notes, source });
+    toInsert.push({ index: i, name, email, phone, stage, tags, notes, source, details: det.cols, custom });
   }
   return { toInsert, duplicates, invalid, total: list.length };
 }
@@ -150,11 +180,17 @@ export async function insertPreparedClients(workspaceId, plan, opts = {}) {
     const params = [];
     let p = 0;
     for (const row of chunk) {
-      valuesSql.push(`($${++p}, $${++p}, $${++p}, $${++p}, $${++p}, $${++p}::text[], $${++p}, $${++p})`);
+      const ph = [`$${++p}`, `$${++p}`, `$${++p}`, `$${++p}`, `$${++p}`, `$${++p}::text[]`, `$${++p}`, `$${++p}`];
       params.push(workspaceId, row.name, row.email, row.phone, row.stage, row.tags, row.notes, row.source);
+      // Detail columns come from a fixed allow-list, never from the request.
+      const d = row.details || {};
+      for (const col of DETAIL_COLUMNS) { ph.push(`$${++p}`); params.push(d[col] === undefined ? null : d[col]); }
+      ph.push(`$${++p}::jsonb`);
+      params.push(JSON.stringify(row.custom || {}));
+      valuesSql.push(`(${ph.join(', ')})`);
     }
     const text = `
-      INSERT INTO clients (workspace_id, name, email, phone, stage, tags, notes, source)
+      INSERT INTO clients (workspace_id, name, email, phone, stage, tags, notes, source, ${DETAIL_COLUMNS.join(', ')}, custom_fields)
       VALUES ${valuesSql.join(', ')}
       RETURNING *
     `;

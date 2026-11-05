@@ -897,7 +897,7 @@ const ONB_LABELS = {
   },
   switchFrom: {
     square: 'Square Appointments', acuity: 'Acuity', vagaro: 'Vagaro', glossgenius: 'GlossGenius',
-    booksy: 'Booksy', calendly: 'Calendly', mindbody: 'Mindbody', fresha: 'Fresha',
+    booksy: 'Booksy', calendly: 'Calendly', mindbody: 'Mindbody', fresha: 'Fresha', ptminder: 'PTminder', futureform: 'FutureForm', momence: 'Momence',
     spreadsheet: 'A spreadsheet', phone: 'Phone contacts', paper: 'Paper book or notes',
     google: 'Google Calendar', other: 'Somewhere else', new: 'Just getting started',
   },

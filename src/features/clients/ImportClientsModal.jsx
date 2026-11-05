@@ -18,35 +18,24 @@
 //
 // Existing clients (same email, then same phone) are skipped by the server,
 // never overwritten.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
-import {
-  parseClientCSV, buildClientRows, fileKind, CSV_MAX_BYTES,
-} from '../../lib/clientColumns.js';
+import { parseClientCSV, fileKind, CSV_MAX_BYTES } from '../../lib/clientColumns.js';
 import { parseVCards } from '../../lib/vcard.js';
 import { openIvy } from '../ivy/openIvy.js';
 import { SWITCH_SOURCE_BY_ID, screenshotPrompt } from '../onboarding/switchSources.js';
-import { Sheet, Note, QuietNote, AutomationsOptIn, plural } from './import/parts.jsx';
+import { Sheet, Note, QuietNote, plural } from './import/parts.jsx';
 import ContactsImport, { contactPickerSupported } from './import/ContactsImport.jsx';
 import { IcsImport, GoogleImport, ICS_MAX_BYTES } from './import/AppointmentsImport.jsx';
 import { AnnounceMove } from './AnnounceMoveSheet.jsx';
+import CsvPreview from './import/CsvPreview.jsx';
+import { loadClientFields } from './clientFields.js';
 
-// Order matters - drives the dropdown options in the column editor.
-const FIELD_OPTIONS = [
-  { value: '',          label: 'Ignore this column' },
-  { value: 'name',      label: 'Full name' },
-  { value: 'firstName', label: 'First name' },
-  { value: 'lastName',  label: 'Last name' },
-  { value: 'nameLastFirst', label: 'Name (Last, First)' },
-  { value: 'email',     label: 'Email' },
-  { value: 'phone',     label: 'Phone' },
-  { value: 'stage',     label: 'Stage' },
-  { value: 'notes',     label: 'Notes' },
-  { value: 'source',    label: 'Source' },
-  { value: 'tags',      label: 'Tags (comma-separated)' },
-];
+// Rows per request: keeps each request well under the server's body limit
+// once rows carry addresses, birthdays and custom fields.
+const IMPORT_BATCH = 500;
 
 const TITLES = {
   menu: 'Bring your clients over',
@@ -85,18 +74,36 @@ export default function ImportClientsModal({ onClose, onComplete, initialMode = 
     openIvy({ prompt: screenshotPrompt(switchFrom), photo: true, navigate });
   };
 
-  // One place that sends client rows, for CSV and contacts alike.
-  const importClients = async (rows, { quiet, source }) => {
+  // One place that sends client rows, for CSV and contacts alike. Big
+  // files go in batches; custom fields (newFields) are created by the
+  // first batch and reused by name after that.
+  const importClients = async (rows, { quiet, source, newFields }) => {
     setBusy(true); setImportErr(null);
     try {
       const clean = rows.map(({ sourceIndex, ...r }) => r); // eslint-disable-line no-unused-vars
-      const r = await api.post('/clients/import', { rows: clean, quiet, sendInvites: false });
-      const importedIds = Array.isArray(r.importedIds) ? r.importedIds
-        : (r.inserted || []).map((c) => c.id).filter(Boolean);
+      const summary = { created: 0, skipped: 0, invalid: 0, total: 0, workflowsFired: 0 };
+      const errors = [];
+      const importedIds = [];
+      for (let off = 0; off < clean.length; off += IMPORT_BATCH) {
+        const part = clean.slice(off, off + IMPORT_BATCH);
+        const r = await api.post('/clients/import', {
+          rows: part, quiet, sendInvites: false,
+          ...(newFields && newFields.length ? { newFields } : {}),
+        });
+        const s = r.summary || {};
+        for (const k of Object.keys(summary)) summary[k] += Number(s[k]) || 0;
+        if (s.workflowsSkipped) { summary.workflowsSkipped = true; summary.workflowsSkippedReason = s.workflowsSkippedReason; }
+        for (const e of r.errors || []) {
+          errors.push({ ...e, row: typeof e.row === 'number' ? e.row + off : e.row });
+        }
+        importedIds.push(...(Array.isArray(r.importedIds) ? r.importedIds
+          : (r.inserted || []).map((c) => c.id).filter(Boolean)));
+      }
+      if (newFields && newFields.length) loadClientFields({ force: true });
       const done = {
         kind: 'clients',
-        summary: r.summary || { created: 0, skipped: 0, invalid: 0 },
-        errors: r.errors || [],
+        summary,
+        errors: errors.slice(0, 200),
         importedIds,
         noEmail: clean.filter((x) => !x.email).length,
         quiet,
@@ -317,133 +324,6 @@ function FileStep({ switchFrom, onScreenshot, onCSV, onVCF, onICS }) {
       </div>
     </>
   );
-}
-
-// ── CSV preview + column mapping ─────────────────────────────────────
-
-function CsvPreview({ parsed, onSubmit, busy, error }) {
-  const [mapping, setMapping] = useState(parsed.mapping);
-  const [batchTags, setBatchTags] = useState('');
-  const [defaultStage, setDefaultStage] = useState('active');
-  const [runAutomations, setRunAutomations] = useState(false);
-  const [showColumns, setShowColumns] = useState(() => !hasName(parsed.mapping));
-
-  const tags = useMemo(() => batchTags.split(/[,;]/).map((t) => t.trim()).filter(Boolean).slice(0, 20), [batchTags]);
-  const { rows, dropped } = useMemo(
-    () => buildClientRows(parsed.records, mapping, { tags, stage: defaultStage }),
-    [parsed.records, mapping, tags, defaultStage],
-  );
-  const claimed = useMemo(() => {
-    const m = new Map();
-    mapping.forEach((f, i) => { if (f) m.set(f, i); });
-    return m;
-  }, [mapping]);
-  const named = hasName(mapping);
-  const sample = rows.slice(0, 6);
-  const matched = parsed.headers.map((h, i) => (mapping[i] ? h : null)).filter(Boolean);
-
-  return (
-    <>
-      <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        Found <strong>{plural(parsed.records.length, 'row')}</strong>.
-        {named
-          ? <> Ivy matched {plural(matched.length, 'column')}. Here is how the first few look.</>
-          : <> Tell Ivy which column has the names.</>}
-      </p>
-
-      {/* A stacked list (not a table) so it reads at 390px without
-          sideways scrolling. */}
-      <div style={{ marginBottom: 10, border: '1px solid var(--border)', borderRadius: 10, overflow: 'auto', maxHeight: 260 }}>
-        {sample.map((r, i) => (
-          <div key={i} style={{ padding: '8px 12px', borderTop: i ? '1px solid var(--border)' : 'none', minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {[r.email || 'No email', r.phone || 'No phone'].join('  ·  ')}
-              {r.notes ? `  ·  ${r.notes}` : ''}
-            </div>
-          </div>
-        ))}
-        {sample.length === 0 && (
-          <div style={{ padding: 14, fontSize: 12.5, textAlign: 'center', color: 'var(--muted)' }}>
-            No names yet. Pick the name column below.
-          </div>
-        )}
-        {rows.length > sample.length && (
-          <div style={{ padding: '6px 10px', fontSize: 11.5, color: 'var(--muted)', textAlign: 'center' }}>
-            +{rows.length - sample.length} more
-          </div>
-        )}
-      </div>
-      {dropped > 0 && named && (
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>
-          {plural(dropped, 'row')} with no name will be left out.
-        </div>
-      )}
-
-      <button type="button" className="btn btn-ghost" onClick={() => setShowColumns((v) => !v)}
-        style={{ padding: '6px 4px', fontSize: 12.5, color: 'var(--accent)', marginBottom: 8 }}>
-        {showColumns ? 'Hide columns' : 'Something wrong? Fix the columns'}
-      </button>
-
-      {showColumns && (
-        <div style={{ marginBottom: 14, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2)', padding: 10 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '6px 10px', alignItems: 'center' }}>
-            {parsed.headers.map((h, i) => (
-              <React.Fragment key={i}>
-                <div style={{ fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h}>
-                  {h || <em style={{ color: 'var(--muted)' }}>(blank)</em>}
-                </div>
-                <select value={mapping[i] || ''} aria-label={`Column ${h}`}
-                  onChange={(e) => { const next = mapping.slice(); next[i] = e.target.value; setMapping(next); }}
-                  style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 13, minWidth: 0 }}>
-                  {FIELD_OPTIONS.map((opt) => {
-                    const used = opt.value && claimed.has(opt.value) && claimed.get(opt.value) !== i;
-                    return <option key={opt.value} value={opt.value} disabled={used}>{opt.label}{used ? ' (used)' : ''}</option>;
-                  })}
-                </select>
-              </React.Fragment>
-            ))}
-          </div>
-          <div className="form-2col" style={{ marginTop: 12 }}>
-            <label style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-              <div style={{ marginBottom: 4, fontWeight: 600 }}>Tag everyone</div>
-              <input className="input" value={batchTags} onChange={(e) => setBatchTags(e.target.value)}
-                placeholder="e.g. from-square" style={{ width: '100%', fontSize: 14 }}/>
-            </label>
-            <label style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-              <div style={{ marginBottom: 4, fontWeight: 600 }}>Add them as</div>
-              <select value={defaultStage} onChange={(e) => setDefaultStage(e.target.value)}
-                style={{ width: '100%', padding: '8px', borderRadius: 7, border: '1px solid var(--border-strong)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 14 }}>
-                <option value="active">Active clients</option>
-                <option value="lead">Leads</option>
-                <option value="paused">Paused</option>
-              </select>
-            </label>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-        <AutomationsOptIn checked={runAutomations} onChange={setRunAutomations}/>
-        {!runAutomations && <QuietNote/>}
-        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-          People already in Ivy (same email or phone) are skipped, never overwritten, so trying again is safe.
-        </div>
-      </div>
-
-      {error && <Note tone="err" style={{ marginBottom: 12 }}>{error}</Note>}
-
-      <button type="button" onClick={() => onSubmit(rows, { quiet: !runAutomations })}
-        disabled={busy || !named || rows.length === 0} className="btn btn-primary"
-        style={{ width: '100%', justifyContent: 'center', padding: '12px 14px', opacity: (busy || !named || rows.length === 0) ? 0.6 : 1 }}>
-        {busy ? 'Adding…' : !named ? 'Pick the name column to continue' : `Add ${plural(rows.length, 'client')}`}
-      </button>
-    </>
-  );
-}
-
-function hasName(mapping) {
-  return mapping.includes('name') || mapping.includes('firstName') || mapping.includes('lastName') || mapping.includes('nameLastFirst');
 }
 
 // ── Done ─────────────────────────────────────────────────────────────
