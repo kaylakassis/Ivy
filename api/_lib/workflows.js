@@ -465,7 +465,8 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
     // (written → content_html; pdf → file_url) so both template kinds
     // round-trip cleanly.
     const tmpl = await sql`
-      SELECT name, kind, content_html, file_url, fields
+      SELECT id, name, kind, content_html, file_url, fields,
+             page_count, pdf_blob_pathname, source_pdf_sha256
         FROM documents
        WHERE id = ${tmplId}
          AND workspace_id = ${workflow.workspace_id}
@@ -477,7 +478,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
       INSERT INTO documents (
         workspace_id, name, kind, content_html, file_url, fields, status,
         recipient_client_id, recipient_email, recipient_name,
-        is_template
+        is_template, page_count, pdf_blob_pathname, source_pdf_sha256, template_id
       ) VALUES (
         ${workflow.workspace_id},
         ${renderTokens(t.name, tokens) + ' - ' + (client?.name || '')},
@@ -489,7 +490,8 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
         ${client?.id || null},
         ${client?.email || null},
         ${client?.name || null},
-        FALSE
+        FALSE,
+        ${t.page_count || 1}, ${t.pdf_blob_pathname || null}, ${t.source_pdf_sha256 || null}, ${t.id}
       )
       RETURNING *
     `;

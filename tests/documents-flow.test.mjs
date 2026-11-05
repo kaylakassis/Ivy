@@ -100,7 +100,7 @@ async function sign(token, doc, signerIndex) {
   const mine = (doc.fields || []).filter((f) => (f.signerIndex || 0) === signerIndex);
   const fields = mine.map((f) => ({ id: f.id, type: f.type, value: f.type === 'signature' ? 'Typed Name' : f.type === 'date' ? '2026-09-11' : 'ok' }));
   const r = mockRes();
-  await signHandler(req({ method: 'POST', query: { token }, body: { fields } }), r);
+  await signHandler(req({ method: 'POST', query: { token }, body: { fields, consent: true } }), r);
   return r;
 }
 

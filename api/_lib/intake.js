@@ -84,12 +84,14 @@ async function cloneAndSend({
   const inserted = await sql`
     INSERT INTO documents (
       workspace_id, name, kind, content_html, file_url, page_count, fields,
+      pdf_blob_pathname, source_pdf_sha256,
       recipient_client_id, recipient_name, recipient_email,
       status, sign_token_hash, sent_at, activity,
       is_template, template_id
     ) VALUES (
       ${workspaceId}, ${template.name}, ${template.kind}, ${template.content_html},
       ${template.file_url}, ${template.page_count}, ${template.fields},
+      ${template.pdf_blob_pathname || null}, ${template.source_pdf_sha256 || null},
       ${recipientClientId}, ${recipientName}, ${recipientEmail},
       'sent', ${tokenHash}, NOW(), ${JSON.stringify(initialActivity)}::jsonb,
       FALSE, ${template.id}

@@ -11,6 +11,7 @@ import { useDocuments } from './state.js';
 import { useViewport } from '../../lib/viewport.js';
 import DocumentEditor from './DocumentEditor.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
+import SendTemplateModal from './SendTemplateModal.jsx';
 
 const STATUS_META = {
   draft:     { label: 'Draft',     color: 'var(--muted)' },
@@ -21,12 +22,13 @@ const STATUS_META = {
 };
 
 export default function Documents() {
-  const { documents, loading, error, create, createFromTemplate, update, remove, send, resend, uploadPdf, void: voidDoc, selfSignLink } = useDocuments();
+  const { documents, templates, loading, error, create, createFromTemplate, update, remove, send, resend, uploadPdf, void: voidDoc, selfSignLink, saveTemplate, sendTemplate } = useDocuments();
   const navigate = useNavigate();
   const [tab, setTab]               = useState('all');
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
+  const [templateSendId, setTemplateSendId] = useState(null);
   // Phones get stacked cards instead of the 5-column table.
   const { isMobile } = useViewport();
 
@@ -51,18 +53,36 @@ export default function Documents() {
     completed: documents.filter((d) => d.status === 'completed').length,
     voided:    documents.filter((d) => d.status === 'voided').length,
     declined:  documents.filter((d) => d.status === 'declined').length,
-  }), [documents]);
+    templates: templates.length,
+  }), [documents, templates]);
 
   const rows = useMemo(() => {
+    if (tab === 'templates') return templates;
     if (tab === 'all') return documents;
     return documents.filter((d) => d.status === tab);
-  }, [documents, tab]);
+  }, [documents, templates, tab]);
 
-  const openDoc = documents.find((d) => d.id === openId) || null;
+  const openDoc = documents.find((d) => d.id === openId) || templates.find((d) => d.id === openId) || null;
+  const templateSendDoc = templates.find((d) => d.id === templateSendId) || null;
   const sendingDoc = documents.find((d) => d.id === sendingId) || null;
 
   const handleCreate = async (input) => {
     const d = await create(input);
+    setCreating(false);
+    setOpenId(d.id);
+  };
+  // "Upload a PDF": make the draft, upload the file into it, open the
+  // editor so the owner can drag fields on. A file the server refuses
+  // leaves no empty draft behind.
+  const handleCreateFromPdf = async (file) => {
+    const name = String(file.name || 'Document').replace(/\.pdf$/i, '').slice(0, 200) || 'Document';
+    const d = await create({ name, kind: 'pdf', fields: [] });
+    try {
+      await uploadPdf(d.id, file);
+    } catch (e) {
+      await remove(d.id).catch(() => {});
+      throw e;
+    }
     setCreating(false);
     setOpenId(d.id);
   };
@@ -116,6 +136,7 @@ export default function Documents() {
           { id: 'completed', label: 'Completed' },
           { id: 'declined', label: 'Declined' },
           { id: 'voided', label: 'Voided' },
+          { id: 'templates', label: 'My templates' },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => setTab(id)} style={{
             padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
@@ -151,10 +172,12 @@ export default function Documents() {
             <div style={{ padding: 48, textAlign: 'center' }}>
               <EmptyNote
                 icon="Doc"
-                title={tab === 'all' ? 'No documents yet' : `No ${tab}`}
+                title={tab === 'all' ? 'No documents yet' : tab === 'templates' ? 'No templates yet' : `No ${tab}`}
                 hint={tab === 'all'
-                  ? 'Pick a template or start blank - waivers, agreements, intake forms, NDAs.'
-                  : 'Try a different tab.'}
+                  ? 'Upload a PDF, pick a template, or start blank: waivers, agreements, intake forms.'
+                  : tab === 'templates'
+                    ? 'Open a document you prepared and tap "Save as template" to reuse it with any client.'
+                    : 'Try a different tab.'}
               />
               {tab === 'all' && (
                 <button className="btn btn-primary" onClick={() => setCreating(true)}
@@ -164,7 +187,8 @@ export default function Documents() {
               )}
             </div>
           ) : rows.map((d, i) => (
-            <DocRow key={d.id} doc={d} first={i === 0} index={i} isMobile={isMobile} onOpen={() => setOpenId(d.id)}/>
+            <DocRow key={d.id} doc={d} first={i === 0} index={i} isMobile={isMobile} onOpen={() => setOpenId(d.id)}
+              onUseTemplate={d.isTemplate ? () => setTemplateSendId(d.id) : null}/>
           ))}
         </div>
       </div>
@@ -172,6 +196,9 @@ export default function Documents() {
       {creatingOpen && (
         <CreateDocumentModal
           onCreate={handleCreate}
+          onCreateFromPdf={handleCreateFromPdf}
+          myTemplates={templates}
+          onUseMyTemplate={(id) => { setCreating(false); setTemplateSendId(id); }}
           onCreateFromTemplate={handleCreateFromTemplate}
           onClose={() => setCreating(false)}
         />
@@ -186,6 +213,8 @@ export default function Documents() {
           onResend={async () => { await resend(openDoc.id); }}
           onUploadPdf={(file) => uploadPdf(openDoc.id, file)}
           onVoid={async () => { await voidDoc(openDoc.id); }}
+          onSaveTemplate={async () => { await saveTemplate(openDoc.id); }}
+          onSendTemplate={() => setTemplateSendId(openDoc.id)}
           onSelfSign={async () => {
             const url = await selfSignLink(openDoc.id);
             // The sign page is a route in this same app, so stay in-app
@@ -193,6 +222,14 @@ export default function Documents() {
             const u = new URL(url, window.location.origin);
             navigate(u.pathname + u.search);
           }}
+        />
+      )}
+      {templateSendDoc && (
+        <SendTemplateModal
+          template={templateSendDoc}
+          onSend={(clientIds, ownerSigns) => sendTemplate(templateSendDoc.id, clientIds, ownerSigns)}
+          onClose={() => setTemplateSendId(null)}
+          onDone={() => { setTemplateSendId(null); setOpenId(null); setTab('sent'); }}
         />
       )}
       {sendingDoc && (
@@ -216,8 +253,8 @@ export default function Documents() {
   );
 }
 
-function DocRow({ doc, first, onOpen, isMobile, index }) {
-  const meta = STATUS_META[doc.status] || STATUS_META.draft;
+function DocRow({ doc, first, onOpen, isMobile, index, onUseTemplate }) {
+  const meta = doc.isTemplate ? { label: 'Template', color: 'var(--accent)' } : (STATUS_META[doc.status] || STATUS_META.draft);
   const statusPill = (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99,
@@ -246,7 +283,12 @@ function DocRow({ doc, first, onOpen, isMobile, index }) {
           {statusPill}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--muted)' }}>
-          <SignerCell doc={doc}/>
+          {onUseTemplate ? (
+            <button type="button" className="btn btn-outline" style={{ padding: '4px 10px', fontSize: 12 }}
+              onClick={(e) => { e.stopPropagation(); onUseTemplate(); }}>
+              <Icons.Mail size={12}/> Send to clients
+            </button>
+          ) : <SignerCell doc={doc}/>}
           <span style={{ marginLeft: 'auto' }}>
             {new Date(doc.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
           </span>
@@ -288,7 +330,14 @@ function DocRow({ doc, first, onOpen, isMobile, index }) {
       }}>
         <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
       </span>
-      <SignerCell doc={doc}/>
+      {onUseTemplate ? (
+        <div>
+          <button type="button" className="btn btn-outline" style={{ padding: '4px 10px', fontSize: 12 }}
+            onClick={(e) => { e.stopPropagation(); onUseTemplate(); }}>
+            <Icons.Mail size={12}/> Send
+          </button>
+        </div>
+      ) : <SignerCell doc={doc}/>}
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
         {new Date(doc.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
       </div>
@@ -345,7 +394,8 @@ function SignerCell({ doc }) {
 // Templates are static, served by /api/documents/templates so the
 // list can grow without redeploying the frontend. Categories are
 // chip filters across the top.
-function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
+function CreateDocumentModal({ onCreate, onCreateFromPdf, myTemplates = [], onUseMyTemplate, onCreateFromTemplate, onClose }) {
+  const pdfInputRef = React.useRef(null);
   const [templates, setTemplates] = useState([]);
   const [loadingTpl, setLoadingTpl] = useState(true);
   const [tplErr, setTplErr] = useState(null);
@@ -447,7 +497,61 @@ function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: '18px 24px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div style={{ padding: '18px clamp(14px, 4vw, 24px)', flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          {/* Upload your own PDF, then drag fields onto it */}
+          <input ref={pdfInputRef} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }}
+            data-upload-pdf
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (!file) return;
+              setBusyId('__pdf'); setErr(null);
+              try { await onCreateFromPdf(file); }
+              catch (ex) { setErr(ex.message || 'Could not upload that PDF'); setBusyId(null); }
+            }}/>
+          <button type="button" onClick={() => pdfInputRef.current?.click()} disabled={!!busyId}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: 14, marginBottom: 12,
+              borderRadius: 10, border: '1px solid var(--accent)', background: 'var(--accent-soft)',
+              cursor: busyId ? 'wait' : 'pointer', textAlign: 'left',
+            }}>
+            <div style={{
+              width: 38, height: 38, borderRadius: 10, background: 'var(--accent)', color: 'var(--accent-ink)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}><Icons.Paperclip size={16} sw={2}/></div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--fg)' }}>
+                {busyId === '__pdf' ? 'Uploading and checking your PDF…' : 'Upload a PDF'}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                Use your own contract or form, then drag on signature, initials, date and more.
+              </div>
+            </div>
+            <Icons.Arrow size={13} stroke="var(--muted)"/>
+          </button>
+
+          {myTemplates.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div className="metric-label" style={{ marginBottom: 8 }}>Your templates</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {myTemplates.slice(0, 6).map((t) => (
+                  <button key={t.id} type="button" onClick={() => onUseMyTemplate(t.id)} disabled={!!busyId}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10,
+                      border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', textAlign: 'left',
+                    }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--muted)',
+                      padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface-2)',
+                    }}>{t.kind === 'pdf' ? 'PDF' : 'DOC'}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--fg)' }}>{t.name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Send</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Blank doc tile */}
           <div style={{
             padding: 14, borderRadius: 10,

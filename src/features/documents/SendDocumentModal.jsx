@@ -161,6 +161,14 @@ export default function SendDocumentModal({ documentName, fields = [], onSend, o
                     <div style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {c.email}
                     </div>
+                    {fields.length > 0 && (() => {
+                      const n = fields.filter((f) => (f.signerIndex || 0) === i).length;
+                      return (
+                        <div style={{ fontSize: 11, color: n ? 'var(--fg-2)' : 'var(--danger)', marginTop: 2 }}>
+                          {n ? `Fills ${n} field${n === 1 ? '' : 's'} (Signer ${i + 1})` : `No fields for Signer ${i + 1} yet`}
+                        </div>
+                      );
+                    })()}
                   </div>
                   <button onClick={() => moveUp(i)} disabled={i === 0}
                     className="btn btn-ghost" style={{ padding: 4, opacity: i === 0 ? 0.3 : 1 }}>

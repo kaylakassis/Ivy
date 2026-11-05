@@ -4452,6 +4452,47 @@ DO $$ BEGIN
   ALTER TABLE bookings ADD CONSTRAINT bookings_package_use_mode_chk
     CHECK (package_use_mode IS NULL OR package_use_mode IN ('booking', 'completion'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- E-sign: link expiry, consent, document fingerprints.
+-- Every signing link (document_signers.sign_token_hash) now expires. The
+-- trigger stamps token_expires_at = NOW() + 30 days whenever a new link
+-- is minted (insert, send, next signer, resend, self-sign, portal link),
+-- so every code path that mints a link gets an expiry without having to
+-- remember to set one; a caller may still set its own expiry explicitly.
+-- consent_at records when the signer agreed to sign electronically;
+-- viewed_at when they first opened the link. source_pdf_sha256 is the
+-- SHA-256 of the uploaded PDF (checked server side on upload) and
+-- final_pdf_sha256 the SHA-256 of the signed copy; both appear on the
+-- signing certificate / in the owner's view.
+ALTER TABLE document_signers ADD COLUMN IF NOT EXISTS token_expires_at TIMESTAMPTZ;
+ALTER TABLE document_signers ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
+ALTER TABLE document_signers ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS source_pdf_sha256 TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS final_pdf_sha256 TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS final_pdf_private BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE OR REPLACE FUNCTION document_signers_token_expiry() RETURNS trigger AS $$
+BEGIN
+  IF NEW.sign_token_hash IS NULL THEN
+    NEW.token_expires_at := NULL;
+  ELSIF TG_OP = 'INSERT' THEN
+    IF NEW.token_expires_at IS NULL THEN
+      NEW.token_expires_at := NOW() + INTERVAL '30 days';
+    END IF;
+  ELSIF NEW.sign_token_hash IS DISTINCT FROM OLD.sign_token_hash
+        AND NEW.token_expires_at IS NOT DISTINCT FROM OLD.token_expires_at THEN
+    NEW.token_expires_at := NOW() + INTERVAL '30 days';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS document_signers_token_expiry_trg ON document_signers;
+CREATE TRIGGER document_signers_token_expiry_trg
+  BEFORE INSERT OR UPDATE ON document_signers
+  FOR EACH ROW EXECUTE FUNCTION document_signers_token_expiry();
+-- Links that were already out before expiry existed: 30 days from when
+-- they were last minted.
+UPDATE document_signers
+   SET token_expires_at = updated_at + INTERVAL '30 days'
+ WHERE sign_token_hash IS NOT NULL AND token_expires_at IS NULL;
 -- Client portal invites: does adding a client (Add client, Ivy, a booking
 -- that creates the client) email them an invite automatically? NULL means
 -- the default, yes. Imports ignore it and stay quiet unless opted in.

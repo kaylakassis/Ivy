@@ -10,7 +10,9 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedDoc, serializeDoc, cleanFields, fetchSigners } from '../_lib/documents.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
-import { isPlatformBlobUrl } from '../_lib/safeUrl.js';
+import { blobPathnameForWorkspace } from '../_lib/blobScope.js';
+import { fetchAndInspectPdf, PdfRejectedError } from '../_lib/pdfInspect.js';
+import { enforce } from '../_lib/rate-limit.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -66,34 +68,58 @@ export default async function handler(req, res) {
       if ('contentHtml' in body) {
         push('content_html', body.contentHtml ? String(body.contentHtml).slice(0, 200000) : null);
       }
+      // A new PDF: check it server side before the document points at it.
+      // Must be a file this workspace uploaded (ws/<id>/ prefix on the
+      // platform blob store), must really be a PDF that parses, isn't
+      // locked, and has 1-200 pages. The page count and the SHA-256
+      // "before" fingerprint come from the server's read, never the browser.
+      let inspected = null;
+      if ('fileUrl' in body && body.fileUrl) {
+        const url = String(body.fileUrl);
+        const pathname = blobPathnameForWorkspace(url, String(workspaceId));
+        if (!pathname) return badRequest(res, 'Invalid fileUrl: upload the PDF first');
+        const blocked = await enforce(req, res, [
+          { key: `doc-pdf-check:ws:${workspaceId}`, max: 60, windowSeconds: 60 * 60 },
+        ]);
+        if (blocked) return;
+        try {
+          inspected = await fetchAndInspectPdf(url);
+        } catch (e) {
+          if (e instanceof PdfRejectedError) return badRequest(res, e.message);
+          throw e;
+        }
+        push('file_url', url);
+        push('pdf_blob_pathname', pathname);
+        push('page_count', inspected.pageCount);
+        push('source_pdf_sha256', inspected.sha256);
+        push('kind', 'pdf');
+        // Positions are page-relative: a different file means the old
+        // placements no longer line up, unless the caller sends new ones.
+        if (!('fields' in body)) push('fields', '[]');
+      } else if ('fileUrl' in body) {
+        push('file_url', null);
+        push('pdf_blob_pathname', null);
+        push('source_pdf_sha256', null);
+      }
+      const effectivePages = inspected ? inspected.pageCount
+        : ((('kind' in body ? body.kind : doc.kind) === 'pdf' && doc.file_url) ? doc.page_count : null);
       if ('fields' in body) {
-        const fields = cleanFields(body.fields);
+        const fields = cleanFields(body.fields, { pageCount: effectivePages || undefined });
         if (fields === null) return badRequest(res, 'Invalid fields');
         push('fields', JSON.stringify(fields));
       }
       if ('isTemplate' in body) {
         push('is_template', !!body.isTemplate);
       }
-      if ('kind' in body) {
+      if ('kind' in body && !inspected) {
         const k = (body.kind || '').toString();
         if (k !== 'pdf' && k !== 'written') return badRequest(res, 'Invalid kind');
         push('kind', k);
       }
-      if ('fileUrl' in body) {
-        // The server later fetches this URL to stamp the signed PDF
-        // (api/_lib/pdfStamp.js), so it must point at a file WE uploaded
-        // (the platform blob store), never an arbitrary host.
-        const url = body.fileUrl ? String(body.fileUrl) : null;
-        if (url && !isPlatformBlobUrl(url)) return badRequest(res, 'Invalid fileUrl: upload the PDF first');
-        push('file_url', url);
-      }
-      if ('pageCount' in body) {
+      if ('pageCount' in body && !inspected) {
         const n = Number(body.pageCount);
         if (!Number.isInteger(n) || n < 1 || n > 200) return badRequest(res, 'pageCount out of range');
         push('page_count', n);
-      }
-      if ('pdfBlobPathname' in body) {
-        push('pdf_blob_pathname', body.pdfBlobPathname ? String(body.pdfBlobPathname) : null);
       }
 
       if (sets.length === 0) return ok(res, { document: serializeDoc(doc) });

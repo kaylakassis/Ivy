@@ -4,6 +4,8 @@ import { api } from '../../lib/api.js';
 
 export function useDocuments() {
   const [documents, setDocuments] = useState([]);
+  // Your own saved templates (documents.is_template), listed separately.
+  const [templates, setTemplates] = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
 
@@ -13,7 +15,17 @@ export function useDocuments() {
       .then((r) => live && setDocuments(r.documents || []))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
+    api.get('/documents?templates=1')
+      .then((r) => live && setTemplates(r.documents || []))
+      .catch(() => live && setTemplates([]));
     return () => { live = false; };
+  }, []);
+
+  // A changed row may live in either list.
+  const replace = useCallback((doc) => {
+    if (!doc) return;
+    setDocuments((ds) => ds.map((d) => d.id === doc.id ? doc : d));
+    setTemplates((ts) => ts.map((d) => d.id === doc.id ? doc : d));
   }, []);
 
   const refresh = useCallback(async () => {
@@ -40,13 +52,29 @@ export function useDocuments() {
 
   const update = useCallback(async (id, patch) => {
     const r = await api.patch('/documents/' + id, patch);
-    setDocuments((ds) => ds.map((d) => d.id === id ? r.document : d));
+    replace(r.document);
     return r.document;
-  }, []);
+  }, [replace]);
 
   const remove = useCallback(async (id) => {
     await api.del('/documents/' + id);
     setDocuments((ds) => ds.filter((d) => d.id !== id));
+    setTemplates((ts) => ts.filter((d) => d.id !== id));
+  }, []);
+
+  // "Save as template": a reusable copy (fields and PDF included).
+  const saveTemplate = useCallback(async (id, name) => {
+    const r = await api.post('/documents/save-template', { id, ...(name ? { name } : {}) });
+    setTemplates((ts) => [r.template, ...ts]);
+    return r.template;
+  }, []);
+
+  // Send a saved template to many clients: one copy each.
+  const sendTemplate = useCallback(async (templateId, clientIds, ownerSigns = null) => {
+    const r = await api.post('/documents/send-template', { templateId, clientIds, ...(ownerSigns ? { ownerSigns } : {}) });
+    const fresh = await api.get('/documents').catch(() => null);
+    if (fresh?.documents) setDocuments(fresh.documents);
+    return r;
   }, []);
 
   // Accepts a single clientId (legacy) OR an array of recipients
@@ -78,14 +106,14 @@ export function useDocuments() {
   }, []);
 
   // Streams a PDF directly to Vercel Blob using the upload-token
-  // endpoint, then PATCHes the document row with the new fileUrl,
-  // page count, and kind='pdf'. Returns the updated document. The
-  // browser also counts pages locally so we don't need an extra
-  // server round trip.
+  // endpoint, then PATCHes the document row with the new fileUrl. The
+  // server re-reads the file (real PDF? not locked? how many pages?) and
+  // answers with a plain-language error if it can't use it.
   const uploadPdf = useCallback(async (id, file) => {
     if (!file) throw new Error('No file');
-    if (file.type !== 'application/pdf') throw new Error('Please choose a PDF');
-    if (file.size > 25 * 1024 * 1024) throw new Error('PDF must be under 25 MB');
+    const looksPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+    if (!looksPdf) throw new Error('Please choose a PDF file');
+    if (file.size > 25 * 1024 * 1024) throw new Error('PDFs can be up to 25 MB');
 
     const { uploadFile: upload } = await import('../../lib/blobUpload.js');
     const result = await upload(file.name, file, {
@@ -94,20 +122,17 @@ export function useDocuments() {
       contentType: 'application/pdf',
     });
 
-    const pageCount = await countPdfPages(file).catch(() => 1);
-
     const patched = await api.patch('/documents/' + id, {
       kind: 'pdf',
       fileUrl: result.url,
       pdfBlobPathname: result.pathname,
-      pageCount,
       // Wipe any prior field placements when swapping the source PDF;
       // page-relative coordinates would otherwise misalign.
       fields: [],
     });
-    setDocuments((ds) => ds.map((d) => d.id === id ? patched.document : d));
+    replace(patched.document);
     return patched.document;
-  }, []);
+  }, [replace]);
 
   // Owner-as-signer: mint a link for their own turn (see api/documents/self-sign.js).
   const selfSignLink = useCallback(async (id) => {
@@ -115,17 +140,5 @@ export function useDocuments() {
     return r.url;
   }, []);
 
-  return { documents, loading, error, refresh, create, createFromTemplate, update, remove, send, resend, void: voidDoc, uploadPdf, selfSignLink };
-}
-
-// Local-only page counter so we can stamp page_count on the row at
-// upload time without a server round trip. Re-uses the pdfjs-dist
-// import the editor + viewer already load.
-async function countPdfPages(file) {
-  const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
-  lib.GlobalWorkerOptions.workerSrc = workerUrl;
-  const buf = await file.arrayBuffer();
-  const pdf = await lib.getDocument({ data: buf }).promise;
-  return pdf.numPages;
+  return { documents, templates, loading, error, refresh, create, createFromTemplate, update, remove, send, resend, void: voidDoc, uploadPdf, selfSignLink, saveTemplate, sendTemplate };
 }

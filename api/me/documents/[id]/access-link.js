@@ -9,6 +9,7 @@ import { requireSameOrigin } from '../../../_lib/security.js';
 import { myClientIds, ids } from '../../../_lib/clientPortal.js';
 import { generateRawToken, appUrl } from '../../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
+import { docFileUrl } from '../../../_lib/docFiles.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
     // Return the flattened signed PDF for viewing instead of minting a token.
     if (status === 'completed') {
       const finalUrl = docRows.rows[0].final_pdf_url;
-      if (finalUrl) return ok(res, { url: finalUrl, completed: true });
+      if (finalUrl) return ok(res, { url: docFileUrl(docRows.rows[0].id, 'final'), completed: true });
       return badRequest(res, 'This document is complete — the signed copy is still being prepared.');
     }
 

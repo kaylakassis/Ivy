@@ -1376,6 +1376,7 @@ function HealthStat({ label, value, tone, hint }) {
 }
 
 function ClientAnalyticsBlock({ client, windowDays }) {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
@@ -1448,8 +1449,12 @@ function ClientAnalyticsBlock({ client, windowDays }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {data.signedDocuments.map((d) => (
-              <div key={d.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
+              // Opens the document, where the signed PDF and its
+              // certificate are one tap away.
+              <button type="button" key={d.id} onClick={() => navigate(`/documents?doc=${encodeURIComponent(d.id)}`)}
+                title="Open the signed document"
+                style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', cursor: 'pointer',
                 padding: '7px 10px', borderRadius: 8,
                 background: 'var(--surface-2)', border: '1px solid var(--border)',
                 fontSize: 12.5,
@@ -1465,7 +1470,8 @@ function ClientAnalyticsBlock({ client, windowDays }) {
                     ? new Date(d.signedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })
                     : ''}
                 </span>
-              </div>
+                <Icons.Arrow size={11} stroke="var(--muted)"/>
+              </button>
             ))}
           </div>
         </div>

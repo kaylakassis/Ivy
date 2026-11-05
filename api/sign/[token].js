@@ -3,7 +3,8 @@
 //   GET    → fetch the document the recipient was emailed (only when their
 //            signer row is awaiting / viewed, or the legacy single-signer
 //            doc is in 'sent' state)
-//   POST   → submit completed field values. Body: { fields: [{ id, value }, ...] }
+//   POST   → submit completed field values.
+//            Body: { fields: [{ id, value }, ...], consent: true }
 //   DELETE → decline. Body: { reason? }
 //
 // Multi-signer flow (preferred): looks up document_signers by token hash.
@@ -13,20 +14,28 @@
 // signer submissions.
 //
 // Single-signer flow (legacy): falls back to documents.sign_token_hash
-// when no document_signers row matches the token. Works exactly as the
-// previous version did so existing in-flight documents don't break.
+// only for documents that have NO document_signers rows (sent before the
+// multi-signer flow existed). Multi-signer documents mirror the current
+// token onto documents.sign_token_hash for list views, so allowing the
+// fallback for them would let a replaced link (after a resend or a portal
+// link) sign the whole document outside the signer chain.
 //
 // Tokens are sha256-hashed before lookup. We never persist or accept
 // the raw token for any other purpose. Tokens are invalidated on
-// completion / decline / void.
+// completion / decline / void, and expire (document_signers
+// .token_expires_at, stamped by a DB trigger whenever a link is minted).
+//
+// Signing is server-authoritative (api/_lib/documents.applySignerValues):
+// a signer can only fill their own fields, Date signed is set here,
+// required fields and dropdown choices are enforced here.
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import {
-  serializeDocPublic, cleanFields, VALID_FIELD_TYPES,
+  serializeDocPublic, applySignerValues, formatSignedDate, MAX_FIELDS,
 } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell, redactEmail } from '../_lib/email.js';
+import { sendEmailToClient, sendEmailToUser, emailShell, redactEmail } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
@@ -42,29 +51,35 @@ export default async function handler(req, res) {
   // Public endpoint (no requireUser) - bootstrap schema explicitly so
   // a cold-started function instance doesn't 500 on missing tables.
   try { await ensureSchemaApplied(); } catch { /* tolerate */ }
+  // Signing pages carry the token in the URL: never let it leak onward.
+  try { res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Cache-Control', 'no-store'); } catch { /* mock res */ }
   if (req.method === 'GET')    return getDoc(req, res);
   if (req.method === 'POST')   return signDoc(req, res);
   if (req.method === 'DELETE') return declineDoc(req, res);
   return methodNotAllowed(res, ['GET', 'POST', 'DELETE']);
 }
 
+const EXPIRED_MESSAGE = 'This signing link has expired. Ask the sender to send you a new one.';
+
 // ───────────────────────────────────────────────────────────────────────
 // Lookup: first try document_signers (multi-signer), then fall back to
-// the legacy single-signer column. Returns null if no match. The
-// resolved object always exposes:
-//   { doc, signer (multi only), signerIndex, totalSigners, isMulti }
+// the legacy single-signer column. Returns null if no match, or
+// { expired: true } for a link past its expiry. The resolved object
+// always exposes:
+//   { doc, signer (multi only), signerIndex, totalSigners, isMulti, tokenHash }
 // so the rest of the file can branch on `isMulti` once.
 // ───────────────────────────────────────────────────────────────────────
 async function resolveByToken(rawToken) {
-  if (typeof rawToken !== 'string' || rawToken.length < 16) return null;
+  if (typeof rawToken !== 'string' || rawToken.length < 16 || rawToken.length > 200) return null;
   const tokenHash = hashToken(rawToken);
 
   // Multi-signer first.
   const ms = await sql`
-    SELECT s.*, d.id AS doc_id, d.workspace_id, d.name, d.status AS doc_status,
+    SELECT s.*, d.id AS doc_id, d.workspace_id, d.name AS doc_name, d.status AS doc_status,
            d.content_html, d.fields, d.activity, d.recipient_client_id,
-           d.recipient_name, d.recipient_email, d.created_at, d.updated_at,
-           d.kind, d.file_url, d.page_count
+           d.recipient_name, d.recipient_email, d.created_at AS doc_created_at,
+           d.kind, d.file_url, d.page_count, d.final_pdf_url, d.completed_at,
+           (s.token_expires_at IS NOT NULL AND s.token_expires_at < NOW()) AS link_expired
       FROM document_signers s
       JOIN documents d ON d.id = s.document_id
      WHERE s.sign_token_hash = ${tokenHash}
@@ -74,42 +89,57 @@ async function resolveByToken(rawToken) {
     const row = ms.rows[0];
     if (row.doc_status !== 'sent') return null;
     if (!['awaiting', 'viewed'].includes(row.status)) return null;
+    if (row.link_expired) return { expired: true };
     const total = await sql`SELECT COUNT(*)::int AS n FROM document_signers WHERE document_id = ${row.doc_id}`;
     return {
       isMulti: true,
+      tokenHash,
       doc: {
-        id: row.doc_id, workspace_id: row.workspace_id, name: row.name,
+        id: row.doc_id, workspace_id: row.workspace_id, name: row.doc_name,
         status: row.doc_status, content_html: row.content_html,
         fields: row.fields, activity: row.activity,
         recipient_client_id: row.recipient_client_id,
         recipient_name: row.recipient_name, recipient_email: row.recipient_email,
         kind: row.kind, file_url: row.file_url, page_count: row.page_count,
+        final_pdf_url: row.final_pdf_url, completed_at: row.completed_at,
       },
       signer: {
         id: row.id, document_id: row.document_id, order_index: row.order_index,
         client_id: row.client_id, name: row.name, email: row.email,
         status: row.status, field_values: row.field_values,
+        is_owner: !!row.is_owner, token_expires_at: row.token_expires_at,
       },
       signerIndex: row.order_index,
       totalSigners: total.rows[0]?.n || 1,
     };
   }
 
-  // Legacy single-signer fallback.
+  // Legacy single-signer fallback: only documents with no signer rows.
   const single = await sql`
-    SELECT * FROM documents
-     WHERE sign_token_hash = ${tokenHash}
-       AND status = 'sent'
+    SELECT * FROM documents d
+     WHERE d.sign_token_hash = ${tokenHash}
+       AND d.status = 'sent'
+       AND NOT EXISTS (SELECT 1 FROM document_signers ds WHERE ds.document_id = d.id)
      LIMIT 1
   `;
   if (single.rows.length === 0) return null;
   return {
     isMulti: false,
+    tokenHash,
     doc: single.rows[0],
     signer: null,
     signerIndex: 0,
     totalSigners: 1,
   };
+}
+
+async function workspaceTimezone(workspaceId) {
+  try {
+    const { rows } = await sql`SELECT timezone FROM calendar_settings WHERE workspace_id = ${workspaceId} LIMIT 1`;
+    return rows[0]?.timezone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -125,29 +155,47 @@ async function getDoc(req, res) {
 
     const token = (req.query.token || '').toString();
     const r = await resolveByToken(token);
+    if (r?.expired) return res.status(410).json({ error: EXPIRED_MESSAGE, expired: true });
     if (!r) return notFound(res, 'This signing link is invalid, has expired, or the document was already signed.');
     const { doc, signer, signerIndex, totalSigners, isMulti } = r;
 
-    // Mark viewed (idempotent: only fire once per signer per session).
+    // First open by this signer: record it, and tell the owner (unless
+    // the owner is the one opening their own countersign link).
     if (isMulti && signer.status === 'awaiting') {
-      await sql`
+      const marked = await sql`
         UPDATE document_signers
            SET status = 'viewed', updated_at = NOW(),
+               viewed_at = COALESCE(viewed_at, NOW()),
                ip = COALESCE(ip, ${ip}),
                user_agent = COALESCE(user_agent, ${(req.headers['user-agent'] || '').toString().slice(0, 500)})
-         WHERE id = ${signer.id}
+         WHERE id = ${signer.id} AND status = 'awaiting'
+         RETURNING id
       `;
-      await appendActivity(doc.id, doc.activity, {
-        kind: 'viewed',
-        text: `${signer.name} (signer ${signerIndex + 1} of ${totalSigners}) opened the document`,
-        ip,
-      });
+      if (marked.rows.length > 0) {
+        await appendActivity(doc.id, {
+          kind: 'viewed',
+          text: `${signer.name} (signer ${signerIndex + 1} of ${totalSigners}) opened the document`,
+          ip,
+        });
+        if (!signer.is_owner) {
+          notifyOwnerSafe({
+            workspaceId: doc.workspace_id,
+            type: 'documents',
+            payload: {
+              title: 'Document opened',
+              body: `${signer.name} opened "${doc.name}"`,
+              url: `/documents?doc=${encodeURIComponent(doc.id)}`,
+              tag: `doc-viewed-${doc.id}`,
+            },
+          });
+        }
+      }
     } else if (!isMulti) {
       const last = (doc.activity || [])[(doc.activity || []).length - 1];
       const todayish = last && last.kind === 'viewed' &&
         (Date.now() - new Date(last.ts).getTime()) < 24 * 60 * 60 * 1000;
       if (!todayish) {
-        await appendActivity(doc.id, doc.activity, {
+        await appendActivity(doc.id, {
           kind: 'viewed',
           text: `${doc.recipient_name || 'Recipient'} opened the document`,
           ip,
@@ -155,6 +203,10 @@ async function getDoc(req, res) {
       }
     }
 
+    const [branding, tz] = await Promise.all([
+      fetchBranding(doc.workspace_id).catch(() => ({})),
+      workspaceTimezone(doc.workspace_id),
+    ]);
     return ok(res, {
       document: serializeDocPublic(doc),
       signer: isMulti ? {
@@ -162,11 +214,25 @@ async function getDoc(req, res) {
         total: totalSigners,
         name: signer.name,
         email: signer.email,
+        isOwner: signer.is_owner,
+        linkExpiresAt: signer.token_expires_at || null,
       } : null,
+      businessName: branding.businessName || null,
+      // What a Date signed field will say if they sign now.
+      signedDate: formatSignedDate(new Date(), tz),
     });
   } catch (err) {
     return serverError(res, err);
   }
+}
+
+// Old iPhone app builds render this page from their own bundled code,
+// which has no consent checkbox and never sends `consent`. Only for them
+// is a missing consent accepted (and recorded as not captured); every
+// current client must send consent: true.
+function isLegacyNativeClient(req, body) {
+  const platform = String(req.headers?.['x-client-platform'] || '').toLowerCase();
+  return body.consent === undefined && (platform === 'ios' || platform === 'android');
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -184,71 +250,71 @@ async function signDoc(req, res) {
 
     const token = (req.query.token || '').toString();
     const r = await resolveByToken(token);
+    if (r?.expired) return res.status(410).json({ error: EXPIRED_MESSAGE, expired: true });
     if (!r) return notFound(res, 'This signing link is invalid or has expired.');
-    const { doc, signer, signerIndex, totalSigners, isMulti } = r;
+    const { doc, signer, signerIndex, totalSigners, isMulti, tokenHash } = r;
 
     const body = await readBody(req);
-    const submitted = cleanFields(body.fields ?? []);
-    if (submitted === null) return badRequest(res, 'Invalid fields payload');
-
-    // Merge submitted values onto stored fields by id. Required-field
-    // check is scoped to fields owned by THIS signer (per signerIndex)
-    // - otherwise signer 1 would trip over required fields that signer
-    // 2 will only fill on their turn. For documents without
-    // per-signer assignment (legacy single-signer / written multi),
-    // all fields default to signerIndex 0 so the same signer fills
-    // everything and the check still works.
-    const stored = doc.fields || [];
-    const merged = stored.map((f) => {
-      const sub = submitted.find((s) => s.id === f.id);
-      const value = sub ? String(sub.value || '') : (f.value || '');
-      return { ...f, value };
-    });
-    const myIdx = isMulti ? signerIndex : 0;
-    for (const f of merged) {
-      if (!VALID_FIELD_TYPES.has(f.type)) {
-        return badRequest(res, `Unknown field type: ${f.type}`);
-      }
-      const ownerIdx = Number.isInteger(f.signerIndex) ? f.signerIndex : 0;
-      if (ownerIdx !== myIdx) continue;
-      if (f.required !== false && !f.value) {
-        return badRequest(res, `Please fill in "${f.label || f.type}"`);
-      }
+    if (!Array.isArray(body.fields ?? []) || (body.fields || []).length > MAX_FIELDS) {
+      return badRequest(res, 'Invalid fields payload');
     }
+    if (body.consent !== true && !isLegacyNativeClient(req, body)) {
+      return badRequest(res, 'Please tick the box to agree to sign electronically.');
+    }
+    const consented = body.consent === true;
+
+    const tz = await workspaceTimezone(doc.workspace_id);
+    const signedDate = formatSignedDate(new Date(), tz);
+    const myIdx = isMulti ? signerIndex : 0;
+    // Merge: only THIS signer's fields take submitted values; required
+    // checks, Date signed and Email are decided here, not in the browser.
+    const applied = applySignerValues({
+      stored: doc.fields || [],
+      submitted: body.fields || [],
+      myIdx,
+      signer: { email: isMulti ? signer.email : doc.recipient_email, name: isMulti ? signer.name : doc.recipient_name },
+      signedDate,
+    });
+    if (applied.error) return badRequest(res, applied.error);
+    const merged = applied.merged;
     // A multi-signer must own at least one field — otherwise a recipient with
     // no assigned fields would be recorded as "signed" with no signature at
-    // all (the per-signer scoping makes the required-field loop trivially pass
-    // for them). The sender should assign them a signature field instead.
+    // all. The sender should assign them a signature field instead.
     if (isMulti && !merged.some((f) => (Number.isInteger(f.signerIndex) ? f.signerIndex : 0) === myIdx)) {
       return badRequest(res, 'No fields are assigned to you to sign on this document. Please contact the sender.');
     }
 
     if (isMulti) {
-      // Stamp this signer complete.
-      await sql`
+      // Stamp this signer complete. Guarded on the token + status so two
+      // submissions racing each other (double tap, two tabs) record once.
+      const done = await sql`
         UPDATE document_signers SET
           field_values    = ${JSON.stringify(merged)}::jsonb,
           status          = 'completed',
           signed_at       = NOW(),
+          consent_at      = ${consented ? new Date().toISOString() : null},
+          viewed_at       = COALESCE(viewed_at, NOW()),
           sign_token_hash = NULL,
           ip              = ${ip},
           user_agent      = ${ua},
           updated_at      = NOW()
         WHERE id = ${signer.id}
+          AND sign_token_hash = ${tokenHash}
+          AND status IN ('awaiting', 'viewed')
+        RETURNING id
       `;
+      if (done.rows.length === 0) return badRequest(res, 'This document was already signed from this link.');
       // Persist the running merged values onto documents.fields so the
-      // NEXT signer's resolveByToken sees prior signers' contributions
-      // (otherwise the merge would lose signer 1's value when signer 2
-      // submits, since stored would still show empties).
+      // NEXT signer's resolveByToken sees prior signers' contributions.
       await sql`
         UPDATE documents SET
           fields = ${JSON.stringify(merged)}::jsonb,
           updated_at = NOW()
         WHERE id = ${doc.id}
       `;
-      await appendActivity(doc.id, doc.activity, {
+      await appendActivity(doc.id, {
         kind: 'signer-completed',
-        text: `${signer.name} (signer ${signerIndex + 1} of ${totalSigners}) signed`,
+        text: `${signer.name} (signer ${signerIndex + 1} of ${totalSigners}) signed${consented ? ' after agreeing to sign electronically' : ''}`,
         ip, signerId: signer.id,
       });
 
@@ -314,6 +380,22 @@ async function signDoc(req, res) {
               url: `/me/documents`,
               tag: `doc-${doc.id}`,
               requireInteraction: true,
+            },
+          });
+        }
+        // Tell the owner a client just signed (and whether it's now their
+        // turn to countersign).
+        if (!signer.is_owner) {
+          notifyOwnerSafe({
+            workspaceId: doc.workspace_id,
+            type: 'documents',
+            payload: {
+              title: n.is_owner ? 'Your turn to sign' : 'Document signed',
+              body: n.is_owner
+                ? `${signer.name} signed "${doc.name}". Open it to add your signature.`
+                : `${signer.name} signed "${doc.name}". Waiting on ${n.name}.`,
+              url: `/documents?doc=${encodeURIComponent(doc.id)}`,
+              tag: `doc-progress-${doc.id}`,
             },
           });
         }
@@ -407,7 +489,7 @@ async function signDoc(req, res) {
       {
         ts: new Date().toISOString(),
         kind: 'completed',
-        text: `${doc.recipient_name || 'Recipient'} signed and completed the document`,
+        text: `${doc.recipient_name || 'Recipient'} signed and completed the document${consented ? ' after agreeing to sign electronically' : ''}`,
         ip,
       },
     ];
@@ -418,7 +500,7 @@ async function signDoc(req, res) {
         completed_at    = NOW(),
         sign_token_hash = NULL,
         completion_hash = ${computeHash({
-          contentHtml: doc.content_html,
+          contentHtml: hashBody(doc),
           signers: [{ name: doc.recipient_name, email: doc.recipient_email, fields: merged, signedAt: new Date().toISOString() }],
         })},
         activity        = ${JSON.stringify(newActivity)}::jsonb,
@@ -544,7 +626,7 @@ async function declineDoc(req, res) {
       payload: {
         title: 'Document declined',
         body: `${declinerName} declined "${doc.name}"${reason ? ` - ${reason}` : ''}`,
-        url: '/documents',
+        url: `/documents?doc=${encodeURIComponent(doc.id)}`,
         tag: `doc-declined-${doc.id}`,
       },
     });
@@ -585,9 +667,11 @@ async function declineDoc(req, res) {
 // Helpers
 // ───────────────────────────────────────────────────────────────────────
 
-async function appendActivity(docId, current, entry) {
-  const next = [...(current || []), { ts: new Date().toISOString(), ...entry }];
-  await sql`UPDATE documents SET activity = ${JSON.stringify(next)}::jsonb, updated_at = NOW() WHERE id = ${docId}`;
+// Append atomically (jsonb concat in SQL) so two events landing at the
+// same moment can't overwrite each other.
+async function appendActivity(docId, entry) {
+  const item = JSON.stringify([{ ts: new Date().toISOString(), ...entry }]);
+  await sql`UPDATE documents SET activity = COALESCE(activity, '[]'::jsonb) || ${item}::jsonb, updated_at = NOW() WHERE id = ${docId}`;
 }
 
 // Pulls the doc + every signer's submission, computes the tamper-
@@ -603,7 +687,7 @@ async function finalizeCompletedDoc(docId) {
      ORDER BY order_index ASC
   `;
   const completionHash = computeHash({
-    contentHtml: doc.content_html,
+    contentHtml: hashBody(doc),
     signers: signers.rows.map((s) => ({
       name: s.name, email: s.email,
       signedAt: s.signed_at?.toISOString?.() || s.signed_at,
@@ -636,6 +720,15 @@ async function finalizeCompletedDoc(docId) {
   // 0 rows = a void won the race against this in-flight signature;
   // callers bail rather than overwrite 'voided' with 'completed'.
   return updated.rows[0] || null;
+}
+
+// What the completion hash treats as "the document": the written body,
+// or for an uploaded PDF the SHA-256 of the original file (so the hash
+// also pins down exactly which PDF was signed).
+function hashBody(doc) {
+  if (doc?.content_html) return doc.content_html;
+  if (doc?.kind === 'pdf' && doc.source_pdf_sha256) return `pdf-sha256:${doc.source_pdf_sha256}`;
+  return '';
 }
 
 // Stable canonicalization: lowercase emails, ISO timestamps, sort
@@ -675,7 +768,8 @@ async function maybeStampFinalPdf(doc) {
   try {
     const signerRows = await sql`
       SELECT id, order_index, name, email, signed_at, declined_at,
-             decline_reason, ip, user_agent, field_values
+             decline_reason, ip, user_agent, field_values,
+             is_owner, viewed_at, consent_at
         FROM document_signers
        WHERE document_id = ${doc.id}
        ORDER BY order_index ASC
@@ -696,6 +790,7 @@ async function maybeStampFinalPdf(doc) {
       }];
     }
     let bytes;
+    const branding = await fetchBranding(doc.workspace_id).catch(() => ({}));
     if (isPdf) {
       bytes = await stampCompletedPdf({
         pdfUrl: doc.file_url,
@@ -703,9 +798,9 @@ async function maybeStampFinalPdf(doc) {
         signers,
         doc,
         hash: doc.completion_hash,
+        business: branding.businessName || null,
       });
     } else {
-      const branding = await fetchBranding(doc.workspace_id);
       bytes = await renderWrittenPdf({
         doc,
         fields: doc.fields || [],
@@ -715,8 +810,14 @@ async function maybeStampFinalPdf(doc) {
       });
     }
     if (!bytes) return null;
+    // The "after" fingerprint: SHA-256 of the signed file itself.
+    const finalSha = crypto.createHash('sha256').update(bytes).digest('hex');
     try {
-      const { url, pathname } = await uploadStampedPdf({
+      await sql`UPDATE documents SET final_pdf_sha256 = ${finalSha} WHERE id = ${doc.id}`;
+      doc.final_pdf_sha256 = finalSha;
+    } catch { /* column missing on an old deploy: the PDF still goes out */ }
+    try {
+      const { url, pathname, private: isPrivate } = await uploadStampedPdf({
         workspaceId: doc.workspace_id,
         docId: doc.id,
         bytes,
@@ -725,6 +826,7 @@ async function maybeStampFinalPdf(doc) {
         UPDATE documents SET
           final_pdf_url = ${url},
           final_pdf_blob_pathname = ${pathname},
+          final_pdf_private = ${!!isPrivate},
           updated_at = NOW()
         WHERE id = ${doc.id}
       `;
@@ -829,7 +931,7 @@ async function notifyOwnerOnCompletion(doc, attachments = []) {
     payload: {
       title: 'Document signed',
       body: `${doc.name} is fully signed`,
-      url: '/documents',
+      url: `/documents?doc=${encodeURIComponent(doc.id)}`,
       tag: `doc-signed-${doc.id}`,
     },
   });

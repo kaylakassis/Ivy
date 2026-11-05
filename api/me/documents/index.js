@@ -5,6 +5,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { docFileUrl } from '../../_lib/docFiles.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -107,7 +108,8 @@ export default async function handler(req, res) {
         // For multi-signer docs that have completed, surface the URL
         // of the final flattened PDF so the client can download their
         // copy. Single-signer / written docs leave this null.
-        finalPdfUrl: r.final_pdf_url || null,
+        // Signed, expiring link (api/_lib/docFiles.js), not the storage address.
+        finalPdfUrl: r.final_pdf_url && r.status === 'completed' ? docFileUrl(r.id, 'final') : null,
         completionHash: r.completion_hash || null,
         businessName: m?.businessName || 'Business',
         // Per-user signer view: where THIS signer stands in the chain,

@@ -1,54 +1,63 @@
 // Server-side PDF stamping. Called when the last signer completes a doc
 // whose kind === 'pdf' and file_url is set. We:
-//   1. Fetch the original PDF bytes from Blob.
+//   1. Fetch the original PDF bytes from Blob (platform host only).
 //   2. For every field placed by the owner, draw the signer's submitted
-//      value at the (page, x, y, w, h) coordinates the editor recorded.
-//      - signature → embedded PNG of the canvas drawing
-//      - text / initial / date → drawText with a serviceable font fit
-//   3. Append a final page summarizing every signer (name, email,
-//      signed_at, IP) plus the document's tamper-evident SHA-256 hash.
-//   4. Save and return the bytes - the caller uploads them to Blob and
-//      stamps `documents.final_pdf_url` so the owner + every signer can
-//      download the flattened, legally-binding artifact.
+//      value at the page + position the editor recorded:
+//        signature / initials → the drawn PNG, or the typed text
+//        checkbox             → a check mark
+//        everything else      → the text, shrunk to fit the box
+//   3. Append a certificate of completion: the document, the original
+//      file's SHA-256, every signer (email, role, viewed / agreed /
+//      signed times, IP, device), the event log, and the completion hash.
+//   4. Save and return the bytes. The caller uploads them and records
+//      the signed file's own SHA-256 on the document row.
 //
-// Coordinates: the editor stores fields with x/y/w/h as 0..1 fractions
-// of the rendered page size in the BROWSER (top-left origin). pdf-lib
-// uses bottom-left points. We flip Y here.
+// Coordinates: the editor stores x/y/w/h as 0..1 fractions of the page AS
+// DISPLAYED (pdf.js shows the crop box, turned by the page's /Rotate),
+// top-left origin. mapPage() turns those back into PDF user space for the
+// real page, so a field lands in the same spot on rotated pages and on
+// pages whose crop box doesn't start at 0,0. Text and images are rotated
+// with the page so they read upright for the viewer.
 //
 // Failures are surfaced (caller logs + falls back to no final PDF)
 // rather than blocking completion - the canonical record is still the
 // document_signers rows + completion_hash.
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import crypto from 'node:crypto';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import { put } from '@vercel/blob';
 import { assertPlatformBlobUrl } from './safeUrl.js';
+import { uploadPrefix } from './blobScope.js';
 
-const SIG_TEXT_FALLBACK_FONT_SIZE = 14;
+const INK = rgb(0.05, 0.07, 0.12);
+const MUTED = rgb(0.30, 0.30, 0.32);
 
-export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) {
-  if (!pdfUrl) return null;
-  // Only ever fetch from the platform blob store: file_url is owner-supplied
-  // and this runs server side, so an arbitrary host would be an SSRF hole.
-  const safePdfUrl = assertPlatformBlobUrl(pdfUrl, { what: 'PDF URL' });
-  const buf = await fetch(safePdfUrl).then((r) => {
-    if (!r.ok) throw new Error(`fetch original PDF failed: ${r.status}`);
-    return r.arrayBuffer();
-  });
-  const pdf = await PDFDocument.load(buf, { ignoreEncryption: true });
+export async function stampCompletedPdf({ pdfUrl, pdfBytes, fields, signers, doc, hash, business }) {
+  let buf = pdfBytes || null;
+  if (!buf) {
+    if (!pdfUrl) return null;
+    // Only ever fetch from the platform blob store: file_url is owner-supplied
+    // and this runs server side, so an arbitrary host would be an SSRF hole.
+    const safePdfUrl = assertPlatformBlobUrl(pdfUrl, { what: 'PDF URL' });
+    buf = await fetch(safePdfUrl).then((r) => {
+      if (!r.ok) throw new Error(`fetch original PDF failed: ${r.status}`);
+      return r.arrayBuffer();
+    });
+  }
+  const sourceBytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  const sourceHash = crypto.createHash('sha256').update(sourceBytes).digest('hex');
+  const pdf = await PDFDocument.load(sourceBytes, { ignoreEncryption: true, updateMetadata: false });
   const helv = await pdf.embedFont(StandardFonts.Helvetica);
   const helvBold = await pdf.embedFont(StandardFonts.HelveticaBold);
 
   const pages = pdf.getPages();
+  const originalPageCount = pages.length;
 
-  // Build a lookup: fieldId → { signedValue, signer }. The latest
-  // (highest order_index) signer to touch a field wins, mirroring how
-  // the UI shows it.
+  // fieldId → { value, signer }. Only non-empty values, so a later
+  // signer's blank can't clobber an earlier signer's real value.
   const valueByField = new Map();
   for (const s of signers) {
     for (const fv of (s.field_values || [])) {
-      // Skip empty values so a later signer's blank can't clobber an
-      // earlier signer's real value (keeps the flattened PDF consistent
-      // with the completion_hash, which is computed from non-empty values).
-      if (fv.value) valueByField.set(fv.id, { value: fv.value, signer: s });
+      if (fv && fv.value) valueByField.set(fv.id, { value: fv.value, signer: s });
     }
   }
 
@@ -56,73 +65,131 @@ export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) 
     const meta = valueByField.get(f.id);
     if (!meta || !meta.value) continue;
     const pageIdx = Number.isInteger(f.page) ? f.page : 0;
-    const page = pages[pageIdx] || pages[0];
+    // A field on a page this PDF doesn't have is skipped, never moved to
+    // page 1 where it would land on the wrong text.
+    const page = pages[pageIdx];
     if (!page) continue;
-    const { width: pw, height: ph } = page.getSize();
+    const m = mapPage(page);
+    const rect = {
+      x: clamp01(f.x ?? 0) * m.dispW,
+      y: clamp01(f.y ?? 0) * m.dispH,
+      w: clamp01(f.w ?? 0.2) * m.dispW,
+      h: clamp01(f.h ?? 0.04) * m.dispH,
+    };
+    if (rect.w <= 0 || rect.h <= 0) continue;
 
-    // Coordinates: editor stored top-left origin, 0..1 fractions.
-    const x  = clamp01(f.x ?? 0) * pw;
-    const yT = clamp01(f.y ?? 0) * ph;
-    const w  = clamp01(f.w ?? 0.2) * pw;
-    const h  = clamp01(f.h ?? 0.04) * ph;
-    // pdf-lib origin is bottom-left.
-    const y  = ph - yT - h;
-
-    if (f.type === 'signature') {
+    if (f.type === 'checkbox') {
+      if (meta.value === 'true') drawCheck(page, m, rect);
+      continue;
+    }
+    if (f.type === 'signature' || f.type === 'initial') {
       const png = decodeSignaturePng(meta.value);
       if (png) {
         try {
           const img = await pdf.embedPng(png);
-          const ratio = Math.min(w / img.width, h / img.height);
-          const drawW = img.width * ratio;
-          const drawH = img.height * ratio;
-          page.drawImage(img, {
-            x: x + (w - drawW) / 2,
-            y: y + (h - drawH) / 2,
-            width: drawW,
-            height: drawH,
-          });
+          const ratio = Math.min(rect.w / img.width, rect.h / img.height);
+          const dw = img.width * ratio;
+          const dh = img.height * ratio;
+          const dx = rect.x + (rect.w - dw) / 2;
+          const dy = rect.y + (rect.h - dh) / 2;
+          const [px, py] = m.toPdf(dx, dy + dh);
+          page.drawImage(img, { x: px, y: py, width: dw, height: dh, rotate: degrees(m.rot) });
           continue;
         } catch {
-          // fall through
+          // fall through to text
         }
       }
-      // Typed signature: SignaturePad emits the raw string. Render the
-      // value (or fall back to the signer's name) in bold so it visually
-      // reads as a "signed" mark.
       const txt = (typeof meta.value === 'string' && meta.value && !meta.value.startsWith('data:'))
         ? meta.value
         : (meta.signer.name || '');
-      drawFitText(page, txt, x, y, w, h, helvBold, rgb(0.05, 0.07, 0.12));
+      drawFitText(page, m, rect, txt, helvBold, f.type === 'initial');
       continue;
     }
-
-    if (f.type === 'date' || f.type === 'text' || f.type === 'initial') {
-      drawFitText(page, String(meta.value), x, y, w, h, helv, rgb(0.05, 0.07, 0.12));
-    }
+    drawFitText(page, m, rect, String(meta.value), helv, false);
   }
 
-  drawAuditPages(pdf, { doc, signers, hash, helv, helvBold });
+  drawAuditPages(pdf, {
+    doc, signers, hash, helv, helvBold, business,
+    sourceHash, pageCount: originalPageCount,
+  });
 
   const bytes = await pdf.save();
   return bytes;
 }
 
-// Upload stamped bytes to Blob and return { url, pathname } so the
-// caller can persist them on the document row.
+// The page as pdf.js displays it: crop box, turned by /Rotate. Returns
+// the displayed size and toPdf(dx, dy) mapping a displayed point
+// (top-left origin) to PDF user space.
+export function mapPage(page) {
+  let box;
+  try { box = page.getCropBox(); } catch { box = null; }
+  if (!box || !(box.width > 0) || !(box.height > 0)) {
+    const s = page.getSize();
+    box = { x: 0, y: 0, width: s.width, height: s.height };
+  }
+  let rot = 0;
+  try { rot = page.getRotation().angle || 0; } catch { rot = 0; }
+  rot = ((Math.round(rot / 90) * 90) % 360 + 360) % 360;
+  const { x: bx, y: by, width: W, height: H } = box;
+  const dispW = rot % 180 === 0 ? W : H;
+  const dispH = rot % 180 === 0 ? H : W;
+  const toPdf = (dx, dy) => {
+    switch (rot) {
+      case 90:  return [bx + dy, by + dx];
+      case 180: return [bx + W - dx, by + dy];
+      case 270: return [bx + W - dy, by + H - dx];
+      default:  return [bx + dx, by + H - dy];
+    }
+  };
+  return { rot, dispW, dispH, toPdf };
+}
+
+function drawCheck(page, m, r) {
+  const s = Math.min(r.w, r.h);
+  const ox = r.x + (r.w - s) / 2;
+  const oy = r.y + (r.h - s) / 2;
+  const pts = [[0.18, 0.55], [0.42, 0.78], [0.84, 0.24]].map(([fx, fy]) => m.toPdf(ox + fx * s, oy + fy * s));
+  const thickness = Math.max(1, s * 0.12);
+  for (let i = 0; i < pts.length - 1; i++) {
+    page.drawLine({
+      start: { x: pts[i][0], y: pts[i][1] }, end: { x: pts[i + 1][0], y: pts[i + 1][1] },
+      thickness, color: INK,
+    });
+  }
+}
+
+// Upload stamped bytes and return { url, pathname, private } so the
+// caller can persist them on the document row. The pathname sits under
+// the workspace's ws/<id>/ prefix (api/_lib/blobScope.js). A private
+// blob store is used when the project has one; otherwise the file is
+// public-but-unguessable (random suffix) and only ever reached through
+// Ivy's signed, expiring links (api/documents/file.js).
+let privateUnsupported = false;
 export async function uploadStampedPdf({ workspaceId, docId, bytes }) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     throw new Error('BLOB_READ_WRITE_TOKEN missing');
   }
   const safeId = String(docId).replace(/[^a-z0-9-]/gi, '');
-  const pathname = `${workspaceId}/documents/${safeId}-signed.pdf`;
-  const result = await put(pathname, bytes, {
-    access: 'public',
+  let prefix;
+  try { prefix = uploadPrefix(String(workspaceId)); } catch { prefix = `${String(workspaceId).replace(/[^a-z0-9-]/gi, '')}/`; }
+  const pathname = `${prefix}documents/${safeId}-signed.pdf`;
+  const opts = {
     addRandomSuffix: true,
     contentType: 'application/pdf',
     token: process.env.BLOB_READ_WRITE_TOKEN,
-  });
-  return { url: result.url, pathname: result.pathname };
+  };
+  if (!privateUnsupported) {
+    try {
+      const result = await put(pathname, bytes, { ...opts, access: 'private' });
+      return { url: result.url, pathname: result.pathname, private: true };
+    } catch {
+      // A public store refuses private blobs. Remember that for this
+      // instance so later completions don't pay for a failing request.
+      privateUnsupported = true;
+    }
+  }
+  const result = await put(pathname, bytes, { ...opts, access: 'public' });
+  return { url: result.url, pathname: result.pathname, private: false };
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────
@@ -140,31 +207,29 @@ function decodeSignaturePng(value) {
   }
 }
 
-// Pick a font size that fits the box height-wise; trim with an ellipsis
-// if the rendered width still overflows.
-function drawFitText(page, text, x, y, w, h, font, color) {
-  let size = Math.min(h * 0.7, 22);
-  if (size < 6) size = 6;
-  let display = text;
+// Draw `text` inside the displayed rect `r`: pick a size that fits the
+// box height, shrink then ellipsize to fit the width, rotate with the page.
+function drawFitText(page, m, r, text, font, centered) {
+  let display = clean(text).replace(/\s+/g, ' ').trim();
+  if (!display) return;
+  let size = Math.min(r.h * 0.68, 22);
+  if (size < 5) size = 5;
+  const pad = Math.min(4, r.w * 0.05);
+  const maxW = Math.max(1, r.w - pad * 2);
   let measured = font.widthOfTextAtSize(display, size);
-  if (measured > w) {
-    // Shrink first, then ellipsize.
-    while (size > 7 && measured > w) {
-      size -= 1;
-      measured = font.widthOfTextAtSize(display, size);
-    }
-    while (display.length > 1 && measured > w) {
-      display = display.slice(0, -2) + '…';
-      measured = font.widthOfTextAtSize(display, size);
-    }
+  while (size > 6 && measured > maxW) {
+    size -= 0.5;
+    measured = font.widthOfTextAtSize(display, size);
   }
-  page.drawText(display, {
-    x: x + 4,
-    y: y + (h - size) / 2 + size * 0.18,
-    size: size || SIG_TEXT_FALLBACK_FONT_SIZE,
-    font,
-    color,
-  });
+  while (display.length > 1 && measured > maxW) {
+    display = display.slice(0, -2) + '…';
+    measured = font.widthOfTextAtSize(display, size);
+  }
+  const dx = centered ? r.x + (r.w - measured) / 2 : r.x + pad;
+  // Baseline: vertically centre the cap height in the box.
+  const dy = r.y + r.h / 2 + size * 0.35;
+  const [px, py] = m.toPdf(dx, dy);
+  page.drawText(display, { x: px, y: py, size, font, color: INK, rotate: degrees(m.rot) });
 }
 
 function clamp01(n) {
@@ -173,76 +238,95 @@ function clamp01(n) {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-function truncate(s, n) {
-  if (s.length <= n) return s;
-  return s.slice(0, n - 1) + '…';
-}
-
 function formatTs(ts) {
   try {
     const d = ts instanceof Date ? ts : new Date(ts);
+    if (Number.isNaN(d.getTime())) return '';
     return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   } catch {
-    return String(ts);
+    return '';
   }
 }
 
-// The signing record: one page (or more, for many signers) listing every
-// signer with time, IP and user agent, plus the tamper-evident hash.
-// Shared by the uploaded-PDF and written-document renderers.
-function drawAuditPages(pdf, { doc, signers, hash, helv, helvBold }) {
-  let current = pdf.addPage();
-  const { width: aw, height: ah } = current.getSize();
-  const margin = 56;
-  let cy = ah - margin;
-  current.drawText('Signing record', { x: margin, y: cy, size: 22, font: helvBold, color: rgb(0.05, 0.07, 0.12) });
-  cy -= 30;
-  current.drawText(doc.name || 'Document', { x: margin, y: cy, size: 12, font: helv, color: rgb(0.30, 0.30, 0.32) });
-  cy -= 28;
-  current.drawLine({ start: { x: margin, y: cy }, end: { x: aw - margin, y: cy }, thickness: 0.5, color: rgb(0.7, 0.7, 0.72) });
-  cy -= 22;
+// The certificate of completion. Shared by the uploaded-PDF and
+// written-document renderers. Every string goes through clean() so a
+// name or value in a script Helvetica can't encode never breaks the file.
+function drawAuditPages(pdf, { doc, signers, hash, helv, helvBold, business, sourceHash, pageCount }) {
+  const PW = 612, PH = 792, M = 56;
+  let page = pdf.addPage([PW, PH]);
+  let y = PH - M;
+  const width = PW - M * 2;
+  const ensure = (need) => {
+    if (y - need < M) {
+      page.drawText('Continued on next page', { x: M, y: 30, size: 8, font: helv, color: MUTED });
+      page = pdf.addPage([PW, PH]);
+      y = PH - M;
+    }
+  };
+  const line = (text, { font = helv, size = 9.5, color = MUTED, indent = 0, lead = 12.5 } = {}) => {
+    for (const l of wrap(clean(text), font, size, width - indent)) {
+      ensure(lead);
+      page.drawText(l, { x: M + indent, y, size, font, color });
+      y -= lead;
+    }
+  };
+  const rule = () => {
+    ensure(16);
+    y -= 4;
+    page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 0.5, color: rgb(0.75, 0.75, 0.77) });
+    y -= 14;
+  };
 
+  line('Certificate of completion', { font: helvBold, size: 20, color: INK, lead: 26 });
+  line(doc.name || 'Document', { font: helvBold, size: 12, color: INK, lead: 16 });
+  y -= 4;
+  line(`Document ID: ${doc.id || ''}`);
+  if (business) line(`Sent by: ${business}`);
+  if (pageCount) line(`Pages in the original document: ${pageCount}`);
+  if (doc.sent_at) line(`Sent: ${formatTs(doc.sent_at)}`);
+  line(`Completed: ${formatTs(doc.completed_at || new Date())}`);
+  if (sourceHash) {
+    y -= 2;
+    line('Original document fingerprint (SHA-256 of the uploaded file):', { font: helvBold });
+    line(sourceHash, { color: INK, size: 8.5 });
+  }
+  rule();
+
+  line('Signers', { font: helvBold, size: 13, color: INK, lead: 18 });
   for (const s of signers) {
-    if (cy < 140) {
-      // Spill onto another page if we run out of room (rare unless 8+ signers).
-      current.drawText('- continued on next page -', { x: margin, y: 30, size: 9, font: helv, color: rgb(0.5, 0.5, 0.5) });
-      current = pdf.addPage();
-      cy = current.getSize().height - margin;
-    }
-    current.drawText(`${s.order_index + 1}. ${s.name}`, { x: margin, y: cy, size: 13, font: helvBold, color: rgb(0.05, 0.07, 0.12) });
-    cy -= 16;
-    const lines = [
-      s.email,
-      s.signed_at ? `Signed at ${formatTs(s.signed_at)}` : (s.declined_at ? `Declined at ${formatTs(s.declined_at)}` : '-'),
-      s.ip ? `IP ${s.ip}` : null,
-      s.user_agent ? truncate(`UA ${s.user_agent}`, 90) : null,
-      s.decline_reason ? truncate(`Reason: ${s.decline_reason}`, 90) : null,
+    ensure(70);
+    const role = s.is_owner ? 'Business' : 'Client';
+    line(`${(s.order_index ?? 0) + 1}. ${s.name || 'Signer'} (${role})`, { font: helvBold, size: 11, color: INK, lead: 15 });
+    const facts = [
+      s.email ? `Email: ${s.email}` : null,
+      s.viewed_at ? `Opened: ${formatTs(s.viewed_at)}` : null,
+      s.consent_at ? `Agreed to sign electronically: ${formatTs(s.consent_at)}` : null,
+      s.signed_at ? `Signed: ${formatTs(s.signed_at)}` : (s.declined_at ? `Declined: ${formatTs(s.declined_at)}` : null),
+      s.ip ? `IP address: ${s.ip}` : null,
+      s.user_agent ? `Device: ${String(s.user_agent).slice(0, 220)}` : null,
+      s.decline_reason ? `Reason: ${String(s.decline_reason).slice(0, 300)}` : null,
     ].filter(Boolean);
-    for (const line of lines) {
-      current.drawText(line, { x: margin + 14, y: cy, size: 10, font: helv, color: rgb(0.30, 0.30, 0.32) });
-      cy -= 13;
+    for (const f of facts) line(f, { indent: 14 });
+    y -= 6;
+  }
+
+  const events = Array.isArray(doc.activity) ? doc.activity : [];
+  if (events.length) {
+    rule();
+    line('Event log', { font: helvBold, size: 13, color: INK, lead: 18 });
+    for (const e of events.slice(-60)) {
+      if (!e) continue;
+      line(`${formatTs(e.ts)}  ${String(e.text || e.kind || '').slice(0, 300)}${e.ip ? `  (IP ${e.ip})` : ''}`, { size: 8.5, lead: 11.5 });
     }
-    cy -= 12;
   }
 
   if (hash) {
-    // The hash block needs ~70px; spill if it won't fit on the current page.
-    if (cy < 90) {
-      current = pdf.addPage();
-      cy = current.getSize().height - margin;
-    }
-    cy -= 8;
-    current.drawLine({ start: { x: margin, y: cy }, end: { x: aw - margin, y: cy }, thickness: 0.5, color: rgb(0.7, 0.7, 0.72) });
-    cy -= 18;
-    current.drawText('Tamper-evident hash (SHA-256)', { x: margin, y: cy, size: 10, font: helvBold, color: rgb(0.30, 0.30, 0.32) });
-    cy -= 14;
-    // Wrap the hash so it always fits.
-    const half = Math.ceil(hash.length / 2);
-    current.drawText(hash.slice(0, half), { x: margin, y: cy, size: 9, font: helv, color: rgb(0.05, 0.07, 0.12) });
-    cy -= 12;
-    current.drawText(hash.slice(half),    { x: margin, y: cy, size: 9, font: helv, color: rgb(0.05, 0.07, 0.12) });
+    rule();
+    line('Completion fingerprint (SHA-256 of the document and every signer\'s answers and times):', { font: helvBold });
+    line(hash, { color: INK, size: 8.5 });
   }
-
+  y -= 6;
+  line('The SHA-256 fingerprint of this signed PDF file is recorded in Ivy when the file is created, so any later change to the file can be detected.', { size: 8.5, lead: 11.5 });
 }
 
 // ─── Written documents ────────────────────────────────────────────────
@@ -342,7 +426,8 @@ export async function renderWrittenPdf({ doc, fields, signers, hash, business })
         y -= 14;
       } else {
         ensure(16);
-        const line = `${label}: ${String(value || '')}`;
+        const shown = f.type === 'checkbox' ? (value === 'true' ? 'Yes' : 'No') : String(value || '');
+        const line = `${label}: ${shown}`;
         writeLines(line, { indent: 10, size: 10.5, lead: 15 });
       }
     }
@@ -352,7 +437,7 @@ export async function renderWrittenPdf({ doc, fields, signers, hash, business })
     y -= 10;
   }
 
-  drawAuditPages(pdf, { doc, signers, hash, helv, helvBold });
+  drawAuditPages(pdf, { doc, signers, hash, helv, helvBold, business });
   return pdf.save();
 }
 
