@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     // no longer grants a trial; older app builds that still call it get a
     // clear message pointing to the plans screen.
     return res.status(400).json({
-      error: 'Your free trial starts with a card on file, so you are never charged by surprise. Choose a plan to start it.',
+      error: 'Your free trial starts with a card on file. Choose a plan to start it.',
       code: 'card_required',
     });
   } catch (err) {
