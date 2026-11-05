@@ -1721,7 +1721,7 @@ function mockReply(text, ctx, attachment) {
     } Want me to help draft a follow-up message?`;
   }
   if (t.includes('retention') || t.includes('churn') || t.includes('quiet')) {
-    return `Retention is about rhythm. Of your ${ctx.activeClients} active client${ctx.activeClients === 1 ? '' : 's'}, ${ctx.quietClients} have had no booking or message in 3+ weeks. Clients who go that long without a touchpoint are 4× more likely to churn. Want a draft of a light check-in to send them?`;
+    return `Retention is about rhythm. Of your ${ctx.activeClients} active client${ctx.activeClients === 1 ? '' : 's'}, ${ctx.quietClients} have had no booking or message in 3+ weeks. Want a draft of a light check-in to send them?`;
   }
   if (t.includes('pricing') || t.includes('rates') || t.includes('raise')) {
     return `A simple rule: raise rates when you're >70% booked for 4 weeks straight. You have ${ctx.upcomingSessions} session${ctx.upcomingSessions === 1 ? '' : 's'} on the books in the next 7 days. If your calendar's been steadily full, that's a green light. Want me to walk through a 10–15% increase plan?`;

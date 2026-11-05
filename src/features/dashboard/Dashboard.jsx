@@ -159,7 +159,7 @@ function SetupCard({ status, switchPrompt, offerSample, onHide, onChanged }) {
           </div>
           <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>
             {phase === 'required' ? 'A few quick steps and your booking page can take bookings.' : 'Optional, but each one helps you get paid and found.'}
-            {next && <> Up next: <strong>{next.label.toLowerCase()}</strong>.</>}
+            {next && <> Up next: <strong>{next.label.charAt(0).toLowerCase() + next.label.slice(1)}</strong>.</>}
           </div>
           <div style={{ height: 6, borderRadius: 99, background: 'var(--border)', overflow: 'hidden', margin: '10px 0 12px' }}>
             <div style={{ height: '100%', width: `${pct}%`, background: tone, transition: 'width .25s ease' }}/>
