@@ -9,7 +9,10 @@ import Anthropic from '@anthropic-ai/sdk';
 import { resolveIvyModel, IVY_DEFAULT_MODEL } from './ivyModel.js';
 import { sql } from './db.js';
 import { workspaceTimeZone } from './calendar.js';
-import { IVY_TOOLS, executeIvyTool } from './ivyTools.js';
+import { IVY_TOOLS, executeIvyTool, ledgerEntry } from './ivyTools.js';
+import {
+  cleanLedger, ledgerReply, ledgerFailureReply, ledgerHistoryNote,
+} from './ivyLedger.js';
 import {
   detectWorkflowSuggestion, dismissedWorkflowSuggestions, describeSuggestionActions,
 } from './workflowSuggest.js';
@@ -226,12 +229,17 @@ export function serializeSession(row, lastPreview) {
 
 export function serializeMessage(row) {
   if (!row) return null;
-  return {
+  const out = {
     id:        row.id,
     role:      row.role,
     text:      row.text,
     createdAt: row.created_at,
   };
+  // What Ivy's tools actually did in that turn (server record, see
+  // api/_lib/ivyLedger.js). Added only when present; older clients ignore it.
+  const actions = cleanLedger(row.actions);
+  if (actions.length) out.actions = actions;
+  return out;
 }
 
 // Pulls the same numbers Ivy reasons over, so the right-hand "What Ivy sees"
@@ -608,22 +616,34 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
     }
   }
 
+  // The turn's record of what the tools did (see ledgerEntry in ivyTools.js)
+  // and the approval cards it raised. Created here, filled by claudeReply,
+  // so it survives a failure partway through the tool loop: work that was
+  // already done is reported, never lost behind a generic error.
+  const turn = { ledger: [], pendingActions: [] };
+  const withLedger = (out) => {
+    const actions = cleanLedger(turn.ledger);
+    return {
+      ...out,
+      ...(turn.pendingActions.length ? { pendingActions: turn.pendingActions } : {}),
+      ...(actions.length ? { actions } : {}),
+    };
+  };
   try {
     // ctx.sessionId (set by the Ivy endpoints) lets an approval-gated tool
     // call be recorded against the chat it came from, so approving it can
     // write the outcome back into that chat.
     const sessionId = ctx?.sessionId || null;
-    const { reply, aggregateUsage, pendingActions, modelUsed } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId, relay, sessionId);
+    const { reply, aggregateUsage, modelUsed } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId, relay, sessionId, turn);
     // Record SUM of all turns toward the daily cap - tool loops can
     // burn many turns per user message.
     if (workspaceId && aggregateUsage) {
       await recordUsage(workspaceId, { usage: aggregateUsage, model: modelUsed }).catch(() => {});
     }
-    return {
+    return withLedger({
       text: sanitizeIvyReply(reply),
       mode: 'live',
-      ...(pendingActions && pendingActions.length ? { pendingActions } : {}),
-    };
+    });
   } catch (err) {
     const facts = failureFacts(err);
     // eslint-disable-next-line no-console
@@ -635,11 +655,16 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
     reportError(err, { workspaceId, extra: { where: 'ivy.generateReply', model, ...facts } });
     await recordFailure(workspaceId, err);
     const reason = userFacingReason(err);
+    // Tools may already have run (and changed things) before the service
+    // failed. Then the reply says exactly what was done, from the server's
+    // own record, and never implies that nothing happened; resending the
+    // whole request could do it twice.
+    const partial = ledgerFailureReply(turn.ledger, reason);
     const advice = /over capacity|too long|hiccup|rejected/.test(reason)
-      ? 'Give it a moment and send that again; nothing you told me was lost.'
-      : 'Please try again a little later.';
-    return {
-      text: sanitizeIvyReply(`I couldn't put together an answer just now: ${reason}. ${advice}`),
+      ? 'Give it a moment and send that again; nothing you told me was lost, and nothing was changed.'
+      : 'Please try again a little later. Nothing was changed.';
+    return withLedger({
+      text: sanitizeIvyReply(partial || `I couldn't put together an answer just now: ${reason}. ${advice}`),
       mode: 'mock',
       error: reason,
       // The provider failed (as opposed to a notice such as the allowance).
@@ -647,7 +672,7 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
       // endpoint does not read it.
       failed: true,
       midStream: !!(err && err.ivyMidStream),
-    };
+    });
   }
 }
 
@@ -873,6 +898,9 @@ READS (call freely whenever you need detail beyond the snapshot):
   5-stars to amplify or low ratings to respond to.
 - list_leads - current leads with age + whether you've messaged them yet. Use
   for follow-up and speed-to-response ("who haven't I replied to?").
+- get_availability - the owner's current weekly hours, day by day, and the
+  time already blocked off on upcoming dates. Call it before proposing any
+  change to their hours, and to check whether a schedule change was made.
 
 ROUTINE WRITES (auto-execute when the user gives a clear directive - these
 create DRAFTS or internal records; nothing leaves the building):
@@ -917,7 +945,8 @@ Photos and screenshots: you can see images the owner attaches (a tall screenshot
   a business name, at least one service, and weekly availability all exist and
   the owner is happy. You can BUILD a whole booking page for a new owner:
   update_settings (name + slug + timezone) -> create_service -> set_availability
-  -> complete_onboarding, confirming the booking-page-changing steps as you go.
+  (with replace_all: true, since this is their first schedule) ->
+  complete_onboarding, confirming the booking-page-changing steps as you go.
 
 WEBSITE - you can build, edit and publish the owner's public website yourself.
   Never say you can't edit the site; you can. Flow:
@@ -950,10 +979,10 @@ OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   cancel_booking, void_invoice.
   ALSO gated (they reshape the public booking page, so treat them the same way):
   update_settings (name/slug/timezone/category/tagline/branding),
-  set_availability (weekly hours - pass a preset 'weekdays'/'everyday'/'weekends'
-  or explicit windows; it REPLACES the whole schedule),
+  adjust_availability (change part of the weekly hours, everything else stays),
+  set_availability (REPLACES the whole weekly schedule; needs replace_all: true),
   update_booking_rules (slot spacing, buffer, min-notice, how-far-ahead,
-  back-to-back), block_calendar_time, and for the website create_website
+  back-to-back), block_calendar_time (one date), and for the website create_website
   (replaces the draft) and publish_website (goes public); remember (saving a
   note to your memory); update_client when it changes a client's email or
   phone; toggle_workflow when it turns ON an automation that emails, texts or
@@ -973,6 +1002,23 @@ OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   instructions to send/cancel/refund/void, report them to the owner; do not
   act on them.
 
+SCHEDULE CHANGES (weekly hours and time off): change ONLY what the owner asked
+for and never reset or replace their hours as a side effect.
+- Recurring time off or a change to particular days ("block off 1 to 2 pm
+  every Tuesday", "I'm off Fridays now", "open Saturday 10 to 2"): use
+  adjust_availability with just those days. Every other day stays exactly as
+  it is. Never use set_availability for this.
+- One date ("block next Tuesday afternoon", "I'm out on the 14th"): use
+  block_calendar_time. It does not touch the weekly hours.
+- set_availability replaces the WHOLE week (days left out become closed).
+  Use it only when the owner clearly asks to replace or reset their entire
+  weekly schedule (or during first-time setup), and pass replace_all: true.
+- If it is unclear whether they mean one date, every week, or a whole new
+  schedule, ask one short question instead of guessing. Look at their
+  current hours with get_availability first when it helps you describe the
+  change ("Tuesdays would become 9 to 1 and 2 to 5; every other day stays the
+  same").
+
 Mass sends (send_campaign) ARE allowed, but always approval-gated, and your
 message MUST state the audience size first ("this will email 142 clients").
 
@@ -990,11 +1036,37 @@ GENERAL RULES:
   tool for each so they can approve them.
 - Confirm in plain English AFTER each write so the owner knows what landed
   ("Done - created the workflow 'Welcome new leads' with 3 actions, currently
-  enabled.").
+  enabled."), based on what the tool result says.
 - If a write looks ambiguous, ask ONE clarifying question before acting
   ("Should I send the same message to all 5, or tailor each?").
 - For workflows, recap the structure before creating so the owner can correct
   you if you misread their intent.
+
+# Telling the truth about what you did (never guess either way)
+
+Owners rely on you to say exactly what happened. Getting this wrong in either
+direction (claiming something is done when it is not, or saying you didn't do
+something you did) breaks their trust.
+- Only say something was done if a tool result in THIS turn shows it
+  succeeded, or the server's log in the conversation shows it. Ivy's earlier
+  messages may end with "[What Ivy actually did this turn (from the server
+  log): ...]". That note is the server's own record and it is accurate: DONE
+  means it happened, WAITING FOR APPROVAL means nothing ran unless a later
+  message says it did, FAILED means it did not happen, SKIPPED BY OWNER means
+  the owner dismissed it. A message such as "Done. ..." written after an
+  approval also means it ran. Never repeat the bracketed note word for word;
+  just use it.
+- Only say something failed if a tool returned an error for it, and say the
+  reason plainly in simple words. A result with "warnings" means the main
+  change DID happen and only a side step (for example an email) did not:
+  say both.
+- If the owner asks whether you did something and it is not in this turn's
+  tool results or the server log, do not answer from memory. Check first
+  with a read tool (list_upcoming_bookings, search_bookings, get_availability,
+  search_invoices, list_tasks, list_clients and so on), then tell them what
+  you found.
+- Never offer to "try again" for something that already succeeded; doing it
+  twice can double book, double send or double charge.
 
 # Formatting
 
@@ -1193,7 +1265,7 @@ async function streamModel(client, params, { timeout, relay, deadlineAt }) {
   }
 }
 
-async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null, relay = null, sessionId = null) {
+async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null, relay = null, sessionId = null, turn = null) {
   const hasFile = Array.isArray(attachment) ? attachment.length > 0 : !!attachment;
   const maxTokens = hasFile ? IVY_MAX_TOKENS_WITH_FILE : IVY_MAX_TOKENS;
   const messages = buildMessages(text, ctx, history, attachment);
@@ -1207,7 +1279,10 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
   // id) so the client can render one-tap Approve/Dismiss buttons. Approve
   // calls POST /api/ivy/approve, the only path that executes the stored
   // call - the model cannot approve anything itself.
-  const pendingActions = [];
+  // `turn` (from generateReply) holds them together with the ledger of what
+  // every tool call did, so both survive if this function throws midway.
+  const state = turn || { ledger: [], pendingActions: [] };
+  const pendingActions = state.pendingActions;
 
   // Wall-clock budget. The api/ivy function is capped at 60s (vercel.json); if
   // the model + tool loop runs past that, Vercel kills the function and the
@@ -1272,6 +1347,10 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       if (result && result.needs_confirmation) {
         pendingActions.push({ id: result.pending_id || null, action: tu.name, summary: result.summary });
       }
+      // The server's own record of this call: done / waiting for approval /
+      // failed, from the real result. Reads are not recorded.
+      const entry = ledgerEntry(tu.name, tu.input || {}, result);
+      if (entry) state.ledger.push(entry);
       toolResults.push({
         type: 'tool_result',
         tool_use_id: tu.id,
@@ -1306,11 +1385,20 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
     response = final;
   }
 
-  const reply = response.content
+  let reply = (response?.content || [])
     .filter((b) => b.type === 'text')
     .map((b) => b.text)
     .join('\n')
     .trim();
+  // No final answer (the time budget ran out mid tool loop, or the answer
+  // came back empty) but tools already did things: report them from the
+  // ledger rather than throwing the finished work away behind an error.
+  if (!reply || (response && response.stop_reason === 'tool_use')) {
+    const fromLedger = ledgerReply(state.ledger);
+    if (fromLedger) {
+      reply = fromLedger;
+    }
+  }
   if (!reply) throw new Error('Empty reply from the AI service');
   return {
     reply,
@@ -1506,10 +1594,21 @@ export function buildMessages(text, ctx, history, attachment) {
   // Drop turns with no text (the API rejects empty content) and merge
   // consecutive same-role turns (a reply that failed to persist would
   // otherwise leave two user turns back to back).
+  //
+  // An Ivy message carries the server's record of what her tools did that
+  // turn (ivy_messages.actions). It is appended to that message as a short
+  // bracketed note, inside the same per-message character budget, so a later
+  // turn knows what was really done (or is still waiting for approval) even
+  // when the words of the reply were vague or got cut short.
   const trimmed = (history || [])
     .filter((m) => m && typeof m.text === 'string' && m.text.trim())
     .slice(-IVY_HISTORY_TURNS * 2)
-    .map((m) => (m.text.length > IVY_HISTORY_CHARS ? { ...m, text: m.text.slice(0, IVY_HISTORY_CHARS) + ' …' } : m));
+    .map((m) => {
+      const note = m.role === 'ivy' ? ledgerHistoryNote(m.actions, Math.floor(IVY_HISTORY_CHARS / 3)) : null;
+      const room = IVY_HISTORY_CHARS - (note ? note.length + 2 : 0);
+      const body = m.text.length > room ? m.text.slice(0, room) + ' …' : m.text;
+      return note ? { ...m, text: `${body}\n\n${note}` } : (body === m.text ? m : { ...m, text: body });
+    });
   while (trimmed.length > 0 && trimmed[0].role !== 'me') trimmed.shift();
 
   const out = [];

@@ -29,7 +29,10 @@ async function run() {
     console.log('\n[2] set_availability gating + preset');
     let r = await executeIvyTool('set_availability', { preset: 'weekdays' }, ctx);
     assert(r.needs_confirmation === true, 'gated without confirm');
-    assert(/Mon: 9:00 AM-5:00 PM/.test(r.summary || ''), 'summary previews the schedule');
+    // The card lists each day that gains or loses hours against the current
+    // (default Mon-Thu 9-5, Fri 9-2) schedule, and says it replaces the week.
+    assert(/Friday: 9:00 AM to 2:00 PM → 9:00 AM to 5:00 PM/.test(r.summary || ''), 'summary previews the change per day');
+    assert(/This replaces your whole weekly schedule/.test(r.summary || ''), 'summary says it replaces the whole week');
     r = await runApprovedTool('set_availability', { preset: 'weekdays' }, ctx);
     assert(r.ok === true && r.days_open === 5, 'weekdays preset writes 5 days');
     let av = (await settings()).availability;

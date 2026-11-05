@@ -13,6 +13,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
 import { streamReply } from './stream.js';
+import { recoverTurn } from './recover.js';
 
 const EMPTY_CTX = {
   revenueThisMonth: 0, openInvoices: 0, activeClients: 0,
@@ -159,6 +160,7 @@ function useIvyState({ enabled = true } = {}) {
     // Ivy's bubble while the reply streams: appears with the first chunk and
     // grows from there; gone once the real message replaces it.
     const live = liveBubble(setMessages);
+    const startedAt = Date.now();
 
     try {
       let result;
@@ -200,6 +202,27 @@ function useIvyState({ enabled = true } = {}) {
       setModeError(r.modeError || null);
       if (r.usage) setUsage(r.usage);
     } catch (e) {
+      live.clear();
+      // The turn may have finished on the server even though its answer never
+      // reached us (a cut-off stream, lost signal, an error after the server
+      // started). Saying "try again" then would be false, and a resend could
+      // do the work twice, so first reload the chat and show what was saved.
+      // A 4xx was refused before anything ran, so there is nothing to find.
+      const status = Number(e?.status) || 0;
+      if (!(status >= 400 && status < 500)) {
+        const rec = await recoverTurn({ api, sessionId: activeId, text: optimisticText, startedAt });
+        if (rec) {
+          setMessages(rec.messages);
+          msgCacheRef.current.set(rec.sessionId, rec.messages);
+          if (rec.session) setSessions((xs) => [rec.session, ...xs.filter((s) => s.id !== rec.session.id)]);
+          if (!activeId) setActiveId(rec.sessionId);
+          setError(rec.replied ? null : new Error(
+            (e?.fromStream && e.message) ? e.message
+              : "Your message was saved, but Ivy's reply didn't reach the app. If you asked her to change something, check whether it was done before sending it again.",
+          ));
+          return;
+        }
+      }
       // A 5xx / gateway timeout (e.g. Vercel killing a slow function → a raw
       // "504 FUNCTION_INVOCATION_TIMEOUT") or a network abort should read as a
       // calm "try again", not a scary deployment error dumped into the chat.
@@ -251,16 +274,38 @@ function useIvyState({ enabled = true } = {}) {
         const r = method === 'approve'
           ? await api.post('/ivy/approve', { id })
           : await api.del('/ivy/approve', { id });
-        appendServerMessage(r?.message);
+        // `outcome` arrives instead of `message` when the action ran but the
+        // chat note could not be saved: still show what happened.
+        appendServerMessage(r?.message || (r?.outcome
+          ? { id: 'outcome-' + id, role: 'ivy', text: r.outcome, createdAt: new Date().toISOString() }
+          : null));
       } catch (e) {
         if (method === 'approve') {
-          setError(e?.status === 409
-            ? new Error(e.message || 'That action already ran or has expired.')
-            : e);
+          // A lost connection or a server error can arrive after the action
+          // already ran. Reload the chat so the owner sees the saved outcome
+          // ("Done. ...") instead of an error that reads as "not done".
+          const status = Number(e?.status) || 0;
+          let reloaded = false;
+          if (activeId && !(status >= 400 && status < 500)) {
+            try {
+              const r = await api.get('/ivy/' + activeId);
+              if (Array.isArray(r?.messages)) {
+                msgCacheRef.current.set(activeId, r.messages);
+                setMessages(r.messages);
+                reloaded = true;
+              }
+            } catch { /* still offline: fall through to the error */ }
+          }
+          if (!reloaded) {
+            setError(status === 409
+              ? new Error(e.message || 'That action already ran or has expired.')
+              : status >= 400 && status < 500 ? e
+                : new Error("Couldn't confirm whether that ran. Open this chat again in a moment to see the result before approving again."));
+          }
         }
       }
     }
-  }, [appendServerMessage]);
+  }, [appendServerMessage, activeId]);
 
   const pendingIdsFor = useCallback((messageId, pendingId) => {
     if (pendingId) return [pendingId];

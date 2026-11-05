@@ -19,6 +19,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { executePendingAction } from '../_lib/ivyApproval.js';
 import { serializeMessage, stripInlineMarkdown, sanitizeIvyReply } from '../_lib/ivy.js';
+import { cleanLedger } from '../_lib/ivyLedger.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,7 +50,8 @@ export default async function handler(req, res) {
       await sql`
         UPDATE ivy_pending_actions SET expires_at = LEAST(expires_at, NOW())
          WHERE id = ${id} AND workspace_id = ${workspaceId} AND executed_at IS NULL`;
-      const message = await appendIvyMessage(workspaceId, row.session_id, `Okay, skipped: ${row.summary}. Nothing was done.`);
+      const message = await appendIvyMessage(workspaceId, row.session_id, `Okay, skipped: ${row.summary}. Nothing was done.`,
+        [{ tool: row.tool, status: 'skipped', ok: false, summary: String(row.summary || row.tool).slice(0, 600) }]);
       return ok(res, { ok: true, dismissed: true, message });
     }
 
@@ -61,9 +63,18 @@ export default async function handler(req, res) {
     // gets nothing and answers 409.
     const out = await executePendingAction({ row, workspaceId, userId: user.id });
     if (!out.claimed) return conflict(res, 'This action has already run or expired.');
-    const { result, text } = out;
-    const message = await appendIvyMessage(workspaceId, row.session_id, text);
-    return ok(res, { ok: !(result && result.error), result, message });
+    const { result, text, actions } = out;
+    // The action has run. Recording it in the chat is bookkeeping: if that
+    // write fails, the owner still gets a success answer (with the outcome
+    // text), never an error that reads as "it didn't happen".
+    let message = null;
+    try {
+      message = await appendIvyMessage(workspaceId, row.session_id, text, actions);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[ivy approve] could not record the outcome in the chat:', err?.message);
+    }
+    return ok(res, { ok: !(result && result.error), result, message, ...(message ? {} : { outcome: text }) });
   } catch (err) {
     return serverError(res, err);
   }
@@ -76,14 +87,15 @@ function conflict(res, message) {
 // Writes the outcome into the chat the action came from, the same way
 // finishTurn stores Ivy's replies (api/_lib/ivyTurn.js), so the owner sees
 // it and the model's next turn knows the action ran (or was skipped).
-async function appendIvyMessage(workspaceId, sessionId, text) {
+async function appendIvyMessage(workspaceId, sessionId, text, actions = null) {
   if (!sessionId) return null;
   const owned = await sql`SELECT id FROM ivy_sessions WHERE id = ${sessionId} AND workspace_id = ${workspaceId}`;
   if (owned.rows.length === 0) return null;
   const clean = sanitizeIvyReply(text);
+  const ledger = cleanLedger(actions);
   const ins = await sql`
-    INSERT INTO ivy_messages (session_id, role, text)
-    VALUES (${sessionId}, 'ivy', ${clean})
+    INSERT INTO ivy_messages (session_id, role, text, actions)
+    VALUES (${sessionId}, 'ivy', ${clean}, ${ledger.length ? JSON.stringify(ledger) : null}::jsonb)
     RETURNING *`;
   await sql`
     UPDATE ivy_sessions

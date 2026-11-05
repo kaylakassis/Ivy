@@ -15,7 +15,7 @@ import {
 } from '../_lib/ivy.js';
 import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
 import { screenOwnerPrompt, screenReply, guardedReply } from '../_lib/ivyGuard.js';
-import { legacyApprovalReply } from '../_lib/ivyApproval.js';
+import { legacyApprovalTurn } from '../_lib/ivyApproval.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 
@@ -87,10 +87,10 @@ export default async function handler(req, res) {
       let reply;
       // iPhone builds in the App Store approve a card by sending a fixed
       // message; run this chat's waiting actions instead of asking the model.
-      const legacy = await legacyApprovalReply({ text: turn.text, sessionId: turn.session?.id, workspaceId, userId: user.id });
+      const legacy = await legacyApprovalTurn({ text: turn.text, sessionId: turn.session?.id, workspaceId, userId: user.id });
       const screened = legacy ? { blocked: false } : screenOwnerPrompt(turn.text);
       if (legacy) {
-        reply = { text: legacy, mode: 'live', error: null };
+        reply = { text: legacy.text, actions: legacy.actions, mode: 'live', error: null };
       } else if (screened.blocked) {
         reply = guardedReply(screened.reason);
       } else {
@@ -98,7 +98,8 @@ export default async function handler(req, res) {
         // against this chat (see executeIvyTool / api/ivy/approve.js).
         reply = await generateReply(turn.text, { ...turn.ctx, sessionId: turn.session.id }, turn.history, workspaceId, turn.attachment, user.id);
         const out = screenReply(reply.text);
-        if (out.blocked) reply = guardedReply(out.reason);
+        // The guard swaps the words, never the record of what the tools did.
+        if (out.blocked) reply = { ...guardedReply(out.reason), ...(reply.actions ? { actions: reply.actions } : {}) };
       }
       return ok(res, await finishTurn({ ...turn, reply, workspaceId }));
     }

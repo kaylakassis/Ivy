@@ -32,11 +32,12 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { generateReply } from '../_lib/ivy.js';
 import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
 import { screenOwnerPrompt, screenReply, guardedReply } from '../_lib/ivyGuard.js';
-import { legacyApprovalReply } from '../_lib/ivyApproval.js';
+import { legacyApprovalTurn } from '../_lib/ivyApproval.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { reportError } from '../_lib/monitoring.js';
 import { redact } from '../_lib/logRedact.js';
+import { ledgerFailureReply } from '../_lib/ivyLedger.js';
 
 // Vercel's Node runtime buffers a function's response unless the function
 // opts into streaming; maxDuration comes from vercel.json (api/ivy/**).
@@ -52,6 +53,7 @@ export default async function handler(req, res) {
 
   let started = false;
   let ping = null;
+  let reply = null;
   const sse = (event, data) => {
     res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
@@ -89,13 +91,12 @@ export default async function handler(req, res) {
     // the screen is swapped with a `replace` event and the fixed line is what
     // gets stored. The model's own refusal is the primary layer; this is
     // defence in depth.
-    let reply;
     // iPhone builds in the App Store approve a card by sending a fixed
     // message; run this chat's waiting actions instead of asking the model.
-    const legacy = await legacyApprovalReply({ text: turn.text, sessionId: turn.session?.id, workspaceId, userId: user.id });
+    const legacy = await legacyApprovalTurn({ text: turn.text, sessionId: turn.session?.id, workspaceId, userId: user.id });
     const screened = legacy ? { blocked: false } : screenOwnerPrompt(turn.text);
     if (legacy) {
-      reply = { text: legacy, mode: 'live', error: null };
+      reply = { text: legacy.text, actions: legacy.actions, mode: 'live', error: null };
       sse('delta', { text: reply.text });
     } else if (screened.blocked) {
       reply = guardedReply(screened.reason);
@@ -109,7 +110,8 @@ export default async function handler(req, res) {
       });
       const out = screenReply(reply.text);
       if (out.blocked) {
-        reply = guardedReply(out.reason);
+        // The guard swaps the words, never the record of what the tools did.
+        reply = { ...guardedReply(out.reason), ...(reply.actions ? { actions: reply.actions } : {}) };
         sse('replace', { text: reply.text });
       }
     }
@@ -124,8 +126,16 @@ export default async function handler(req, res) {
     // eslint-disable-next-line no-console
     console.error('[ivy stream] failed after start:', redact(err?.stack || err?.message || String(err)));
     try { reportError(err, { req }); } catch { /* ignore */ }
+    // If tools already ran this turn, say what they did (the reply could
+    // not be saved, so this event is the only record the owner gets now; the
+    // client also reloads the chat from the server). Never a bare "try
+    // again" after real changes: a resend could do them twice.
+    const done = reply ? ledgerFailureReply(reply.actions, 'the reply could not be saved') : null;
     try {
-      sse('error', { message: 'Ivy took too long to answer that one. Please try again.' });
+      sse('error', {
+        message: done || 'Ivy took too long to answer that one. Please try again.',
+        ...(reply?.actions?.length ? { actions: reply.actions } : {}),
+      });
       res.end();
     } catch { /* connection already closed */ }
   } finally {

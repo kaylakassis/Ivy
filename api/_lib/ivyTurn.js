@@ -11,6 +11,7 @@ import {
   serializeSession, serializeMessage, workspaceContext, fetchOwnedSession,
   getDailyUsage, sanitizeUserText, stripInlineMarkdown,
 } from './ivy.js';
+import { cleanLedger } from './ivyLedger.js';
 
 export const MAX_MESSAGE_CHARS = 4000;
 // Vercel serverless caps the request body around 4.5 MB. We allow up to
@@ -74,13 +75,21 @@ export async function beginTurn(body, workspaceId) {
   // Fetch prior turns BEFORE inserting the new user message so the
   // history we pass to the model doesn't include the message we're about
   // to respond to (we pass it as `text` separately).
+  //
+  // The NEWEST 40, oldest first. (Taking the first 40 in a long chat fed the
+  // model turns from the start of the conversation and none of the recent
+  // ones, so Ivy could not see what she had just done.) `actions` is the
+  // server's record of what her tools did in each reply (see ivyLedger.js).
   const priorMsgs = await sql`
-    SELECT role, text FROM ivy_messages
-    WHERE session_id = ${session.id}
+    SELECT role, text, actions FROM (
+      SELECT role, text, actions, created_at FROM ivy_messages
+       WHERE session_id = ${session.id}
+       ORDER BY created_at DESC
+       LIMIT 40
+    ) recent
     ORDER BY created_at ASC
-    LIMIT 40
   `;
-  const history = priorMsgs.rows.map((r) => ({ role: r.role, text: r.text }));
+  const history = priorMsgs.rows.map((r) => ({ role: r.role, text: r.text, actions: r.actions || null }));
 
   // The persisted user message includes a one-line note about the
   // attachment so it shows up in chat history. The actual file
@@ -104,10 +113,13 @@ export async function beginTurn(body, workspaceId) {
 //   { session, messages: [owner, ivy], context, mode, modeError, usage }
 export async function finishTurn({ session, userMsg, reply, ctx, workspaceId }) {
   const replyText = reply.text;
+  // What the tools did this turn, stored with the reply so the chat (and
+  // Ivy's next turn) keeps the server's record, not just her words.
+  const actions = cleanLedger(reply.actions);
 
   const ivyMsg = await sql`
-    INSERT INTO ivy_messages (session_id, role, text)
-    VALUES (${session.id}, 'ivy', ${replyText})
+    INSERT INTO ivy_messages (session_id, role, text, actions)
+    VALUES (${session.id}, 'ivy', ${replyText}, ${actions.length ? JSON.stringify(actions) : null}::jsonb)
     RETURNING *
   `;
 

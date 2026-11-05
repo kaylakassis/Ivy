@@ -11,6 +11,7 @@ import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
+import ActionLedger from './ActionLedger.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 import { stagger } from '../../components/motion/stagger.jsx';
 import { usePhotoAttach, PhotoButton, PhotoTray } from './PhotoAttach.jsx';
@@ -206,6 +207,7 @@ export default function IvyPro() {
               {messages.map((m, i) => (
                 <div key={m.id} style={stagger(i)}>
                   <ChatBubble msg={m}/>
+                  {m.role === 'ivy' && <ActionLedger msg={m} indent={38} maxWidth="calc(82% - 38px)"/>}
                   {m.pendingActions && m.pendingActions.length > 0 && (
                     <PendingActionCard actions={m.pendingActions} busy={thinking}
                       onApprove={() => approvePending(m.id)} onDismiss={() => dismissPending(m.id)}/>

@@ -24,6 +24,7 @@ import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
+import ActionLedger from './ActionLedger.jsx';
 import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 import { stagger } from '../../components/motion/stagger.jsx';
 import Loader from '../../components/motion/Loader.jsx';
@@ -668,6 +669,7 @@ function MessageList({ messages, thinking, onApprove, onDismiss }) {
       {messages.map((m, i) => (
         <div key={m.id} style={stagger(i)}>
           <Bubble role={m.role} text={m.text} streaming={!!m.streaming}/>
+          {m.role === 'ivy' && <ActionLedger msg={m}/>}
           {m.pendingActions && m.pendingActions.length > 0 && (
             <PendingActionCard actions={m.pendingActions} busy={thinking}
               onApprove={() => onApprove?.(m.id)} onDismiss={() => onDismiss?.(m.id)}/>

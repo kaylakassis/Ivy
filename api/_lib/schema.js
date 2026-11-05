@@ -4108,4 +4108,11 @@ ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS referral_name    TEXT;
 -- CREATE OR REPLACE VIEW allows).
 CREATE OR REPLACE VIEW admin_real_workspace_profile AS
   SELECT p.* FROM workspace_profile p WHERE p.workspace_id IN (SELECT id FROM admin_real_workspaces);
+
+-- Ivy's per-turn action ledger: what her tools actually did in the turn this
+-- reply belongs to ([{ tool, status: done|waiting|failed|skipped, ok,
+-- summary, error?, warnings? }], see api/_lib/ivyLedger.js). Shown under the
+-- reply and fed back to the model in later turns so Ivy can neither forget
+-- nor deny what she did. NULL for turns with no actions (and older rows).
+ALTER TABLE ivy_messages ADD COLUMN IF NOT EXISTS actions JSONB;
 `;

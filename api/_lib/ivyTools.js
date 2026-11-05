@@ -26,6 +26,10 @@ import { findClientForBulk, findServiceForBulk } from './bookingImport.js';
 import { prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS } from './clientImport.js';
 import { blockState, BLOCKED_MESSAGE } from './moderation.js';
 import { validEmail } from './auth.js';
+import {
+  parseAvailabilityChanges, applyAvailabilityChanges, diffAvailability, describeChange,
+  scheduleByDay, fmtWindows, DAY_NAMES,
+} from './availabilityEdit.js';
 import crypto from 'node:crypto';
 
 // ── Tool schema (passed to Anthropic on every call) ──────────────────
@@ -115,6 +119,16 @@ export const IVY_TOOLS = [
       properties: {
         days_ahead: { type: 'integer', description: 'Window in days. Default 7.' },
         limit: { type: 'integer', description: 'Max rows. Default 30.' },
+      },
+    },
+  },
+  {
+    name: 'get_availability',
+    description: "Read the owner's current weekly booking hours (per day, in the business time zone) and the time already blocked off on upcoming dates. Call this before proposing any change to their hours or time off, and to check whether a schedule change was actually made.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        days_ahead: { type: 'integer', description: 'How many days of upcoming blocked time to list. Default 60.' },
       },
     },
   },
@@ -774,16 +788,41 @@ export const IVY_TOOLS = [
   },
   {
     name: 'set_availability',
-    description: "Set the weekly hours clients can book. Pass EITHER a preset ('weekdays' = Mon-Fri 9-5, 'everyday' = every day 9-5, 'weekends' = Sat+Sun 9-5) OR an explicit `availability` object mapping weekdays to time windows. This REPLACES the whole weekly schedule. Changes the public booking page, so confirm WITH THE OWNER first.",
+    description: "REPLACE the owner's WHOLE weekly schedule. Use ONLY when the owner clearly asks to replace or start over on their entire week (for example \"make my hours Monday to Friday 9 to 5\", \"reset my schedule\"), or during first-time setup. Every day you leave out becomes closed. For any change to particular days or times (\"block 1 to 2 every Tuesday\", \"close Fridays\", \"open Saturday mornings\") use adjust_availability instead; for one date use block_calendar_time. If you are not sure whether they want their whole schedule replaced, ask first. Requires replace_all: true. Pass EITHER a preset ('weekdays' = Mon-Fri 9-5, 'everyday' = every day 9-5, 'weekends' = Sat+Sun 9-5) OR an explicit `availability` object. Approval-gated.",
     input_schema: {
       type: 'object',
       properties: {
+        replace_all:  { type: 'boolean', description: 'Must be true: confirms the owner asked to replace their whole weekly schedule.' },
         preset:       { type: 'string', enum: ['weekdays', 'everyday', 'weekends'], description: 'A quick starting schedule (all 9am-5pm).' },
         availability: {
           type: 'object',
           description: 'Weekday -> array of {start,end} windows in minutes since midnight (e.g. {"monday":[{"start":540,"end":1020}]} for Mon 9-5). Keys may be day names or 0-6 (0=Sunday). Omitted days are closed.',
         },
       },
+    },
+  },
+  {
+    name: 'adjust_availability',
+    description: "Change PART of the owner's weekly schedule and leave everything else exactly as it is. Use this for recurring changes such as \"block off 1 to 2 pm every Tuesday\" (close Tuesday 780-840), \"I don't work Fridays anymore\" (close Friday, whole day), or \"add Saturday 10 to 2\" (open Saturday 600-840). Closing a window splits the open hours around it; opening one adds to the hours already open. Days you do not name are not touched. It applies to the schedule as it is when the owner approves. Approval-gated.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        changes: {
+          type: 'array',
+          description: 'One entry per change, applied in order.',
+          items: {
+            type: 'object',
+            properties: {
+              day:       { type: 'string', description: 'monday, tuesday, ... sunday (or 0-6, 0 = Sunday).' },
+              action:    { type: 'string', enum: ['close', 'open'], description: 'close = no bookings in that window every week; open = add bookable hours.' },
+              start_min: { type: 'integer', minimum: 0, maximum: 1440, description: 'Minutes since midnight, e.g. 780 = 1:00 PM. Leave out start_min and end_min with action close to close the whole day.' },
+              end_min:   { type: 'integer', minimum: 0, maximum: 1440 },
+            },
+            required: ['day', 'action'],
+          },
+        },
+      },
+      required: ['changes'],
     },
   },
   {
@@ -807,7 +846,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'block_calendar_time',
-    description: 'Block off a calendar slot so no one can book during it - vacation, focus time, a personal appointment. Pass a date (YYYY-MM-DD) plus either all_day=true OR start_min/end_min (minutes-since-midnight, 0-1440). Confirm WITH THE OWNER before calling.',
+    description: 'Block off time on ONE date so no one can book during it - a day off, a dentist appointment, a vacation day. Pass a date (YYYY-MM-DD) plus either all_day=true OR start_min/end_min (minutes-since-midnight, 0-1440). For time off that repeats every week (for example every Tuesday 1 to 2 pm) use adjust_availability instead. Never changes the weekly hours. Approval-gated.',
     input_schema: {
       type: 'object',
       properties: {
@@ -835,6 +874,7 @@ export const HANDLERS = {
   list_overdue_invoices,
   list_upcoming_bookings,
   search_clients,
+  get_availability,
   // Reads - expanded
   list_clients,
   list_services,
@@ -895,6 +935,7 @@ export const HANDLERS = {
   // Settings + calendar control
   update_settings,
   set_availability,
+  adjust_availability,
   update_booking_rules,
   complete_onboarding,
   block_calendar_time,
@@ -930,6 +971,7 @@ export const SENSITIVE_TOOLS = new Set([
   // reshape the whole public booking page. Always confirm with the owner.
   'update_settings',
   'set_availability',
+  'adjust_availability',
   'update_booking_rules',
   'block_calendar_time',
   // Memory is injected into every future turn, so a note planted by text
@@ -1132,23 +1174,45 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       return `Update settings: ${parts.length ? parts.join('; ') : '(no fields supplied)'}`;
     }
     case 'set_availability': {
-      const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
       let avail = null;
       if (a.preset) {
         avail = AVAILABILITY_PRESETS[String(a.preset).toLowerCase()] || null;
-        if (!avail) return `Set weekly availability from preset "${a.preset}"`;
+        if (!avail) return `Set weekly availability from preset "${a.preset}". This replaces your whole weekly schedule.`;
       } else if (a.availability && typeof a.availability === 'object') {
         const v = validateAvailability(a.availability);
         avail = v.error ? null : v.value;
-        if (!avail) return `Set weekly availability (couldn't preview: ${v.error})`;
+        if (!avail) return `Set weekly availability (couldn't preview: ${v.error}). This replaces your whole weekly schedule.`;
       }
-      if (!avail) return 'Set weekly availability';
-      const lines = Object.keys(avail).sort().map((k) => {
-        const idx = Number(k);
-        const wins = (avail[k] || []).map((w) => `${fmtMinAsTime(w.start)}-${fmtMinAsTime(w.end)}`).join(', ');
-        return `${DAY[idx] || k}: ${wins}`;
-      });
-      return `Replace the weekly booking hours with — ${lines.join(' · ')}. Days not listed are closed. This changes the public booking page.`;
+      if (!avail) return 'Set weekly availability. This replaces your whole weekly schedule.';
+      // Diff against what the booking page shows today, so the owner sees
+      // every day that gains or loses hours, not only the new list.
+      let before = {};
+      try { before = await currentAvailability(ctx.workspaceId); } catch { /* preview without a diff */ }
+      const { changed, unchanged } = diffAvailability(before, avail);
+      const lines = changed.map((c) => `${DAY_NAMES[c.day]}: ${fmtWindows(c.from)} → ${fmtWindows(c.to)}`);
+      const same = unchanged.length ? `\nNo change: ${unchanged.map((d) => DAY_NAMES[d]).join(', ')}.` : '';
+      if (!lines.length) return `Replace your weekly hours with the same hours you have now (nothing changes).${same}\nThis replaces your whole weekly schedule.`;
+      return `Replace your weekly booking hours:\n${lines.join('\n')}${same}\nThis replaces your whole weekly schedule.`;
+    }
+    case 'adjust_availability': {
+      const p = parseAvailabilityChanges(a);
+      if (p.error) return `Change your weekly hours (couldn't preview: ${p.error})`;
+      let before = {};
+      try { before = await currentAvailability(ctx.workspaceId); } catch { /* preview without the result */ }
+      const applied = applyAvailabilityChanges(before, p.changes);
+      const asked = p.changes.map(describeChange);
+      const lines = [`Change your weekly hours: ${asked.join('; ')}.`];
+      if (!applied.error) {
+        const { changed } = diffAvailability(before, applied.value);
+        for (const d of applied.touched) {
+          const c = changed.find((x) => x.day === d);
+          lines.push(c
+            ? `${DAY_NAMES[d]}: ${fmtWindows(c.from)} → ${fmtWindows(c.to)}`
+            : `${DAY_NAMES[d]}: no change (already ${fmtWindows(validateAvailability(before).value?.[String(d)] || [])})`);
+        }
+      }
+      lines.push('All other days stay the same.');
+      return lines.join('\n');
     }
     case 'update_booking_rules': {
       const parts = [];
@@ -1163,7 +1227,7 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       const when = a.all_day
         ? `${a.date || '?'} (all day)`
         : `${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
-      return `Block off ${when}${a.label ? ` — "${a.label}"` : ''}. Clients can't book this window.`;
+      return `Block off ${when}${a.label ? `, "${a.label}"` : ''}. Clients can't book this window. Your weekly hours stay the same.`;
     }
     case 'create_workflow': {
       const acts = Array.isArray(a.actions) ? a.actions : [];
@@ -1224,6 +1288,11 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
   const a = { ...(args || {}) };
   delete a.confirm;
   if (opts.approved !== true && (SENSITIVE_TOOLS.has(name) || await needsArgumentApproval(name, a, ctx))) {
+    // Calls that can never be right are refused before a card is shown, so
+    // the owner is never asked to approve something that will not run (or
+    // that would do more than they asked).
+    const refusal = await refuseBeforeApproval(name, a, ctx);
+    if (refusal) return { error: refusal };
     return await holdForApproval(name, a, ctx);
   }
   try {
@@ -1233,6 +1302,52 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
   } catch (err) {
     return { error: err?.message || String(err) };
   }
+}
+
+// Checks made when the model asks for a gated tool, before a pending row is
+// recorded. Returns an error string for the model, or null.
+//
+// set_availability replaces the whole week, so a model call must say so with
+// replace_all: true. The one exception is first-time setup (the workspace has
+// not finished onboarding), where there is no schedule of the owner's own to
+// lose yet. Pending rows recorded before replace_all existed were already
+// shown to the owner as "Replace the weekly booking hours with ...", so the
+// approve path (opts.approved) does not re-check and they still run.
+async function refuseBeforeApproval(name, a, ctx) {
+  if (name === 'set_availability' && a.replace_all !== true) {
+    if (await workspaceIsOnboarded(ctx?.workspaceId)) {
+      return 'set_availability replaces the whole weekly schedule and was not used. For a change to particular days or times '
+        + '(for example closing 1 to 2 pm every Tuesday) call adjust_availability, which leaves every other day as it is. '
+        + 'Only if the owner clearly asked to replace their entire weekly schedule, call set_availability again with replace_all: true. '
+        + 'If you are not sure which they want, ask them. Nothing was changed.';
+    }
+  }
+  if (name === 'adjust_availability') {
+    const p = parseAvailabilityChanges(a);
+    if (p.error) return `${p.error}. Nothing was changed.`;
+  }
+  return null;
+}
+
+async function workspaceIsOnboarded(workspaceId) {
+  if (!workspaceId) return false;
+  try {
+    const r = await sql`SELECT onboarded_at FROM workspaces WHERE id = ${workspaceId}`;
+    return !!r.rows[0]?.onboarded_at;
+  } catch {
+    // Unknown: fail toward asking for replace_all, which is the safe side.
+    return true;
+  }
+}
+
+// The stored weekly schedule. Makes sure the settings row exists first (a
+// harmless, idempotent insert) so a brand-new workspace reads the same
+// default hours its booking page already shows.
+async function currentAvailability(workspaceId) {
+  if (!workspaceId) return {};
+  await sql`INSERT INTO calendar_settings (workspace_id) VALUES (${workspaceId}) ON CONFLICT (workspace_id) DO NOTHING`;
+  const r = await sql`SELECT availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
+  return r.rows[0]?.availability || {};
 }
 
 // The approve endpoint's entry point: executes a tool with the arguments the
@@ -1280,7 +1395,7 @@ const READ_ONLY_TOOLS = new Set([
   'list_staff', 'list_tasks', 'search_invoices', 'search_bookings', 'get_dashboard_summary',
   'list_expenses', 'get_pl_summary', 'list_reviews', 'list_leads',
   'remember', 'forget', 'list_memories', 'explain_workflow_suggestion',
-  'get_website',
+  'get_website', 'get_availability',
 ]);
 const ACTION_KINDS = {
   add_bookings_from_list: 'booking',
@@ -1299,6 +1414,139 @@ export function ivyActionKind(tool) {
   if (!HANDLERS[tool]) return null;
   return ACTION_KINDS[tool] || 'other';
 }
+// ── What Ivy did this turn (the per-turn ledger) ─────────────────────
+// claudeReply (api/_lib/ivy.js) keeps one entry per tool call that changes
+// something, built from the tool's real result, never from what the model
+// says. It is stored with Ivy's chat message (ivy_messages.actions), shown
+// under the reply, and fed back to the model in later turns so Ivy can
+// neither forget nor deny what she did.
+//   { tool, status: 'done' | 'waiting' | 'failed' | 'skipped', ok, summary,
+//     error?, warnings? }
+// 'waiting' = an approval card was shown; nothing ran yet.
+// Reads (and memory lookups) are not listed.
+const LEDGER_SKIP = new Set([...READ_ONLY_TOOLS].filter((t) => t !== 'forget' && t !== 'remember'));
+export function isReadOnlyIvyTool(name) {
+  return LEDGER_SKIP.has(name);
+}
+
+const qt = (s, n = 60) => `"${String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)}"`;
+const numBit = (n) => (n != null && n !== '' ? ` #${n}` : '');
+// Past-tense, one line, from the tool's own result (falls back to its args).
+const DONE_TEXT = {
+  add_client: (a, r) => `Added ${r.client?.name || a.name || 'a client'} to your clients`,
+  update_client: (a, r) => (r.no_changes ? `Nothing needed changing for ${r.client?.name || 'that client'}` : `Updated ${r.client?.name || 'a client'}'s details`),
+  mark_invoice_paid: (a, r) => `Marked invoice${numBit(r.invoice?.number)} as paid`,
+  create_service: (a, r) => `Created the service ${qt(r.service?.name || a.name)}`,
+  create_booking: (a, r) => `Booked ${r.booking?.client_name || 'the client'} on ${fmtDay(r.booking?.date || a.date)} at ${fmtMinAsTime(r.booking?.start_min ?? a.start_min)}`,
+  add_bookings_from_list: (a, r) => `Added ${Number(r.added) || 0} appointment${Number(r.added) === 1 ? '' : 's'} to your calendar${r.skipped?.length ? ` (skipped ${r.skipped.length} already there)` : ''}`,
+  import_clients_from_list: (a, r) => `Added ${Number(r.added) || 0} client${Number(r.added) === 1 ? '' : 's'}${r.skipped_existing ? ` (skipped ${r.skipped_existing} already there)` : ''}`,
+  create_invoice: (a, r) => `Drafted invoice${numBit(r.invoice?.number)} (not sent)`,
+  create_task: (a, r) => (r.deduped ? `${qt(r.task?.title || a.title)} was already on your task list` : `Added the task ${qt(r.task?.title || a.title)}`),
+  complete_task: (a, r) => `Marked the task ${qt(r.task?.title)} done`,
+  create_project: (a, r) => `Created the project ${qt(r.project?.name || a.name)}`,
+  create_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name || a.name)} (${r.workflow?.enabled ? 'on' : 'off'})`,
+  create_suggested_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name)}`,
+  create_document_from_template: (a, r) => `Drafted the document ${qt(r.document?.name)} (not sent)`,
+  cancel_booking: (a, r) => `Cancelled ${r.booking?.client_name || 'the'} appointment on ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told the client' : ''}`,
+  void_invoice: (a, r) => `Voided invoice${numBit(r.invoice?.number)}`,
+  toggle_workflow: (a, r) => `Turned ${r.workflow?.enabled ? 'on' : 'off'} the automation ${qt(r.workflow?.name)}`,
+  create_quote: (a, r) => `Drafted estimate${numBit(r.quote?.number)} (not sent)`,
+  create_product: (a, r) => `Created the product ${qt(r.product?.name || a.name)}`,
+  create_expense: (a, r) => `Logged an expense of $${Number(r.expense?.amount ?? a.amount ?? 0).toFixed(2)}${r.expense?.category ? ` (${r.expense.category})` : ''}`,
+  create_goal: (a, r) => `Set the goal ${qt(r.goal?.title || a.title)}`,
+  create_time_entry: (a, r) => `Logged time: ${qt(r.time_entry?.description || a.description)}`,
+  create_recurring_invoice: (a, r) => `Set up the recurring invoice ${qt(r.recurring_invoice?.name || a.name)} as a draft (auto-send is off)`,
+  create_campaign: (a, r) => `Drafted the campaign ${qt(r.campaign?.subject || a.subject)} (not sent)`,
+  create_package: (a, r) => `Created the package ${qt(r.package?.name || a.name)}`,
+  send_message_to_client: (a, r) => `Sent a message to ${r.client_name || 'the client'}`,
+  send_invoice: (a, r) => (r.email_delivered === false ? `Marked the invoice sent (pay link is live) for ${r.sent_to}` : `Emailed the invoice to ${r.sent_to}`),
+  send_quote: (a, r) => (r.email_delivered === false ? `Marked the estimate sent for ${r.sent_to}` : `Emailed the estimate to ${r.sent_to}`),
+  send_document: (a, r) => (r.email_delivered === false ? `Marked the document sent for ${r.sent_to}` : `Sent the document to ${r.sent_to} to sign`),
+  send_review_request: (a, r) => `Asked ${r.sent_to} for a review`,
+  send_campaign: (a, r) => `Sent the campaign to ${Number(r.sent) || 0} of ${Number(r.recipients) || 0} clients`,
+  reschedule_booking: (a, r) => `Moved ${r.booking?.client_name || 'the'} appointment to ${fmtDay(r.booking?.date)} at ${fmtMinAsTime(r.booking?.start_min)}`,
+  refund_invoice: () => 'Refunded the invoice',
+  update_settings: (a, r) => (Number(r.updated) ? `Updated your settings (${(r.changed_fields || []).join(', ').replace(/_/g, ' ')})` : 'No settings needed changing'),
+  set_availability: (a, r) => `Replaced your weekly hours (${Number(r.days_open) || 0} day${Number(r.days_open) === 1 ? '' : 's'} open)`,
+  adjust_availability: (a, r) => `Changed your weekly hours: ${(r.changed_days || []).map((d) => `${d.day} now ${d.after}`).join('; ') || 'no day needed changing'}. Every other day stayed the same`,
+  update_booking_rules: (a, r) => (Number(r.updated) ? 'Updated your booking rules' : 'No booking rules needed changing'),
+  block_calendar_time: (a, r) => `Blocked ${fmtDay(r.date || a.date)} ${r.all_day ? '(all day)' : `${fmtMinAsTime(r.start_min)} to ${fmtMinAsTime(r.end_min)}`}`,
+  complete_onboarding: () => 'Finished your setup and published your booking page',
+  remember: (a, r) => `Saved to Ivy's memory: ${qt(r.remembered || a.fact, 120)}`,
+  forget: () => "Removed a note from Ivy's memory",
+  create_website: () => 'Built your website draft',
+  edit_website_section: () => 'Edited your website draft',
+  edit_website_page: () => 'Edited your website pages (draft)',
+  update_website: () => 'Updated your website draft',
+  publish_website: (a, r) => `Published your website${r.url ? ` at ${r.url}` : ''}`,
+};
+// What it would have done, for a failure line ("Didn't work: add client Jane").
+const ATTEMPT_TEXT = {
+  add_client: 'Add a client', update_client: "Update a client's details", create_booking: 'Book the appointment',
+  add_bookings_from_list: 'Add the appointments', import_clients_from_list: 'Add the clients',
+  create_invoice: 'Draft the invoice', create_quote: 'Draft the estimate', create_task: 'Add the task',
+  complete_task: 'Mark the task done', create_service: 'Create the service', create_workflow: 'Create the automation',
+  create_suggested_workflow: 'Create the suggested automation', toggle_workflow: 'Switch the automation',
+  mark_invoice_paid: 'Mark the invoice paid', send_invoice: 'Send the invoice', send_quote: 'Send the estimate',
+  send_message_to_client: 'Send the message', cancel_booking: 'Cancel the appointment', reschedule_booking: 'Move the appointment',
+  block_calendar_time: 'Block off the time', set_availability: 'Replace your weekly hours', adjust_availability: 'Change your weekly hours',
+  update_settings: 'Update your settings', update_booking_rules: 'Update your booking rules', remember: "Save to Ivy's memory",
+};
+function attemptText(name, a) {
+  const who = a?.name || a?.title || a?.subject || '';
+  const base = ATTEMPT_TEXT[name] || `Run ${String(name).replace(/_/g, ' ')}`;
+  return `${base}${who ? ` ${qt(who, 40)}` : ''}`;
+}
+
+export function ledgerEntry(name, args, result) {
+  if (!name || isReadOnlyIvyTool(name)) return null;
+  const a = args || {};
+  const r = result && typeof result === 'object' ? result : {};
+  if (r.needs_confirmation) {
+    return { tool: name, status: 'waiting', ok: false, summary: String(r.summary || attemptText(name, a)).slice(0, 600) };
+  }
+  // A result that says it made nothing (create_suggested_workflow with no
+  // suggestion) is not a completed action.
+  const notDone = r.error || r.created === false;
+  if (notDone) {
+    return {
+      tool: name, status: 'failed', ok: false,
+      summary: attemptText(name, a).slice(0, 200),
+      error: String(r.error || r.reason || 'it did not go through').slice(0, 300),
+    };
+  }
+  let summary;
+  try { summary = (DONE_TEXT[name] || (() => `Did: ${String(name).replace(/_/g, ' ')}`))(a, r); } catch { summary = `Did: ${String(name).replace(/_/g, ' ')}`; }
+  const entry = { tool: name, status: 'done', ok: true, summary: String(summary).slice(0, 400) };
+  const warnings = Array.isArray(r.warnings) ? r.warnings.filter(Boolean).map((w) => String(w).slice(0, 200)).slice(0, 5) : [];
+  if (warnings.length) entry.warnings = warnings;
+  return entry;
+}
+
+// A secondary step (email, push, workflow) failed after the main change was
+// saved: the action still happened, so the tool returns ok with a warning
+// instead of an error that would make Ivy say it did not happen.
+function warn(list, text, err) {
+  // eslint-disable-next-line no-console
+  if (err) console.warn('[ivy tool] secondary step failed:', text, err?.message || err);
+  list.push(text);
+}
+
+// sendEmailToClient answers { ok, sent, reason }: ok:false is a failed send,
+// sent:false a skipped one (the client muted that kind of email, or the daily
+// send cap). Either way the email did not arrive.
+function deliveryOf(r) {
+  if (!r) return { ok: false, reason: 'no answer from the email service' };
+  if (r.ok === false) return { ok: false, reason: r.reason || 'the email service failed' };
+  if (r.sent === false) {
+    const why = r.reason === 'muted' ? 'the client turned off this kind of email'
+      : r.reason === 'workspace-quota-exceeded' ? "today's email limit was reached"
+        : (r.reason || 'it was skipped');
+    return { ok: false, reason: why };
+  }
+  return { ok: true };
+}
+
 async function recordIvyAction(tool, workspaceId, result) {
   const kind = ivyActionKind(tool);
   if (!kind || !workspaceId) return;
@@ -1578,13 +1826,22 @@ async function send_invoice({ workspaceId, args }) {
       footer: `Thanks for your business.`,
     }),
   };
-  const sendResult = resolvedClientId
-    ? await sendEmailToClient({ clientId: resolvedClientId, to: recipientEmail, ...emailPayload })
-    : await sendEmailToClientByAddress({ workspaceId, email: recipientEmail, ...emailPayload });
-  if (sendResult && sendResult.ok === false) {
+  // The invoice is already marked sent with a live pay link; an email that
+  // fails (or throws) after that is a warning, not "the invoice wasn't sent".
+  let sendResult;
+  try {
+    sendResult = resolvedClientId
+      ? await sendEmailToClient({ clientId: resolvedClientId, to: recipientEmail, ...emailPayload })
+      : await sendEmailToClientByAddress({ workspaceId, email: recipientEmail, ...emailPayload });
+  } catch (err) {
+    sendResult = { ok: false, reason: err?.message || 'email failed' };
+  }
+  const delivered = deliveryOf(sendResult);
+  if (!delivered.ok) {
     return {
       ok: true, invoice_id: id, sent_to: recipientEmail, email_delivered: false,
-      note: `Invoice marked sent and the pay link is live, but the email was not delivered (${sendResult.reason || 'client email preferences or send quota'}).`,
+      note: `Invoice marked sent and the pay link is live, but the email was not delivered (${delivered.reason}).`,
+      warnings: [`The invoice email to ${recipientEmail} did not go out (${delivered.reason}). The invoice is marked sent and its pay link works.`],
     };
   }
   return { ok: true, invoice_id: id, sent_to: recipientEmail };
@@ -1606,11 +1863,20 @@ async function add_client({ workspaceId, args }) {
   const row = ins.rows[0];
   // Same automations a manual add fires (client_created; lead_created
   // for leads). Awaited so the run exists by the time Ivy reports back.
-  const wf = await fireClientCreatedWorkflows({ workspaceId, client: row, source: 'ivy-add-client' });
+  // The client is saved at this point; an automation that fails to start is
+  // a warning on a completed add, never "couldn't add the client".
+  const warnings = [];
+  let wf = { fired: 0 };
+  try {
+    wf = await fireClientCreatedWorkflows({ workspaceId, client: row, source: 'ivy-add-client' });
+  } catch (err) {
+    warn(warnings, 'Your new-client automations did not start for this client.', err);
+  }
   return {
     ok: true,
     client: { id: row.id, name: row.name, email: row.email },
     ...(wf.fired > 0 ? { workflows_fired: wf.fired } : {}),
+    ...(warnings.length ? { warnings } : {}),
   };
 }
 
@@ -1958,8 +2224,24 @@ async function add_bookings_from_list({ workspaceId, args }) {
   const { rows, problems } = cleanBulkBookings(args);
   if (!rows.length) throw new Error(problems.length ? `Nothing to add: ${problems.join('; ')}` : 'No appointments were given.');
   const created = []; const skipped = []; const newClients = [];
+  // One row that fails (a bad value, a constraint) must not turn the whole
+  // call into an error after earlier rows were already added: the owner would
+  // be told nothing happened while half the list is on the calendar. Each
+  // row's failure is reported as a problem instead.
   for (const r of rows) {
-    /* eslint-disable no-await-in-loop */
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await addOneBulkBooking(workspaceId, r, { created, skipped, newClients });
+    } catch (err) {
+      problems.push(`${r.name} on ${r.date} at ${fmtMinAsTime(r.startMin)}: could not be added (${String(err?.message || err).slice(0, 120)})`);
+    }
+  }
+  if (!created.length && !skipped.length && !newClients.length) throw new Error(`None of the appointments could be added: ${problems.join('; ')}`);
+  return bulkBookingsResult(workspaceId, { created, skipped, newClients, problems });
+}
+
+async function addOneBulkBooking(workspaceId, r, { created, skipped, newClients }) {
+  {
     let client = await findClientForBulk(workspaceId, r);
     if (!client) {
       const ins = await sql`
@@ -1976,7 +2258,7 @@ async function add_bookings_from_list({ workspaceId, args }) {
       SELECT 1 FROM bookings
        WHERE workspace_id = ${workspaceId} AND client_id = ${client.id} AND date = ${r.date}
          AND start_min = ${r.startMin} AND cancelled_at IS NULL LIMIT 1`;
-    if (dup.rows.length) { skipped.push(`${client.name} on ${r.date} at ${fmtMinAsTime(r.startMin)} (already on the calendar)`); continue; }
+    if (dup.rows.length) { skipped.push(`${client.name} on ${r.date} at ${fmtMinAsTime(r.startMin)} (already on the calendar)`); return; }
     const notes = [r.serviceName && !svc ? `Service: ${r.serviceName}` : null, r.notes].filter(Boolean).join('\n') || null;
     // bookings.client_email is required; an empty string means "no email",
     // and reminders, review requests and other client emails skip it.
@@ -1986,14 +2268,19 @@ async function add_bookings_from_list({ workspaceId, args }) {
               ${r.date}, ${r.startMin}, ${endMin}, ${notes}, 'import')
       RETURNING id, client_id, date, start_min, end_min, client_name`;
     created.push(b.rows[0]);
-    /* eslint-enable no-await-in-loop */
   }
+}
+
+async function bulkBookingsResult(workspaceId, { created, skipped, newClients, problems }) {
   // Clients on the new appointments who have no email: they get no reminders
   // until the owner adds one (the approval message links to that list).
   const ids = [...new Set(created.map((b) => b.client_id).filter(Boolean))];
-  const missingEmail = ids.length ? (await sql`
-    SELECT id, name FROM clients WHERE workspace_id = ${workspaceId} AND id = ANY(${ids}::uuid[])
-       AND (email IS NULL OR email = '') ORDER BY name`).rows : [];
+  let missingEmail = [];
+  try {
+    missingEmail = ids.length ? (await sql`
+      SELECT id, name FROM clients WHERE workspace_id = ${workspaceId} AND id = ANY(${ids}::uuid[])
+         AND (email IS NULL OR email = '') ORDER BY name`).rows : [];
+  } catch { /* the appointments are in; this list is a nicety */ }
   return {
     ok: true,
     added: created.length,
@@ -2385,17 +2672,17 @@ async function cancel_booking({ workspaceId, args }) {
   // ("cancel and notify the client") - honor it. Best-effort: the
   // cancellation itself is already committed above.
   let notified = false;
+  const warnings = [];
   if (args.notify) {
     try {
       const { notifyBookingCancellation } = await import('./bookingNotify.js');
       await notifyBookingCancellation({ workspaceId, bookingId: rows[0].id, source: 'owner' });
       notified = true;
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.warn('[ivy cancel_booking] notify failed:', e.message);
+      warn(warnings, `The appointment is cancelled, but the cancellation notice to ${rows[0].client_name || 'the client'} did not go out.`, e);
     }
   }
-  return { booking: rows[0], cancelled: true, client_notified: notified };
+  return { booking: rows[0], cancelled: true, client_notified: notified, ...(warnings.length ? { warnings } : {}) };
 }
 
 async function void_invoice({ workspaceId, args }) {
@@ -2642,8 +2929,11 @@ async function send_quote({ workspaceId, args }) {
   const link = `${appUrl()}/quote/${encodeURIComponent(rawToken)}`;
   const branding = await fetchBranding(workspaceId).catch(() => ({}));
   const business = branding.businessName;
+  // The estimate is already marked sent with a live link. Whether the email
+  // actually went out is reported, never assumed.
+  let sendResult;
   try {
-    await sendEmailToClient({
+    sendResult = await sendEmailToClient({
       clientId, workspaceId, type: 'invoices', to: recipientEmail,
       subject: `Estimate ${q.number}${business ? ' from ' + business : ''}`,
       replyTo: branding.replyTo,
@@ -2658,6 +2948,14 @@ async function send_quote({ workspaceId, args }) {
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[ivy.send_quote] email failed:', e?.message);
+    sendResult = { ok: false, reason: e?.message || 'email failed' };
+  }
+  const delivered = deliveryOf(sendResult);
+  if (!delivered.ok) {
+    return {
+      ok: true, quote_id: id, sent_to: recipientEmail, total: totals.total, email_delivered: false,
+      warnings: [`The estimate email to ${recipientEmail} did not go out (${delivered.reason}). The estimate is marked sent and its link works.`],
+    };
   }
   return { ok: true, quote_id: id, sent_to: recipientEmail, total: totals.total };
 }
@@ -2672,14 +2970,24 @@ async function send_campaign({ workspaceId, args }) {
   if (row.status === 'sent' || row.status === 'sending') throw new Error('Campaign already sent');
   const campaign = serializeCampaign(row);
   const result = await sendCampaign({ workspaceId, campaign });
-  await sql`
-    UPDATE email_campaigns SET
-      status = 'sent', sent_at = NOW(),
-      recipient_count = ${result.recipientCount}, sent_count = ${result.sent}, failed_count = ${result.failed},
-      updated_at = NOW()
-    WHERE id = ${id} AND workspace_id = ${workspaceId}
-  `;
-  return { ok: true, campaign_id: id, recipients: result.recipientCount, sent: result.sent, failed: result.failed, skipped: result.skipped };
+  // The emails have gone out. Failing to record that must not read as "the
+  // campaign was not sent" (the owner would send it again).
+  const warnings = [];
+  try {
+    await sql`
+      UPDATE email_campaigns SET
+        status = 'sent', sent_at = NOW(),
+        recipient_count = ${result.recipientCount}, sent_count = ${result.sent}, failed_count = ${result.failed},
+        updated_at = NOW()
+      WHERE id = ${id} AND workspace_id = ${workspaceId}
+    `;
+  } catch (err) {
+    warn(warnings, 'The emails went out, but the campaign could not be marked as sent. Do not send it again.', err);
+  }
+  return {
+    ok: true, campaign_id: id, recipients: result.recipientCount, sent: result.sent, failed: result.failed, skipped: result.skipped,
+    ...(warnings.length ? { warnings } : {}),
+  };
 }
 
 async function reschedule_booking({ workspaceId, args }) {
@@ -2785,8 +3093,9 @@ async function send_document({ workspaceId, args }) {
 
   const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
   const branding = await fetchBranding(workspaceId).catch(() => ({}));
+  let sendResult;
   try {
-    await sendEmailToClient({
+    sendResult = await sendEmailToClient({
       clientId, workspaceId, type: 'documents', to: signerEmail,
       subject: `Action needed: sign "${doc.name}"`,
       replyTo: branding.replyTo,
@@ -2802,6 +3111,14 @@ async function send_document({ workspaceId, args }) {
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error('[ivy.send_document] email failed:', e?.message);
+    sendResult = { ok: false, reason: e?.message || 'email failed' };
+  }
+  const delivered = deliveryOf(sendResult);
+  if (!delivered.ok) {
+    return {
+      ok: true, document_id: id, sent_to: signerEmail, email_delivered: false,
+      warnings: [`The signing email to ${signerEmail} did not go out (${delivered.reason}). The document is marked sent.`],
+    };
   }
   return { ok: true, document_id: id, sent_to: signerEmail };
 }
@@ -2834,8 +3151,9 @@ async function send_review_request({ workspaceId, args }) {
   const link = `${appUrl()}/review/${encodeURIComponent(rawToken)}`;
   const firstName = (row.client_name || '').split(/\s+/)[0] || 'there';
 
+  let sendResult;
   try {
-    await sendEmailToClient({
+    sendResult = await sendEmailToClient({
       clientId: row.client_id, workspaceId, type: 'marketing', to: row.client_email,
       subject: `How was your ${row.service_name || 'session'}?`,
       replyTo: branding.replyTo,
@@ -2854,8 +3172,12 @@ async function send_review_request({ workspaceId, args }) {
       }),
     });
   } catch (e) {
-    throw new Error('Could not send the review request email');
+    throw new Error('Could not send the review request email. Nothing was changed.');
   }
+  // Nothing is recorded until the email actually went out, so a skipped or
+  // failed send is an honest error with nothing half done.
+  const delivered = deliveryOf(sendResult);
+  if (!delivered.ok) throw new Error(`The review request email did not go out (${delivered.reason}). Nothing was changed.`);
   await sql`
     UPDATE bookings SET review_request_token_hash = ${hash}, review_requested_at = NOW(), updated_at = NOW()
      WHERE id = ${id} AND workspace_id = ${workspaceId}
@@ -2977,6 +3299,61 @@ async function set_availability({ workspaceId, args }) {
             WHERE workspace_id = ${workspaceId}`;
   await afterSettingsWrite(workspaceId);
   return { ok: true, days_open: Object.keys(avail).length, availability: avail };
+}
+
+// Part of the week, the rest untouched. Runs only after the owner approved
+// the card, possibly minutes later, so the changes are applied to the
+// schedule as stored NOW (not the one the card previewed). The write only
+// lands if the schedule is still the one just read; a concurrent edit (the
+// owner saving the Availability screen at the same moment) makes it re-read
+// and apply again, so neither change is lost.
+async function adjust_availability({ workspaceId, args }) {
+  const p = parseAvailabilityChanges(args);
+  if (p.error) throw new Error(p.error);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    // eslint-disable-next-line no-await-in-loop
+    const before = await currentAvailability(workspaceId);
+    const applied = applyAvailabilityChanges(before, p.changes);
+    if (applied.error) throw new Error(applied.error);
+    // eslint-disable-next-line no-await-in-loop
+    const upd = await sql`
+      UPDATE calendar_settings SET availability = ${JSON.stringify(applied.value)}::jsonb, updated_at = NOW()
+       WHERE workspace_id = ${workspaceId} AND availability = ${JSON.stringify(before)}::jsonb
+       RETURNING availability`;
+    if (upd.rows.length === 0) continue;
+    // eslint-disable-next-line no-await-in-loop
+    await afterSettingsWrite(workspaceId);
+    const { changed } = diffAvailability(before, applied.value);
+    return {
+      ok: true,
+      changed_days: changed.map((c) => ({ day: DAY_NAMES[c.day], before: fmtWindows(c.from), after: fmtWindows(c.to) })),
+      untouched_days: 'Every other day was left exactly as it was.',
+      weekly_hours: scheduleByDay(applied.value),
+    };
+  }
+  throw new Error('Your schedule was being changed at the same moment. Nothing was changed; please try again.');
+}
+
+async function get_availability({ workspaceId, args }) {
+  const days = clampInt(args?.days_ahead, 60, 1, 365);
+  const avail = await currentAvailability(workspaceId);
+  const tz = await workspaceTimeZone(workspaceId).catch(() => null);
+  const blocks = await sql`
+    SELECT date, start_min, end_min, all_day, label FROM calendar_blocks
+     WHERE workspace_id = ${workspaceId}
+       AND date >= CURRENT_DATE - 1 AND date <= CURRENT_DATE + ${days}::int
+       AND COALESCE(blocks_bookings, TRUE) = TRUE
+     ORDER BY date, start_min
+     LIMIT 60`;
+  return {
+    time_zone: tz || null,
+    weekly_hours: scheduleByDay(avail),
+    blocked_dates: blocks.rows.map((b) => ({
+      date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10),
+      time: b.all_day ? 'all day' : `${fmtMinAsTime(b.start_min)} to ${fmtMinAsTime(b.end_min)}`,
+      label: b.label || null,
+    })),
+  };
 }
 
 async function update_booking_rules({ workspaceId, args }) {

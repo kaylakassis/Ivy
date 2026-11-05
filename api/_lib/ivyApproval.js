@@ -10,7 +10,9 @@ import { sql } from './db.js';
 import { runApprovedTool } from './ivyTools.js';
 
 // Claims and runs one pending row. Returns { claimed:false } when it had
-// already run or expired, otherwise { claimed:true, result, text }.
+// already run or expired, otherwise { claimed:true, result, text, actions }
+// where actions is the one-entry ledger for the chat message that records the
+// outcome (see api/_lib/ivyLedger.js).
 export async function executePendingAction({ row, workspaceId, userId }) {
   const claimed = await sql`
     UPDATE ivy_pending_actions
@@ -26,10 +28,28 @@ export async function executePendingAction({ row, workspaceId, userId }) {
   } catch (err) {
     result = { error: err?.message || String(err) };
   }
-  await sql`
-    UPDATE ivy_pending_actions SET result = ${JSON.stringify(result ?? null)}::jsonb
-     WHERE id = ${row.id} AND workspace_id = ${workspaceId}`;
-  let text = result && result.error ? `That didn't work: ${result.error}` : `Done. ${row.summary}`;
+  // The tool has run. Storing its result is bookkeeping: a failure here must
+  // not turn a completed action into an error the owner would read as "not
+  // done" (and tap again).
+  try {
+    await sql`
+      UPDATE ivy_pending_actions SET result = ${JSON.stringify(result ?? null)}::jsonb
+       WHERE id = ${row.id} AND workspace_id = ${workspaceId}`;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[ivy approve] could not store the result:', err?.message);
+  }
+  const failed = !!(result && result.error);
+  const warnings = !failed && Array.isArray(result?.warnings) ? result.warnings.filter(Boolean).slice(0, 5).map(String) : [];
+  const actions = [{
+    tool: row.tool,
+    status: failed ? 'failed' : 'done',
+    ok: !failed,
+    summary: String(row.summary || row.tool).slice(0, 600),
+    ...(failed ? { error: String(result.error).slice(0, 300) } : {}),
+    ...(warnings.length ? { warnings } : {}),
+  }];
+  let text = failed ? `That didn't work: ${result.error}` : `Done. ${row.summary}`;
   // A client list: counts, not the whole approval card again.
   if (!result?.error && row.tool === 'import_clients_from_list') text = clientImportDoneText(result);
   // Appointments added from a photo, or clients from a list: say who still
@@ -45,7 +65,10 @@ export async function executePendingAction({ row, workspaceId, userId }) {
   if (!result?.error && row.tool === 'import_clients_from_list' && Number(result?.with_email_count) > 0) {
     text += '\n\nWhen you are ready, you can email them your new booking link: [Let them know you moved](/clients?announce=1)';
   }
-  return { claimed: true, result, text };
+  // The main change happened but a side step did not (an email, a notice):
+  // say both, so the owner neither thinks it failed nor that the email went.
+  if (warnings.length) text += `\n\nOne thing to check: ${warnings.join(' ')}`;
+  return { claimed: true, result, text, actions };
 }
 
 function clientImportDoneText(r) {
@@ -68,7 +91,14 @@ export const LEGACY_APPROVAL_TEXT = 'Yes, go ahead and do it.';
 // minutes) and return the reply text, with no model call. Returns null for
 // any other message. The trigger is the owner's typed or tapped message, never
 // text from client data or tool results, so it cannot be injected.
-export async function legacyApprovalReply({ text, sessionId, workspaceId, userId }) {
+export async function legacyApprovalReply(args) {
+  const out = await legacyApprovalTurn(args);
+  return out ? out.text : null;
+}
+
+// Same as legacyApprovalReply, plus the ledger of what ran, for the chat
+// message that records it. Returns null or { text, actions }.
+export async function legacyApprovalTurn({ text, sessionId, workspaceId, userId }) {
   if (!sessionId || String(text || '').trim() !== LEGACY_APPROVAL_TEXT) return null;
   const { rows } = await sql`
     SELECT id, session_id, tool, args, summary
@@ -79,11 +109,12 @@ export async function legacyApprovalReply({ text, sessionId, workspaceId, userId
      LIMIT 10`;
   if (rows.length === 0) return null;
   const lines = [];
+  const actions = [];
   for (const row of rows) {
     // eslint-disable-next-line no-await-in-loop
     const out = await executePendingAction({ row, workspaceId, userId });
-    if (out.claimed) lines.push(out.text);
+    if (out.claimed) { lines.push(out.text); actions.push(...(out.actions || [])); }
   }
   if (lines.length === 0) return null;
-  return lines.join('\n');
+  return { text: lines.join('\n'), actions };
 }
