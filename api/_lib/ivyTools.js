@@ -3017,7 +3017,10 @@ async function reschedule_booking({ workspaceId, args }) {
   const b = await sql`SELECT id FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL`;
   if (b.rows.length === 0) throw new Error('Booking not found or cancelled');
   const { rows } = await sql`
-    UPDATE bookings SET date = ${dateStr}, start_min = ${startMin}, end_min = ${endMin}, updated_at = NOW()
+    UPDATE bookings SET date = ${dateStr}, start_min = ${startMin}, end_min = ${endMin}, updated_at = NOW(),
+           -- New time, fresh reminder beats (same reset as the calendar's reschedule).
+           reminders_sent = '{}'::jsonb, sms_sent = '{}'::jsonb,
+           push_sent = '{}'::jsonb, owner_reminders_sent = '{}'::jsonb
      WHERE id = ${id} AND workspace_id = ${workspaceId}
      RETURNING id, date, start_min, end_min, client_name
   `;
