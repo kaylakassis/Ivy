@@ -27,6 +27,7 @@ import { notifyLeadInstantReply, extractLeadContact } from '../_lib/leadNotify.j
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { assertPublicHttpsUrl } from '../_lib/safeUrl.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
+import { notifyOwnerSafe } from '../_lib/push.js';
 
 // SSRF guard for owner-configured form-webhook delivery. This endpoint is
 // PUBLIC (any visitor triggers it), so a delivery URL pointing at the cloud
@@ -145,15 +146,30 @@ export default async function handler(req, res) {
     // subscribe box. Best-effort; never blocks the 200.
     if (formId !== 'newsletter' && site.workspace_id) {
       const { email: leadEmail, name: leadName } = extractLeadContact(payload);
+      let leadClientId = null;
       if (leadEmail) {
         // Put the prospect in the owner's CRM as a lead (find-or-create by
         // email within the workspace, like the booking-page contact form)
         // and fire lead_created / client_created workflows for a NEW row
         // only - a returning visitor doesn't re-trigger. Best-effort: a
         // CRM hiccup must never fail a delivered form.
-        await recordWebsiteLead({ workspaceId: site.workspace_id, email: leadEmail, name: leadName, handle: site.handle });
+        leadClientId = await recordWebsiteLead({ workspaceId: site.workspace_id, email: leadEmail, name: leadName, handle: site.handle });
         await notifyLeadInstantReply({ workspaceId: site.workspace_id, toEmail: leadEmail, leadName });
       }
+      // Owner push: a new enquiry is time-sensitive. The body names the
+      // person (from the form) but never echoes the free-text fields, so
+      // nothing private sits on a lock screen. Opens the lead's record
+      // when one exists, else the inbox of form leads (Clients).
+      await notifyOwnerSafe({
+        workspaceId: site.workspace_id,
+        type: 'messages',
+        payload: {
+          title: 'New website enquiry',
+          body: `${String(leadName || leadEmail || 'Someone').slice(0, 80)} filled in your ${String(formId).slice(0, 40)} form.`,
+          url: leadClientId ? `/clients?id=${leadClientId}` : '/clients',
+          tag: `form-${submissionId}`,
+        },
+      });
     }
 
     return ok(res, { received: true, delivered });
@@ -169,7 +185,7 @@ async function recordWebsiteLead({ workspaceId, email, name, handle }) {
        WHERE workspace_id = ${workspaceId} AND lower(email) = ${email}
        LIMIT 1
     `;
-    if (existing.rows.length > 0) return;
+    if (existing.rows.length > 0) return existing.rows[0].id;
     // clients.name is NOT NULL - fall back to the address's local part
     // when the form didn't collect a name.
     const clientName = (name || '').trim() || email.split('@')[0];
@@ -179,9 +195,11 @@ async function recordWebsiteLead({ workspaceId, email, name, handle }) {
       RETURNING *
     `;
     await fireClientCreatedWorkflows({ workspaceId, client: ins.rows[0], source: 'website-form' });
+    return ins.rows[0].id;
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(`[form-submission] lead record failed (${handle}):`, err.message);
+    return null;
   }
 }
 

@@ -11,7 +11,7 @@ import { serializeClient, serializeClientMinimal, helperSeesMinimalClients, VALI
 import { helperClientScope } from '../_lib/helpers.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { clientDetailColumns, loadFieldDefs, mergeCustomFields, writeClientColumns } from '../_lib/clientDetails.js';
-import { sendClientInvite } from '../_lib/clientNotify.js';
+import { sendClientInvite, inviteNewClientsEnabled } from '../_lib/clientNotify.js';
 import { celebrateFirstClient } from '../_lib/milestones.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -182,11 +182,24 @@ export default async function handler(req, res) {
         const withDetails = await writeClientColumns(rows[0].id, workspaceId, extra);
         if (withDetails) rows[0] = withDetails;
       }
-      // Best-effort invite. Skip when no email, already invited, or the
-      // owner unchecked "Email them an invite" in the add modal
-      // (body.sendInvite === false). Default stays ON for single adds.
-      if (rows[0]?.email && body.sendInvite !== false) {
-        sendClientInvite({ workspaceId, clientId: rows[0].id });
+      // Portal invite. The add form sends the owner's explicit choice
+      // (sendInvite true/false; its checkbox starts from the business
+      // setting). A caller that says nothing follows the business setting
+      // "Invite new clients automatically" (default on). Awaited so the
+      // response can say whether it really went out (opt-outs, daily cap
+      // and send failures report sent:false and leave no "invited" stamp).
+      let invite = { sent: false, reason: rows[0]?.email ? 'off' : 'no-email' };
+      if (rows[0]?.email) {
+        const wantInvite = typeof body.sendInvite === 'boolean'
+          ? body.sendInvite
+          : await inviteNewClientsEnabled(workspaceId);
+        if (wantInvite) {
+          invite = await sendClientInvite({ workspaceId, clientId: rows[0].id });
+          if (invite.sent) {
+            const fresh = await sql`SELECT invite_sent_at FROM clients WHERE id = ${rows[0].id} AND workspace_id = ${workspaceId}`;
+            rows[0].invite_sent_at = fresh.rows[0]?.invite_sent_at || rows[0].invite_sent_at;
+          }
+        }
       }
       // First-client milestone (best-effort, one-time, ignores demo data).
       celebrateFirstClient(workspaceId).catch(() => {});
@@ -195,7 +208,10 @@ export default async function handler(req, res) {
       // "Just-now triggered" run visible in the workflow runs list when
       // the owner refreshes.
       await fireClientCreatedWorkflows({ workspaceId, client: rows[0], source: 'manual-create' });
-      return created(res, { client: serializeClient(rows[0]) });
+      return created(res, {
+        client: serializeClient(rows[0]),
+        invite: { sent: !!invite.sent, reason: invite.sent ? null : (invite.reason || null) },
+      });
     }
 
     return methodNotAllowed(res, ['GET', 'POST']);

@@ -4,8 +4,10 @@
 // Bypasses sendClientInvite's idempotency guard (it skips if
 // invite_sent_at is set) so the owner can nudge a slow-claimer.
 //
-// Updates clients.invite_sent_at to NOW() either way so the audit trail
-// reflects when the latest invite went out.
+// Stamps clients.invite_sent_at = NOW() only when the email really went
+// out, so "Last invited ..." in the client drawer is never a send that a
+// client opt-out (or the daily cap) stopped. Response:
+//   { sent, reason, inviteSentAt }  (inviteSentAt: the stamp now on file)
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
@@ -15,6 +17,7 @@ import { sendEmailToClient, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { withIdempotency } from '../../_lib/idempotency.js';
+import { enforce } from '../../_lib/rate-limit.js';
 import { methodNotAllowed, serverError } from '../../_lib/json.js';
 
 function escapeHtml(s) {
@@ -31,6 +34,11 @@ export default async function handler(req, res) {
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
     const { id: clientId } = req.query;
+    // An invite is an email to someone else's inbox: cap the nudges.
+    if (await enforce(req, res, [
+      { key: `client-invite:ws:${workspaceId}`, max: 60, windowSeconds: 3600 },
+      { key: `client-invite:c:${String(clientId).slice(0, 64)}`, max: 5, windowSeconds: 86400 },
+    ])) return;
 
     // Idempotent wrap - a double-click on Resend invite used to fire
     // two invitation emails to the same address.
@@ -61,8 +69,8 @@ export default async function handler(req, res) {
         heading: `Claim your account with ${bizName}`,
         branding,
         body: `<p>Hi${firstName(client.name) ? ` ${escapeHtml(firstName(client.name))}` : ''},</p>
-          <p>This is a quick reminder that <strong>${escapeHtml(bizName)}</strong> set you up with a
-          Ivy portal - it's where you'll see your bookings, invoices, and any messages from them.</p>
+          <p>This is a quick reminder that <strong>${escapeHtml(bizName)}</strong> set you up with an
+          Ivy portal. It's where you'll see your bookings, invoices, and any messages from them.</p>
           <p>Create your free account (or sign in if you already have one) to get started.</p>`,
         ctaText: 'Create my account',
         ctaUrl: signupHref,
@@ -70,13 +78,21 @@ export default async function handler(req, res) {
       }),
     });
 
-    await sql`UPDATE clients SET invite_sent_at = NOW() WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
+    let inviteSentAt = client.invite_sent_at || null;
+    if (result.sent) {
+      const stamped = await sql`
+        UPDATE clients SET invite_sent_at = NOW()
+        WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+        RETURNING invite_sent_at`;
+      inviteSentAt = stamped.rows[0]?.invite_sent_at || inviteSentAt;
+    }
 
     return {
       status: 200,
       body: {
-        sent: result.sent,
+        sent: !!result.sent,
         reason: result.reason || null,
+        inviteSentAt,
       },
     };
     } // end doResendInvite

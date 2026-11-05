@@ -18,7 +18,7 @@ import {
 import { notifyPackageExhausted } from '../../_lib/packageNotify.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
-import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
+import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled, notifyHelperAssigned } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { settleOwnerCancellation } from '../../_lib/bookingFees.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
@@ -346,6 +346,10 @@ export default async function handler(req, res) {
         } else { throw e; }
       }
       syncOnBookingUpdated({ workspaceId, bookingId: id });
+      // Newly assigned to a helper: put it on their phone.
+      if ('staffId' in body && rows[0]?.staff_id && rows[0].staff_id !== found.rows[0].staff_id) {
+        notifyHelperAssigned({ workspaceId, bookingId: id });
+      }
       return ok(res, { booking: serializeBooking(rows[0], bopts) });
     }
 

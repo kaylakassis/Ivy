@@ -8,6 +8,7 @@ import { api } from './api.js';
 import { isNative } from './platform.js';
 import {
   nativePermissionState, registerNativePush, unregisterNativePush,
+  initNativePushOnLaunch, detachNativePush, pushTurnedOffHere, setPushTurnedOffHere,
 } from './nativePush.js';
 
 const SW_PATH = '/sw.js';
@@ -45,10 +46,11 @@ async function getRegistration() {
 export async function getSubscription() {
   if (isNative()) {
     // "Subscribed" on native = OS permission granted (the launch init
-    // re-registers the token whenever that's true). Truthy sentinel
-    // keeps the settings toggle rendering identically to web.
+    // re-registers the token whenever that's true) and not switched off
+    // in Ivy on this device. Truthy sentinel keeps the settings toggle
+    // rendering identically to web.
     const perm = await primeNativePermission();
-    return perm === 'granted' ? { native: true } : null;
+    return perm === 'granted' && !pushTurnedOffHere() ? { native: true } : null;
   }
   if (!pushSupported()) return null;
   const reg = await getRegistration();
@@ -70,6 +72,7 @@ function urlBase64ToUint8Array(base64String) {
 // gesture caller-side), subscribe to PushManager, persist on the server.
 // Returns the resulting subscription on success or throws on failure.
 export async function subscribePush() {
+  setPushTurnedOffHere(false);
   if (isNative()) {
     await registerNativePush();
     nativePermCache = 'granted';
@@ -102,6 +105,9 @@ export async function subscribePush() {
 }
 
 export async function unsubscribePush() {
+  // Remember the choice on this device so the next app launch does not
+  // quietly register again (native permission stays granted at OS level).
+  setPushTurnedOffHere(true);
   if (isNative()) {
     await unregisterNativePush();
     return;
@@ -112,4 +118,50 @@ export async function unsubscribePush() {
   if (!sub) return;
   await api.post('/push/unsubscribe', { endpoint: sub.endpoint });
   await sub.unsubscribe();
+}
+
+// Every signed-in shell (owner, client portal, helper) calls this once on
+// mount. It binds this device's push channel to whoever is signed in now,
+// without ever prompting:
+//   iPhone app: re-registers the APNs token when iOS permission is granted
+//     (Apple rotates tokens; the server upserts and binds it to this user).
+//   Browser: when permission is granted and a subscription exists, posts
+//     it again so it belongs to the current account (a previous account
+//     on this browser released it at sign-out).
+// Skipped when the person switched notifications off in Ivy on this device.
+export async function syncPushOnLaunch() {
+  try {
+    if (pushTurnedOffHere()) return;
+    if (isNative()) { await initNativePushOnLaunch(); return; }
+    if (!pushSupported() || Notification.permission !== 'granted') return;
+    const reg = await navigator.serviceWorker.getRegistration(SW_PATH);
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    if (!sub) return;
+    const json = sub.toJSON();
+    if (!json?.endpoint || !json?.keys) return;
+    await api.post('/push/subscribe', { endpoint: json.endpoint, keys: json.keys, userAgent: navigator.userAgent });
+  } catch {
+    /* best-effort: never block the shell */
+  }
+}
+
+// Called on sign-out, BEFORE the session ends (the server needs to know
+// whose row to drop). Releases this device from the account so the next
+// person to sign in here never gets the previous account's notifications
+// on their lock screen, and their own registration is not refused as
+// "token in use". Leaves OS / browser permission alone. Capped at 3s so a
+// slow network never holds up signing out.
+export async function detachPushForSignOut() {
+  const work = (async () => {
+    try {
+      if (isNative()) { await detachNativePush(); return; }
+      if (!pushSupported()) return;
+      const reg = await navigator.serviceWorker.getRegistration(SW_PATH);
+      const sub = reg ? await reg.pushManager.getSubscription() : null;
+      if (sub) await api.post('/push/unsubscribe', { endpoint: sub.endpoint });
+    } catch {
+      /* best-effort */
+    }
+  })();
+  await Promise.race([work, new Promise((r) => setTimeout(r, 3000))]);
 }

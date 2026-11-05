@@ -36,7 +36,8 @@ import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { getProvider } from '../../_lib/payments/index.js';
 import { appUrl } from '../../_lib/tokens.js';
-import { sendClientInvite } from '../../_lib/clientNotify.js';
+import { sendClientInvite, inviteNewClientsEnabled } from '../../_lib/clientNotify.js';
+import { keepAlive } from '../../_lib/keepAlive.js';
 import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
 import { loadWorkspaceAccess, archivedPayload, archivedForbidden } from '../../_lib/businessAccess.js';
 import {
@@ -655,9 +656,11 @@ async function createBooking(req, res) {
       `;
       clientId = newClient.rows[0].id;
       // First-time booker - email a "claim your account" invite alongside
-      // the booking confirmation that notifyNewBooking sends.
-      sendClientInvite({ workspaceId, clientId })
-        .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message));
+      // the booking confirmation that notifyNewBooking sends, when the
+      // business invites new clients automatically (default on).
+      keepAlive(inviteNewClientsEnabled(workspaceId)
+        .then((on) => (on ? sendClientInvite({ workspaceId, clientId }) : null))
+        .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message)));
       // A first booking is how most leads enter the CRM - fire the
       // owner's client_created / lead_created workflows for them, same as
       // a manual add. Fire-and-forget like the other side effects below;

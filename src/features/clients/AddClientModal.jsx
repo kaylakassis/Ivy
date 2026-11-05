@@ -8,7 +8,12 @@
 // Photo upload + per-client attachments live in the full ClientDrawer
 // once the lead exists, since upload-then-cancel without a row leaves
 // orphan files in Blob.
-import React, { useState } from 'react';
+//
+// The invite box starts from the business setting "Invite new clients
+// automatically" (/api/clients/invite-settings, default on), and the owner
+// can flip that setting right here. The box itself is this one add only.
+import React, { useEffect, useState } from 'react';
+import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
@@ -29,6 +34,40 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
   // Existing clients vs. new prospects - her book is mostly the former.
   const [stage, setStage]   = useState('active');
   const [sendInvite, setSendInvite] = useState(true);
+  // Business default (null until loaded; the box stays ticked meanwhile,
+  // matching the server default).
+  const [inviteDefault, setInviteDefault] = useState(null);
+  const [inviteDefaultBusy, setInviteDefaultBusy] = useState(false);
+  const [inviteTouched, setInviteTouched] = useState(false);
+  useEffect(() => {
+    let live = true;
+    api.get('/clients/invite-settings')
+      .then((r) => {
+        if (!live || typeof r?.inviteNewClients !== 'boolean') return;
+        setInviteDefault(r.inviteNewClients);
+        // Follow the business default unless the owner already chose.
+        setSendInvite((cur) => (inviteTouched ? cur : r.inviteNewClients));
+      })
+      .catch(() => {});
+    return () => { live = false; };
+    // Load once on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const flipInviteDefault = async () => {
+    if (inviteDefault === null || inviteDefaultBusy) return;
+    const next = !inviteDefault;
+    setInviteDefaultBusy(true);
+    try {
+      const r = await api.patch('/clients/invite-settings', { inviteNewClients: next });
+      setInviteDefault(!!r.inviteNewClients);
+      setSendInvite(!!r.inviteNewClients);
+      setInviteTouched(false);
+    } catch (ex) {
+      setErr(ex.message || 'Could not change the invite setting');
+    } finally {
+      setInviteDefaultBusy(false);
+    }
+  };
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -54,7 +93,7 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
     setBusy(true);
     setErr(null);
     try {
-      await onAdd({
+      return await onAdd({
         ...detailsPatch(details, draftFrom({}), fields),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
         name: trimmedName,
@@ -154,12 +193,23 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
               color: 'var(--fg-2)', lineHeight: 1.5, cursor: 'pointer',
             }}>
               <input type="checkbox" checked={sendInvite}
-                onChange={(e) => setSendInvite(e.target.checked)} style={{ marginTop: 2 }}/>
+                onChange={(e) => { setInviteTouched(true); setSendInvite(e.target.checked); }} style={{ marginTop: 2 }}/>
               <span>
                 Email them an invite to your client portal (book, pay, message you).
-                Uncheck to add quietly - you can invite them later from their profile.
+                Uncheck to add quietly. You can invite them later from their profile.
               </span>
             </label>
+          )}
+          {inviteDefault !== null && /\S+@\S+\.\S+/.test(trimmedEmail) && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginTop: -4 }}>
+              {inviteDefault
+                ? 'New clients get this invite automatically.'
+                : 'New clients are added quietly unless you tick the box.'}{' '}
+              <button type="button" className="btn btn-ghost" onClick={flipInviteDefault} disabled={inviteDefaultBusy}
+                style={{ padding: '2px 4px', fontSize: 12, color: 'var(--accent)', display: 'inline' }}>
+                {inviteDefaultBusy ? 'Saving…' : (inviteDefault ? 'Turn off' : 'Invite automatically')}
+              </button>
+            </div>
           )}
         </div>
 

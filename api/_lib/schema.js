@@ -4452,4 +4452,8 @@ DO $$ BEGIN
   ALTER TABLE bookings ADD CONSTRAINT bookings_package_use_mode_chk
     CHECK (package_use_mode IS NULL OR package_use_mode IN ('booking', 'completion'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Client portal invites: does adding a client (Add client, Ivy, a booking
+-- that creates the client) email them an invite automatically? NULL means
+-- the default, yes. Imports ignore it and stay quiet unless opted in.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS invite_new_clients BOOLEAN;
 `;

@@ -1,5 +1,6 @@
 // iOS app: the "turn on notifications" sheet, shown once the owner is past
-// the paywall and onboarding. iOS only ever shows its own permission
+// the paywall and onboarding, and in the client portal and helper shell
+// once their first screen has loaded (`audience` picks the wording). iOS only ever shows its own permission
 // dialog once per install, so we ask in our own words first and only
 // trigger the system prompt when they tap "Turn on". "Not now" snoozes
 // for a week. Renders nothing on the web (the dashboard card handles
@@ -26,7 +27,13 @@ function snooze(ms) {
   try { localStorage.setItem(SNOOZE_KEY, String(Date.now() + ms)); } catch { /* private mode */ }
 }
 
-export default function NativePushPrompt({ active }) {
+const COPY = {
+  owner:  'Get a ping the moment a client books, pays or messages you, even when Ivy is closed. You can change this any time in Account.',
+  client: 'Get a ping when your business messages you, confirms or moves an appointment, sends an invoice or a document to sign. You can change this any time in Notifications.',
+  helper: 'Get a ping when a session is added to your day or moved, and when a client messages. You can change this any time in Account.',
+};
+
+export default function NativePushPrompt({ active, audience = 'owner' }) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   // Never stack on top of a tab tutorial; wait until it closes.
@@ -81,7 +88,7 @@ export default function NativePushPrompt({ active }) {
         </div>
         <div id="push-prompt-title" style={{ fontSize: 19, fontWeight: 700, marginBottom: 6 }}>Turn on notifications</div>
         <div style={{ fontSize: 14.5, color: 'var(--muted)', lineHeight: 1.45, marginBottom: 18 }}>
-          Get a ping the moment a client books, pays or messages you, even when Ivy is closed. You can change this any time in Account.
+          {COPY[audience] || COPY.owner}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button type="button" className="btn btn-primary" onClick={turnOn} disabled={busy}

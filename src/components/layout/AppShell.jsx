@@ -30,7 +30,7 @@ import { TutorialProvider } from '../../lib/tutorialState.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
-import { initNativePushOnLaunch } from '../../lib/nativePush.js';
+import { syncPushOnLaunch } from '../../lib/push.js';
 import NativePushPrompt from '../NativePushPrompt.jsx';
 import ReviewPrompt from '../ReviewPrompt.jsx';
 import { identifyIapUser, onIapCustomerInfoChange } from '../../lib/iap.js';
@@ -149,7 +149,9 @@ function AppShellInner() {
   // Native app: silently refresh the APNs device token on launch when
   // the user already granted notifications (Apple rotates tokens; the
   // server upserts). No-op on web, never prompts.
-  useEffect(() => { Promise.resolve().then(() => initNativePushOnLaunch()).catch(() => {}); }, []);
+  // Bind this device's notifications (iPhone token or browser subscription)
+  // to the signed-in owner. Never prompts.
+  useEffect(() => { Promise.resolve().then(() => syncPushOnLaunch()).catch(() => {}); }, []);
   useEffect(() => { initNative(); }, []);
 
   // iOS in-app purchases: bind the RevenueCat customer to this workspace as

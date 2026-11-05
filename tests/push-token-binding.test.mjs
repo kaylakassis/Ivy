@@ -12,6 +12,7 @@ import { sql } from '../api/_lib/db.js';
 import { signSession } from '../api/_lib/auth.js';
 import deviceHandler from '../api/push/device.js';
 import subscribeHandler, { allowedPushEndpoint } from '../api/push/subscribe.js';
+import unsubscribeHandler from '../api/push/unsubscribe.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -107,11 +108,37 @@ try {
   assert(r.statusCode === 200, `known push service → 200 (${r.statusCode})`);
   const saved = await sql`SELECT COUNT(*)::int AS c FROM push_subscriptions WHERE endpoint = ${goodEndpoint} AND user_id = ${a.id}`;
   assert(saved.rows[0].c === 1, 'subscription stored');
+
+  console.log('\n[6] one browser, one account: the next sign-in takes the subscription over');
+  r = mkRes();
+  await subscribeHandler(req({ cookie: b.cookie, body: { endpoint: goodEndpoint, keys: { p256dh: 'p2', auth: 'a2' } } }), r);
+  assert(r.statusCode === 200, 'B subscribes from the same browser');
+  const holders = (await sql`SELECT user_id FROM push_subscriptions WHERE endpoint = ${goodEndpoint}`).rows.map((x) => x.user_id);
+  assert(holders.length === 1 && holders[0] === b.id, `only B is bound now, A no longer gets pushed to B's browser (${holders.length})`);
+
+  console.log('\n[7] sign-out release: unsubscribe and device DELETE only touch your own rows');
+  r = mkRes();
+  await unsubscribeHandler(req({ cookie: a.cookie, body: { endpoint: goodEndpoint } }), r);
+  assert((await sql`SELECT COUNT(*)::int AS c FROM push_subscriptions WHERE endpoint = ${goodEndpoint}`).rows[0].c === 1, "A cannot remove B's browser subscription");
+  r = mkRes();
+  await unsubscribeHandler(req({ cookie: b.cookie, body: { endpoint: goodEndpoint } }), r);
+  assert((await sql`SELECT COUNT(*)::int AS c FROM push_subscriptions WHERE endpoint = ${goodEndpoint}`).rows[0].c === 0, 'B signing out releases it');
+  r = mkRes();
+  await deviceHandler(req({ cookie: a.cookie, body: { token: TOKEN, platform: 'ios' } }), r);
+  r = mkRes();
+  await deviceHandler(req({ cookie: b.cookie, method: 'DELETE', body: { token: TOKEN } }), r);
+  assert((await ownerOf()) === a.id, "B's sign-out cannot drop A's iPhone token");
+  r = mkRes();
+  await deviceHandler(req({ cookie: a.cookie, method: 'DELETE', body: { token: TOKEN } }), r);
+  r = mkRes();
+  await deviceHandler(req({ cookie: b.cookie, body: { token: TOKEN, platform: 'ios' } }), r);
+  assert(r.body?.registered === true && (await ownerOf()) === b.id, 'after A signs out on the phone, B signing in gets the phone straight away');
 } catch (err) {
   console.error('Fatal:', err.message, err.stack);
   fail++;
 } finally {
   await sql`DELETE FROM push_device_tokens WHERE token = ${TOKEN}`.catch(() => {});
+  await sql`DELETE FROM push_subscriptions WHERE endpoint LIKE ${`%${TAG}%`}`.catch(() => {});
   for (const uid of users) await sql`DELETE FROM users WHERE id = ${uid}`.catch(() => {});
 }
 console.log(`\n${pass} passed, ${fail} failed`);
