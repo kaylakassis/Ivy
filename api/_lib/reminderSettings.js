@@ -153,6 +153,28 @@ export function mergeAudienceSettings(kind, current, body) {
   return { value: next };
 }
 
+// The whole PATCH /api/calendar/reminders body: { clients?, owner? },
+// each merged onto what `row` (a calendar_settings row) stores. Shared by
+// the settings screen and Ivy so both validate the same way. Returns
+// { clients, owner } (null for an audience not in the body) or { error }.
+export function mergeReminderPatch(row, body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Body must be an object' };
+  if (!('clients' in body) && !('owner' in body)) return { error: 'Nothing to update' };
+  let clients = null;
+  let owner = null;
+  if ('clients' in body) {
+    const r = mergeAudienceSettings('clients', clientRemindersFrom(row?.client_reminders ?? null), body.clients);
+    if (r.error) return r;
+    clients = r.value;
+  }
+  if ('owner' in body) {
+    const r = mergeAudienceSettings('owner', ownerRemindersFrom(row?.owner_reminders ?? null), body.owner);
+    if (r.error) return r;
+    owner = r.value;
+  }
+  return { clients, owner };
+}
+
 // Does this services row follow the business default? An explicit flag
 // wins; rows saved before the flag existed follow the default when they
 // still hold the old built-in schedule.

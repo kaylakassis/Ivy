@@ -448,8 +448,9 @@ export async function sendDocumentForSigning({ workspaceId, doc, recipients, bra
     : '';
   const brand = branding || await fetchBranding(workspaceId).catch(() => ({}));
   let emailWarning = null;
+  let emailResult = null;
   try {
-    await sendEmailToClient({
+    emailResult = await sendEmailToClient({
       clientId: first.clientId || null, workspaceId,
       type: 'documents',
       to: first.email,
@@ -471,6 +472,7 @@ export async function sendDocumentForSigning({ workspaceId, doc, recipients, bra
     // eslint-disable-next-line no-console
     console.error('[documents/send] email failed:', mailErr.message);
     emailWarning = `We saved the document but couldn't email ${first.name || first.email} - try Resend in a moment.`;
+    emailResult = { ok: false, sent: false, reason: mailErr.message };
   }
 
   if (first.clientId) try {
@@ -512,5 +514,202 @@ export async function sendDocumentForSigning({ workspaceId, doc, recipients, bra
   });
 
   const signers = await fetchSigners(id);
-  return { row: updated.rows[0], signers, link, emailWarning };
+  // emailResult: what the client email sender answered ({ sent, reason }),
+  // so a caller can say truthfully whether the email went out (a client
+  // who turned off document emails is skipped without an error).
+  return { row: updated.rows[0], signers, link, emailWarning, emailResult };
+}
+
+// Void a document so every sign link stops working. The one path behind
+// POST /api/documents/void and Ivy's void_document. Returns { error } or
+// { row }. The owner can edit it again afterwards.
+export async function voidDocument({ workspaceId, id }) {
+  const doc = await fetchOwnedDoc({ id, workspaceId });
+  if (!doc) return { error: 'Document not found' };
+  if (doc.status === 'completed') return { error: "Can't void a completed document" };
+  const newActivity = [
+    ...(doc.activity || []),
+    { ts: new Date().toISOString(), kind: 'voided', text: 'Document voided' },
+  ];
+  // Kill every outstanding sign link, not just the legacy single-signer
+  // one on the documents row: multi-signer flows mint a token per signer
+  // in document_signers, and signers 2..N must not complete a voided doc.
+  const updated = await sql`
+    UPDATE documents SET
+      status = 'voided',
+      sign_token_hash = NULL,
+      activity = ${JSON.stringify(newActivity)}::jsonb,
+      updated_at = NOW()
+    WHERE id = ${id} AND workspace_id = ${workspaceId}
+    RETURNING *
+  `;
+  if (updated.rows.length === 0) return { error: 'Document not found - was it deleted while you were voiding it?' };
+  try {
+    // Nulling the token is enough: sign/[token] resolves by hash. Status
+    // stays 'awaiting' (the CHECK constraint has no 'voided' here).
+    await sql`
+      UPDATE document_signers SET sign_token_hash = NULL, updated_at = NOW()
+       WHERE document_id = ${id}
+         AND document_id IN (SELECT id FROM documents WHERE id = ${id} AND workspace_id = ${workspaceId})
+    `;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[documents/void] document_signers cleanup failed:', e.message);
+  }
+  return { row: updated.rows[0] };
+}
+
+// Who a resend would go to: the signer whose turn it is, or the legacy
+// single recipient. Returns { error } or { doc, target, signerCount }.
+export async function resendTarget({ workspaceId, id }) {
+  const doc = await fetchOwnedDoc({ id, workspaceId });
+  if (!doc) return { error: 'Document not found' };
+  if (doc.status === 'completed') return { error: 'Already signed - nothing to resend' };
+  if (doc.status === 'voided') return { error: 'Document is voided' };
+  if (doc.status === 'draft') return { error: "Draft hasn't been sent - use Send instead" };
+  if (doc.status === 'declined') return { error: 'Document was declined - revise + resend a new copy' };
+  const { rows: signers } = await sql`
+    SELECT id, client_id, name, email, order_index, status
+      FROM document_signers
+     WHERE document_id = ${id}
+     ORDER BY order_index ASC
+  `;
+  let target = signers.find((x) => x.status === 'awaiting') || null;
+  if (!target && doc.recipient_email) {
+    target = { id: null, client_id: doc.recipient_client_id, name: doc.recipient_name, email: doc.recipient_email, order_index: 0 };
+  }
+  if (!target) return { error: 'No pending signer to resend to' };
+  if (!target.email) return { error: 'Current signer has no email on file' };
+  return { doc, target, signerCount: signers.length };
+}
+
+// Re-email the current signer with a fresh link (the old link stops
+// working). The one path behind POST /api/documents/resend and Ivy's
+// resend_document. Returns { error } or { row, target, emailWarning, emailResult }.
+export async function resendDocument({ workspaceId, id }) {
+  const found = await resendTarget({ workspaceId, id });
+  if (found.error) return found;
+  const { doc, target, signerCount } = found;
+  const raw = generateRawToken(32);
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  if (target.id) {
+    await sql`
+      UPDATE document_signers SET sign_token_hash = ${hash}, status = 'awaiting', updated_at = NOW()
+       WHERE id = ${target.id} AND document_id = ${id}`;
+  }
+  // Keep the legacy fields on documents in sync so the owner list and the
+  // sign flow both see the latest token.
+  const newActivity = [
+    ...(doc.activity || []),
+    { ts: new Date().toISOString(), kind: 'sent', text: `Resent to ${target.name || target.email}` },
+  ];
+  await sql`
+    UPDATE documents SET
+      recipient_client_id = ${target.client_id || null},
+      recipient_name      = ${target.name || ''},
+      recipient_email     = ${target.email},
+      sign_token_hash     = ${hash},
+      activity            = ${JSON.stringify(newActivity)}::jsonb,
+      updated_at          = NOW()
+    WHERE id = ${id} AND workspace_id = ${workspaceId}
+  `;
+  const link = `${appUrl()}/sign/${encodeURIComponent(raw)}`;
+  const branding = await fetchBranding(workspaceId).catch(() => ({}));
+  const position = signerCount > 1
+    ? `<p style="font-size:13px;color:#85827B;">You're signer ${target.order_index + 1} of ${signerCount}.</p>`
+    : '';
+  let emailWarning = null;
+  let emailResult = null;
+  try {
+    emailResult = await sendEmailToClient({
+      clientId: target.client_id || null, workspaceId,
+      type: 'documents',
+      to: target.email,
+      subject: `Reminder: please sign "${doc.name}"`,
+      replyTo: branding.replyTo,
+      html: emailShell({
+        heading: 'Document still waiting on you',
+        body: `<p>Hi ${escapeHtml(target.name || 'there')},</p>
+               <p>This is a friendly nudge - <b>${escapeHtml(doc.name)}</b> is still waiting on your signature.</p>
+               ${position}`,
+        ctaText: 'Open and sign',
+        ctaUrl: link,
+        footer: "If you weren't expecting this, you can safely ignore.",
+        branding,
+      }),
+    });
+  } catch (mailErr) {
+    // eslint-disable-next-line no-console
+    console.error('[documents/resend] email failed:', mailErr.message);
+    emailWarning = `We refreshed the link but the email to ${target.name || target.email} didn't go through - try again in a moment.`;
+    emailResult = { ok: false, sent: false, reason: mailErr.message };
+  }
+  const row = await fetchOwnedDoc({ id, workspaceId });
+  return { row, target, emailWarning, emailResult };
+}
+
+export const MAX_TEMPLATE_RECIPIENTS = 50;
+
+// Everything a "send this template to these clients" needs, checked
+// without sending: the template, its fields for the signer count, the
+// owner's own email when they sign too, and each client (missing or with
+// no email are skipped). `owner` = { name, email } of the signed-in owner.
+// Returns { error } or { template, owner, sendTo: [{ id, name, email }], skipped }.
+export async function prepareTemplateSend({ workspaceId, templateId, clientIds, ownerSigns = null, owner = null }) {
+  const ids = [...new Set((Array.isArray(clientIds) ? clientIds : []).map(String)
+    .filter((x) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x)))];
+  if (ids.length === 0) return { error: 'Pick at least one client' };
+  if (ids.length > MAX_TEMPLATE_RECIPIENTS) return { error: `Up to ${MAX_TEMPLATE_RECIPIENTS} clients at a time` };
+  const tpl = templateId ? await fetchOwnedDoc({ id: String(templateId), workspaceId }) : null;
+  if (!tpl || !tpl.is_template) return { error: 'Template not found' };
+  const signs = ownerSigns === 'first' || ownerSigns === 'last' ? ownerSigns : null;
+  const problem = fieldProblemsForSend(tpl, signs ? 2 : 1);
+  if (problem) return { error: signs ? problem : `${problem} (If you sign this too, turn on "I sign it too".)` };
+  let self = null;
+  if (signs) {
+    const email = String(owner?.email || '').toLowerCase().trim();
+    if (!email) return { error: 'Your account has no email address to send your signing link to' };
+    self = { clientId: null, name: String(owner?.name || 'Business owner').slice(0, 200), email, isOwner: true };
+  }
+  const { rows: clients } = await sql`
+    SELECT id, name, email FROM clients
+     WHERE workspace_id = ${workspaceId} AND id = ANY(${ids}::uuid[])
+  `;
+  const byId = new Map(clients.map((c) => [c.id, c]));
+  const sendTo = [];
+  const skipped = [];
+  for (const cid of ids) {
+    const c = byId.get(cid);
+    if (!c) { skipped.push({ clientId: cid, name: null, reason: 'not found' }); continue; }
+    const email = String(c.email || '').toLowerCase().trim();
+    if (!email) { skipped.push({ clientId: cid, name: c.name, reason: 'no email' }); continue; }
+    sendTo.push({ id: c.id, name: c.name || email, email });
+  }
+  return { template: tpl, ownerSigns: signs, self, sendTo, skipped };
+}
+
+// Send a template to many clients: each gets their own copy, sent through
+// sendDocumentForSigning. The one path behind POST
+// /api/documents/send-template and Ivy's send_document_from_template.
+// Returns { error } or { sent: [{ clientId, documentId, warning?, emailed }], skipped }.
+export async function sendTemplateToClients({ workspaceId, templateId, clientIds, ownerSigns = null, owner = null }) {
+  const prep = await prepareTemplateSend({ workspaceId, templateId, clientIds, ownerSigns, owner });
+  if (prep.error) return prep;
+  const { template: tpl, self, sendTo, skipped } = prep;
+  const branding = await fetchBranding(workspaceId).catch(() => ({}));
+  const sent = [];
+  for (const client of sendTo) {
+    // eslint-disable-next-line no-await-in-loop
+    const copy = await cloneDocument({ workspaceId, src: tpl, name: `${tpl.name} - ${client.name}`.slice(0, 200), client });
+    const me = { clientId: client.id, name: client.name, email: client.email };
+    const recipients = prep.ownerSigns === 'first' ? [self, me] : prep.ownerSigns === 'last' ? [me, self] : [me];
+    // eslint-disable-next-line no-await-in-loop
+    const r = await sendDocumentForSigning({ workspaceId, doc: copy, recipients, branding });
+    sent.push({
+      clientId: client.id, documentId: copy.id,
+      ...(r.emailWarning ? { warning: r.emailWarning } : {}),
+      emailed: !!r.emailResult?.sent,
+    });
+  }
+  return { sent, skipped };
 }

@@ -15,12 +15,9 @@ import { enforce } from '../_lib/rate-limit.js';
 import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { serializeService } from '../_lib/calendar.js';
 import {
-  getCurrentPolicy, listPolicyVersions, getPolicySettings, savePolicyText, savePolicySettings,
-  MAX_POLICY_CHARS,
+  getCurrentPolicy, listPolicyVersions, getPolicySettings, updateCancellationPolicy, MAX_POLICY_CHARS,
 } from '../_lib/cancellationPolicy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
-
-const SETTING_KEYS = ['requireAcceptance', 'showOnBookingPage', 'showInSiteFooter', 'refundDepositOutsideWindow'];
 
 async function loadState(workspaceId) {
   const [policy, versions, settings, svc, fs] = await Promise.all([
@@ -68,29 +65,9 @@ export default async function handler(req, res) {
     const body = await readBody(req);
     if (!body || typeof body !== 'object') return badRequest(res, 'Nothing to save');
 
-    let createdVersion = null;
-    if (body.text !== undefined) {
-      if (typeof body.text !== 'string') return badRequest(res, 'text must be plain text');
-      if (body.text.length > MAX_POLICY_CHARS * 2) return badRequest(res, `Keep your policy under ${MAX_POLICY_CHARS} characters.`);
-      const saved = await savePolicyText({ workspaceId, userId: user.id, text: body.text });
-      if (saved.error) return badRequest(res, saved.error);
-      if (saved.created) createdVersion = saved.policy;
-    }
-
-    const patch = {};
-    for (const k of SETTING_KEYS) {
-      if (body[k] === undefined) continue;
-      if (typeof body[k] !== 'boolean') return badRequest(res, `${k} must be true or false`);
-      patch[k] = body[k];
-    }
-    if (patch.requireAcceptance === true && !(await getCurrentPolicy(workspaceId))) {
-      return badRequest(res, 'Write your cancellation policy first, then turn this on.');
-    }
-    const before = await getPolicySettings(workspaceId);
-    let after = before;
-    if (Object.keys(patch).length) after = await savePolicySettings({ workspaceId, patch });
-
-    const changed = SETTING_KEYS.filter((k) => before[k] !== after[k]);
+    const out = await updateCancellationPolicy({ workspaceId, userId: user.id, body });
+    if (out.error) return badRequest(res, out.error);
+    const { createdVersion, after, changed } = out;
     if (createdVersion || changed.length) {
       recordWorkspaceAudit(req, {
         workspaceId, actor: user,

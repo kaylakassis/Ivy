@@ -8,6 +8,7 @@
 // never anything the model says afterwards.
 import { sql } from './db.js';
 import { runApprovedTool } from './ivyTools.js';
+import { APP_WRITE_TOOLS } from './ivyAppTools.js';
 
 // Claims and runs one pending row. Returns { claimed:false } when it had
 // already run or expired, otherwise { claimed:true, result, text, actions }
@@ -40,16 +41,20 @@ export async function executePendingAction({ row, workspaceId, userId }) {
     console.warn('[ivy approve] could not store the result:', err?.message);
   }
   const failed = !!(result && result.error);
+  // Tools that word their own past-tense line from what really happened
+  // (api/_lib/ivyAppTools.js): the Done message and ledger use it instead
+  // of repeating the approval card's question.
+  const doneLine = !failed && APP_WRITE_TOOLS.has(row.tool) && typeof result?.done === 'string' ? result.done : null;
   const warnings = !failed && Array.isArray(result?.warnings) ? result.warnings.filter(Boolean).slice(0, 5).map(String) : [];
   const actions = [{
     tool: row.tool,
     status: failed ? 'failed' : 'done',
     ok: !failed,
-    summary: String(row.summary || row.tool).slice(0, 600),
+    summary: String(doneLine || row.summary || row.tool).slice(0, 600),
     ...(failed ? { error: String(result.error).slice(0, 300) } : {}),
     ...(warnings.length ? { warnings } : {}),
   }];
-  let text = failed ? `That didn't work: ${result.error}` : `Done. ${row.summary}`;
+  let text = failed ? `That didn't work: ${result.error}` : `Done. ${doneLine || row.summary}`;
   // A client list: counts, not the whole approval card again.
   if (!result?.error && row.tool === 'import_clients_from_list') text = clientImportDoneText(result);
   // Appointments added from a photo, or clients from a list: say who still

@@ -16,7 +16,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { enforce } from '../_lib/rate-limit.js';
-import { invalidateCalendarSettings } from '../_lib/calendar.js';
+import { setInviteNewClients } from '../_lib/clientNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -32,12 +32,7 @@ export default async function handler(req, res) {
       if (await enforce(req, res, [{ key: `client-invite-settings:ws:${workspaceId}`, max: 60, windowSeconds: 3600 }])) return;
       const body = await readBody(req);
       if (typeof body?.inviteNewClients !== 'boolean') return badRequest(res, 'inviteNewClients must be true or false');
-      await sql`
-        INSERT INTO calendar_settings (workspace_id, invite_new_clients)
-        VALUES (${workspaceId}, ${body.inviteNewClients})
-        ON CONFLICT (workspace_id) DO UPDATE SET invite_new_clients = EXCLUDED.invite_new_clients
-      `;
-      invalidateCalendarSettings(workspaceId);
+      await setInviteNewClients(workspaceId, body.inviteNewClients);
       return ok(res, { inviteNewClients: body.inviteNewClients });
     }
 

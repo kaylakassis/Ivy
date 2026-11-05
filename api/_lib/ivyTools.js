@@ -19,6 +19,10 @@ import { validateAvailability, availabilityFromPreset, validateBookingRules, val
 import { sendEmail, emailShell } from './email.js';
 import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction, refuseWebsiteAction } from './ivyWebsiteTools.js';
 import { OWNER_TOOLS, OWNER_HANDLERS, OWNER_SENSITIVE, OWNER_READ_ONLY, describeOwnerAction, refuseOwnerAction } from './ivyOwnerTools.js';
+import {
+  APP_TOOLS, APP_HANDLERS, APP_SENSITIVE, APP_READ_ONLY, APP_WRITE_TOOLS, appCallIsRead, appToolNeedsApproval,
+  describeAppAction, refuseAppAction,
+} from './ivyAppTools.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
 import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
@@ -40,6 +44,7 @@ import crypto from 'node:crypto';
 export const IVY_TOOLS = [
   ...WEBSITE_TOOLS,
   ...OWNER_TOOLS,
+  ...APP_TOOLS,
   {
     name: 'list_quiet_clients',
     description: "Lists clients who haven't been messaged or seen in a while. Use when the user asks who they should follow up with, who's gone quiet, or to draft a check-in.",
@@ -900,6 +905,7 @@ export const IVY_TOOLS = [
 export const HANDLERS = {
   ...WEBSITE_HANDLERS,
   ...OWNER_HANDLERS,
+  ...APP_HANDLERS,
   // Reads - existing
   list_quiet_clients,
   list_overdue_invoices,
@@ -962,7 +968,6 @@ export const HANDLERS = {
   send_campaign,
   reschedule_booking,
   create_package,
-  send_document,
   send_review_request,
   refund_invoice,
   // Settings + calendar control
@@ -988,6 +993,10 @@ export const SENSITIVE_TOOLS = new Set([
   // Services, reviews, blocked time, appointment status, tasks, automations,
   // coupon codes (api/_lib/ivyOwnerTools.js): every write is approved.
   ...OWNER_SENSITIVE,
+  // Reminders, packages, deposits, cancellation policy, documents, autopay,
+  // portal invites (api/_lib/ivyAppTools.js). Tools that also read hold
+  // only their write actions (appToolNeedsApproval).
+  ...APP_SENSITIVE,
   // Many appointments (and possibly new clients) at once, read from a photo.
   'add_bookings_from_list',
   // Many clients at once, read from a file, a screenshot or a photo.
@@ -1041,6 +1050,7 @@ function workflowHasOutboundActions(name, a) {
 // lookups are scoped to the caller's workspace; an unknown id is not gated
 // here because the handler itself rejects it.
 async function needsArgumentApproval(name, a, ctx) {
+  if (appToolNeedsApproval(name, a)) return true;
   if (name === 'create_workflow') return workflowHasOutboundActions(name, a);
   if (name === 'update_client') return !!(await clientContactChange(a, ctx));
   if (name === 'toggle_workflow') return !!(await outboundWorkflowBeingEnabled(a, ctx));
@@ -1133,11 +1143,6 @@ async function bookingLabel(ctx, id) {
   if (!row) return '(unknown booking)';
   return `${row.service_name || 'the appointment'} on ${fmtDay(row.date)} at ${fmtMinAsTime(row.start_min)} with ${row.client_name || '(unknown client)'}`;
 }
-async function documentLabel(ctx, id) {
-  if (!id || !ctx?.workspaceId) return '(unknown document)';
-  const row = await lookupRow(() => sql`SELECT name FROM documents WHERE id = ${String(id)} AND workspace_id = ${ctx.workspaceId}`);
-  return row ? `"${row.name}"` : '(unknown document)';
-}
 
 // Async so gated actions can resolve real context for the approval card
 // (names, numbers, amounts, how many clients a campaign will email). Scoped
@@ -1147,6 +1152,8 @@ async function describeSensitiveAction(name, a, ctx = {}) {
   if (web) return web;
   const own = await describeOwnerAction(name, a || {}, ctx);
   if (own) return own;
+  const app = await describeAppAction(name, a || {}, ctx);
+  if (app) return app;
   switch (name) {
     case 'add_bookings_from_list':
       return describeBulkBookings(a, ctx);
@@ -1157,7 +1164,7 @@ async function describeSensitiveAction(name, a, ctx = {}) {
     case 'send_invoice':
       return `Email ${await invoiceLabel(ctx, a.invoice_id)}${a.client_id ? ` to ${await clientLabel(ctx, a.client_id)}` : ''}`;
     case 'cancel_booking':
-      return `Cancel ${await bookingLabel(ctx, a.booking_id)}${a.notify ? ' and notify the client' : ''}`;
+      return `Cancel ${await bookingLabel(ctx, a.booking_id)}${a.notify ? ' and notify the client' : ''}.${await cancelMoneyNote(ctx, a.booking_id)}`;
     case 'void_invoice':
       return `Void ${await invoiceLabel(ctx, a.invoice_id)}. It stays on record marked Void, the client's link stops taking payment and nothing is owed${a.notify_client ? '. The client gets an email saying it was voided' : '. The client is not emailed'}`;
     case 'delete_invoice':
@@ -1172,8 +1179,6 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       return `Email ${await quoteLabel(ctx, a.quote_id)}${a.client_id ? ` to ${await clientLabel(ctx, a.client_id)}` : ''}`;
     case 'reschedule_booking':
       return `Reschedule ${await bookingLabel(ctx, a.booking_id)} to ${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
-    case 'send_document':
-      return `Send document ${await documentLabel(ctx, a.document_id)} to ${await clientLabel(ctx, a.client_id)} for e-signature`;
     case 'send_review_request':
       return `Email a review request for ${await bookingLabel(ctx, a.booking_id)}`;
     case 'refund_invoice':
@@ -1347,7 +1352,7 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
   }
   try {
     const result = await fn({ ...ctx, args: a });
-    await recordIvyAction(name, ctx?.workspaceId, result);
+    await recordIvyAction(name, ctx?.workspaceId, result, a);
     return result;
   } catch (err) {
     return { error: err?.message || String(err) };
@@ -1366,7 +1371,8 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
 async function refuseBeforeApproval(name, a, ctx) {
   // Website and owner-parity tools dry-run their plan against the owner's
   // current data: an unknown section, page, service, review... is refused.
-  const planned = (await refuseWebsiteAction(name, a, ctx)) || (await refuseOwnerAction(name, a, ctx));
+  const planned = (await refuseWebsiteAction(name, a, ctx)) || (await refuseOwnerAction(name, a, ctx))
+    || (await refuseAppAction(name, a, ctx));
   if (planned) return planned;
   if (name === 'set_availability' && a.replace_all !== true) {
     if (await workspaceIsOnboarded(ctx?.workspaceId)) {
@@ -1449,7 +1455,7 @@ const READ_ONLY_TOOLS = new Set([
   'list_staff', 'list_tasks', 'search_invoices', 'search_bookings', 'get_dashboard_summary',
   'list_expenses', 'get_pl_summary', 'list_reviews', 'list_leads',
   'remember', 'forget', 'list_memories', 'explain_workflow_suggestion',
-  'get_website', 'get_availability', ...OWNER_READ_ONLY,
+  'get_website', 'get_availability', ...OWNER_READ_ONLY, ...APP_READ_ONLY,
 ]);
 const ACTION_KINDS = {
   add_bookings_from_list: 'booking',
@@ -1463,9 +1469,12 @@ const ACTION_KINDS = {
   create_booking: 'booking', reschedule_booking: 'booking', cancel_booking: 'booking',
   block_calendar_time: 'booking',
   create_document_from_template: 'document', send_document: 'document',
+  send_document_from_template: 'document', void_document: 'document', resend_document: 'document',
+  use_package_session: 'booking', review_deposit_refund: 'invoice', autopay: 'invoice',
+  send_policy_for_acceptance: 'message', resend_client_invite: 'message',
 };
-export function ivyActionKind(tool) {
-  if (!tool || READ_ONLY_TOOLS.has(tool)) return null;
+export function ivyActionKind(tool, args) {
+  if (!tool || READ_ONLY_TOOLS.has(tool) || appCallIsRead(tool, args)) return null;
   if (!HANDLERS[tool]) return null;
   return ACTION_KINDS[tool] || 'other';
 }
@@ -1502,7 +1511,7 @@ const DONE_TEXT = {
   create_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name || a.name)} (${r.workflow?.enabled ? 'on' : 'off'})`,
   create_suggested_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name)}`,
   create_document_from_template: (a, r) => `Drafted the document ${qt(r.document?.name)} (not sent)`,
-  cancel_booking: (a, r) => `Cancelled ${r.booking?.client_name || 'the'} appointment on ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told the client' : ''}`,
+  cancel_booking: (a, r) => `Cancelled ${r.booking?.client_name || 'the'} appointment on ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told the client' : ''}${r.deposit_review ? `. Their ${r.deposit_review} deposit is waiting in Deposits to review for your Refund or Keep` : ''}`,
   void_invoice: (a, r) => `Voided invoice${numBit(r.invoice?.number)}. It stays on record, its link no longer takes payment and nothing is owed${r.client_notified ? '. The client was emailed' : ''}`,
   delete_invoice: (a, r) => `Deleted the draft invoice${numBit(r.number)}`,
   archive_invoices: (a, r) => `${a.unarchive ? 'Brought back' : 'Archived'} ${Number(r.changed) || 0} invoice${Number(r.changed) === 1 ? '' : 's'}${a.unarchive ? '' : ' (hidden from the main list; revenue unchanged)'}${r.skipped?.length ? `. ${r.skipped.length} could not be changed: ${r.skipped[0].why}` : ''}`,
@@ -1518,7 +1527,6 @@ const DONE_TEXT = {
   send_message_to_client: (a, r) => `Sent a message to ${r.client_name || 'the client'}`,
   send_invoice: (a, r) => (r.email_delivered === false ? `Marked the invoice sent (pay link is live) for ${r.sent_to}` : `Emailed the invoice to ${r.sent_to}`),
   send_quote: (a, r) => (r.email_delivered === false ? `Marked the estimate sent for ${r.sent_to}` : `Emailed the estimate to ${r.sent_to}`),
-  send_document: (a, r) => (r.email_delivered === false ? `Marked the document sent for ${r.sent_to}` : `Sent the document to ${r.sent_to} to sign`),
   send_review_request: (a, r) => `Asked ${r.sent_to} for a review`,
   send_campaign: (a, r) => `Sent the campaign to ${Number(r.sent) || 0} of ${Number(r.recipients) || 0} clients`,
   reschedule_booking: (a, r) => `Moved ${r.booking?.client_name || 'the'} appointment to ${fmtDay(r.booking?.date)} at ${fmtMinAsTime(r.booking?.start_min)}`,
@@ -1538,7 +1546,7 @@ const DONE_TEXT = {
   forget: () => "Removed a note from Ivy's memory",
   // Website and owner-parity tools: each plan words its own past-tense line
   // from the real change (ivyWebsiteTools.js / ivyOwnerTools.js).
-  ...Object.fromEntries([...WEBSITE_SENSITIVE, ...OWNER_SENSITIVE].map((n) => [n, (a, r) => r.done || `Did: ${n.replace(/_/g, ' ')}`])),
+  ...Object.fromEntries([...WEBSITE_SENSITIVE, ...OWNER_SENSITIVE, ...APP_WRITE_TOOLS].map((n) => [n, (a, r) => r.done || `Did: ${n.replace(/_/g, ' ')}`])),
 };
 // What it would have done, for a failure line ("Didn't work: add client Jane").
 const ATTEMPT_TEXT = {
@@ -1558,6 +1566,11 @@ const ATTEMPT_TEXT = {
   manage_service: 'Change the service', reply_to_review: 'Reply to the review', unblock_calendar_time: 'Unblock the time',
   update_booking_status: "Update the appointment's status", manage_task: 'Change the task', delete_workflow: 'Delete the automation',
   create_coupon: 'Create the coupon code',
+  reminder_settings: 'Change the reminder settings', use_package_session: 'Use a package session',
+  review_deposit_refund: 'Decide the deposit', cancellation_policy: 'Change the cancellation policy',
+  send_policy_for_acceptance: 'Email the cancellation policy', send_document: 'Send the document',
+  send_document_from_template: 'Send the template', void_document: 'Void the document', resend_document: 'Resend the document',
+  autopay: 'Change automatic payments', client_invite_settings: 'Change the invite setting', resend_client_invite: 'Resend the portal invite',
 };
 function attemptText(name, a) {
   const who = a?.name || a?.title || a?.subject || '';
@@ -1566,7 +1579,7 @@ function attemptText(name, a) {
 }
 
 export function ledgerEntry(name, args, result) {
-  if (!name || isReadOnlyIvyTool(name)) return null;
+  if (!name || isReadOnlyIvyTool(name) || appCallIsRead(name, args)) return null;
   const a = args || {};
   const r = result && typeof result === 'object' ? result : {};
   if (r.needs_confirmation) {
@@ -1614,8 +1627,8 @@ function deliveryOf(r) {
   return { ok: true };
 }
 
-async function recordIvyAction(tool, workspaceId, result) {
-  const kind = ivyActionKind(tool);
+async function recordIvyAction(tool, workspaceId, result, args) {
+  const kind = ivyActionKind(tool, args);
   if (!kind || !workspaceId) return;
   if (!result || result.error || result.needs_confirmation) return;
   try {
@@ -2039,14 +2052,28 @@ async function list_documents({ workspaceId, args }) {
   const params = [workspaceId];
   if (args?.templates_only) where.push('is_template = TRUE');
   else where.push('is_template = FALSE');
-  if (args?.status) { params.push(args.status); where.push(`status = $${params.length}`); }
+  if (args?.status) { params.push(String(args.status).slice(0, 20)); where.push(`status = $${params.length}`); }
   const { rows } = await sql.query(
-    `SELECT id, name, kind, status, recipient_name, recipient_email, updated_at
+    `SELECT id, name, kind, status, recipient_name, recipient_email, updated_at, completed_at,
+            (final_pdf_url IS NOT NULL) AS has_final_pdf
        FROM documents WHERE ${where.join(' AND ')}
        ORDER BY updated_at DESC LIMIT 50`,
     params,
   );
-  return { documents: rows };
+  const { fetchSignersBulk } = await import('./documents.js');
+  const { docFileUrl } = await import('./docFiles.js');
+  const signers = await fetchSignersBulk(rows.map((r) => r.id));
+  return {
+    documents: rows.map(({ has_final_pdf: hasPdf, ...d }) => ({
+      ...d,
+      signers: (signers.get(d.id) || []).map((x) => ({
+        name: x.name, you: !!x.is_owner, status: x.status, signed_at: x.signed_at || null,
+        ...(x.declined_at ? { declined_at: x.declined_at } : {}),
+      })),
+      // A short-lived signed link to the signed PDF, never the storage address.
+      ...(hasPdf ? { final_pdf_url: docFileUrl(d.id, 'final') } : {}),
+    })),
+  };
 }
 
 async function list_workflows({ workspaceId }) {
@@ -2794,31 +2821,90 @@ async function complete_task({ workspaceId, args }) {
   return { task: rows[0] };
 }
 
-async function cancel_booking({ workspaceId, args }) {
+async function cancel_booking({ workspaceId, args, userId }) {
   if (!args?.booking_id) throw new Error('booking_id is required');
+  // Same as the Calendar's cancel (DELETE /api/calendar/bookings/:id):
+  // cancelled by the business, never a fee.
   const { rows } = await sql`
-    UPDATE bookings SET cancelled_at = NOW(), updated_at = NOW()
+    UPDATE bookings SET cancelled_at = NOW(), cancelled_by = 'owner', updated_at = NOW()
      WHERE id = ${args.booking_id}
        AND workspace_id = ${workspaceId}
        AND cancelled_at IS NULL
-     RETURNING id, date, start_min, client_name
+     RETURNING id, date, start_min, client_name, client_package_id, no_show_at, completion_log, google_event_id
   `;
   if (rows.length === 0) throw new Error('Booking not found or already cancelled');
+  const b = rows[0];
+  const warnings = [];
+  // A paid deposit is never refunded and never forgotten: with no answer
+  // from the owner (refund: undefined) it becomes a one-tap "Deposits to
+  // review" request, exactly like a cancel from an older app.
+  let depositReview = null;
+  try {
+    const { settleOwnerCancellation } = await import('./bookingFees.js');
+    const settled = await settleOwnerCancellation({ workspaceId, bookingId: b.id, refund: undefined, userId: userId || null });
+    if (settled?.depositRefundRequestedCents > 0) {
+      const cur = (await sql`SELECT COALESCE(currency, 'USD') AS c FROM finance_settings WHERE workspace_id = ${workspaceId}`).rows[0]?.c || 'USD';
+      const { fmtAmount } = await import('../../src/lib/autopayRules.js');
+      depositReview = fmtAmount(settled.depositRefundRequestedCents, cur);
+    }
+  } catch (e) {
+    warn(warnings, 'The appointment is cancelled, but its paid deposit could not be put in Deposits to review. Check the booking in Calendar.', e);
+  }
+  // The package session goes back unless the visit already counted, and
+  // gift card credit goes back on the card (both exactly once inside).
+  try {
+    const visitCounted = !!b.no_show_at || Object.keys(b.completion_log || {}).length > 0;
+    if (!visitCounted && b.client_package_id) {
+      const { restoreCredit } = await import('./packages.js');
+      await restoreCredit({ workspaceId, clientPackageId: b.client_package_id });
+    }
+    const { restoreGiftCardCreditForBooking } = await import('./giftCards.js');
+    await restoreGiftCardCreditForBooking({ workspaceId, bookingId: b.id });
+  } catch (e) {
+    warn(warnings, 'The appointment is cancelled, but a package session or gift card credit was not given back. Check the booking in Calendar.', e);
+  }
+  try {
+    const { syncOnBookingDeleted } = await import('./googleSync.js');
+    syncOnBookingDeleted({ workspaceId, googleEventId: b.google_event_id });
+  } catch { /* calendar sync is best effort */ }
   // notify:true is what the owner approved on the confirmation card
   // ("cancel and notify the client") - honor it. Best-effort: the
   // cancellation itself is already committed above.
   let notified = false;
-  const warnings = [];
   if (args.notify) {
     try {
       const { notifyBookingCancellation } = await import('./bookingNotify.js');
-      await notifyBookingCancellation({ workspaceId, bookingId: rows[0].id, source: 'owner' });
+      await notifyBookingCancellation({ workspaceId, bookingId: b.id, source: 'owner' });
       notified = true;
     } catch (e) {
-      warn(warnings, `The appointment is cancelled, but the cancellation notice to ${rows[0].client_name || 'the client'} did not go out.`, e);
+      warn(warnings, `The appointment is cancelled, but the cancellation notice to ${b.client_name || 'the client'} did not go out.`, e);
     }
   }
-  return { booking: rows[0], cancelled: true, client_notified: notified, ...(warnings.length ? { warnings } : {}) };
+  return {
+    booking: { id: b.id, date: b.date, start_min: b.start_min, client_name: b.client_name },
+    cancelled: true, client_notified: notified,
+    ...(depositReview ? { deposit_review: depositReview } : {}),
+    ...(warnings.length ? { warnings } : {}),
+  };
+}
+
+// What a cancel does with money already paid, for the approval card.
+async function cancelMoneyNote(ctx, bookingId) {
+  const row = await lookupRow(() => sql`
+    SELECT b.deposit_paid, b.deposit_refunded_amount, b.deposit_payment_intent, b.deposit_paid_at, b.client_package_id,
+           b.no_show_at, b.completion_log, COALESCE(fs.currency, 'USD') AS currency
+      FROM bookings b LEFT JOIN finance_settings fs ON fs.workspace_id = b.workspace_id
+     WHERE b.id = ${String(bookingId || '')} AND b.workspace_id = ${ctx?.workspaceId} AND b.cancelled_at IS NULL`);
+  if (!row) return '';
+  const parts = [];
+  const held = Math.max(0, Math.round(Number(row.deposit_paid || 0) * 100) - Math.round(Number(row.deposit_refunded_amount || 0) * 100));
+  if (held > 0 && row.deposit_payment_intent && row.deposit_paid_at) {
+    const { fmtAmount } = await import('../../src/lib/autopayRules.js');
+    parts.push(` Their ${fmtAmount(held, row.currency)} deposit is not refunded yet: it goes to Deposits to review, where you tap Refund or Keep.`);
+  }
+  const counted = !!row.no_show_at || Object.keys(row.completion_log || {}).length > 0;
+  if (row.client_package_id && !counted) parts.push(' Their package session is given back.');
+  return parts.join('') || ' No fee is charged.';
 }
 
 // Invoice clean-up runs the same cores as the owner's buttons
@@ -3187,8 +3273,10 @@ async function create_package({ workspaceId, args }) {
   let serviceIds = [];
   if (args.service_ids != null) {
     if (!Array.isArray(args.service_ids)) throw new Error('service_ids must be an array');
-    serviceIds = args.service_ids.map((s) => String(s)).filter(Boolean);
-    if (serviceIds.some((idv) => !/^[0-9a-fA-F-]{36}$/.test(idv))) throw new Error('service_ids must be UUIDs');
+    // Deduped: the same service listed twice must not fail the ownership
+    // count below (it counts distinct rows).
+    serviceIds = [...new Set(args.service_ids.map((s) => String(s).trim().toLowerCase()).filter(Boolean))];
+    if (serviceIds.some((idv) => !/^[0-9a-f-]{36}$/.test(idv))) throw new Error('service_ids must be UUIDs');
     serviceIds = serviceIds.slice(0, 50);
     if (serviceIds.length > 0) {
       const { rows: own } = await sql.query(
@@ -3208,98 +3296,6 @@ async function create_package({ workspaceId, args }) {
     RETURNING id, name, session_count, price
   `;
   return { package: rows[0] };
-}
-
-async function send_document({ workspaceId, args }) {
-  const id = args.document_id ? String(args.document_id) : null;
-  const clientId = args.client_id ? String(args.client_id) : null;
-  if (!id) throw new Error('document_id is required');
-  if (!clientId) throw new Error('client_id is required');
-  const { fetchOwnedDoc } = await import('./documents.js');
-  const { sendEmailToClient } = await import('./email.js');
-  const { fetchBranding } = await import('./branding.js');
-
-  const doc = await fetchOwnedDoc({ id, workspaceId });
-  if (!doc) throw new Error('Document not found');
-  if (doc.status === 'completed') throw new Error('Already completed');
-  if (doc.status === 'voided') throw new Error('Document is voided - restore first');
-  if (doc.status === 'declined') throw new Error('Document was declined - restore to draft first');
-
-  const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
-  if (cl.rows.length === 0) throw new Error('Unknown client');
-  const signerName = cl.rows[0].name || '';
-  const signerEmail = (cl.rows[0].email || '').toLowerCase().trim();
-  if (!signerEmail) throw new Error('Client has no email on file');
-
-  // Single-signer send: reset signer rows, mint one token, mark 'sent'.
-  // (Multi-signer flows stay in the documents UI.)
-  const rawToken = generateRawToken(32);
-  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-  await sql`
-    DELETE FROM document_signers
-     WHERE document_id = ${id}
-       AND document_id IN (SELECT id FROM documents WHERE id = ${id} AND workspace_id = ${workspaceId})
-  `;
-  await sql`
-    INSERT INTO document_signers (document_id, order_index, client_id, name, email, sign_token_hash, status)
-    VALUES (${id}, ${0}, ${clientId}, ${signerName}, ${signerEmail}, ${tokenHash}, 'awaiting')
-  `;
-  const newActivity = [
-    ...(Array.isArray(doc.activity) ? doc.activity : []),
-    { ts: new Date().toISOString(), kind: 'sent', text: `Sent to ${signerName || signerEmail}` },
-  ];
-  const cleanedFields = (Array.isArray(doc.fields) ? doc.fields : []).map((f) => ({ ...f, value: '' }));
-  await sql`
-    UPDATE documents SET
-      recipient_client_id = ${clientId}, recipient_name = ${signerName}, recipient_email = ${signerEmail},
-      status = 'sent', sign_token_hash = ${tokenHash}, sent_at = NOW(),
-      activity = ${JSON.stringify(newActivity)}::jsonb, fields = ${JSON.stringify(cleanedFields)}::jsonb,
-      completion_hash = NULL, decline_reason = NULL, declined_at = NULL,
-      final_pdf_url = NULL, final_pdf_blob_pathname = NULL, updated_at = NOW()
-    WHERE id = ${id} AND workspace_id = ${workspaceId}
-  `;
-
-  const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
-  const branding = await fetchBranding(workspaceId).catch(() => ({}));
-  let sendResult;
-  try {
-    sendResult = await sendEmailToClient({
-      clientId, workspaceId, type: 'documents', to: signerEmail,
-      subject: `Action needed: sign "${doc.name}"`,
-      replyTo: branding.replyTo,
-      html: emailShell({
-        heading: 'A document needs your signature',
-        body: `<p>Hi ${escapeHtml(signerName)},</p>
-               <p>You've been sent a document to review and sign: <b>${escapeHtml(doc.name)}</b>.</p>
-               <p>Click the button to open and sign it.</p>`,
-        ctaText: 'Open and sign', ctaUrl: link,
-        footer: "If you weren't expecting this, you can safely ignore this email.", branding,
-      }),
-    });
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('[ivy.send_document] email failed:', e?.message);
-    sendResult = { ok: false, reason: e?.message || 'email failed' };
-  }
-  // Same client push the Documents send gives (sendDocumentForSigning).
-  notifyClientSafe({
-    clientId,
-    type: 'documents',
-    payload: {
-      title: 'Document needs your signature',
-      body: doc.name,
-      url: '/me/documents',
-      tag: `doc-${id}`,
-    },
-  });
-  const delivered = deliveryOf(sendResult);
-  if (!delivered.ok) {
-    return {
-      ok: true, document_id: id, sent_to: signerEmail, email_delivered: false,
-      warnings: [`The signing email to ${signerEmail} did not go out (${delivered.reason}). The document is marked sent.`],
-    };
-  }
-  return { ok: true, document_id: id, sent_to: signerEmail };
 }
 
 async function send_review_request({ workspaceId, args }) {

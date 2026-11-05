@@ -135,3 +135,71 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     return { sent: false, reason: 'error' };
   }
 }
+
+// The "Invite new clients automatically" switch. Shared by
+// PATCH /api/clients/invite-settings and Ivy's client_invite_settings.
+export async function setInviteNewClients(workspaceId, value) {
+  await sql`
+    INSERT INTO calendar_settings (workspace_id, invite_new_clients)
+    VALUES (${workspaceId}, ${!!value})
+    ON CONFLICT (workspace_id) DO UPDATE SET invite_new_clients = EXCLUDED.invite_new_clients
+  `;
+  const { invalidateCalendarSettings } = await import('./calendar.js');
+  invalidateCalendarSettings(workspaceId);
+  return !!value;
+}
+
+// Why a portal invite cannot be re-sent to this client, or null. `client`
+// is the owned clients row.
+export function resendInviteProblem(client) {
+  if (!client) return 'Client not found';
+  if (!client.email) return 'No email on file for this client';
+  if (client.user_id) return 'Client has already claimed their portal account';
+  return null;
+}
+
+// Re-send the "claim your portal account" invitation, bypassing
+// sendClientInvite's once-only guard so the owner can nudge a slow
+// claimer. Stamps invite_sent_at only when the email really went out. The
+// one path behind POST /api/clients/:id/resend-invite and Ivy's
+// resend_client_invite. Returns { error, status } or { sent, reason, inviteSentAt }.
+export async function resendClientInvite({ workspaceId, clientId }) {
+  const { rows } = await sql`SELECT * FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
+  const client = rows[0] || null;
+  const problem = resendInviteProblem(client);
+  if (problem) return { error: problem, status: client ? 400 : 404 };
+
+  const branding = await fetchBranding(workspaceId);
+  const bizName = branding.businessName || 'Your business';
+  const base = appUrl();
+  const signinHref = `${base}/signin?email=${encodeURIComponent(client.email)}`;
+  // mode=client so the invitee lands on the client signup (claims their
+  // portal) rather than creating a business workspace.
+  const signupHref = `${base}/signup?mode=client&email=${encodeURIComponent(client.email)}`;
+  const result = await sendEmailToClient({
+    clientId, workspaceId, type: 'bookings',
+    to: client.email,
+    subject: `Reminder: claim your account with ${bizName}`,
+    replyTo: branding.replyTo,
+    html: emailShell({
+      heading: `Claim your account with ${bizName}`,
+      branding,
+      body: `<p>Hi${firstName(client.name) ? ` ${escapeHtml(firstName(client.name))}` : ''},</p>
+        <p>This is a quick reminder that <strong>${escapeHtml(bizName)}</strong> set you up with an
+        Ivy portal. It's where you'll see your bookings, invoices, and any messages from them.</p>
+        <p>Create your free account (or sign in if you already have one) to get started.</p>`,
+      ctaText: 'Create my account',
+      ctaUrl: signupHref,
+      footer: `Already have an Ivy account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> - we'll link you to ${escapeHtml(bizName)} automatically.`,
+    }),
+  });
+  let inviteSentAt = client.invite_sent_at || null;
+  if (result?.sent) {
+    const stamped = await sql`
+      UPDATE clients SET invite_sent_at = NOW()
+       WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+       RETURNING invite_sent_at`;
+    inviteSentAt = stamped.rows[0]?.invite_sent_at || inviteSentAt;
+  }
+  return { sent: !!result?.sent, reason: result?.reason || null, inviteSentAt };
+}

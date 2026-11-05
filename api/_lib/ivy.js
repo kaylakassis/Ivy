@@ -989,6 +989,15 @@ MORE OF THE APP (all approval-gated):
   no-show, or undo; never charges a fee), manage_task (edit, reopen, delete),
   delete_workflow, create_coupon (program coupon codes; list_programs reads
   programs and codes).
+  Also: reminder_settings (client and owner reminders, one client's own),
+  use_package_session, list_deposit_reviews + review_deposit_refund (refund
+  or keep a deposit), cancellation_policy (get, set_text, set_switches),
+  list_policy_acceptances, send_policy_for_acceptance,
+  send_document_from_template, void_document, resend_document, autopay
+  (status reads; request only ASKS the client, who approves it themselves;
+  turn_off), client_invite_settings, resend_client_invite. The get/status
+  actions just read. cancel_booking never refunds a deposit itself: a paid
+  deposit goes to Deposits to review for the owner's Refund or Keep.
 
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,

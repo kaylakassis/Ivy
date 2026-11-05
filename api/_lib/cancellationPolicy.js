@@ -143,6 +143,118 @@ export async function savePolicySettings({ workspaceId, patch }) {
   return serializeSettings(rows[0]);
 }
 
+// The switches PUT /api/cancellation-policy (and Ivy) can change.
+export const POLICY_SETTING_KEYS = ['requireAcceptance', 'showOnBookingPage', 'showInSiteFooter', 'refundDepositOutsideWindow'];
+
+// Validate a settings patch: each key present must be true or false.
+// Returns { patch } or { error }.
+export function cleanPolicySettingsPatch(body) {
+  const patch = {};
+  for (const k of POLICY_SETTING_KEYS) {
+    if (body?.[k] === undefined) continue;
+    if (typeof body[k] !== 'boolean') return { error: `${k} must be true or false` };
+    patch[k] = body[k];
+  }
+  return { patch };
+}
+
+// The owner's save: new text (a new version when the words change) and/or
+// switches. The one path behind PUT /api/cancellation-policy and Ivy's
+// cancellation_policy tool. Returns { error } or
+// { createdVersion, before, after, changed } (changed = switch keys whose
+// value moved).
+export async function updateCancellationPolicy({ workspaceId, userId, body }) {
+  if (!body || typeof body !== 'object') return { error: 'Nothing to save' };
+  let createdVersion = null;
+  if (body.text !== undefined) {
+    if (typeof body.text !== 'string') return { error: 'text must be plain text' };
+    if (body.text.length > MAX_POLICY_CHARS * 2) return { error: `Keep your policy under ${MAX_POLICY_CHARS} characters.` };
+    const saved = await savePolicyText({ workspaceId, userId, text: body.text });
+    if (saved.error) return { error: saved.error };
+    if (saved.created) createdVersion = saved.policy;
+  }
+  const { patch, error } = cleanPolicySettingsPatch(body);
+  if (error) return { error };
+  if (patch.requireAcceptance === true && !(await getCurrentPolicy(workspaceId))) {
+    return { error: 'Write your cancellation policy first, then turn this on.' };
+  }
+  const before = await getPolicySettings(workspaceId);
+  let after = before;
+  if (Object.keys(patch).length) after = await savePolicySettings({ workspaceId, patch });
+  const changed = POLICY_SETTING_KEYS.filter((k) => before[k] !== after[k]);
+  return { createdVersion, before, after, changed };
+}
+
+// "Please accept the policy" link for a booking the business made itself.
+// loadPolicyRequest checks everything a send needs (shared with Ivy's
+// approval card); sendPolicyAcceptanceRequest records the single-use link
+// (only its sha256 is stored, 30-day expiry) and emails the client. One
+// email per booking per 10 minutes. Both return { error, status } on a
+// refusal.
+export async function loadPolicyRequest({ workspaceId, bookingId }) {
+  const { rows } = await sql`
+    SELECT b.id, b.client_id, b.date, b.start_min, b.cancelled_at,
+           c.name AS client_name, c.email AS client_email,
+           s.name AS service_name, cs.biz_name, cs.slug
+      FROM bookings b
+      LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+     WHERE b.id = ${bookingId} AND b.workspace_id = ${workspaceId}
+     LIMIT 1
+  `;
+  const b = rows[0];
+  if (!b) return { error: 'Booking not found', status: 404 };
+  if (b.cancelled_at) return { error: 'This booking is cancelled.', status: 400 };
+  if (!b.client_id || !b.client_email) return { error: 'Add an email for this client first.', status: 400 };
+  if (!b.slug) return { error: 'Set up your booking page first.', status: 400 };
+  const policy = await getCurrentPolicy(workspaceId);
+  if (!policy) return { error: 'Write your cancellation policy first.', status: 400 };
+  const recent = await sql`
+    SELECT 1 FROM cancellation_policy_requests
+     WHERE workspace_id = ${workspaceId} AND booking_id = ${bookingId}
+       AND created_at > NOW() - INTERVAL '10 minutes'
+     LIMIT 1
+  `;
+  if (recent.rows.length > 0) return { error: 'You just sent this. Give it a few minutes before sending again.', status: 400 };
+  return { booking: b, policy };
+}
+
+export async function sendPolicyAcceptanceRequest({ workspaceId, bookingId }) {
+  const loaded = await loadPolicyRequest({ workspaceId, bookingId });
+  if (loaded.error) return loaded;
+  const b = loaded.booking;
+  const { generateRawToken, appUrl } = await import('./tokens.js');
+  const { sendEmailToClient, emailShell } = await import('./email.js');
+  const { fetchBranding } = await import('./branding.js');
+  const raw = generateRawToken(32);
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  await sql`
+    INSERT INTO cancellation_policy_requests (workspace_id, client_id, booking_id, token_hash, sent_to, expires_at)
+    VALUES (${workspaceId}, ${b.client_id}, ${bookingId}, ${hash}, ${b.client_email}, NOW() + INTERVAL '30 days')
+  `;
+  const link = `${appUrl()}/book/${encodeURIComponent(b.slug)}/policy?t=${encodeURIComponent(raw)}`;
+  const biz = b.biz_name || 'your business';
+  const first = String(b.client_name || '').trim().split(/\s+/)[0];
+  const dateISO = b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10);
+  const branding = await fetchBranding(workspaceId);
+  const html = emailShell({
+    heading: 'Please review the cancellation policy',
+    branding,
+    body: `<p>${first ? `Hi ${escapeHtml(first)},` : 'Hi,'}</p>
+      <p>${escapeHtml(biz)} asks you to read and agree to their cancellation policy for your ${escapeHtml(b.service_name || 'appointment')} on ${escapeHtml(dateISO)}.</p>
+      <p>It only takes a moment.</p>`,
+    ctaText: 'Read the policy',
+    ctaUrl: link,
+    footer: `Questions? Reply to this email to reach ${escapeHtml(biz)}.`,
+  });
+  const sent = await sendEmailToClient({
+    clientId: b.client_id, workspaceId, type: 'bookings', to: b.client_email,
+    subject: `${biz}: please review the cancellation policy`, html, replyTo: branding?.replyTo,
+  });
+  return { sent: !!sent?.sent, sentTo: b.client_email, reason: sent?.sent ? null : (sent?.reason || null) };
+}
+
 // What the public booking page / website get. Null when there is nothing
 // to show (no text yet). Always the latest version.
 export async function publicPolicy(workspaceId) {

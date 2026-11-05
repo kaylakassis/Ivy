@@ -12,10 +12,7 @@ import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
-import {
-  consumeCredit, restoreCredit, sendPackageRefusal, refusalForFailedConsume, packageUseModeFor,
-} from '../../_lib/packages.js';
-import { notifyPackageExhausted } from '../../_lib/packageNotify.js';
+import { restoreCredit, sendPackageRefusal, applyPackageSession } from '../../_lib/packages.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled, notifyHelperAssigned } from '../../_lib/bookingNotify.js';
@@ -208,63 +205,11 @@ export default async function handler(req, res) {
       // at booking time, and the link is only written while the booking
       // has no package. A lost race gives the session straight back.
       if (body.applyClientPackageId) {
-        const cpId = String(body.applyClientPackageId);
-        if (!/^[0-9a-fA-F-]{36}$/.test(cpId)) return badRequest(res, 'Invalid package');
-        if (booking.cancelled_at) return badRequest(res, "Can't use a package on a cancelled booking");
-        if (!booking.client_id) return badRequest(res, 'This booking has no client record');
-        if (booking.recurrence_rule) {
-          return sendPackageRefusal(res, { code: 'package_recurring_unsupported', cp: null, audience: 'owner' });
-        }
-        if (booking.client_package_id) {
-          if (booking.client_package_id === cpId) return ok(res, { booking: serializeBooking(booking, bopts), alreadyApplied: true });
-          return badRequest(res, 'This booking already uses a package session');
-        }
-        // The package must be this client's, at this business.
-        const own = await sql`
-          SELECT id FROM client_packages
-           WHERE id = ${cpId} AND workspace_id = ${workspaceId} AND client_id = ${booking.client_id}
-        `;
-        if (own.rows.length === 0) {
-          return sendPackageRefusal(res, { code: 'package_not_found', cp: null, audience: 'owner' });
-        }
-        // Claim the booking first (only while it has no package), then
-        // spend the session. Two taps at once: one claims, the other sees
-        // it already applied. A failed spend un-claims.
-        const useMode = await packageUseModeFor(workspaceId);
-        const claimed = await sql`
-          UPDATE bookings SET client_package_id = ${cpId}, package_use_mode = ${useMode}
-           WHERE id = ${id} AND workspace_id = ${workspaceId}
-             AND client_package_id IS NULL AND cancelled_at IS NULL
-          RETURNING *
-        `;
-        if (claimed.rows.length === 0) {
-          const now = await sql`SELECT * FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId}`;
-          const cur = now.rows[0];
-          if (cur?.client_package_id === cpId) {
-            return ok(res, { booking: serializeBooking(cur, bopts), alreadyApplied: true });
-          }
-          return badRequest(res, cur?.cancelled_at ? "Can't use a package on a cancelled booking" : 'This booking already uses a package session');
-        }
-        const consumed = await consumeCredit({
-          workspaceId, clientPackageId: cpId, clientId: booking.client_id, serviceId: booking.service_id,
-        });
-        if (!consumed.ok) {
-          await sql`
-            UPDATE bookings SET client_package_id = NULL, package_use_mode = NULL
-             WHERE id = ${id} AND workspace_id = ${workspaceId} AND client_package_id = ${cpId}
-          `;
-          return refusalForFailedConsume(res, {
-            workspaceId, clientPackageId: cpId, clientId: booking.client_id,
-            serviceId: booking.service_id, audience: 'owner',
-          });
-        }
-        if (consumed.exhausted) {
-          notifyPackageExhausted({ workspaceId, clientPackageId: cpId, clientId: booking.client_id });
-        }
-        return ok(res, {
-          booking: serializeBooking(claimed.rows[0], bopts),
-          package: { id: cpId, creditsRemaining: consumed.creditsRemaining, state: consumed.creditsRemaining > 0 ? 'active' : 'used_up' },
-        });
+        const out = await applyPackageSession({ workspaceId, booking, clientPackageId: body.applyClientPackageId });
+        if (out.error) return badRequest(res, out.error);
+        if (out.refusal) return sendPackageRefusal(res, { ...out.refusal, audience: 'owner' });
+        if (out.alreadyApplied) return ok(res, { booking: serializeBooking(out.booking, bopts), alreadyApplied: true });
+        return ok(res, { booking: serializeBooking(out.booking, bopts), package: out.package });
       }
 
       // Convenience: cancel a single occurrence in a recurring series.

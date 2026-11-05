@@ -22,6 +22,8 @@ When you add a screen or an owner action, add a row here. Then either give Ivy a
   - A completed call is "done". Website and parity tools word the done line from what the plan actually did.
   - A failed call is "failed", with the reason.
 - **Compact schemas.** Tool schemas are sent with every request. Group related operations under one tool with an `action` enum, and keep descriptions short.
+  - A grouped tool with a read action (`reminder_settings` get, `cancellation_policy` get, `autopay` status, `client_invite_settings` get) runs that read straight away; every other action is held for approval (`appToolNeedsApproval` in `api/_lib/ivyAppTools.js`).
+- **Same code as the button.** A tool calls the server function the app's own screen calls (for example `decideDepositRefund`, `sendDocumentForSigning`, `requestAutopay`). Ivy never has a second copy of money, signing or email logic.
 
 ## Website (full editor parity)
 
@@ -63,7 +65,9 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | See upcoming / search bookings, weekly hours, blocked time | `list_upcoming_bookings`, `search_bookings`, `get_availability` |
 | Book an appointment | `create_booking` |
 | Add many appointments from a photo or list | `add_bookings_from_list` (approval) |
-| Reschedule, cancel (optionally notify) | `reschedule_booking`, `cancel_booking` (approval) |
+| Reschedule, cancel (optionally notify) | `reschedule_booking`, `cancel_booking` (approval). Cancelling is the Calendar's cancel: never a fee, a paid deposit goes to Deposits to review (the card says so), a package session and gift card credit go back |
+| Deposits to review: refund or keep | `list_deposit_reviews`, `review_deposit_refund` (approval: "Refund Jordan's $20.00 deposit? (cancelled 2 days ahead, your policy refunds it)") |
+| Use a package session for a booking made without one | `use_package_session` (approval, says sessions left before and after) |
 | Mark completed (with notes) / undo | `update_booking_status` (approval) |
 | Mark no-show / undo | `update_booking_status` (approval). Never charges a fee |
 | Charge a no-show or late-cancel fee, tips, collect payment | Owner only: moves real money on the client's card |
@@ -73,7 +77,9 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Services: create | `create_service` |
 | Services: edit price, length, name, description, group size, visibility; delete | `manage_service` (approval) |
 | Services: deposits, add-ons, custom fields, per-service hours, reminders, intake forms, photo | Not yet |
-| Booking reminder settings (workspace-wide and per client) | Pending: another builder is adding these settings. Add an Ivy tool after that lands |
+| Booking reminder settings (clients, your own, one client) | `reminder_settings` get / update (approval: "Clients get reminders 1 day and 1 hour before (was 1 day, 8 hours, 1 hour)") |
+| Cancellation policy: wording, switches (require acceptance, booking page, footer, deposit refundable) | `cancellation_policy` get / set_text / set_switches (approval) |
+| Policy acceptance records; send the policy for a client to accept | `list_policy_acceptances` (read, no IP addresses), `send_policy_for_acceptance` (approval) |
 | Staff list | `list_staff` |
 | Add staff, invite a helper login, helper permissions, revoke | Owner only: grants another person access to business and client data |
 | Locations / rooms | Not yet |
@@ -90,6 +96,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Edit name, stage, tags, notes | `update_client` |
 | Edit email or phone | `update_client` (approval, it changes where messages go) |
 | Import a list (file, screenshot, photo) | `import_clients_from_list` (approval, always quiet) |
+| "Invite new clients automatically"; resend a portal invite | `client_invite_settings` get / update, `resend_client_invite` (approval) |
 | Calendar file / Google events import, "I moved" email | Ivy points to [Import](/clients?import=1) and [Let them know you moved](/clients?announce=1) |
 | Message a client | `send_message_to_client` (approval) |
 | Archive or change stage in bulk | Not yet (one at a time with `update_client`) |
@@ -107,7 +114,8 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Mark an invoice paid | `mark_invoice_paid` |
 | Void, delete, archive, refund invoices | Handled by the invoice update: another builder owns this behaviour and these tools. This pass did not change `void_invoice` or `refund_invoice` |
 | Products, expenses, time entries, goals | `create_product`, `create_expense`, `create_time_entry`, `create_goal` |
-| Packages | `create_package` exists. Package booking and package UI are owned by the package builder. Package tools are read-only from this pass |
+| Packages | `create_package` (repeated service ids are fine), `use_package_session` (approval) |
+| Autopay for recurring invoices | `autopay` status / request / turn_off (request and turn_off approval). Ivy can only ask; only the client approves, in their own portal |
 | Gift cards: sell, refund | Owner only: money in and out |
 | Memberships: plans, change plan | Not yet (plans touch subscriptions on the payment account) |
 | Point of sale, Tap to Pay | Owner only: charges a card in person |
@@ -129,10 +137,11 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 
 | Owner action | Ivy |
 |---|---|
-| List templates and sent documents | `list_documents` |
+| List templates and sent documents | `list_documents` (with each signer's status and a short-lived link to the signed PDF) |
 | Draft from a template | `create_document_from_template` |
-| Send for signing | `send_document` (approval) |
-| Resend, void a sent document | Not yet |
+| Send for signing | `send_document` (approval; same checks and send as the Send button) |
+| Send a template to many clients (owner signs first or last) | `send_document_from_template` (approval, up to 50, lists who is skipped) |
+| Resend, void a sent document | `resend_document`, `void_document` (approval) |
 | Upload a PDF, place fields, self-sign | Owner only: files from the device, and a signature is the owner's own act |
 
 ## Marketing, automations, reviews
@@ -186,3 +195,4 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/ivy-website-parity.test.mjs`: every website operation is held before approval, the card text is exact, and the draft equals the editor's transforms after approval. Also covers publish and schedule, discard and restore, invalid input, and workspace isolation.
 - `tests/ivy-owner-tools.test.mjs`: each parity tool is held before approval, gives the right result after approval, refuses invalid input, stays inside its workspace, and writes truthful ledger lines.
 - `tests/ivy-website-tools.test.mjs`: the original build, edit and publish flow, now with every draft edit approval-gated.
+- `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy, documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.

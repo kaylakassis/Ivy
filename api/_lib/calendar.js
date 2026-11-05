@@ -48,6 +48,23 @@ export function invalidateCalendarSettings(workspaceId) {
   if (workspaceId) cacheInvalidate(`cs:${workspaceId}`);
 }
 
+// Store merged reminder settings (mergeReminderPatch in
+// api/_lib/reminderSettings.js). null leaves that audience as it is.
+// Returns the updated calendar_settings row.
+export async function saveReminderSettings(workspaceId, { clients = null, owner = null }) {
+  await ensureCalendarSettings(workspaceId);
+  const { rows } = await sql`
+    UPDATE calendar_settings SET
+      client_reminders = COALESCE(${clients ? JSON.stringify(clients) : null}::jsonb, client_reminders),
+      owner_reminders  = COALESCE(${owner ? JSON.stringify(owner) : null}::jsonb, owner_reminders),
+      updated_at = NOW()
+    WHERE workspace_id = ${workspaceId}
+    RETURNING *
+  `;
+  invalidateCalendarSettings(workspaceId);
+  return rows[0];
+}
+
 // The workspace's IANA timezone, or 'UTC' when unset. Cheap (cache-backed via
 // fetchCalendarSettings) and always non-null so it's safe to interpolate into
 // `... AT TIME ZONE ${tz}` — a NULL there would blow up the whole expression.

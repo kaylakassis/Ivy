@@ -228,16 +228,83 @@ export async function sendPackageRefusal(res, { code, cp, audience = 'client', s
 // Re-read a package after a refused atomic decrement, so the refusal
 // names the real reason (most often: someone else just took the last one).
 export async function refusalForFailedConsume(res, { workspaceId, clientPackageId, clientId, serviceId, audience }) {
+  const { code, cp } = await failedConsumeReason({ workspaceId, clientPackageId, clientId, serviceId });
+  return sendPackageRefusal(res, { code, cp, audience });
+}
+
+// The refusal code (and package row) behind a refused decrement.
+export async function failedConsumeReason({ workspaceId, clientPackageId, clientId, serviceId }) {
   const { rows } = await sql`
     SELECT * FROM client_packages
      WHERE id = ${clientPackageId} AND workspace_id = ${workspaceId}
   `;
   const cp = rows[0];
-  if (!cp || (clientId && cp.client_id !== clientId)) {
-    return sendPackageRefusal(res, { code: 'package_not_found', cp: null, audience });
+  if (!cp || (clientId && cp.client_id !== clientId)) return { code: 'package_not_found', cp: null };
+  return { code: packageBlockCode(cp, serviceId) || 'package_used_up', cp };
+}
+
+// Use a package session for a booking that was made without one (the
+// owner forgot to pick it, or is logging an attended visit). The one path
+// behind PATCH /api/calendar/bookings/:id { applyClientPackageId } and
+// Ivy's use_package_session. Exactly once: the booking is claimed only
+// while it has no package, then the session is spent with the same atomic
+// guarded decrement as at booking time; a failed spend un-claims.
+// `booking` is the owned bookings row. Returns one of
+//   { error }                         plain refusal
+//   { refusal: { code, cp } }         a package refusal (packageErrorMessage)
+//   { booking, alreadyApplied: true }
+//   { booking, package: { id, creditsRemaining, state }, exhausted }
+export async function applyPackageSession({ workspaceId, booking, clientPackageId }) {
+  const cpId = String(clientPackageId || '');
+  const id = booking?.id;
+  if (!/^[0-9a-fA-F-]{36}$/.test(cpId)) return { error: 'Invalid package' };
+  if (booking.cancelled_at) return { error: "Can't use a package on a cancelled booking" };
+  if (!booking.client_id) return { error: 'This booking has no client record' };
+  if (booking.recurrence_rule) return { refusal: { code: 'package_recurring_unsupported', cp: null } };
+  if (booking.client_package_id) {
+    if (booking.client_package_id === cpId) return { booking, alreadyApplied: true };
+    return { error: 'This booking already uses a package session' };
   }
-  const code = packageBlockCode(cp, serviceId) || 'package_used_up';
-  return sendPackageRefusal(res, { code, cp, audience });
+  // The package must be this client's, at this business.
+  const own = await sql`
+    SELECT id FROM client_packages
+     WHERE id = ${cpId} AND workspace_id = ${workspaceId} AND client_id = ${booking.client_id}
+  `;
+  if (own.rows.length === 0) return { refusal: { code: 'package_not_found', cp: null } };
+  // Claim the booking first (only while it has no package), then spend the
+  // session. Two taps at once: one claims, the other sees it applied.
+  const useMode = await packageUseModeFor(workspaceId);
+  const claimed = await sql`
+    UPDATE bookings SET client_package_id = ${cpId}, package_use_mode = ${useMode}
+     WHERE id = ${id} AND workspace_id = ${workspaceId}
+       AND client_package_id IS NULL AND cancelled_at IS NULL
+    RETURNING *
+  `;
+  if (claimed.rows.length === 0) {
+    const now = await sql`SELECT * FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId}`;
+    const cur = now.rows[0];
+    if (cur?.client_package_id === cpId) return { booking: cur, alreadyApplied: true };
+    return { error: cur?.cancelled_at ? "Can't use a package on a cancelled booking" : 'This booking already uses a package session' };
+  }
+  const consumed = await consumeCredit({
+    workspaceId, clientPackageId: cpId, clientId: booking.client_id, serviceId: booking.service_id,
+  });
+  if (!consumed.ok) {
+    await sql`
+      UPDATE bookings SET client_package_id = NULL, package_use_mode = NULL
+       WHERE id = ${id} AND workspace_id = ${workspaceId} AND client_package_id = ${cpId}
+    `;
+    return { refusal: await failedConsumeReason({ workspaceId, clientPackageId: cpId, clientId: booking.client_id, serviceId: booking.service_id }) };
+  }
+  if (consumed.exhausted) {
+    const { notifyPackageExhausted } = await import('./packageNotify.js');
+    notifyPackageExhausted({ workspaceId, clientPackageId: cpId, clientId: booking.client_id });
+  }
+  return {
+    booking: claimed.rows[0],
+    package: { id: cpId, creditsRemaining: consumed.creditsRemaining, state: consumed.creditsRemaining > 0 ? 'active' : 'used_up' },
+    exhausted: !!consumed.exhausted,
+  };
 }
 
 // True if this package can absorb a booking for the given service. Used
