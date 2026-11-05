@@ -10,6 +10,7 @@
 // the workspace's events actually arrive at. Both are idempotent.
 import crypto from 'node:crypto';
 import { sql } from './db.js';
+import { resolveMergedClientId } from './clientResolve.js';
 import { generateCode, hashCode, normalizeCode } from './giftCards.js';
 import { fetchBranding } from './branding.js';
 import { sendEmail, sendEmailToUser, sendEmailToClient, sendEmailToClientByAddress, emailShell } from './email.js';
@@ -242,8 +243,11 @@ export function paidMethodForSession(session, pi = null) {
 async function maybeStoreSavedCard({ creds, workspaceId, metadata, paymentIntentId, customerId }) {
   if (!creds || metadata?.save_card !== '1' || !metadata?.client_id || !paymentIntentId) return null;
   try {
+    // A client merged away since the checkout started: the card goes to
+    // the client that holds their history now.
+    const clientId = await resolveMergedClientId(workspaceId, metadata.client_id);
     return await storeCardFromPaymentIntent({
-      creds, workspaceId, clientId: metadata.client_id, paymentIntentId, customerId,
+      creds, workspaceId, clientId, paymentIntentId, customerId,
     });
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -541,7 +545,8 @@ async function fulfillDepositSession({ workspaceId, session, creds = null }) {
 async function fulfillProgramSession({ workspaceId, session }) {
   const md = session.metadata || {};
   const programId = md.program_id;
-  const clientId = md.client_id;
+  // Merged away since the checkout started: enroll the kept client.
+  const clientId = await resolveMergedClientId(workspaceId, md.client_id);
   if (!programId || !clientId) return { ignored: 'program metadata incomplete' };
   const prog = (await sql`SELECT id, title, billing, price_cents, access_days FROM programs WHERE id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
   const cli = (await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`).rows[0];
@@ -595,8 +600,22 @@ const isUuidLike = (s) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-f
 
 async function fulfillPackageSession({ workspaceId, session }) {
   const packageId = session.metadata?.package_id;
-  const clientId  = session.metadata?.client_id;
+  // Merged away since the checkout started: the package goes to the kept
+  // client (the stripe_session_id unique index still makes it exactly once).
+  const clientId  = await resolveMergedClientId(workspaceId, session.metadata?.client_id);
   if (!packageId || !clientId) return { ignored: 'package metadata incomplete' };
+  // The client row is gone (deleted, not merged) or belongs to another
+  // business: never insert against it (a foreign key error would make the
+  // provider retry forever). Tell the owner so the payment is not silent.
+  const owner = (await sql`SELECT id FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`).rows[0];
+  if (!owner) {
+    notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: { title: 'Package paid, client not found', body: 'A package was paid for, but that client is no longer in your list. Check your payments and add the package by hand.',
+        url: '/clients', tag: `package-noclient-${session.id}` },
+    });
+    return { ignored: 'package client not found' };
+  }
   const dup = await sql`
     SELECT id FROM client_packages WHERE workspace_id = ${workspaceId} AND stripe_session_id = ${session.id} LIMIT 1
   `;

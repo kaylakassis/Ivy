@@ -21,6 +21,10 @@
 //   • Exactly once: a second call for the same removed client (a double tap,
 //     a retry, Ivy's approval and a button at the same time) answers
 //     "already merged" and changes nothing.
+//   • A payment started by the removed client (checkout, subscription,
+//     card setup) still lands on the kept client: webhooks and fulfilment
+//     resolve the client id in provider metadata through client_merges
+//     (api/_lib/clientResolve.js).
 //   • There is no undo. The merge record keeps a snapshot of the removed
 //     record, so support can see exactly what it held, but splitting a
 //     client again cannot know which later bookings or messages belong to

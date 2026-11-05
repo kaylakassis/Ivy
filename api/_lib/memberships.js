@@ -1,5 +1,6 @@
 // Helpers for membership tier templates + per-client subscription state.
 import { sql } from './db.js';
+import { resolveMergedClientId } from './clientResolve.js';
 import { fetchStripeCustomer } from './stripe.js';
 import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
 
@@ -162,7 +163,8 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
     const md = sub.metadata || {};
     const mdWorkspaceId = md.workspace_id;
     const membershipId = md.membership_id;
-    const clientIdFromMd = md.client_id;
+    // A client merged away since the checkout started resolves to the kept one.
+    const clientIdFromMd = await resolveMergedClientId(workspaceId, md.client_id);
     const hasIvyMetadata = md.purpose === 'membership' && membershipId && clientIdFromMd;
     if (hasIvyMetadata) {
       if (mdWorkspaceId && mdWorkspaceId !== workspaceId) return 'mismatch';
