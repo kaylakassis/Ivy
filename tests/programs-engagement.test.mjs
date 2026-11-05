@@ -282,7 +282,11 @@ async function run() {
   await call(programMembers, req({ method: 'POST', cookie: A.cookie, query: { id: P.id }, body: { clientId: s7.cid } }));
   for (let d = 0; d < 7; d++) {
     await sql`INSERT INTO program_posts (program_id, workspace_id, author_client_id, author_user_id, author_name, body, created_at)
-              VALUES (${P.id}, ${A.wid}, ${s7.cid}, ${s7.uid}, 'tia', ${`day ${d}`}, NOW() - make_interval(days => ${d}))`;
+              VALUES (${P.id}, ${A.wid}, ${s7.cid}, ${s7.uid}, 'tia', ${`day ${d}`},
+                      -- Noon local on each of the last 7 local days. (NOW() minus whole
+                      -- days lands two posts on one local date around a DST change
+                      -- when the suite runs late in the evening.)
+                      ((date_trunc('day', NOW() AT TIME ZONE ${TZ}) - make_interval(days => ${d}) + INTERVAL '12 hours') AT TIME ZONE ${TZ}))`;
   }
   const s7b = await awardBadges({ program: progRow, clientId: s7.cid, tz: TZ });
   assert(s7b.some((b) => b.badge === 'streak_7') && !s7b.some((b) => b.badge === 'streak_30'), '7 days in a row → 7-day streak badge (not 30)');
