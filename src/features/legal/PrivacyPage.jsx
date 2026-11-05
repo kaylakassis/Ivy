@@ -11,10 +11,22 @@ import LegalPage, { H2, P, UL } from './LegalPage.jsx';
 
 export const PRIVACY_VERSION = '2026-11-05';
 
+export const PRIVACY_LAST_UPDATED = 'November 5, 2026';
+
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="November 5, 2026">
-      <P><strong>Effective version: {PRIVACY_VERSION}.</strong>
+    <LegalPage title="Privacy Policy" lastUpdated={PRIVACY_LAST_UPDATED}>
+      <PrivacyPolicyBody/>
+    </LegalPage>
+  );
+}
+
+// The policy text on its own, so the in-app "We updated our Privacy Policy"
+// notice can show the whole thing inline.
+export function PrivacyPolicyBody() {
+  return (
+    <>
+      <P><strong>Effective version: {PRIVACY_VERSION}.</strong>{' '}
         This Privacy Policy explains what information Ivy ("we", "us", "the
         Service") collects from you, how we use it, and what choices you have.
         If anything here is unclear, please email us at{' '}
@@ -163,6 +175,6 @@ export default function PrivacyPage() {
       <P>Questions about this policy:{' '}
         <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>.
       </P>
-    </LegalPage>
+    </>
   );
 }

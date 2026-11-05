@@ -11,6 +11,7 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import { Icons } from '../../components/Icons.jsx';
 import VerifyEmailBanner from '../../components/VerifyEmailBanner.jsx';
 import TermsAcceptModal from '../../components/TermsAcceptModal.jsx';
+import PrivacyUpdateNotice from '../../components/PrivacyUpdateNotice.jsx';
 import { SkelLine, SkelBlock, SkelRowList } from '../../components/Skeleton.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -122,6 +123,7 @@ function ClientShellInner() {
         <MoreSheet data={data} summary={data?.summary} onClose={() => setMoreOpen(false)}/>
       )}
       <TermsAcceptModal/>
+      <PrivacyUpdateNotice/>
     </div>
   );
 }

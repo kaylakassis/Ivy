@@ -44,6 +44,15 @@ export function AuthProvider({ children }) {
     return () => { live = false; };
   }, []);
 
+  // After a sign-in, load the Terms / Privacy state the same way a page load
+  // does. Without this, someone who signs in (rather than reopening the app)
+  // never saw the "We updated our Privacy Policy" notice until they reloaded.
+  const loadLegalState = useCallback(() => {
+    api.get('/auth/me')
+      .then((r) => { setTerms(r.terms || null); setPrivacy(r.privacy || null); })
+      .catch(() => {});
+  }, []);
+
   // Holds the native-only mfa token between /auth/login and the challenge.
   // (Web carries it in an httpOnly cookie the server sets on login.)
   const mfaTokenRef = useRef(null);
@@ -75,8 +84,9 @@ export function AuthProvider({ children }) {
     clearMeCache(); clearDeviceCache();
     setUser(r.user);
     stampSessionHint(true);
+    loadLegalState();
     return r.user;
-  }, []);
+  }, [loadLegalState]);
 
   // A password reset on a 2FA account ends at the same code step as login.
   // The reset page hands over the native-only token here before routing to
@@ -111,8 +121,9 @@ export function AuthProvider({ children }) {
     clearMeCache(); clearDeviceCache();
     setUser(r.user);
     stampSessionHint(true);
+    loadLegalState();
     return r.user;
-  }, []);
+  }, [loadLegalState]);
 
   // mode: 'owner' (default - creates a workspace) or 'client' (no workspace,
   // claims existing client records by email match).
