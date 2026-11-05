@@ -19,6 +19,7 @@ import {
   syncRefundToPurchases,
 } from '../../_lib/checkoutFulfillment.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
+import { applyStripeChargeRefundToInvoice } from '../../_lib/invoiceRefundSync.js';
 import { fetchWithTimeout } from '../../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
@@ -174,12 +175,18 @@ export default async function handler(req, res) {
       return ok(res, { received: true, applied: 'invoice-payment-failed', result });
     }
 
-    // A refund issued from the payment dashboard for a gift card or a
-    // package sold from the booking page: void the card / cancel the
-    // bundle. (Invoice refunds on this legacy path are recorded by the
-    // owner's own refund action, which also moves the money.)
+    // A refund issued from the payment dashboard. An invoice paid by card
+    // is updated (refunded amount, status, client email) the same way the
+    // platform webhook does it, so it no longer says "Paid" after the money
+    // went back. Otherwise, a gift card or a package sold from the booking
+    // page: void the card / cancel the bundle.
     if (event.type === 'charge.refunded') {
-      const synced = await syncRefundToPurchases({ workspaceId, charge: event.data?.object || {} });
+      const charge = event.data?.object || {};
+      const invSync = await applyStripeChargeRefundToInvoice({ workspaceId, charge });
+      if (invSync !== 'not-found') {
+        return ok(res, { received: true, applied: invSync === 'applied' ? 'invoice-refund-synced' : 'refund already recorded' });
+      }
+      const synced = await syncRefundToPurchases({ workspaceId, charge });
       return ok(res, { received: true, ...synced });
     }
 

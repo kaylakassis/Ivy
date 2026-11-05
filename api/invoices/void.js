@@ -1,14 +1,14 @@
-// POST /api/invoices/void  body: { id }
-// Owner voids the invoice; the public view link stops working.
-import { sql } from '../_lib/db.js';
+// POST /api/invoices/void  body: { id, notifyClient? }
+// Owner voids an unpaid invoice. It stays on record marked Void, the
+// client's link shows "This invoice was voided" and can no longer take a
+// payment, reminders stop, and nothing is owed. Paid invoices are refunded
+// instead; an invoice with a part payment needs that payment refunded
+// first. Rules: src/lib/invoiceRules.js; core: api/_lib/invoiceActions.js.
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedInvoice, serializeInvoice } from '../_lib/finance.js';
-import { restoreStock } from '../_lib/products.js';
-import { restoreGiftCardCreditForInvoice } from '../_lib/giftCards.js';
-import { recordWorkspaceAudit } from '../_lib/audit.js';
+import { voidInvoiceCore } from '../_lib/invoiceActions.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -22,73 +22,16 @@ export default async function handler(req, res) {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
     if (!id) return badRequest(res, 'id is required');
-
-    const inv = await fetchOwnedInvoice({ id, workspaceId });
-    if (!inv) return badRequest(res, 'Invoice not found');
-    if (inv.status === 'paid') return badRequest(res, "Can't void a paid invoice");
-
-    // POS sales decrement stock at pay-link issuance, so voiding an
-    // unpaid sale must put the units back. Balanced-pairs bookkeeping in
-    // the activity log ('restocked' vs 'stock-rededucted' from un-void)
-    // makes a void→restore→void cycle restock exactly once per void.
-    const activity = inv.activity || [];
-    const stockItems = (Array.isArray(inv.items) ? inv.items : [])
-      .filter((it) => it.productId && Number(it.quantity) > 0);
-    const restocks   = activity.filter((a) => a.kind === 'restocked').length;
-    const rededucts  = activity.filter((a) => a.kind === 'stock-rededucted').length;
-    const willRestock = stockItems.length > 0 && restocks <= rededucts;
-
-    const giftCreditLeft = Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0);
-    const newActivity = [
-      ...activity,
-      { ts: new Date().toISOString(), kind: 'voided', text: 'Invoice voided' },
-      ...(giftCreditLeft > 0
-        ? [{ ts: new Date().toISOString(), kind: 'gift-card-restored',
-            text: `Gift card credit of $${(giftCreditLeft / 100).toFixed(2)} returned to the card ending ${inv.gift_card_code_last4 || '????'}` }]
-        : []),
-      ...(willRestock
-        ? [{ ts: new Date().toISOString(), kind: 'restocked', text: 'Stock returned to inventory' }]
-        : []),
-    ];
-
-    // Status guard mirrors send/resend: a payment landing between the
-    // read above and this write must win - never flip paid → voided.
-    const updated = await sql`
-      UPDATE invoices SET
-        status = 'voided',
-        view_token_hash = NULL,
-        activity = ${JSON.stringify(newActivity)}::jsonb,
-        updated_at = NOW()
-      WHERE id = ${id} AND workspace_id = ${workspaceId}
-        AND status NOT IN ('paid', 'refunded')
-      RETURNING *
-    `;
-    if (updated.rows.length === 0) {
-      return badRequest(res, 'This invoice was just paid - refresh to see its current state.');
+    try {
+      const out = await voidInvoiceCore({
+        workspaceId, id, actor: user, req,
+        notifyClient: body.notifyClient === true || body.notifyClient === 'true',
+      });
+      return ok(res, out);
+    } catch (e) {
+      if (e.code === 'not_found' || e.code === 'refused') return badRequest(res, e.message);
+      throw e;
     }
-    // A gift card the client applied goes back on the card (exactly once;
-    // the helper claims the credit atomically). Best-effort after the
-    // void itself landed - a failure here is logged, never a 500 that
-    // would leave the owner unsure whether the void happened.
-    if (giftCreditLeft > 0) {
-      await restoreGiftCardCreditForInvoice({ workspaceId, invoiceId: inv.id })
-        .catch((err) => console.error('[invoice void] gift card restore failed:', err.message));
-    }
-    if (willRestock) {
-      for (const it of stockItems) {
-        // eslint-disable-next-line no-await-in-loop
-        await restoreStock({ workspaceId, productId: it.productId, qty: it.quantity });
-      }
-    }
-    // Immutable trail of an irreversible state change. Fire-and-forget;
-    // a logging blip won't undo the void.
-    recordWorkspaceAudit(req, {
-      workspaceId, actor: user,
-      action: 'invoice.void',
-      target: { kind: 'invoice', id: inv.id },
-      meta: { number: inv.number, client_name: inv.client_name },
-    });
-    return ok(res, { invoice: serializeInvoice(updated.rows[0]) });
   } catch (err) {
     return serverError(res, err);
   }

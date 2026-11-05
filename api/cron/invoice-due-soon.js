@@ -15,7 +15,7 @@ import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyClientSafe } from '../_lib/push.js';
-import { notifyInvoiceDueSoon } from '../_lib/invoiceNotify.js';
+import { notifyInvoiceDueSoon, reminderOwed } from '../_lib/invoiceNotify.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -50,12 +50,13 @@ async function handler(req, res) {
         // eslint-disable-next-line no-await-in-loop
         const { rows } = await sql.query(
           `SELECT
-             i.id, i.workspace_id, i.client_id, i.client_name, i.client_email,
-             i.number, i.due_date,
+             i.*,
              GREATEST(0, EXTRACT(DAY FROM i.due_date::timestamp - NOW())::int) AS days_until_due
            FROM invoices i
            LEFT JOIN calendar_settings cs ON cs.workspace_id = i.workspace_id
            WHERE i.status = 'sent'
+             AND i.payment_processing_at IS NULL
+             AND i.archived_at IS NULL
              AND i.due_date IS NOT NULL
              AND i.due_date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
              AND i.due_date <= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date + ($1::int)
@@ -71,10 +72,21 @@ async function handler(req, res) {
         batches += 1;
         for (const r of rows) {
           try {
+            if (reminderOwed(r) <= 0) {
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE invoices SET due_soon_reminder_sent_at = NOW() WHERE id = ${r.id}`;
+              continue;
+            }
             const raw = generateRawToken(32);
             const hash = crypto.createHash('sha256').update(raw).digest('hex');
+            // Status guard: an invoice voided or paid since the SELECT keeps
+            // its state - never re-open a pay link on it or remind about it.
             // eslint-disable-next-line no-await-in-loop
-            await sql`UPDATE invoices SET view_token_hash = ${hash} WHERE id = ${r.id}`;
+            const minted = await sql`
+              UPDATE invoices SET view_token_hash = ${hash}
+               WHERE id = ${r.id} AND status = 'sent' AND payment_processing_at IS NULL
+               RETURNING id`;
+            if (minted.rows.length === 0) continue;
             const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
             // eslint-disable-next-line no-await-in-loop
             await notifyInvoiceDueSoon({

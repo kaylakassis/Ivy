@@ -12,7 +12,8 @@ import { celebrateFirstPayment, celebrateRevenueMonthMilestone } from './milesto
 import { recordFirstRealPayment } from './firstWin.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
-import { paidMethodLabel } from './finance.js';
+import { paidMethodLabel, computeTotals } from './finance.js';
+import { invoiceMoney } from '../../src/lib/invoiceRules.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -160,15 +161,18 @@ export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, me
 export async function notifyInvoiceDueSoon({ workspaceId, invoiceId, daysUntilDue, viewUrl }) {
   try {
     const { rows } = await sql`
-      SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,
-             i.due_date, i.items, i.tax_rate, i.discount
+      SELECT i.*
       FROM invoices i
       WHERE i.id = ${invoiceId} AND i.workspace_id = ${workspaceId}
     `;
     const inv = rows[0];
     if (!inv?.client_email) return;
-    const { computeTotals } = await import('./finance.js');
-    const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+    // Never remind about an invoice that is void, paid, refunded, archived
+    // or settling, and quote what is actually still owed (after a gift
+    // card or a part payment), not the original total.
+    const owedNow = reminderOwed(inv);
+    if (owedNow <= 0) return;
+    const totals = { total: owedNow };
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName || 'your business';
     const whenLabel = daysUntilDue <= 0 ? 'today'
@@ -202,15 +206,15 @@ export async function notifyInvoiceDueSoon({ workspaceId, invoiceId, daysUntilDu
 export async function notifyInvoiceOverdue({ workspaceId, invoiceId, daysOverdue, viewUrl }) {
   try {
     const { rows } = await sql`
-      SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,
-             i.due_date, i.items, i.tax_rate, i.discount
+      SELECT i.*
       FROM invoices i
       WHERE i.id = ${invoiceId} AND i.workspace_id = ${workspaceId}
     `;
     const inv = rows[0];
     if (!inv?.client_email) return;
-    const { computeTotals } = await import('./finance.js');
-    const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+    const owedNow = reminderOwed(inv);
+    if (owedNow <= 0) return;
+    const totals = { total: owedNow };
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName || 'your business';
     const html = emailShell({
@@ -234,5 +238,61 @@ export async function notifyInvoiceOverdue({ workspaceId, invoiceId, daysOverdue
   } catch (err) {
     console.error('[notifyInvoiceOverdue] failed:', err.message);
     reportError(err, { extra: { invoiceId, workspaceId } });
+  }
+}
+
+// What a reminder may ask for: 0 (send nothing) unless the invoice is still
+// open (sent / overdue), not archived, not mid bank payment, and something
+// is actually owed after gift card credit and part payments.
+export function reminderOwed(inv) {
+  if (!inv || (inv.status !== 'sent' && inv.status !== 'overdue')) return 0;
+  if (inv.archived_at || inv.payment_processing_at) return 0;
+  const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+  return invoiceMoney({ ...inv, total: totals.total }).owed;
+}
+
+// "This invoice was voided" to the client, only when the owner ticks the
+// box while voiding an invoice the client was sent. Preference-gated like
+// every other invoice email.
+export function renderInvoiceVoided({ business, firstName, number, branding }) {
+  const biz = escapeHtml(business || 'the business');
+  const html = emailShell({
+    heading: `Invoice ${number} was voided`,
+    branding,
+    body: `<p>Hi ${escapeHtml(firstName || 'there')},</p>
+      <p>${biz} has voided invoice <strong>${escapeHtml(number)}</strong>. You don't owe anything for it, and you don't need to do anything.</p>
+      <p>If you already sent a payment for it, just reply to this email and ${biz} will sort it out with you.</p>`,
+    footer: `Questions? Reply to this email to reach ${biz}.`,
+  });
+  return { subject: `Invoice ${number} was voided`, html };
+}
+
+export async function notifyInvoiceVoided({ workspaceId, invoiceId }) {
+  try {
+    const { rows } = await sql`
+      SELECT id, number, client_id, client_name, client_email, status
+        FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
+    `;
+    const inv = rows[0];
+    if (!inv?.client_email || inv.status !== 'voided') return { sent: false };
+    const branding = await fetchBranding(workspaceId);
+    const rendered = renderInvoiceVoided({
+      business: branding.businessName,
+      firstName: (inv.client_name || '').split(/\s+/)[0],
+      number: inv.number,
+      branding,
+    });
+    const r = await sendEmailToClient({
+      clientId: inv.client_id, type: 'invoices',
+      to: inv.client_email,
+      subject: rendered.subject,
+      html: rendered.html,
+      replyTo: branding.replyTo,
+    });
+    return { sent: !!r?.sent };
+  } catch (err) {
+    console.error('[notifyInvoiceVoided] failed:', err.message);
+    reportError(err, { extra: { invoiceId, workspaceId } });
+    return { sent: false };
   }
 }

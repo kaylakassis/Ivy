@@ -144,7 +144,10 @@ async function run() {
   await mkInvoice({ wid: A.wid, cid: A.cid, token: tokPaid, status: 'paid' });
   res = mockRes();
   await viewHandler(publicReq({ method: 'GET', query: { token: tokPaid } }), res);
-  assert(res.statusCode === 404, 'paid invoice is not served publicly at all');
+  // A paid invoice's link (for example the client portal's View button)
+  // shows it read only: closed, no ways to pay, nothing payable.
+  assert(res.statusCode === 200 && res.body.invoice.closed === true && res.body.invoice.manualMethods.length === 0
+    && res.body.invoice.paymentEnabled === false, 'paid invoice is served read only, with no ways to pay');
 
   console.log('\n[3] claim stamps the invoice and notifies the owner once');
   outbox.length = 0;

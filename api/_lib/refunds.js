@@ -35,8 +35,15 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
 
   const inv = await fetchOwnedInvoice({ id, workspaceId });
   if (!inv) throw new Error('Invoice not found');
-  if (inv.status !== 'paid' && inv.status !== 'refunded') {
-    throw new Error('Only paid invoices can be refunded');
+  // Paid invoices, and open ones with a part payment on them (the owner
+  // refunds the part payment, then voids). Anything else has no money to
+  // give back; the message says what to do instead.
+  const openWithPayment = (inv.status === 'sent' || inv.status === 'overdue') && Number(inv.paid_amount || 0) > 0;
+  if (inv.status !== 'paid' && inv.status !== 'refunded' && !openWithPayment) {
+    if (inv.status === 'voided') throw new Error('This invoice is void and has no payment to refund.');
+    throw new Error(inv.status === 'draft'
+      ? 'Nothing has been paid on this invoice, so there is nothing to refund. You can delete the draft.'
+      : 'Nothing has been paid on this invoice, so there is nothing to refund. Void it instead.');
   }
 
   const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
@@ -73,9 +80,11 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
     stripeRefundId = out.id;
   }
 
-  const newRefunded = alreadyRefunded + amount;
+  const newRefunded = Math.round((alreadyRefunded + amount) * 100) / 100;
   const fullyRefunded = newRefunded >= refundBasis - 0.001;
-  const newStatus = fullyRefunded ? 'refunded' : 'paid';
+  // A part payment refunded on a still-open invoice leaves it open (the
+  // client still owes it, or the owner voids it next).
+  const newStatus = openWithPayment ? inv.status : (fullyRefunded ? 'refunded' : 'paid');
 
   const activityEntry = {
     ts: new Date().toISOString(),
@@ -89,7 +98,7 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   // provider call above was idempotent (same key) so no double money moved.
   const updated = await sql`
     UPDATE invoices SET
-      status          = ${newStatus},
+      status          = CASE WHEN ${openWithPayment} THEN status ELSE ${newStatus} END,
       refunded_amount = ${newRefunded},
       refunded_at     = NOW(),
       activity        = ${JSON.stringify([...(inv.activity || []), activityEntry])}::jsonb,
@@ -127,7 +136,7 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   // credit stays claimable for a later void / refund.
   let giftRestoredCents = 0;
   const giftLeft = Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0);
-  if (giftLeft > 0 && (method === 'gift_card' || fullyRefunded)) {
+  if (giftLeft > 0 && !openWithPayment && (method === 'gift_card' || fullyRefunded)) {
     giftRestoredCents = await restoreGiftCardCreditForInvoice({
       workspaceId, invoiceId: inv.id,
       amountCents: method === 'gift_card' ? Math.round(amount * 100) : null,

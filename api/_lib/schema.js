@@ -4243,4 +4243,16 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_step INTEGER NOT NULL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_reminder_last_sent_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_users_signup_reminder_due
   ON users(created_at) WHERE signup_reminder_step < 3 AND deleted_at IS NULL;
+
+-- Invoice clean-up (src/lib/invoiceRules.js). archived_at hides a paid,
+-- refunded or void invoice from the owner's main Finance list. It is a
+-- view setting only: the row, its payments and refunds stay, revenue
+-- history never changes, and unarchiving puts it back. NULL = not archived.
+-- recurring_invoice_id links an invoice to the recurring series that made
+-- it, so the owner sees that voiding one invoice does not stop the series.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS recurring_invoice_id UUID REFERENCES recurring_invoices(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_ws_archived
+  ON invoices(workspace_id, archived_at) WHERE archived_at IS NOT NULL;
+
 `;

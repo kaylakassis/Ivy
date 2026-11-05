@@ -22,6 +22,7 @@ import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { serializeClientPackage } from '../../_lib/packages.js';
 import { serializeClientMembership } from '../../_lib/memberships.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { invoiceMoney } from '../../../src/lib/invoiceRules.js';
 
 // Defensive: every aggregate runs in parallel but a single failure
 // degrades to a neutral value rather than failing the whole response.
@@ -63,7 +64,10 @@ export default async function handler(req, res) {
       `SELECT i.id, i.client_id, i.number, i.status,
               i.issue_date, i.due_date, i.paid_at,
               i.total, i.currency,
-              i.tax_rate, i.discount, i.paid_amount
+              i.tax_rate, i.discount, i.paid_amount, i.paid_method,
+              i.refunded_amount, i.refunded_at,
+              i.gift_card_credit_cents, i.gift_card_credit_restored_cents,
+              i.updated_at
        FROM invoices i
        WHERE i.client_id = ANY($1)
          AND i.status <> 'draft'
@@ -86,6 +90,10 @@ export default async function handler(req, res) {
 
     const invoices = rows.map((r) => {
       const m = byClient.get(r.client_id);
+      // Shared money math: a void or refunded invoice is never "owed", and
+      // what is owed on an open one is after gift card credit and any part
+      // payment (net of refunds).
+      const money = invoiceMoney(r);
       return {
         id: r.id,
         number: r.number,
@@ -99,9 +107,12 @@ export default async function handler(req, res) {
         // Added for the 1.0.5 portal: part-payments, so the Pay button
         // shows what is actually left to pay.
         paidAmount: Number(r.paid_amount || 0),
-        amountDue: (r.status === 'sent' || r.status === 'overdue')
-          ? Math.max(0, Math.round((Number(r.total || 0) - Number(r.paid_amount || 0)) * 100) / 100)
-          : 0,
+        amountDue: money.owed,
+        // Added for refunds: what was given back, what was kept, and when.
+        refundedAmount: money.refunded,
+        netPaid: money.net,
+        refundedAt: r.refunded_at || null,
+        updatedAt: r.updated_at || null,
       };
     });
 

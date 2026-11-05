@@ -96,7 +96,7 @@ export default async function handler(req, res) {
     if (type === 'invoices') {
       const inv = await sql.query(
         `SELECT id, number, client_name, client_email, paid_at, issue_date,
-                due_date, items, tax_rate, discount, notes
+                due_date, items, tax_rate, discount, notes, refunded_amount
          FROM invoices
          WHERE workspace_id = $1
            AND status IN ('paid', 'refunded')
@@ -167,6 +167,28 @@ export default async function handler(req, res) {
               '', // discount per-line; we already netted it into base
               '200', // 200 = Sales (Xero default revenue account)
               taxType, currency,
+            ));
+          }
+        }
+        // Money given back is a line of its own, so a refunded invoice nets
+        // to what was actually kept (a full refund nets to $0) instead of
+        // importing as full income.
+        const refunded = Math.round(Number(row.refunded_amount || 0) * 100) / 100;
+        if (refunded > 0) {
+          if (format === 'quickbooks') {
+            lines.push(r(
+              row.number, row.client_name, row.client_email || '',
+              dateISO, dueISO, 'Net 30', row.notes || '',
+              'Refund', 'Refund to client',
+              n(1), n(-refunded), n(-refunded), n(0), currency,
+            ));
+          } else {
+            lines.push(r(
+              row.client_name, row.client_email || '',
+              row.number, '', dateISO, dueISO,
+              'Refund to client',
+              '1', n(-refunded),
+              '', '200', 'Tax Exempt', currency,
             ));
           }
         }
