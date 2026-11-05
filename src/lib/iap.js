@@ -73,6 +73,13 @@ let purchasesPromise = null;
 // Why the last configure() attempt failed, so the UI can say the real
 // reason instead of the store library's generic "must be configured".
 let lastConfigureError = null;
+// The server's own reason for refusing the last identify (for example the
+// owner already pays for Ivy on the web, so the app must not sell them an
+// Apple subscription as well). Shown instead of a generic error.
+let lastIdentifyRefusal = null;
+export function iapIdentifyRefusal() {
+  return lastIdentifyRefusal;
+}
 
 // A human-readable reason in-app purchasing cannot run right now, or null
 // when it is ready. Used by every purchase entry point and the Account page.
@@ -139,6 +146,7 @@ export async function initIAP() {
 //      failed server call is retried on the next attempt.
 export async function identifyIapUser(workspaceId) {
   const id = workspaceId ? String(workspaceId) : '';
+  lastIdentifyRefusal = null;
   if (!iapAvailable() || !id) return false;
   if (!(await initIAP())) return false;
   if (currentAppUserId === id) return true;
@@ -153,6 +161,9 @@ export async function identifyIapUser(workspaceId) {
   try {
     await api.post('/billing/iap-identify');
   } catch (err) {
+    // 409 = the server refuses on purpose (already billed on the web). Keep
+    // its message so the purchase screens can say why nothing was sold.
+    if (err?.status === 409 && err?.message) lastIdentifyRefusal = err.message;
     // eslint-disable-next-line no-console
     console.error('[iap] server identify failed:', err?.message || err);
     return false;

@@ -24,6 +24,7 @@
 import { sql } from '../_lib/db.js';
 import { fetchSubscription, platformStripeSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
+import { flagOtherLiveSubscriptions } from '../_lib/billingGuard.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
@@ -78,7 +79,7 @@ async function handler(req, res) {
     const secretKey = platformStripeSecret();
     if (!secretKey) return ok(res, { skipped: 'platform Stripe not configured' });
 
-    let scanned = 0, applied = 0, unchanged = 0, errors = 0;
+    let scanned = 0, applied = 0, unchanged = 0, errors = 0, duplicates = 0;
     let emptied = false;
     let lastId = '00000000-0000-0000-0000-000000000000';
 
@@ -105,6 +106,11 @@ async function handler(req, res) {
             // eslint-disable-next-line no-await-in-loop
             const outcome = await applyWorkspaceSubState({ workspaceId: w.id, sub });
             if (outcome === 'applied') applied++; else unchanged++;
+            // Second live plan on the same customer? Raise it (never
+            // cancels from here). Best-effort: never stalls the sweep.
+            // eslint-disable-next-line no-await-in-loop
+            duplicates += await flagOtherLiveSubscriptions({ workspaceId: w.id, trackedSub: sub, secretKey })
+              .catch((e) => { console.warn('[billing-reconcile] duplicate check', w.id, e.message); return 0; });
           } catch (err) {
             // Unknown/foreign subscription id, transient Stripe error -
             // log and move on; one bad row must not stall the sweep.
@@ -121,7 +127,7 @@ async function handler(req, res) {
     }, { budgetMs: BUDGET_MS });
 
     const terminatedBy = terminationReason({ emptied, hitCap: false });
-    return ok(res, { scanned, applied, unchanged, errors, terminatedBy });
+    return ok(res, { scanned, applied, unchanged, errors, duplicates, terminatedBy });
   } catch (err) {
     return serverError(res, err);
   }

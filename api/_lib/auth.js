@@ -324,9 +324,14 @@ export async function ensureWorkspace(userId) {
     // owner_id (schema.js) a parallel insert fails and the catch re-reads;
     // without it (a database that still has old duplicates) the NOT EXISTS
     // guard still narrows the race to almost nothing.
+    // Same starting state as signup and helper start-business: no plan and
+    // no trial yet. The column defaults ('trialing', 14 days) are from the
+    // old no-card trial; relying on them here let a client-portal account
+    // that touched any owner endpoint get 14 free days with no card, then
+    // do it again with a new account.
     const created = await sql`
-      INSERT INTO workspaces (owner_id)
-      SELECT ${userId}
+      INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
+      SELECT ${userId}, 'incomplete', NULL
        WHERE NOT EXISTS (SELECT 1 FROM workspaces WHERE owner_id = ${userId})
       RETURNING id
     `;
@@ -344,4 +349,24 @@ export async function ensureWorkspace(userId) {
 
 export function validEmail(e) {
   return typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
+// The one form an account email is stored and looked up in: trimmed and
+// lowercased, so "Irene@x.com" and " irene@x.com " are the same account.
+// Every path that creates a user or finds one by email goes through this
+// (signup, login, password reset, helper invites, admin create, dev login),
+// and users has a unique index on LOWER(email) behind it. Gmail dots and
+// +aliases are deliberately NOT folded: they are real, distinct addresses
+// on most providers. Capped at 254 characters, the longest valid address.
+export const ACCOUNT_EXISTS_MESSAGE = 'An account with this email already exists. Sign in instead, or reset your password.';
+export function normalizeAccountEmail(e) {
+  if (typeof e !== 'string') return '';
+  return e.trim().toLowerCase().slice(0, 254);
+}
+
+// Postgres unique_violation (from either the users.email or the
+// LOWER(email) unique index) - lets a signup that lost a race answer with
+// the friendly "already exists" message instead of a 500.
+export function isUniqueViolation(err) {
+  return err?.code === '23505' || /duplicate key|unique constraint/i.test(err?.message || '');
 }

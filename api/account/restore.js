@@ -20,7 +20,7 @@
 // Public endpoint: no requireUser. The token is the proof.
 import { sql } from '../_lib/db.js';
 import {
-  signSession, setSessionCookie, isNativeClient, invalidateUserCache,
+  signSession, setSessionCookie, isNativeClient, invalidateUserCache, isUniqueViolation,
 } from '../_lib/auth.js';
 import { beginMfaStep, hasTwoStep } from '../_lib/mfaEmail.js';
 import { readBody } from '../_lib/body.js';
@@ -101,13 +101,23 @@ export default async function handler(req, res) {
       if (clash.rows.length > 0) finalEmail = u.email;
     }
 
-    await sql`
+    // The clash check above and this write are not atomic: a signup that
+    // takes the address in between trips the unique email index. Keep the
+    // mangled form then, exactly as if the clash had been seen first.
+    const restoreRow = (email) => sql`
       UPDATE users SET
         deleted_at = NULL,
-        email = ${finalEmail},
+        email = ${email},
         updated_at = NOW()
       WHERE id = ${u.id}
     `;
+    try {
+      await restoreRow(finalEmail);
+    } catch (restoreErr) {
+      if (finalEmail === u.email || !isUniqueViolation(restoreErr)) throw restoreErr;
+      finalEmail = u.email;
+      await restoreRow(finalEmail);
+    }
     // Drop the cached (deleted) user row so requireUser sees the
     // restored, non-deleted state on the very next request rather than
     // continuing to 401 for up to the cache TTL.

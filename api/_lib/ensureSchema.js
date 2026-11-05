@@ -149,7 +149,19 @@ async function runProbe() {
 // fast-paths. Only called after a fully-successful pass (every statement
 // ran), so we mark them all applied=TRUE in one batch upsert. Mirrors the
 // ledger written by api/admin/migrate.js.
-async function recordApplied(statements) {
+async function recordApplied(allStatements) {
+  // The same statement can legitimately appear twice in SCHEMA_SQL (a view
+  // refreshed again after later ALTERs). One INSERT ... ON CONFLICT DO
+  // UPDATE cannot touch the same hash twice, so a repeat used to fail the
+  // whole ledger write, leaving the probe failing and a full migration on
+  // every cold start. Record each distinct statement once.
+  const seen = new Set();
+  const statements = allStatements.filter((s) => {
+    const h = hashStmt(s);
+    if (seen.has(h)) return false;
+    seen.add(h);
+    return true;
+  });
   if (statements.length === 0) return;
   try {
     const valuesSql = statements

@@ -26,6 +26,9 @@ import {
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
+import {
+  loadBillingRow, classifyIncomingStripeSub, closeConflictsForSubscription, recordTrialClaimForWorkspace,
+} from '../_lib/billingGuard.js';
 
 // Stripe statuses that count as "this user is paying us". Trialing is
 // excluded - affiliates only earn attribution on real revenue.
@@ -79,7 +82,7 @@ export default async function handler(req, res) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
-        await onSubscriptionChanged(event.data.object, event.type);
+        await onSubscriptionChanged(event.data.object, event.type, secretKey);
         break;
 
       case 'invoice.upcoming':
@@ -131,8 +134,25 @@ async function onCheckoutCompleted(session, secretKey) {
   const isTrialing = status === 'trialing';
   const trialEnd = sub?.trial_end ? new Date(sub.trial_end * 1000) : periodEnd;
 
+  // Double-billing backstop. checkout.js refuses a second plan, but a
+  // session opened before the first one completed (or before an Apple
+  // purchase) can still be paid. If this workspace already has a live
+  // plan, the new subscription is dealt with in resolveExtraStripeSub and
+  // the workspace keeps the plan it had: no overwrite, no welcome email.
+  if (sub) {
+    const verdict = await classifyIncomingStripeSub({
+      ws: await loadBillingRow(workspaceId), sub, secretKey, viaCheckout: true,
+    });
+    if (verdict.action !== 'track') {
+      invalidateOwnerWorkspaceByWorkspaceId(workspaceId).catch(() => {});
+      return;
+    }
+  }
+
   // A completed web checkout is the owner explicitly choosing Stripe
-  // billing, so it may reclaim a workspace previously billed via Apple.
+  // billing, so it may reclaim a workspace previously billed via Apple
+  // once that Apple plan has ended or stopped renewing (a still-renewing
+  // one was caught just above).
   await sql`
     UPDATE workspaces SET
       subscription_status     = ${status},
@@ -155,6 +175,9 @@ async function onCheckoutCompleted(session, secretKey) {
       valueCents: monthlyValueCents(sub),
     }).catch((e) => console.warn('[billing] attribute on checkout failed:', e.message));
   }
+  // This person has now had their first-time offer (trial or paid plan);
+  // a later account with the same email gets no second trial.
+  if (isTrialing || PAYING_STATUSES.has(status)) await recordTrialClaimForWorkspace(workspaceId, 'stripe');
 
   // Fire-and-forget welcome email to the owner.
   notifySubscriptionStarted({
@@ -171,9 +194,13 @@ async function onCheckoutCompleted(session, secretKey) {
 // Mid-life updates: renewals, plan changes, cancellations. Match by
 // stripe_subscription_id since that's stable across the sub's lifetime.
 // Fall back to metadata.workspace_id when the row hasn't been linked yet.
-async function onSubscriptionChanged(sub, eventType) {
+async function onSubscriptionChanged(sub, eventType, secretKey) {
   const workspaceId = sub.metadata?.workspace_id || null;
   const status = mapStripeStatus(sub.status);
+  // A subscription that ended closes any double-billing case about it.
+  if (eventType === 'customer.subscription.deleted' || status === 'cancelled') {
+    await closeConflictsForSubscription(sub.id);
+  }
   const periodEnd = sub.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
@@ -210,7 +237,17 @@ async function onSubscriptionChanged(sub, eventType) {
     RETURNING id
   `;
   let resolvedWorkspaceId = updated.rows[0]?.id || null;
-  if (updated.rows.length === 0 && workspaceId) {
+  let mayLink = updated.rows.length === 0 && !!workspaceId;
+  if (mayLink) {
+    // Not the workspace's tracked subscription. Linking it used to be
+    // unconditional, so a second subscription silently replaced the first
+    // (which kept billing), and a late "deleted" event for an old one could
+    // flip a paying workspace to cancelled. Only link it when the workspace
+    // has no other live plan.
+    const verdict = await classifyIncomingStripeSub({ ws: await loadBillingRow(workspaceId), sub, secretKey });
+    mayLink = verdict.action === 'track';
+  }
+  if (mayLink) {
     const fallback = await sql`
       UPDATE workspaces SET
         subscription_status     = ${status},
@@ -235,6 +272,9 @@ async function onSubscriptionChanged(sub, eventType) {
       workspaceId: resolvedWorkspaceId,
       valueCents: monthlyValueCents(sub),
     }).catch((e) => console.warn('[billing] attribute on sub change failed:', e.message));
+  }
+  if (resolvedWorkspaceId && (isTrialing || isActive)) {
+    await recordTrialClaimForWorkspace(resolvedWorkspaceId, 'stripe');
   }
 
   // Cancellation email - fires on customer.subscription.deleted, but

@@ -49,6 +49,10 @@ import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures
 import {
   markReferralConverted, grantPendingReferralCredits, applyBankedAppleWeeks,
 } from '../_lib/referrals.js';
+import { platformStripeSecret } from '../_lib/stripe.js';
+import {
+  stripeBillingOnFile, resolveExtraStripeSub, recordTrialClaimForWorkspace,
+} from '../_lib/billingGuard.js';
 import crypto from 'node:crypto';
 
 export const config = { api: { bodyParser: false } };
@@ -178,7 +182,8 @@ export default async function handler(req, res) {
     // the started-email side effect.
     const { rows: existingRows } = await sql`
       SELECT id, owner_id, subscription_status, converted_at, trial_started_at,
-             subscription_source, stripe_customer_id, subscription_period_end, cancel_at_period_end,
+             subscription_source, stripe_customer_id, stripe_subscription_id,
+             subscription_period_end, cancel_at_period_end,
              revenuecat_user_id, apple_original_transaction_id
       FROM workspaces
       WHERE id = ${workspaceId}
@@ -216,6 +221,33 @@ export default async function handler(req, res) {
       && ['active', 'trialing', 'past_due'].includes(prev.subscription_status);
     if (stripeBilled && nextStatus !== 'active') {
       return ok(res, { received: true, ignored: event.type, reason: 'stripe-billed' });
+    }
+
+    // Apple just took (or renewed) a payment for a workspace that still has
+    // a web plan on file: both would keep charging. iap-identify now stops
+    // the app from selling Apple to a web payer, but older app builds and
+    // purchases started before the web plan can still get here. Apple's
+    // charge cannot be undone from our side, so the web plan is the one
+    // stopped: cancelled at once if it never took money (a card trial),
+    // otherwise renewal turned off and the case raised for a refund
+    // decision. Real purchases only, never sandbox. Best-effort: the Apple
+    // state below is applied either way.
+    const grantsAccess = nextStatus === 'active'
+      && ['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION'].includes(event.type);
+    if (!isSandbox && grantsAccess && stripeBillingOnFile(prev) && !prev.cancel_at_period_end) {
+      const secretKey = platformStripeSecret();
+      if (secretKey) {
+        try {
+          await resolveExtraStripeSub({
+            workspaceId, kind: 'apple_and_stripe',
+            keptRef: eventTxn ? `apple:${eventTxn}` : 'apple',
+            extraSubId: prev.stripe_subscription_id, secretKey,
+            note: 'An Apple subscription was bought while the web plan was still running.',
+          });
+        } catch (conflictErr) {
+          console.error('[revenuecat-webhook] double-billing check failed:', conflictErr?.message);
+        }
+      }
     }
 
     const periodEnd = expirationMs ? new Date(expirationMs) : null;
@@ -270,6 +302,12 @@ export default async function handler(req, res) {
              END
        WHERE id = ${workspaceId}
     `;
+
+    // First-time offer used (Apple trial or first paid period): no second
+    // free trial on the web for this person, even on a new account.
+    if (!isSandbox && (shouldStampTrialStart || shouldStampConverted)) {
+      await recordTrialClaimForWorkspace(workspaceId, 'apple');
+    }
 
     // Owner-facing notifications. Mirror the Stripe webhook's behavior
     // so iOS-billed owners get the same emails web-billed owners do.

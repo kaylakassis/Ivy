@@ -1,7 +1,7 @@
 // POST /api/auth/login  { email, password }
 import bcrypt from 'bcryptjs';
 import { sql, warmupDb, isConnectionError } from '../_lib/db.js';
-import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
+import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient, normalizeAccountEmail } from '../_lib/auth.js';
 import { beginMfaStep, hasTwoStep } from '../_lib/mfaEmail.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
@@ -67,11 +67,12 @@ export default async function handler(req, res) {
     // doesn't call requireUser.
     await ensureSchemaApplied();
     const { email, password } = await readBody(req);
-    if (!validEmail(email) || typeof password !== 'string') {
+    // Any capitals or stray spaces sign in to the same account.
+    const emailKey = normalizeAccountEmail(email);
+    if (!validEmail(emailKey) || typeof password !== 'string') {
       return badRequest(res, 'Invalid credentials');
     }
     const ip = getClientIp(req);
-    const emailKey = email.toLowerCase();
 
     // Lockout counts FAILED attempts only. Five wrong passwords for an
     // email FROM ONE IP lock that pair for 60 minutes; each miss tells the
@@ -113,7 +114,11 @@ export default async function handler(req, res) {
     const { rows } = await sql`
       SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at,
              mfa_email_enabled_at
-      FROM users WHERE email = ${emailKey}
+      FROM users WHERE LOWER(email) = ${emailKey}
+      -- Only a pre-fix database can hold two case variants of one address
+      -- (the ops alert flags them); prefer the exact, oldest row.
+      ORDER BY (email = ${emailKey}) DESC, deleted_at IS NOT NULL, created_at ASC
+      LIMIT 1
     `;
     // Always run a bcrypt compare so the timing of the no-user branch
     // matches the wrong-password branch. Otherwise an attacker can

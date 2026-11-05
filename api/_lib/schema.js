@@ -4130,4 +4130,85 @@ BEGIN
     CREATE UNIQUE INDEX IF NOT EXISTS uq_workspaces_owner ON workspaces(owner_id);
   END IF;
 END $$;
+
+-- One account per email, whatever the capitals. users.email has always
+-- been UNIQUE, but case-sensitively, so "Irene@x.com" and "irene@x.com"
+-- could be two accounts. Every path now stores and looks up the trimmed,
+-- lowercased address (normalizeAccountEmail in api/_lib/auth.js). First
+-- lowercase what can be lowercased without colliding with another row,
+-- then add the case-insensitive unique index, but only when no two rows
+-- share an address any more (those are reported by the hourly ops alert
+-- and merged by hand first), so this migration never fails on old data.
+UPDATE users u SET email = LOWER(TRIM(u.email)), updated_at = NOW()
+ WHERE u.email <> LOWER(TRIM(u.email))
+   AND NOT EXISTS (
+     SELECT 1 FROM users o
+      WHERE o.id <> u.id AND LOWER(TRIM(o.email)) = LOWER(TRIM(u.email))
+   );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM users GROUP BY LOWER(email) HAVING COUNT(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_lower ON users (LOWER(email));
+  END IF;
+END $$;
+
+-- One free trial per person. Keyed by a SHA-256 of the normalised email
+-- (with the "+deleted-<id>" mangle from account deletion taken out), not by
+-- workspace, because deleting an account and signing up again makes a brand
+-- new workspace. No foreign keys: the row must outlive the account it came
+-- from. Written when a trial starts or a plan first converts (Stripe, Apple,
+-- or the no-card trial); read before checkout offers a trial. Backfilled
+-- from every workspace that has already had a trial or a paid plan.
+CREATE TABLE IF NOT EXISTS billing_trial_claims (
+  email_hash   TEXT PRIMARY KEY,
+  workspace_id UUID,
+  source       TEXT NOT NULL,
+  claimed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO billing_trial_claims (email_hash, workspace_id, source, claimed_at)
+SELECT DISTINCT ON (k.email_hash) k.email_hash, k.workspace_id, 'backfill', k.claimed_at
+  FROM (
+    SELECT encode(sha256(convert_to(
+             regexp_replace(LOWER(TRIM(u.email)), '[+]deleted-[0-9a-f-]+@', '@'), 'UTF8')), 'hex') AS email_hash,
+           w.id AS workspace_id,
+           COALESCE(w.trial_started_at, w.converted_at, w.created_at) AS claimed_at
+      FROM workspaces w JOIN users u ON u.id = w.owner_id
+     WHERE w.trial_started_at IS NOT NULL OR w.trial_ends_at IS NOT NULL OR w.converted_at IS NOT NULL
+  ) k
+ ORDER BY k.email_hash, k.claimed_at ASC
+ON CONFLICT (email_hash) DO NOTHING;
+
+-- Possible double billing caught by the billing webhooks: a second live
+-- Stripe subscription for one workspace, or a Stripe plan running next to a
+-- renewing Apple one. One row per extra subscription (kind + extra_ref is
+-- unique, so a redelivered event cannot act twice). action: cancelled_unpaid
+-- (it had taken no money, cancelled at once), cancel_at_period_end (it had
+-- taken money: renewal turned off, a person decides on a refund), flagged
+-- (could not be stopped automatically), already_ended. Open rows
+-- (resolved_at IS NULL) are sent by the hourly ops alert.
+CREATE TABLE IF NOT EXISTS billing_conflicts (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,
+  kept_ref     TEXT,
+  extra_ref    TEXT NOT NULL,
+  action       TEXT NOT NULL,
+  detail       TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resolved_at  TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_billing_conflicts_extra ON billing_conflicts(kind, extra_ref);
+CREATE INDEX IF NOT EXISTS idx_billing_conflicts_open ON billing_conflicts(created_at) WHERE resolved_at IS NULL;
+
+-- The Ivy plan checkout session currently handed out for this workspace.
+-- A second click, a second tab or a retry gets the same open session back
+-- instead of a new one, and opening a different plan expires the old
+-- session, so only one checkout per workspace can ever be completed.
+-- billing_checkout_key is the offer it was made for (plan, trial, coupon).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_session_id TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_key        TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_url        TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS billing_checkout_at         TIMESTAMPTZ;
 `;

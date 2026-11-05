@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos, isNative } from '../../lib/platform.js';
 import { useAuth } from '../../lib/auth.jsx';
-import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode, iapUnavailableReason } from '../../lib/iap.js';
+import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode, iapUnavailableReason, iapIdentifyRefusal } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS, MONTHLY_STACK_SAVINGS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
@@ -69,6 +69,16 @@ export default function Paywall({ ctx, onRefresh }) {
   const compact = useCompact();
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
+  // Set when checkout was refused because a plan already exists: the error
+  // box then offers Manage billing. (Apple plans are managed on the
+  // iPhone; the server's message says where.)
+  const [manageHint, setManageHint] = useState(null);
+  // The error box sits in the scrolling middle of the wall, below the plan
+  // card, so on a short screen it can be out of sight. Bring it into view.
+  const errRef = useRef(null);
+  useEffect(() => {
+    if (err) errRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [err, manageHint]);
   // Neutral status (not an error), e.g. after Apple's code sheet closes.
   const [note, setNote]   = useState(null);
   const [winback, setWinback] = useState(null); // {percentOff, durationMonths, promoCode, expiresAt}
@@ -155,7 +165,7 @@ export default function Paywall({ ctx, onRefresh }) {
   }, [cancelled]);
 
   const subscribe = async () => {
-    setBusy('subscribe'); setErr(null); setNote(null);
+    setBusy('subscribe'); setErr(null); setNote(null); setManageHint(null);
     // iOS in-app purchase branch. Apple requires that subscriptions sold
     // INSIDE the app go through StoreKit - we can't redirect to a Stripe
     // checkout URL from within the WebView without violating App Store
@@ -171,7 +181,7 @@ export default function Paywall({ ctx, onRefresh }) {
         // ctx.owns.id is the workspace - the value the webhook matches on.
         const identified = await identifyIapUser(ctx?.owns?.id);
         if (!identified) {
-          setErr(iapUnavailableReason() || 'We could not start a purchase on this account. Please sign out and back in, then try again.');
+          setErr(iapIdentifyRefusal() || iapUnavailableReason() || 'We could not start a purchase on this account. Please sign out and back in, then try again.');
           setBusy(null);
           return;
         }
@@ -228,6 +238,8 @@ export default function Paywall({ ctx, onRefresh }) {
       window.location.href = r.url;
     } catch (e) {
       setErr(e.message || 'Could not start checkout');
+      const refused = e?.status === 409 ? e.details : null;
+      setManageHint(refused?.provider === 'stripe' ? 'portal' : null);
       setBusy(null);
     }
   };
@@ -239,7 +251,7 @@ export default function Paywall({ ctx, onRefresh }) {
     setBusy('restore'); setErr(null); setNote(null);
     try {
       const identified = await identifyIapUser(ctx?.owns?.id);
-      if (!identified) { setErr(iapUnavailableReason() || 'Restore failed'); setBusy(null); return; }
+      if (!identified) { setErr(iapIdentifyRefusal() || iapUnavailableReason() || 'Restore failed'); setBusy(null); return; }
       const r = await restoreIapPurchases();
       if (!r.ok) { setErr(r.error || 'Restore failed'); setBusy(null); return; }
       // Give RC's webhook a moment to land, then refresh.
@@ -259,7 +271,7 @@ export default function Paywall({ ctx, onRefresh }) {
     setBusy('redeem'); setErr(null); setNote(null);
     try {
       const identified = await identifyIapUser(ctx?.owns?.id);
-      if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); setBusy(null); return; }
+      if (!identified) { setErr(iapIdentifyRefusal() || iapUnavailableReason() || 'Could not open the redemption screen.'); setBusy(null); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); setBusy(null); return; }
       // Apple's sheet returns as soon as it opens, before the person has
@@ -590,11 +602,21 @@ export default function Paywall({ ctx, onRefresh }) {
               )}
 
               {err && (
-                <div style={{
+                <div ref={errRef} style={{
                   padding: '8px 12px', borderRadius: 8,
                   background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
                   color: 'var(--danger)', fontSize: 12.5,
-                }}>{err}</div>
+                }}>
+                  {err}
+                  {manageHint === 'portal' && !isIos() && (
+                    <div style={{ marginTop: 6 }}>
+                      <button type="button" onClick={openBillingPortal} disabled={busy != null}
+                        className="btn btn-ghost" style={{ padding: '3px 0', fontSize: 12.5, color: 'var(--accent)' }}>
+                        {busy === 'portal' ? 'Opening…' : 'Manage billing'}
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
               {!err && note && (
                 <div style={{

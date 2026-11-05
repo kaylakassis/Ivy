@@ -325,6 +325,7 @@ export async function createSubscriptionCheckoutSession({
   workspaceId, successUrl, cancelUrl,
   couponId,  // optional - when set, pre-applies the win-back coupon.
   trialDays, // optional - when set, starts a card-on-file free trial of N days.
+  idempotencyKey, // optional - same key + same params returns the same session.
 }) {
   const body = {
     mode: 'subscription',
@@ -354,9 +355,19 @@ export async function createSubscriptionCheckoutSession({
   if (customerId) body.customer = customerId;
   else if (customerEmail) body.customer_email = customerEmail;
   const session = await stripeFetch('/checkout/sessions', {
-    method: 'POST', secretKey, body,
+    method: 'POST', secretKey, body, idempotencyKey,
   });
   return { id: session.id, url: session.url, customer: session.customer };
+}
+
+// Close an open Checkout Session so it can no longer be paid. Stripe
+// refuses for a session that already completed or expired; callers treat
+// that as fine.
+export async function expireCheckoutSession({ secretKey, sessionId }) {
+  if (!sessionId) throw new Error('sessionId is required');
+  return stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
+    method: 'POST', secretKey, idempotencyKey: `ivy-expire:${sessionId}`,
+  });
 }
 
 // Create a one-time win-back coupon for a specific workspace. A percent-off

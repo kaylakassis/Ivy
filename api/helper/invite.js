@@ -5,7 +5,7 @@
 // shows "sign in" vs "create your sign-in"). Invalid, used, cancelled and
 // expired tokens all get the same 400 so the endpoint is not an oracle.
 import { sql } from '../_lib/db.js';
-import { readSession } from '../_lib/auth.js';
+import { readSession, normalizeAccountEmail } from '../_lib/auth.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { findLiveInvite, deadInviteState } from '../_lib/helpers.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
       return badRequest(res, 'This invite link is not valid. Ask the business to send a new one.');
     }
 
-    const email = invite.email.toLowerCase();
+    const email = normalizeAccountEmail(invite.email);
     const existing = await sql`SELECT id FROM users WHERE LOWER(email) = ${email} AND deleted_at IS NULL LIMIT 1`;
     // Is the browser already signed in as the invitee? Lets the page
     // skip the password step. We only report a boolean, never the id.

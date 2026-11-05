@@ -210,6 +210,52 @@ export async function checkReadiness() {
     }));
 }
 
+// Billing and account integrity:
+//   billing_conflicts  an owner possibly paying twice (two live Stripe
+//                      plans, or Stripe next to a renewing Apple plan) that
+//                      the webhook could not settle on its own: it either
+//                      already took money (refund decision) or Stripe
+//                      refused the automatic stop. Open until the extra
+//                      subscription ends.
+//   duplicate_emails   two accounts whose emails differ only in capitals
+//                      (only possible on data from before the case-blind
+//                      unique index, which cannot be created until they are
+//                      merged).
+export async function checkBillingIntegrity() {
+  const out = [];
+  const c = await sql`
+    SELECT bc.workspace_id, bc.kind, bc.action, bc.kept_ref, bc.extra_ref, bc.detail, w.stripe_customer_id
+      FROM billing_conflicts bc LEFT JOIN workspaces w ON w.id = bc.workspace_id
+     WHERE bc.resolved_at IS NULL
+     ORDER BY bc.created_at ASC
+     LIMIT 20`;
+  if (c.rows.length > 0) {
+    const lines = c.rows.slice(0, 5).map((r) => {
+      const what = r.kind === 'apple_and_stripe' ? 'web plan next to an Apple plan' : 'second web plan';
+      return `Business ${r.workspace_id}: ${what}, extra subscription ${r.extra_ref} (kept ${r.kept_ref || 'unknown'}), ${r.action.replace(/_/g, ' ')}. ${r.detail || ''}`.trim();
+    });
+    const more = c.rows.length > 5 ? ` And ${c.rows.length - 5} more.` : '';
+    out.push({
+      key: 'billing_conflicts', severity: 'critical',
+      title: `Possible double billing: ${c.rows.length} owner${c.rows.length === 1 ? '' : 's'} to check`,
+      detail: `${lines.join(' ')}${more}`.slice(0, 1200),
+      where: 'Stripe dashboard, Customers: search the subscription id, cancel the extra one if it is still running and refund what the owner paid twice',
+    });
+  }
+  const d = await sql`
+    SELECT COUNT(*)::int AS n FROM (SELECT 1 FROM users GROUP BY LOWER(email) HAVING COUNT(*) > 1) x`;
+  const dupes = d.rows[0]?.n || 0;
+  if (dupes > 0) {
+    out.push({
+      key: 'duplicate_emails', severity: 'warning',
+      title: `Accounts sharing one email: ${dupes} address${dupes === 1 ? '' : 'es'}`,
+      detail: `${dupes} email address${dupes === 1 ? ' belongs' : 'es belong'} to more than one account, differing only in capital letters. New duplicates are already refused; until these are merged the database cannot enforce it on its own.`,
+      where: 'Admin → Users: search each address, keep the account in use, delete the other',
+    });
+  }
+  return out;
+}
+
 // Run every check, never letting one broken check hide the others. A check
 // that throws becomes its own warning so the breakage is still reported.
 export async function runOpsChecks({ now = new Date() } = {}) {
@@ -218,6 +264,7 @@ export async function runOpsChecks({ now = new Date() } = {}) {
     ['cron_health', () => checkCronHealth({ now })],
     ['webhook_failures', () => checkWebhookFailures()],
     ['readiness', () => checkReadiness()],
+    ['billing_integrity', () => checkBillingIntegrity()],
   ];
   const firing = [];
   for (const [name, fn] of groups) {

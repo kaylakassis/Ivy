@@ -10,6 +10,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { TRIAL_DAYS } from '../_lib/billing.js';
+import { hasUsedTrial, recordTrialClaim } from '../_lib/billingGuard.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -50,7 +51,9 @@ export default async function handler(req, res) {
     // this workspace already had its trial, so refuse to re-grant a fresh
     // one. Without this, a lapsed/cancelled owner could POST start-trial
     // repeatedly and keep using Ivy without ever paying.
-    if (r.trial_ends_at) {
+    // ...and one trial per person: an earlier account with this email that
+    // already had a trial (or a paid plan) counts, even if it was deleted.
+    if (r.trial_ends_at || await hasUsedTrial(user.email)) {
       return ok(res, {
         ok: true,
         alreadyTrialed: true,
@@ -68,6 +71,7 @@ export default async function handler(req, res) {
       RETURNING subscription_status, trial_ends_at, subscription_period_end
     `;
     const after = rows[0];
+    await recordTrialClaim({ email: user.email, workspaceId, source: 'no-card' });
     invalidateOwnerWorkspace(user.id);
     return ok(res, {
       ok: true,

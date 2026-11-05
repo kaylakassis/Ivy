@@ -41,7 +41,7 @@ import { TRIAL_DAYS } from '../_lib/billing.js';
 import { rateLimit, getClientIp } from '../_lib/rate-limit.js';
 import { serverError } from '../_lib/json.js';
 
-const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@joinivy.ai').toLowerCase();
+const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@joinivy.ai').trim().toLowerCase();
 const MIN_SECRET_LEN = 16;
 const VALID_STATES = new Set(['onboarding', 'paywall', 'trial', 'active']);
 
@@ -63,7 +63,7 @@ function timingSafeEqual(a, b) {
 // there is intentionally no password that logs into this account; the
 // secret link is the only door.
 async function ensureQaAccount() {
-  const found = await sql`SELECT id FROM users WHERE email = ${QA_EMAIL} LIMIT 1`;
+  const found = await sql`SELECT id FROM users WHERE LOWER(email) = ${QA_EMAIL} ORDER BY created_at ASC LIMIT 1`;
   let userId = found.rows[0]?.id;
   if (!userId) {
     const pw = await hashPassword(crypto.randomUUID() + crypto.randomUUID());

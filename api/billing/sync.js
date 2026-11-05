@@ -17,6 +17,7 @@ import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttributio
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { loadBillingRow, classifyIncomingStripeSub, recordTrialClaimForWorkspace } from '../_lib/billingGuard.js';
 
 const PAYING_STATUSES = new Set(['active', 'past_due']);
 
@@ -64,6 +65,19 @@ export default async function handler(req, res) {
       return ok(res, { synced: false, reason: 'no subscription found' });
     }
 
+    // Same double-billing backstop as the webhook: a checkout that
+    // completed while another plan was live must not replace it here.
+    if (sessionId) {
+      const verdict = await classifyIncomingStripeSub({
+        ws: await loadBillingRow(workspaceId), sub: subscription, secretKey, viaCheckout: true,
+      });
+      if (verdict.action !== 'track') {
+        evictWorkspaceGateCache(workspaceId);
+        invalidateOwnerWorkspace(user.id);
+        return ok(res, { synced: false, reason: 'already subscribed', duplicate: true });
+      }
+    }
+
     const mapped = mapStripeStatus(subscription.status);
     const periodEnd = subscription.current_period_end
       ? new Date(subscription.current_period_end * 1000)
@@ -102,6 +116,7 @@ export default async function handler(req, res) {
       WHERE id = ${workspaceId}
         AND (${isFreshCheckout} OR COALESCE(subscription_source, 'stripe') <> 'apple')
     `;
+    if (isTrialing || PAYING_STATUSES.has(mapped)) await recordTrialClaimForWorkspace(workspaceId, 'stripe');
     if (PAYING_STATUSES.has(mapped)) {
       await attributePayment({
         workspaceId,

@@ -17,6 +17,7 @@
 import { sql } from '../_lib/db.js';
 import {
   readSession, hashPassword, signSession, setSessionCookie, isNativeClient, invalidateUserCache,
+  normalizeAccountEmail, isUniqueViolation,
 } from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
     const raw = typeof body.token === 'string' ? body.token : '';
     const invite = await findLiveInvite(raw);
     if (!invite) return badRequest(res, EXPIRED);
-    const email = invite.email.toLowerCase();
+    const email = normalizeAccountEmail(invite.email);
 
     const owner = await sql`SELECT id, email FROM users WHERE id = ${invite.owner_id} LIMIT 1`;
     if ((owner.rows[0]?.email || '').toLowerCase() === email) {
@@ -94,18 +95,31 @@ export default async function handler(req, res) {
         return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create a sign-in.`);
       }
       const passwordHash = await hashPassword(body.password);
-      const ins = await sql`
-        INSERT INTO users (
-          email, password_hash, name, email_verified_at,
-          terms_version, terms_accepted_at, privacy_version, privacy_accepted_at,
-          last_login_at, last_active_at
-        ) VALUES (
-          ${email}, ${passwordHash}, ${name}, NOW(),
-          ${CURRENT_TERMS_VERSION}, NOW(), ${acceptablePrivacyVersion(body.acceptedPrivacyVersion)}, NOW(),
-          NOW(), NOW()
-        )
-        RETURNING id
-      `;
+      // A second tap racing this one (or a signup for the same address in
+      // between) loses on the unique email index: send them to sign in, the
+      // same answer an existing account gets above, never a 500.
+      let ins;
+      try {
+        ins = await sql`
+          INSERT INTO users (
+            email, password_hash, name, email_verified_at,
+            terms_version, terms_accepted_at, privacy_version, privacy_accepted_at,
+            last_login_at, last_active_at
+          ) VALUES (
+            ${email}, ${passwordHash}, ${name}, NOW(),
+            ${CURRENT_TERMS_VERSION}, NOW(), ${acceptablePrivacyVersion(body.acceptedPrivacyVersion)}, NOW(),
+            NOW(), NOW()
+          )
+          RETURNING id
+        `;
+      } catch (insErr) {
+        if (!isUniqueViolation(insErr)) throw insErr;
+        return res.status(401).json({
+          error: 'sign-in-required',
+          message: 'This email already has an Ivy account. Sign in to accept the invite.',
+          email,
+        });
+      }
       userId = ins.rows[0].id;
       created = true;
       try {

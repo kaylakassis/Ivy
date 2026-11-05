@@ -6,7 +6,10 @@
 // proof-of-acceptance is bound to the same transaction as the account
 // itself.
 import { sql } from '../_lib/db.js';
-import { hashPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
+import {
+  hashPassword, signSession, setSessionCookie, validEmail, isNativeClient,
+  normalizeAccountEmail, isUniqueViolation, ACCOUNT_EXISTS_MESSAGE,
+} from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -70,7 +73,10 @@ export default async function handler(req, res) {
     // would 500. Bootstrap explicitly here.
     await ensureSchemaApplied();
     const { email, password, name, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = await readBody(req);
-    if (!validEmail(email)) return badRequest(res, 'Invalid email');
+    // One account per address, whatever the capitals or stray spaces:
+    // everything below works on the normalised key.
+    const emailKey = normalizeAccountEmail(email);
+    if (!validEmail(emailKey)) return badRequest(res, 'Invalid email');
     const pwCheck = validatePassword(password);
     if (!pwCheck.ok) return badRequest(res, pwCheck.error);
     // Name is required so we can address the user in emails + show
@@ -120,39 +126,48 @@ export default async function handler(req, res) {
     const blocked = await enforce(req, res, [rateRule, ...(globalRule ? [globalRule] : [])]);
     if (blocked) return;
 
-    const emailKey = email.toLowerCase();
-    const existing = await sql`SELECT id, deleted_at FROM users WHERE email = ${emailKey}`;
-    if (existing.rows.length > 0) {
-      const row = existing.rows[0];
+    // Case-insensitive: an older row stored as "Irene@x.com" still owns
+    // "irene@x.com".
+    const existing = await sql`SELECT id, email, deleted_at FROM users WHERE LOWER(email) = ${emailKey}`;
+    if (existing.rows.some((row) => !row.deleted_at)) {
+      return badRequest(res, ACCOUNT_EXISTS_MESSAGE, { code: 'email_taken' });
+    }
+    for (const row of existing.rows) {
       // Self-heal: a soft-deleted row squatting on an unmangled email
       // (deletion paths mangle the address to free it, but a legacy or
       // partially-failed delete can leave it behind). The account is dead
       // either way - free the address now so the signup can proceed,
       // instead of telling the user their email is taken by a ghost.
-      if (row.deleted_at) {
-        const mangled = emailKey.replace(/^([^@]+)@(.+)$/, `$1+deleted-${row.id}@$2`);
-        await sql`UPDATE users SET email = ${mangled}, updated_at = NOW() WHERE id = ${row.id} AND deleted_at IS NOT NULL`;
-      } else {
-        return badRequest(res, 'Email already in use');
-      }
+      const mangled = emailKey.replace(/^([^@]+)@(.+)$/, `$1+deleted-${row.id}@$2`);
+      await sql`UPDATE users SET email = ${mangled}, updated_at = NOW() WHERE id = ${row.id} AND deleted_at IS NOT NULL`;
     }
 
     const password_hash = await hashPassword(password);
-    const insertUser = await sql`
-      INSERT INTO users (
-        email, password_hash, name,
-        terms_version, terms_accepted_at,
-        privacy_version, privacy_accepted_at,
-        last_login_at, last_active_at
-      )
-      VALUES (
-        ${emailKey}, ${password_hash}, ${cleanName},
-        ${CURRENT_TERMS_VERSION}, NOW(),
-        ${privacyVersionAccepted}, NOW(),
-        NOW(), NOW()
-      )
-      RETURNING id, email, name, created_at, email_verified_at
-    `;
+    // Two signups for the same address racing each other (double tap, two
+    // tabs) both pass the check above; the unique indexes on users.email and
+    // LOWER(users.email) let exactly one INSERT win. The loser gets the same
+    // friendly answer as a sequential duplicate, never a 500.
+    let insertUser;
+    try {
+      insertUser = await sql`
+        INSERT INTO users (
+          email, password_hash, name,
+          terms_version, terms_accepted_at,
+          privacy_version, privacy_accepted_at,
+          last_login_at, last_active_at
+        )
+        VALUES (
+          ${emailKey}, ${password_hash}, ${cleanName},
+          ${CURRENT_TERMS_VERSION}, NOW(),
+          ${privacyVersionAccepted}, NOW(),
+          NOW(), NOW()
+        )
+        RETURNING id, email, name, created_at, email_verified_at
+      `;
+    } catch (insErr) {
+      if (isUniqueViolation(insErr)) return badRequest(res, ACCOUNT_EXISTS_MESSAGE, { code: 'email_taken' });
+      throw insErr;
+    }
     const user = insertUser.rows[0];
 
     // The Neon HTTP driver isn't transactional across awaits, so the

@@ -1,7 +1,7 @@
 // POST /api/auth/forgot-password  { email }
 // Always returns 200 - we never reveal whether an email exists.
 import { sql } from '../_lib/db.js';
-import { validEmail } from '../_lib/auth.js';
+import { validEmail, normalizeAccountEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     const { email } = await readBody(req);
-    const emailKey = typeof email === 'string' ? email.toLowerCase().trim() : '';
+    const emailKey = normalizeAccountEmail(email);
 
     // Rate-limit aggressively: this endpoint sends real emails.
     const ip = getClientIp(req);
@@ -40,7 +40,12 @@ export default async function handler(req, res) {
       return ok(res, { sent: true });
     }
 
-    const { rows } = await sql`SELECT id, name FROM users WHERE email = ${emailKey}`;
+    const { rows } = await sql`
+      SELECT id, name FROM users
+       WHERE LOWER(email) = ${emailKey} AND deleted_at IS NULL
+       ORDER BY (email = ${emailKey}) DESC, created_at ASC
+       LIMIT 1
+    `;
     if (rows.length === 0) {
       await timingDecoy();
       return ok(res, { sent: true });

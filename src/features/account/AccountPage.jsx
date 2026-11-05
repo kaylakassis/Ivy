@@ -7,7 +7,7 @@
 // Future tabs (billing, team, notifications) will mount alongside.
 import React, { useEffect, useRef, useState } from 'react';
 import { isNative, isIos } from '../../lib/platform.js';
-import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason } from '../../lib/iap.js';
+import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason, iapIdentifyRefusal } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -568,7 +568,7 @@ function SubscriptionCard() {
     setBusy(true); setErr(null);
     try {
       const identified = await identifyIapUser(ctx?.owns?.id);
-      if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); return; }
+      if (!identified) { setErr(iapIdentifyRefusal() || iapUnavailableReason() || 'Could not open the redemption screen.'); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); return; }
       await new Promise((res) => setTimeout(res, 1500));
@@ -601,8 +601,9 @@ function SubscriptionCard() {
   const startTrial = async () => {
     setBusy(true); setErr(null);
     try {
-      await api.post('/billing/start-trial', {});
+      const r = await api.post('/billing/start-trial', {});
       await refresh();
+      if (r?.alreadyTrialed) setErr('The free trial has already been used on this email. Subscribe to keep using the business app.');
     } catch (e) {
       setErr(e.message || 'Could not start trial');
     } finally {
