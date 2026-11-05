@@ -18,7 +18,7 @@ export const CURRENT_TERMS_VERSION = '2026-05-05';
 // to re-accept on their next request. legal_acceptances stores both
 // (document='terms', document='privacy') so the audit trail can show
 // exactly which version of each they saw.
-export const CURRENT_PRIVACY_VERSION = '2026-10-31';
+export const CURRENT_PRIVACY_VERSION = '2026-11-05';
 
 // Earlier Privacy Policy versions still accepted AT SIGN-UP. The iPhone
 // app ships its own copy of the policy and its version number, so a build
@@ -27,7 +27,7 @@ export const CURRENT_PRIVACY_VERSION = '2026-10-31';
 // an older version sees the in-app "We updated our Privacy Policy" notice
 // (api/auth/me.js privacy.needsAcknowledgement). Drop an entry once the
 // app builds that ship it are no longer in use.
-export const PRIOR_PRIVACY_VERSIONS = ['2026-05-25'];
+export const PRIOR_PRIVACY_VERSIONS = ['2026-10-31', '2026-05-25'];
 
 // The version to record for a sign-up, or null when it is not one we accept.
 export function acceptablePrivacyVersion(v) {

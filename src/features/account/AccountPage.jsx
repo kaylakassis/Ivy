@@ -598,19 +598,6 @@ function SubscriptionCard() {
     }
   };
 
-  const startTrial = async () => {
-    setBusy(true); setErr(null);
-    try {
-      const r = await api.post('/billing/start-trial', {});
-      await refresh();
-      if (r?.alreadyTrialed) setErr('The free trial has already been used on this email. Subscribe to keep using the business app.');
-    } catch (e) {
-      setErr(e.message || 'Could not start trial');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   // Paid subscribers show "Active"; everyone else gets the plain state label.
   const statusLabel = {
     active:   'Active',
@@ -698,12 +685,6 @@ function SubscriptionCard() {
             onConfirm={confirmSubscribe}
             busy={busy}
           />
-        )}
-        {!sub.isActive && !sub.trialEndsAt && (
-          <button className="btn btn-ghost" onClick={startTrial} disabled={busy}
-            style={{ color: 'var(--muted)' }}>
-            Start {TRIAL_DAYS}-day free trial
-          </button>
         )}
       </div>
     </div>

@@ -63,15 +63,13 @@ async function run() {
     'trial_ends_at unchanged (no fresh trial granted)');
   assert(new Date(after1.trial_ends_at).getTime() < Date.now(), 'trial_ends_at still in the past');
 
-  console.log('\n[2] never-trialed workspace (trial_ends_at NULL) → trial granted');
+  console.log('\n[2] never-trialed workspace → no-card trial refused (card required)');
   await sql`UPDATE workspaces SET subscription_status = 'inactive', trial_ends_at = NULL, subscription_period_end = NULL WHERE id = ${wsId}`;
   const res2 = makeRes();
   await startTrial(makeReq(token), res2);
-  assert(res2.body?.alreadyActive === false, 'grant path: alreadyActive false');
-  assert(res2.body?.status === 'trialing', 'status flipped to trialing');
+  assert(res2.statusCode === 400 && res2.body?.code === 'card_required', 'refused with card_required');
   const after2 = await getWs(wsId);
-  assert(after2.trial_ends_at && new Date(after2.trial_ends_at).getTime() > Date.now(),
-    'trial_ends_at set into the future');
+  assert(after2.subscription_status === 'inactive' && !after2.trial_ends_at, 'no trial granted, nothing changed');
 
   console.log('\n[3] active trial → alreadyActive (idempotent no-op)');
   await sql`UPDATE workspaces SET subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '10 days' WHERE id = ${wsId}`;

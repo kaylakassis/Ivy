@@ -9,11 +9,11 @@
 import React from 'react';
 import LegalPage, { H2, P, UL } from './LegalPage.jsx';
 
-export const PRIVACY_VERSION = '2026-10-31';
+export const PRIVACY_VERSION = '2026-11-05';
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="October 31, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="November 5, 2026">
       <P><strong>Effective version: {PRIVACY_VERSION}.</strong>
         This Privacy Policy explains what information Ivy ("we", "us", "the
         Service") collects from you, how we use it, and what choices you have.
@@ -119,7 +119,10 @@ export default function PrivacyPage() {
         the workspace for 4 weeks after the trial ends, with the same notices, then
         permanently delete it. When you
         delete your account, we delete your account and everything in it within
-        30 days. Server logs roll
+        30 days. To make sure each person gets one free trial, we keep a scrambled
+        (hashed) form of your email address after your account is deleted. It is not
+        stored as readable text and is used only to recognize the same email if it
+        signs up for another free trial. Server logs roll
         off automatically after 30 days. Backups may persist for up to 30
         additional days before being overwritten.</P>
 

@@ -1,7 +1,8 @@
 // POST /api/billing/start-trial
-// Starts (or re-starts) a 14-day trial for the owner's workspace, but only
-// if they're not already in an active state. Idempotent - calling while
-// already trialing/active is a no-op.
+// Used to start a no-card 14-day trial. Trials now require a card (they start
+// through checkout), so this only reports an existing plan or trial and
+// otherwise answers 400 card_required. Kept so older app builds get a clear
+// message instead of a 404.
 //
 // Returns the new subscription block in the same shape /api/me uses, so
 // the Paywall can swap into "trial active" view without re-fetching.
@@ -9,8 +10,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { TRIAL_DAYS } from '../_lib/billing.js';
-import { hasUsedTrial, recordTrialClaim } from '../_lib/billingGuard.js';
+import { hasUsedTrial } from '../_lib/billingGuard.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -63,22 +63,13 @@ export default async function handler(req, res) {
       });
     }
 
-    const { rows } = await sql`
-      UPDATE workspaces SET
-        subscription_status = 'trialing',
-        trial_ends_at       = NOW() + (${TRIAL_DAYS}::int || ' days')::interval
-      WHERE id = ${workspaceId}
-      RETURNING subscription_status, trial_ends_at, subscription_period_end
-    `;
-    const after = rows[0];
-    await recordTrialClaim({ email: user.email, workspaceId, source: 'no-card' });
-    invalidateOwnerWorkspace(user.id);
-    return ok(res, {
-      ok: true,
-      alreadyActive: false,
-      status: after.subscription_status,
-      trialEndsAt: after.trial_ends_at,
-      periodEndsAt: after.subscription_period_end,
+    // Card required: the free trial only starts through checkout with a card
+    // on file (Stripe on the web, the Apple offer in the app). This endpoint
+    // no longer grants a trial; older app builds that still call it get a
+    // clear message pointing to the plans screen.
+    return res.status(400).json({
+      error: 'Your free trial starts with a card on file, so you are never charged by surprise. Choose a plan to start it.',
+      code: 'card_required',
     });
   } catch (err) {
     return serverError(res, err);

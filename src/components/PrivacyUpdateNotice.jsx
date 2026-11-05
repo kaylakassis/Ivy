@@ -46,11 +46,12 @@ export default function PrivacyUpdateNotice() {
           fontSize: 21, letterSpacing: '-0.02em', lineHeight: 1.25,
         }}>We updated our Privacy Policy</h2>
         <p style={{ margin: 0, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Two things are now spelled out more clearly. Nothing about who your data is shared with has changed, and we still never sell it.
+          A few things are now spelled out more clearly. Nothing about who your data is shared with has changed, and we still never sell it.
         </p>
         <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           <li><b style={{ color: 'var(--fg)' }}>Business totals stay private.</b> A small number of authorized Ivy team members can see totals for your account, like revenue collected through Ivy, to support you and keep Ivy running well. They are never published in a way that identifies you or your clients.</li>
           <li><b style={{ color: 'var(--fg)' }}>Anonymous combined stats.</b> We may share figures about Ivy as a whole, like the total collected by businesses on Ivy. These combine many businesses and never name or identify anyone.</li>
+          <li><b style={{ color: 'var(--fg)' }}>One free trial per person.</b> If an account is deleted, we keep a scrambled (hashed) form of its email address, not readable text, only to recognize the same email signing up for another free trial.</li>
         </ul>
         {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

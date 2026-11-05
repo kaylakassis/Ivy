@@ -366,7 +366,11 @@ export default function Paywall({ ctx, onRefresh }) {
     }}>
       <div className="card" style={{
         width: '100%', maxWidth: compact ? 400 : 430, maxHeight: compact ? '100%' : '94vh',
-        display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden',
+        // The whole card scrolls as one when the screen is short. (The body
+        // used to scroll in its own small window, so on a laptop the plan
+        // card showed as a sliver tucked behind the Subscribe button.)
+        display: 'flex', flexDirection: 'column', padding: 0, overflowX: 'hidden', overflowY: 'auto',
+        overscrollBehavior: 'contain',
         boxShadow: '0 30px 70px rgba(0,0,0,0.32)',
       }}>
         {/* ─── HERO BAND ─────────────────────────────────────────────
@@ -430,11 +434,11 @@ export default function Paywall({ ctx, onRefresh }) {
           )}
         </div>
 
-        {/* ─── BODY (scrolls if the viewport is short) ──────────────── */}
+        {/* ─── BODY (the whole card scrolls if the viewport is short) ── */}
         <div style={{
           padding: compact ? '14px 16px 12px' : '20px 24px 22px',
           display: 'flex', flexDirection: 'column', gap: compact ? 10 : 14,
-          overflowY: 'auto', flex: '1 1 auto', minHeight: 0,
+          flex: '0 0 auto',
         }}>
           {syncing ? (
             <p style={{ margin: '6px 0', color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55, textAlign: 'center' }}>
