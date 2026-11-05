@@ -145,7 +145,7 @@ export default function AccountabilityPartnerRow() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>Also email me</div>
               <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
-                When a notification can't reach your phone, for the weekly digest, and for check-ins when you have been away.
+                The same note by email, so it's waiting in your inbox too.
               </div>
             </div>
           </label>

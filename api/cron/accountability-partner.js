@@ -128,11 +128,12 @@ export async function planForWorkspace(r, { now = Date.now() } = {}) {
   return { kind: 'digest', items, weekly: settings.frequency === 'weekly' };
 }
 
-// Email goes out for the away check-ins, a weekly digest, and a daily
-// digest that reached no device (so it is never said twice).
+// Every partner message (daily or weekly digest, away check-ins) is also
+// emailed while "Also email me" is on (Kayla's call, 1.0.6). Still one
+// message a day: the email carries the same note as the push.
+// eslint-disable-next-line no-unused-vars
 export function shouldEmail({ kind, weekly = false, emailEnabled, hasEmail, reachedDevice }) {
-  if (!emailEnabled || !hasEmail) return false;
-  return kind !== 'digest' || weekly || !reachedDevice;
+  return !!(emailEnabled && hasEmail);
 }
 
 async function deliver(r, plan) {

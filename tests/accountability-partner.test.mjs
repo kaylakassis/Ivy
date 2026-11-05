@@ -279,7 +279,7 @@ async function run() {
     `important only, messages off (${impRow?.body})`);
   const s = resolvePartnerSettings({}, { frequency: 'important' });
   assert(messageableItems(items, s).every((i) => i.priority === 1), 'important keeps priority 1 only');
-  assert(shouldEmail({ kind: 'digest', emailEnabled: true, hasEmail: true, reachedDevice: true }) === false, 'daily digest that reached a phone: no email too');
+  assert(shouldEmail({ kind: 'digest', emailEnabled: true, hasEmail: true, reachedDevice: true }) === true, 'daily digest is emailed too, even when it reached a phone');
   assert(shouldEmail({ kind: 'digest', emailEnabled: true, hasEmail: true, reachedDevice: false }) === true, 'no device: email');
   assert(shouldEmail({ kind: 'away1', emailEnabled: true, hasEmail: true, reachedDevice: true }) === true, 'check-ins: always emailed');
   assert(shouldEmail({ kind: 'away1', emailEnabled: false, hasEmail: true, reachedDevice: false }) === false, 'email switched off: never');
