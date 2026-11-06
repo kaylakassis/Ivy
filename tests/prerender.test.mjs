@@ -182,7 +182,7 @@ try {
   const robots = await get('/robots.txt');
   check(robots.status === 200, '/robots.txt missing');
   for (const s of ['/sitemap.xml', '/marketing-sitemap.xml']) check(robots.body.includes(`Sitemap: ${SITE_ORIGIN}${s}`), `robots.txt lacks ${s}`);
-  for (const ua of ['GPTBot', 'ClaudeBot', 'Claude-SearchBot', 'PerplexityBot', 'Google-Extended', 'Bingbot', 'Applebot-Extended', 'OAI-SearchBot', 'CCBot']) {
+  for (const ua of ['GPTBot', 'PerplexityBot', 'Google-Extended', 'Bingbot', 'Applebot-Extended', 'OAI-SearchBot', 'CCBot']) {
     check(robots.body.includes(`User-agent: ${ua}`), `robots.txt lacks ${ua}`);
   }
   for (const d of ['/api/', '/dashboard', '/account', '/admin', '/onboarding', '/me', '/sign/', '/invoice/', '/quote/', '/review/', '/p/']) {

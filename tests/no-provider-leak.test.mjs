@@ -48,12 +48,7 @@ const staticLeaks = [];
 const staticFiles = [...walkExt('public', ['.html', '.webmanifest', '.txt', '.xml']), 'index.html'];
 if (fs.existsSync('dist')) staticFiles.push(...walkExt('dist', ['.js', '.html', '.css', '.json', '.txt', '.xml']));
 for (const f of staticFiles) {
-  let text = fs.readFileSync(f, 'utf8');
-  // robots.txt addresses crawlers by their own user-agent tokens (GPTBot,
-  // ClaudeBot, Claude-SearchBot, PerplexityBot...). Those are the crawlers'
-  // names, not a statement about what powers Ivy, and cannot be spelled any
-  // other way; every other line of the file is still checked.
-  if (path.basename(f) === 'robots.txt') text = text.replace(/^User-agent:.*$/gm, '');
+  const text = fs.readFileSync(f, 'utf8');
   const m = text.match(VENDOR);
   if (m) staticLeaks.push(`${f}: …${text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' ')}…`);
 }

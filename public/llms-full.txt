@@ -27,7 +27,7 @@ Ivy, the assistant, sees the owner's real numbers (revenue this month, active cl
 - A public booking page at the owner's own link, embeddable anywhere. Clients book around real availability with no login and no back-and-forth.
 - Services, packages and class capacity, with per-weekday availability and blocked time.
 - Deposits, intake forms and signatures collected in the booking flow itself.
-- Automated reminders by email and SMS: 1 week, 2 days, 1 day and 2 hours before.
+- Automated reminders by email and SMS before each appointment, at the times the owner chooses.
 - Card on file, with late-cancel and no-show policies that enforce themselves.
 - Up to 2 helpers can sign in to see their schedule and mark sessions done. Included.
 - Google Calendar two-way sync; Apple Calendar and Outlook read-only subscriptions; day, week and month views; reschedule and cancel with notice rules.
@@ -35,7 +35,7 @@ Ivy, the assistant, sees the owner's real numbers (revenue this month, active cl
 
 ## Money
 
-- Payments go straight to the owner's own Stripe account at Stripe's standard processing rate. Ivy never touches the money and takes zero percent of payment volume.
+- Payments go straight to the owner's own Stripe account at Stripe's standard processing rate. Ivy never touches the money.
 - Clients can pay with cards, Apple Pay, Google Pay, Link, Amazon Pay, Cash App Pay, ACH bank debit, and buy now, pay later with Klarna, Affirm and Afterpay, wherever Stripe offers them.
 - Branded invoices and recurring billing with line items, tax, discounts and public pay links.
 - Card on file and auto-charges.
