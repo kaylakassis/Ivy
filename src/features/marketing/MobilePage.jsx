@@ -3,18 +3,19 @@
 // Solo service owners work between sessions, on shoots, at client
 // homes. The phone is the primary device. This page explains the PWA
 // install + the offline-friendly bits.
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { usePageMeta, siteUrl } from '../../lib/pageMeta.js';
 
 export default function MobilePage() {
-  useEffect(() => {
-    document.title = 'On your phone - Ivy';
-    const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'Ivy installs as a phone app in two taps. Add clients between sessions, send invoices on the go, message clients from anywhere.');
-  }, []);
+  usePageMeta({
+    title: 'Ivy on Your Phone - Works on Every Device',
+    description: 'Ivy installs as a phone app in two taps. Add clients between sessions, send invoices on the go, message clients from anywhere.',
+    canonical: siteUrl('/mobile'),
+  });
   return (
     <MarketingShell>
       <SimpleNav/>

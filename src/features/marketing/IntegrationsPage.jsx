@@ -3,11 +3,12 @@
 // flag here but the UX is not finished, so leaving the cards in - even
 // gated - was inviting someone to flip the flag without auditing first.
 // When those providers are truly shipping, add them back explicitly.
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { usePageMeta, siteUrl } from '../../lib/pageMeta.js';
 
 const LIVE = [
   { name: 'Stripe',           icon: 'Dollar',   sub: 'Clients pay with cards, Apple Pay, Google Pay, Link, Amazon Pay, Cash App Pay, ACH bank debit, and buy now, pay later with Klarna, Affirm and Afterpay, wherever Stripe offers them. Card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
@@ -25,12 +26,11 @@ const LIVE = [
 ];
 
 export default function IntegrationsPage() {
-  useEffect(() => {
-    document.title = 'Integrations - Ivy';
-    const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content',
-      'Ivy connects to Stripe payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.');
-  }, []);
+  usePageMeta({
+    title: 'Ivy Integrations - Stripe, Calendars, SMS, Webhooks',
+    description: 'Ivy connects to Stripe, Google, Apple and Outlook calendars, Twilio SMS, webhooks and your custom domain, plus an embeddable booking widget for any site.',
+    canonical: siteUrl('/integrations'),
+  });
   return (
     <MarketingShell>
       <SimpleNav/>

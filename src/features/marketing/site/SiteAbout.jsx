@@ -1,6 +1,7 @@
 // About page, ported pixel-faithfully from the static about.html prototype.
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { siteUrl } from '../../../lib/pageMeta.js';
 import { SignupCta } from './Chrome.jsx';
 
 const PAGE_CSS = `
@@ -29,9 +30,9 @@ const PAGE_CSS = `
 export default function SiteAbout() {
   useSiteFonts();
   usePageMeta({
-    title: 'About Ivy - One Tool for Solo Service Businesses | Security & Data Ownership',
-    description: "Why Ivy exists: solo owners pay for tools, not a system. One workspace where booking, invoicing, messaging, documents, and AI share the same memory - with isolated workspaces, encrypted data, JSON export anytime, and a client portal that's free forever.",
-    canonical: 'https://joinivy.ai/about',
+    title: 'About Ivy - One Tool for Solo Service Businesses',
+    description: 'Why Ivy exists: one workspace where booking, invoicing, messaging, documents and AI share the same memory. Isolated workspaces, encrypted data, export anytime.',
+    canonical: siteUrl('/about'),
   });
   return (
     <div className="site-root">

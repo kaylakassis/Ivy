@@ -4,6 +4,7 @@
 // prototype's stylesheet, scoped under .site-root.
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { siteUrl } from '../../../lib/pageMeta.js';
 import { SignupCta } from './Chrome.jsx';
 
 const PAGE_CSS = `
@@ -47,9 +48,9 @@ const PAGE_CSS = `
 export default function SiteFeatures() {
   useSiteFonts();
   usePageMeta({
-    title: 'Ivy Features - Booking, Invoicing, CRM, E-Signature, Website Builder & AI Assistant',
-    description: 'Everything Ivy does for solo service businesses: online booking with reminders, branded invoicing with card on file, client CRM, legally binding e-signature, two-way messaging, website builder with custom domain, workflows, and an AI assistant that does your busywork. One plan, everything included.',
-    canonical: 'https://joinivy.ai/features',
+    title: 'Ivy Features - Booking, Invoicing, CRM, E-Signature & AI',
+    description: 'Everything Ivy does for solo service businesses: booking with reminders, invoicing with card on file, CRM, e-signature, messaging, website builder and AI.',
+    canonical: siteUrl('/features'),
   });
   return (
     <div className="site-root">

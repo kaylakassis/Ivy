@@ -1,18 +1,19 @@
 // /security - trust + data-handling. Most evaluators (and their
 // procurement teams) want this. Keep the language plain, the claims
 // honest, and the contact obvious.
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { usePageMeta, siteUrl } from '../../lib/pageMeta.js';
 
 export default function SecurityPage() {
-  useEffect(() => {
-    document.title = 'Security & data - Ivy';
-    const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'How Ivy protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.');
-  }, []);
+  usePageMeta({
+    title: 'Security & Data - Your Data, Your Control | Ivy',
+    description: 'How Ivy protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.',
+    canonical: siteUrl('/security'),
+  });
   return (
     <MarketingShell>
       <SimpleNav/>

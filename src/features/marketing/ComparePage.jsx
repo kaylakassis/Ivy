@@ -3,12 +3,13 @@
 // Same shell as the other marketing pages; data per-competitor comes
 // from compareData.js. Designed for high-intent search queries:
 // "<competitor> alternative", "switch from <competitor>", etc.
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { COMPETITORS, FEATURE_ROWS, COMPETITOR_LIST } from './compareData.js';
 import { IVY_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
+import { usePageMeta, siteUrl, breadcrumbs } from '../../lib/pageMeta.js';
 
 const SYMBOL = { y: '✓', n: '-', l: '~' };
 const SYMBOL_COLOR = { y: 'var(--accent)', n: 'var(--muted)', l: 'var(--fg-2)' };
@@ -18,12 +19,13 @@ export default function ComparePage() {
   const { slug } = useParams();
   const c = COMPETITORS[slug];
 
-  useEffect(() => {
-    if (!c) return;
-    document.title = `Ivy vs ${c.name} - switching guide`;
-    const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `Switching from ${c.name} to Ivy? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/week, AI included.`);
-  }, [c]);
+  const meta = useMemo(() => (c ? {
+    title: `Ivy vs ${c.name} - switching guide`,
+    description: `Switching from ${c.name} to Ivy? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/week, AI included.`,
+    canonical: siteUrl(`/vs/${slug}`),
+    jsonLd: breadcrumbs([['Home', '/'], ['Compare', '/compare'], [`Ivy vs ${c.name}`, `/vs/${slug}`]]),
+  } : null), [c, slug]);
+  usePageMeta(meta);
 
   if (!c) return <Navigate to="/pricing" replace/>;
 

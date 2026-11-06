@@ -5,9 +5,17 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
+import { usePageMeta, siteUrl } from '../../lib/pageMeta.js';
 
-export default function LegalPage({ title, lastUpdated, children }) {
+// `path` + `description` give the page its own <title>, description and
+// canonical (the legal pages are public and pre-rendered for crawlers).
+export default function LegalPage({ title, lastUpdated, path, description, children }) {
   const [tweaks] = useTweaks();
+  usePageMeta({
+    title: `${title} | Ivy`,
+    description: description || `${title} for Ivy, last updated ${lastUpdated}.`,
+    canonical: path ? siteUrl(path) : undefined,
+  });
   return (
     <div className={`app-root dir-${tweaks.direction}`}
       style={{ minHeight: '100vh', padding: '40px 24px 80px', background: 'var(--page)' }}>

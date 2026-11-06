@@ -1,0 +1,161 @@
+# Ivy
+
+> Ivy is the all-in-one business platform for solopreneurs, with an AI assistant that does your busywork. One plan covers booking, invoicing, a client CRM, two-way messaging, e-signature, a website builder, email campaigns and the Ivy assistant. $8.99 per week after a 14-day free trial, or $374.99 per year. Payments go straight to the owner's own Stripe account at Stripe's standard rate. The client portal is free for clients.
+
+Ivy is made for solo service businesses: massage therapists, coaches, hair stylists, photographers, personal trainers, contractors, tutors, and every other business of one. The owner is the only one who pays. Clients never pay to use the portal.
+
+## What Ivy does
+
+- Ivy AI assistant: reads the owner's real numbers and answers in plain English with specific actions. It can draft invoices and quotes, book sessions, create tasks, log expenses and build automations from a plain-English description. Anything that reaches a client waits for the owner's approval. 600 assistant messages a month are included.
+- Booking and scheduling: a public booking page at the owner's own link, services, packages and class capacity, per-weekday availability, deposits, intake forms and signatures collected in the booking flow, Google Calendar sync, and reminders by email and SMS 1 week, 2 days, 1 day and 2 hours before.
+- Money: branded invoices and recurring billing, card on file with late-cancel and no-show policies, memberships, packages and gift cards, in-person sales by QR code, overdue reminders on autopilot, and a finance dashboard with a tax export compatible with QuickBooks and Xero. Payments go straight to the owner's Stripe account; Ivy never touches the money.
+- Clients: unlimited clients and a pipeline, CSV import, two-way client messaging with photos and voice memos, automatic review requests and referral rewards, and a free client portal for bookings, invoices, signed forms and messages.
+- Presence: website builder with custom domain and built-in SEO, documents and legally binding e-signature, email campaigns to all clients or tagged segments, and an iPhone app with Face ID and push notifications on the same account as the web.
+
+## Pricing
+
+- $8.99 per week, one plan, everything included, no per-seat fees.
+- $374.99 per year on annual billing, about 20% less than paying weekly.
+- 14-day free trial with the whole product unlocked, $0 today, cancel anytime.
+- Clients pay nothing. The client portal is free for them, always.
+
+## Security and data
+
+- Every workspace is isolated; the AI assistant can only see that workspace's data.
+- Data is encrypted in transit and at rest. Payment data never touches Ivy's servers; client cards go straight to Stripe. Ivy takes zero percent of payment volume.
+- Owners can export everything (clients, bookings, invoices, documents, messages) as CSV and JSON at any time from their account page.
+- Production infrastructure is hosted in the United States.
+
+## Key pages
+
+- [Home](https://www.joinivy.ai/)
+- [Features](https://www.joinivy.ai/features)
+- [Pricing](https://www.joinivy.ai/pricing)
+- [Tour](https://www.joinivy.ai/tour)
+- [Compare Ivy with HoneyBook, Calendly and a do-it-yourself stack](https://www.joinivy.ai/compare)
+- [About](https://www.joinivy.ai/about)
+- [Support](https://www.joinivy.ai/support)
+- [Security and data](https://www.joinivy.ai/security)
+- [Integrations](https://www.joinivy.ai/integrations)
+- [Ivy on your phone](https://www.joinivy.ai/mobile)
+- [Ivy for iPhone and iPad on the App Store](https://apps.apple.com/us/app/ivy-for-solo-businesses/id6808542331)
+- [Privacy Policy](https://www.joinivy.ai/privacy)
+- [Terms of Service](https://www.joinivy.ai/terms)
+- [Do Not Sell or Share My Personal Information](https://www.joinivy.ai/do-not-sell)
+
+## Ivy for specific businesses
+
+- [Massage therapists](https://www.joinivy.ai/for/massage-therapists)
+- [Hair stylists and barbers](https://www.joinivy.ai/for/hair-stylists)
+- [Personal trainers and fitness coaches](https://www.joinivy.ai/for/personal-trainers)
+- [Coaches and consultants](https://www.joinivy.ai/for/coaches)
+- [Cleaners and home-service pros](https://www.joinivy.ai/for/cleaners)
+- [Photographers](https://www.joinivy.ai/for/photographers)
+- [Videographers](https://www.joinivy.ai/for/videographers)
+- [Makeup artists](https://www.joinivy.ai/for/makeup-artists)
+- [Nail techs](https://www.joinivy.ai/for/nail-techs)
+- [Lash artists](https://www.joinivy.ai/for/lash-artists)
+- [Estheticians](https://www.joinivy.ai/for/estheticians)
+- [Yoga instructors](https://www.joinivy.ai/for/yoga-instructors)
+- [Pilates teachers](https://www.joinivy.ai/for/pilates-teachers)
+- [Tattoo artists](https://www.joinivy.ai/for/tattoo-artists)
+- [Doulas and birth coaches](https://www.joinivy.ai/for/doulas)
+- [Tutors](https://www.joinivy.ai/for/tutors)
+- [Music teachers](https://www.joinivy.ai/for/music-teachers)
+- [Life coaches](https://www.joinivy.ai/for/life-coaches)
+- [Career coaches](https://www.joinivy.ai/for/career-coaches)
+- [Consultants](https://www.joinivy.ai/for/consultants)
+- [Dog walkers and pet sitters](https://www.joinivy.ai/for/dog-walkers)
+- [Pet groomers](https://www.joinivy.ai/for/pet-groomers)
+- [Real-estate agents](https://www.joinivy.ai/for/real-estate-agents)
+- [Event planners](https://www.joinivy.ai/for/event-planners)
+- [Wedding planners](https://www.joinivy.ai/for/wedding-planners)
+- [Freelance designers](https://www.joinivy.ai/for/freelance-designers)
+- [Copywriters](https://www.joinivy.ai/for/copywriters)
+- [Handymen](https://www.joinivy.ai/for/handymen)
+
+## Switching to Ivy from another tool
+
+- [Ivy vs HoneyBook](https://www.joinivy.ai/vs/honeybook)
+- [Ivy vs Dubsado](https://www.joinivy.ai/vs/dubsado)
+- [Ivy vs Vagaro](https://www.joinivy.ai/vs/vagaro)
+- [Ivy vs Mindbody](https://www.joinivy.ai/vs/mindbody)
+- [Ivy vs Acuity](https://www.joinivy.ai/vs/acuity)
+- [Ivy vs Calendly](https://www.joinivy.ai/vs/calendly)
+- [Ivy vs Practice](https://www.joinivy.ai/vs/practice)
+- [Ivy vs Paperbell](https://www.joinivy.ai/vs/paperbell)
+
+## Blog
+
+Practical guides for solopreneurs: reduce no-shows, get paid faster, keep clients, get reviews, handle taxes, and run your one-person business with less busywork. Index: https://www.joinivy.ai/blog
+
+- [How Small Businesses Are Actually Using AI (Beyond the Hype)](https://www.joinivy.ai/blog/ai-for-solo-businesses)
+- [Are Electronic Signatures Legally Binding? (Yes - Since 2000)](https://www.joinivy.ai/blog/are-esignatures-legally-binding)
+- [Should You Require Booking Deposits? The Data Says Probably Yes](https://www.joinivy.ai/blog/booking-deposits-guide)
+- [Calendly Alternatives When You Need More Than a Scheduling Link](https://www.joinivy.ai/blog/calendly-alternatives)
+- [3 Copy-Paste Cancellation Policy Templates (Gentle to Strict)](https://www.joinivy.ai/blog/cancellation-policy-templates)
+- [Why Every Solo Business Needs a Contract (Even for Small Jobs)](https://www.joinivy.ai/blog/client-contracts-101)
+- [Client Intake Form Template: Copy This Question List](https://www.joinivy.ai/blog/client-intake-form-template)
+- [Client Intake Forms: What to Ask (and What to Skip)](https://www.joinivy.ai/blog/client-intake-forms)
+- [Why Keeping Clients Beats Finding New Ones (The Math)](https://www.joinivy.ai/blog/client-retention-beats-acquisition)
+- [Does a Solo Business Really Need a Website in the Instagram Era?](https://www.joinivy.ai/blog/does-your-business-need-a-website)
+- [Email Marketing for Solo Businesses: Worth It? (Yes - Here's the ROI)](https://www.joinivy.ai/blog/email-marketing-solo-business)
+- [Email vs SMS Appointment Reminders: What the Data Says](https://www.joinivy.ai/blog/email-vs-sms-reminders)
+- [How to Get Your First 10 Clients as a Coach](https://www.joinivy.ai/blog/get-first-clients-coaches)
+- [How to Get Your First 10 Clients as a Contractor](https://www.joinivy.ai/blog/get-first-clients-contractors)
+- [How to Get Your First 10 Clients as a Photographer](https://www.joinivy.ai/blog/get-first-clients-photographers)
+- [How to Get Your First 10 Clients as a Hair Stylist](https://www.joinivy.ai/blog/get-first-clients-stylists)
+- [How to Get Your First 10 Clients as a Personal Trainer](https://www.joinivy.ai/blog/get-first-clients-trainers)
+- [How to Get Your First 10 Clients as a Tutor](https://www.joinivy.ai/blog/get-first-clients-tutors)
+- [How to Get More Google Reviews (Without Being Weird About It)](https://www.joinivy.ai/blog/get-more-google-reviews)
+- [How to Get Paid Faster: 6 Fixes for Slow Invoices](https://www.joinivy.ai/blog/get-paid-faster)
+- [How to Get Paid on Time as a Coach](https://www.joinivy.ai/blog/get-paid-on-time-coaches)
+- [How to Get Paid on Time as a Contractor](https://www.joinivy.ai/blog/get-paid-on-time-contractors)
+- [How to Get Paid on Time as a Photographer](https://www.joinivy.ai/blog/get-paid-on-time-photographers)
+- [How to Get Paid on Time as a Hair Stylist](https://www.joinivy.ai/blog/get-paid-on-time-stylists)
+- [How to Get Paid on Time as a Personal Trainer](https://www.joinivy.ai/blog/get-paid-on-time-trainers)
+- [How to Get Paid on Time as a Tutor](https://www.joinivy.ai/blog/get-paid-on-time-tutors)
+- [How to Get Your First 10 Clients (Without an Audience or Ad Budget)](https://www.joinivy.ai/blog/get-your-first-10-clients)
+- [Do Gift Cards Work for Small Service Businesses? The Numbers Say Yes](https://www.joinivy.ai/blog/gift-cards-small-business)
+- [7 HoneyBook Alternatives for Solo Service Businesses (2026)](https://www.joinivy.ai/blog/honeybook-alternatives)
+- [How to Fire a Client (Politely, Professionally, and Without Guilt)](https://www.joinivy.ai/blog/how-to-fire-a-client)
+- [How to Price Your Services as a Solopreneur](https://www.joinivy.ai/blog/how-to-price-your-services)
+- [How to Raise Your Rates Without Losing Clients](https://www.joinivy.ai/blog/how-to-raise-your-rates)
+- [How to Reduce No-Shows: 7 Tactics That Actually Work](https://www.joinivy.ai/blog/how-to-reduce-no-shows)
+- [Ivy vs Dubsado: Which Fits Your Solo Business?](https://www.joinivy.ai/blog/ivy-vs-dubsado)
+- [Ivy vs HoneyBook: An Honest Comparison for Solo Businesses](https://www.joinivy.ai/blog/ivy-vs-honeybook)
+- [Ivy vs Jobber for Solo Contractors & Home-Service Pros](https://www.joinivy.ai/blog/ivy-vs-jobber)
+- [Ivy vs Vagaro for Salons, Spas & Solo Beauty Pros](https://www.joinivy.ai/blog/ivy-vs-vagaro)
+- [Late Cancellation Fees: What to Charge and How to Enforce Them](https://www.joinivy.ai/blog/late-cancellation-fees)
+- [Local SEO Basics for Service Businesses (No Jargon)](https://www.joinivy.ai/blog/local-seo-for-service-businesses)
+- [No-Show Cost Calculator: What Empty Slots Cost You Per Year](https://www.joinivy.ai/blog/no-show-cost-calculator)
+- [How to Write a No-Show Policy Clients Actually Respect](https://www.joinivy.ai/blog/no-show-policy-template)
+- [What to Say When a Client Hasn't Paid: 4 Scripts That Work](https://www.joinivy.ai/blog/overdue-invoice-scripts)
+- [Packages vs Hourly: Which Pricing Structure Fits Your Business?](https://www.joinivy.ai/blog/packages-vs-hourly-pricing)
+- [5 Payment Reminder Email Templates (Before and After the Due Date)](https://www.joinivy.ai/blog/payment-reminder-email-templates)
+- [3 Price Increase Letter Templates That Keep Clients](https://www.joinivy.ai/blog/price-increase-letter-templates)
+- [Quarterly Estimated Taxes, Explained for the Newly Self-Employed](https://www.joinivy.ai/blog/quarterly-taxes-explained)
+- [How to Handle No-Shows as a Coach](https://www.joinivy.ai/blog/reduce-no-shows-coaches)
+- [How to Handle No-Shows as a Contractor](https://www.joinivy.ai/blog/reduce-no-shows-contractors)
+- [How to Handle No-Shows as a Photographer](https://www.joinivy.ai/blog/reduce-no-shows-photographers)
+- [How to Handle No-Shows as a Hair Stylist](https://www.joinivy.ai/blog/reduce-no-shows-stylists)
+- [How to Handle No-Shows as a Personal Trainer](https://www.joinivy.ai/blog/reduce-no-shows-trainers)
+- [How to Handle No-Shows as a Tutor](https://www.joinivy.ai/blog/reduce-no-shows-tutors)
+- [How to Start a Referral Program for Your Service Business](https://www.joinivy.ai/blog/referral-program-service-business)
+- [How to Respond to a Negative Review (Templates Included)](https://www.joinivy.ai/blog/respond-to-negative-reviews)
+- [Tax Deductions Self-Employed Service Providers Commonly Miss](https://www.joinivy.ai/blog/self-employed-tax-deductions)
+- [Should You Charge Late Fees on Invoices?](https://www.joinivy.ai/blog/should-you-charge-late-fees)
+- [The True Cost of Your Tool Stack (It's Not Just the Subscriptions)](https://www.joinivy.ai/blog/true-cost-of-your-tool-stack)
+- [Where Your Admin Hours Actually Go (and How to Get Them Back)](https://www.joinivy.ai/blog/where-your-admin-hours-go)
+- [How to Win Back Clients Who Ghosted](https://www.joinivy.ai/blog/win-back-clients-who-ghosted)
+
+## Contact
+
+- Support: support@joinivy.ai, or Help and support inside the app
+- General: hello@joinivy.ai
+- Security reports: security@joinivy.ai
+- Privacy: privacy@joinivy.ai
+
+## Full version
+
+A longer plain-text description for AI assistants is at https://www.joinivy.ai/llms-full.txt

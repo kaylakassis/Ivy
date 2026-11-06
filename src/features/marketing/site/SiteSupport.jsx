@@ -14,6 +14,7 @@
 // owner's own Stripe, Square or PayPal account.
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { siteUrl } from '../../../lib/pageMeta.js';
 
 const PAGE_CSS = `
 .site-root .narrow{max-width:760px;margin:0 auto}
@@ -83,12 +84,25 @@ const FAQ = [
   },
 ];
 
+// The same questions and answers as structured data, word for word, so
+// search engines can show them as an FAQ.
+const FAQ_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map(({ q, a }) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a.join(' ') },
+  })),
+};
+
 export default function SiteSupport() {
   useSiteFonts();
   usePageMeta({
-    title: 'Support | Ivy',
-    description: 'Get help with Ivy. Email support@joinivy.ai or use Help and support inside the app. Answers to common questions about trials, billing, cancelling, data export and account deletion.',
-    canonical: 'https://joinivy.ai/support',
+    title: 'Ivy Support - Help with Trials, Billing and Your Account',
+    description: 'Get help with Ivy: email support@joinivy.ai or use Help and support in the app. Answers on trials, billing, cancelling, data export and deleting your account.',
+    canonical: siteUrl('/support'),
+    jsonLd: FAQ_LD,
   });
 
   return (
