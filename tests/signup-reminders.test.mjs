@@ -136,6 +136,10 @@ async function run() {
   const beta = await owner('beta', { user: { user_type: 'beta' } });
   const spons = await owner('spons', { user: { user_type: 'sponsored' } });
   const comped = await owner('comped', { ws: { comp_until: '9999-01-01T00:00:00Z' } });
+  // A comp invite on file but not yet applied to the workspace (the claim
+  // at sign-up is best-effort): still never reminded.
+  const invited = await owner('invited');
+  await sql`INSERT INTO comp_invites (email, note, comp_months) VALUES (${invited.email.toUpperCase()}, 'test', 3)`;
   const paying = await owner('paying', { ws: { subscription_status: 'active', subscription_period_end: new Date(Date.now() + 30 * 864e5).toISOString() } });
   const trialing = await owner('trialing', { ws: { subscription_status: 'trialing', trial_ends_at: new Date(Date.now() + 10 * 864e5).toISOString() } });
   const lapsed = await owner('lapsed', { ws: { subscription_status: 'canceled', converted_at: new Date(Date.now() - 864e5).toISOString() } });
@@ -146,7 +150,7 @@ async function run() {
   await sql`INSERT INTO staff_members (workspace_id, name, email, active, user_id) VALUES (${paying.ws}, 'H', ${helper.email}, TRUE, ${helper.id})`;
   await runCron();
   for (const [label, p] of [['client', client], ['helper', helper], ['tester', tester], ['beta', beta], ['sponsored', spons],
-    ['comped', comped], ['paying', paying], ['trialing', trialing], ['lapsed plan', lapsed],
+    ['comped', comped], ['comp invite on file', invited], ['paying', paying], ['trialing', trialing], ['lapsed plan', lapsed],
     ['trial used on an earlier account', usedTrial], ['signed up 30 days ago', oldAcct]]) {
     assert(mailsTo(p.email).length === 0, `${label}: not emailed`);
   }

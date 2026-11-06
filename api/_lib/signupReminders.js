@@ -7,7 +7,8 @@
 //
 // Who: owners (they have a workspace) only. Never clients or helpers (no
 // workspace), testers, beta / sponsored / super-admin accounts, comped
-// workspaces, deleted accounts, or anyone whose workspace has a plan, a
+// workspaces (and anyone with a complimentary invite on file, claimed or
+// not: they never see the paywall), deleted accounts, or anyone whose workspace has a plan, a
 // trial, a past plan, or a trial claim (including a trial used by the same
 // email on an earlier account). Email verified or not.
 //
@@ -142,7 +143,8 @@ export const ELIGIBLE_SQL = `
             OR w.comp_until IS NOT NULL
             OR w.setup_nudge_sent_at > NOW() - INTERVAL '24 hours'
             OR EXISTS (SELECT 1 FROM billing_trial_claims c WHERE c.workspace_id = w.id)))
-  AND NOT EXISTS (SELECT 1 FROM billing_trial_claims c WHERE c.email_hash = ${EMAIL_HASH_SQL})`;
+  AND NOT EXISTS (SELECT 1 FROM billing_trial_claims c WHERE c.email_hash = ${EMAIL_HASH_SQL})
+  AND NOT EXISTS (SELECT 1 FROM comp_invites ci WHERE LOWER(ci.email) = LOWER(u.email))`;
 
 // The next step is due: not all three sent, old enough for it, and the
 // last one was at least MIN_GAP_HOURS ago.
