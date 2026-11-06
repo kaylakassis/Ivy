@@ -15,7 +15,8 @@ export const PRIVACY_LAST_UPDATED = 'November 5, 2026';
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated={PRIVACY_LAST_UPDATED}>
+    <LegalPage title="Privacy Policy" lastUpdated={PRIVACY_LAST_UPDATED} path="/privacy"
+      description="Ivy's Privacy Policy explains what information Ivy collects from you, how we use it, and what choices you have.">
       <PrivacyPolicyBody/>
     </LegalPage>
   );

@@ -4,6 +4,7 @@
 // React state (two sliders + derived values, same conservative math).
 import React, { useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { siteUrl } from '../../../lib/pageMeta.js';
 import { MONTHLY_STACK_SAVINGS } from '../../../lib/pricing.js';
 import { SignupCta } from './Chrome.jsx';
 
@@ -98,8 +99,8 @@ export default function SitePricing() {
   useSiteFonts();
   usePageMeta({
     title: 'Ivy Pricing - $8.99/week, One Plan | 14-Day Free Trial',
-    description: 'Ivy costs $8.99/week (or $374.99/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. One plan, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
-    canonical: 'https://joinivy.ai/pricing',
+    description: 'Ivy costs $8.99/week or $374.99/year after a 14-day free trial, $0 today. One plan: booking, invoicing, CRM, e-signature, website builder and the AI assistant.',
+    canonical: siteUrl('/pricing'),
     jsonLd: JSON_LD,
   });
 

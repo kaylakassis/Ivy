@@ -1,6 +1,9 @@
-// Vercel edge middleware - runs in front of every /api/* request.
+// Vercel edge middleware - runs in front of every /api/* request and the
+// site root "/".
 //
-// Sole purpose: enable CORS for the Capacitor (native iOS/Android) shell.
+// Two jobs:
+//
+// 1. CORS for the Capacitor (native iOS/Android) shell on /api/*.
 //
 // The native WebView origin is `capacitor://localhost` on iOS (WebKit
 // refuses to hand `https` to a custom scheme handler, so iosScheme=https
@@ -24,12 +27,27 @@
 // custom X-Client-Platform header (which triggers a real browser
 // preflight, which only succeeds for Capacitor origins this middleware
 // allows). Defense in depth.
-import { next } from '@vercel/edge';
+//
+// 2. The pre-rendered marketing home page at "/".
+//
+// scripts/prerender.mjs saves the public pages as static HTML under
+// dist/prerender/ so crawlers that do not run JavaScript see the content.
+// Every other public path is routed to its file by a vercel.json rewrite,
+// but "/" cannot be: the filesystem match for dist/index.html wins before
+// any rewrite runs. So the root is rewritten here, and only for a
+// logged-out visitor on the Ivy marketing host:
+//   • a connected custom domain serves that owner's site, never Ivy's
+//     home page, so it is left alone;
+//   • a signed-in visitor (session cookie present) gets the SPA shell as
+//     before, which sends them straight on to their dashboard or portal
+//     without first painting the marketing page.
+// The native app loads index.html from the device and never hits "/".
+import { next, rewrite } from '@vercel/edge';
 
 export const config = {
-  // Only run on API routes. Don't touch HTML / asset routes (those use
-  // the static headers block in vercel.json).
-  matcher: '/api/:path*',
+  // API routes (CORS) and the site root (pre-rendered home). Other HTML /
+  // asset routes use the static headers + rewrites in vercel.json.
+  matcher: ['/api/:path*', '/'],
 };
 
 const NATIVE_ORIGINS = new Set([
@@ -47,7 +65,28 @@ const ALLOWED_HEADERS = [
   'Idempotency-Key',
 ].join(', ');
 
+// Hosts the Ivy marketing site is served on (plus Vercel preview URLs so a
+// deployment can be checked before DNS). Same set as isPlatformHost in
+// src/lib/publicUrl.js minus localhost.
+const MARKETING_HOSTS = new Set(['www.joinivy.ai', 'joinivy.ai']);
+const SESSION_COOKIE = 'ivy_session'; // api/_lib/auth.js
+
+function prerenderedHome(req) {
+  const url = new URL(req.url);
+  if (url.pathname !== '/') return null;
+  if (req.method !== 'GET' && req.method !== 'HEAD') return null;
+  const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || url.hostname)
+    .toLowerCase().replace(/:\d+$/, '');
+  if (!MARKETING_HOSTS.has(host) && !host.endsWith('.vercel.app')) return null;
+  const cookie = req.headers.get('cookie') || '';
+  if (new RegExp(`(^|;\\s*)${SESSION_COOKIE}=`).test(cookie)) return null;
+  return rewrite(new URL('/prerender/index.html', url));
+}
+
 export default function middleware(req) {
+  const home = prerenderedHome(req);
+  if (home) return home;
+
   const origin = req.headers.get('origin') || '';
   const isNative = NATIVE_ORIGINS.has(origin);
 

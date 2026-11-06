@@ -24,6 +24,7 @@ import { ClientPortalProvider } from './features/client/clientContext.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { isPlatformHost } from './lib/publicUrl.js';
+import { lazyRoute } from './lib/lazyRoute.js';
 import GetAppBanner from './components/GetAppBanner.jsx';
 
 // ── Lazy: business app pages ──
@@ -83,22 +84,44 @@ const ConnectedPage = lazy(() => import('./features/finance/ConnectedPage.jsx'))
 const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
 const PublicQuote   = lazy(() => import('./features/finance/PublicQuote.jsx'));
 const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
-const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
-const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
-const DoNotSellPage = lazy(() => import('./features/legal/DoNotSellPage.jsx'));
-const SiteAbout     = lazy(() => import('./features/marketing/site/SiteAbout.jsx'));
 const WelcomePage   = lazy(() => import('./features/auth/WelcomePage.jsx'));
-const SiteSupport   = lazy(() => import('./features/marketing/site/SiteSupport.jsx'));
-const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
-const SitePricing     = lazy(() => import('./features/marketing/site/SitePricing.jsx'));
-const SiteTour        = lazy(() => import('./features/marketing/site/SiteTour.jsx'));
-const SiteFeatures    = lazy(() => import('./features/marketing/site/SiteFeatures.jsx'));
-const SiteCompare     = lazy(() => import('./features/marketing/site/SiteCompare.jsx'));
-const ComparePage     = lazy(() => import('./features/marketing/ComparePage.jsx'));
-const SecurityPage    = lazy(() => import('./features/marketing/SecurityPage.jsx'));
-const MobilePage      = lazy(() => import('./features/marketing/MobilePage.jsx'));
-const IntegrationsPage = lazy(() => import('./features/marketing/IntegrationsPage.jsx'));
 const WaitlistPage    = lazy(() => import('./features/auth/WaitlistPage.jsx'));
+
+// ── Lazy: public marketing + legal pages ──
+// These are pre-rendered to static HTML at build time (scripts/prerender.mjs),
+// so they use lazyRoute(): main.jsx preloads the current page's chunk before
+// mounting and React's first render commits the page itself, not the spinner,
+// over the static copy the visitor is already looking at.
+const PrivacyPage   = lazyRoute(() => import('./features/legal/PrivacyPage.jsx'));
+const TermsPage     = lazyRoute(() => import('./features/legal/TermsPage.jsx'));
+const DoNotSellPage = lazyRoute(() => import('./features/legal/DoNotSellPage.jsx'));
+const SiteAbout     = lazyRoute(() => import('./features/marketing/site/SiteAbout.jsx'));
+const SiteSupport   = lazyRoute(() => import('./features/marketing/site/SiteSupport.jsx'));
+const VerticalPage  = lazyRoute(() => import('./features/marketing/VerticalPage.jsx'));
+const SitePricing     = lazyRoute(() => import('./features/marketing/site/SitePricing.jsx'));
+const SiteTour        = lazyRoute(() => import('./features/marketing/site/SiteTour.jsx'));
+const SiteFeatures    = lazyRoute(() => import('./features/marketing/site/SiteFeatures.jsx'));
+const SiteCompare     = lazyRoute(() => import('./features/marketing/site/SiteCompare.jsx'));
+const ComparePage     = lazyRoute(() => import('./features/marketing/ComparePage.jsx'));
+const SecurityPage    = lazyRoute(() => import('./features/marketing/SecurityPage.jsx'));
+const MobilePage      = lazyRoute(() => import('./features/marketing/MobilePage.jsx'));
+const IntegrationsPage = lazyRoute(() => import('./features/marketing/IntegrationsPage.jsx'));
+
+// Pre-rendered path → the chunk its route needs. "/" is MarketingHome,
+// which RootRouter imports eagerly, so it needs no preload.
+const PRERENDERED_ROUTES = {
+  '/privacy': PrivacyPage, '/terms': TermsPage, '/do-not-sell': DoNotSellPage,
+  '/about': SiteAbout, '/support': SiteSupport, '/pricing': SitePricing,
+  '/tour': SiteTour, '/features': SiteFeatures, '/compare': SiteCompare,
+  '/security': SecurityPage, '/mobile': MobilePage, '/integrations': IntegrationsPage,
+};
+export function preloadRoute(pathname) {
+  const p = String(pathname || '/').replace(/\/+$/, '') || '/';
+  const C = PRERENDERED_ROUTES[p]
+    || (p.startsWith('/for/') ? VerticalPage : null)
+    || (p.startsWith('/vs/') ? ComparePage : null);
+  return C ? C.preload() : Promise.resolve();
+}
 
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the
 // destination page's own loader for visual real estate. Lives inside

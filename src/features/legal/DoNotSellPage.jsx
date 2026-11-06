@@ -9,7 +9,8 @@ import LegalPage, { H2, P } from './LegalPage.jsx';
 
 export default function DoNotSellPage() {
   return (
-    <LegalPage title="Do Not Sell or Share My Personal Information" lastUpdated="May 25, 2026">
+    <LegalPage title="Do Not Sell or Share My Personal Information" lastUpdated="May 25, 2026" path="/do-not-sell"
+      description="California residents can opt out of the sale or sharing of their personal information. This page explains what Ivy does and how to exercise that right.">
       <P>
         California's privacy laws (CCPA + CPRA) give residents the right to
         opt out of the "sale" or "sharing" of their personal information.

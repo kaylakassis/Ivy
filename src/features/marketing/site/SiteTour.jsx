@@ -12,6 +12,7 @@
 // motion everything is simply visible.
 import { useEffect, useState } from 'react';
 import { SiteNav, SiteFooter, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
+import { siteUrl } from '../../../lib/pageMeta.js';
 import { SignupCta } from './Chrome.jsx';
 
 // ─── The tour ──────────────────────────────────────────────────────────
@@ -530,8 +531,8 @@ export default function SiteTour() {
   useSiteFonts();
   usePageMeta({
     title: 'Take the Tour - Every Ivy Feature in 13 Stops | Ivy',
-    description: 'Scroll through everything Ivy does: dashboard, clients and folders, booking, messages, invoices, point of sale, expenses and taxes, e-signature, website, marketing, the Ivy assistant, and the iPhone app. One plan, $8.99/week.',
-    canonical: 'https://joinivy.ai/tour',
+    description: 'Everything Ivy does in 13 stops: clients, booking, messages, invoices, point of sale, e-signature, website, marketing, the Ivy assistant and the iPhone app.',
+    canonical: siteUrl('/tour'),
     ogType: 'website',
   });
   const [active, setActive] = useState(0);

@@ -17,50 +17,13 @@ const NAV = [
   ['/pricing', 'Pricing'], ['/compare', 'Compare'], ['/blog', 'Blog'], ['/about', 'About'],
 ];
 
-// Sets document head per page: title, description, canonical, og/twitter, and
-// optional JSON-LD. CSR-only is fine for the core pages (Google renders JS);
-// the blog posts are fully static files with real head tags.
-export function usePageMeta({ title, description, canonical, ogType = 'website', jsonLd }) {
-  useEffect(() => {
-    document.title = title;
-    const ensure = (sel, make) => {
-      let el = document.head.querySelector(sel);
-      if (!el) { el = make(); document.head.appendChild(el); }
-      return el;
-    };
-    const meta = (attr, name, content) => {
-      const el = ensure(`meta[${attr}="${name}"]`, () => {
-        const m = document.createElement('meta'); m.setAttribute(attr, name); return m;
-      });
-      el.setAttribute('content', content);
-      el.dataset.siteMeta = '1';
-    };
-    meta('name', 'description', description);
-    meta('property', 'og:type', ogType);
-    meta('property', 'og:site_name', 'Ivy');
-    meta('property', 'og:title', title);
-    meta('property', 'og:description', description);
-    if (canonical) meta('property', 'og:url', canonical);
-    meta('name', 'twitter:card', 'summary_large_image');
-    meta('name', 'twitter:title', title);
-    meta('name', 'twitter:description', description);
-    let link = null;
-    if (canonical) {
-      link = ensure('link[rel="canonical"]', () => {
-        const l = document.createElement('link'); l.setAttribute('rel', 'canonical'); return l;
-      });
-      link.setAttribute('href', canonical);
-    }
-    let ld = null;
-    if (jsonLd) {
-      ld = document.createElement('script');
-      ld.type = 'application/ld+json';
-      ld.textContent = JSON.stringify(jsonLd);
-      document.head.appendChild(ld);
-    }
-    return () => { if (ld) ld.remove(); };
-  }, [title, description, canonical, ogType, jsonLd]);
-}
+// Sets document head per page: title, description, canonical, og/twitter,
+// and optional JSON-LD. Lives in src/lib/pageMeta.js (shared with the
+// /for, /vs, legal and other marketing pages); re-exported here so the
+// site pages keep importing it from the chrome. The pages are pre-rendered
+// to static HTML at build time (scripts/prerender.mjs) so crawlers that do
+// not run JavaScript see the same head and content.
+export { usePageMeta } from '../../../lib/pageMeta.js';
 
 export function SiteNav({ active }) {
   const [open, setOpen] = useState(false);

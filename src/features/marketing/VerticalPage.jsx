@@ -5,43 +5,40 @@
 // Adding a vertical: drop a row in VERTICALS below. Slug is the URL.
 // keep the angle phrase tight ("for massage therapists") - it should
 // drop into Google search verbatim.
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { VERTICALS } from './verticalsData.js';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { usePageMeta, siteUrl, breadcrumbs } from '../../lib/pageMeta.js';
 
 const VERTICAL_LIST = Object.entries(VERTICALS);
+
+// Meta description from the page's own copy: headline + sub when that
+// fits a search snippet, otherwise the sub alone, otherwise the headline.
+export function verticalDescription(v) {
+  const full = `${v.headline} ${v.sub}`;
+  if (full.length <= 160) return full;
+  return v.sub.length <= 160 ? v.sub : v.headline;
+}
 
 export default function VerticalPage() {
   const { slug } = useParams();
   const v = VERTICALS[slug];
   const [tweaks] = useTweaks();
 
+  const meta = useMemo(() => (v ? {
+    title: `Ivy - ${capFirst(v.angle)} run their business in one place`,
+    description: verticalDescription(v),
+    canonical: siteUrl(`/for/${slug}`),
+    jsonLd: breadcrumbs([['Home', '/'], [`Ivy for ${v.angle}`, `/for/${slug}`]]),
+  } : null), [v, slug]);
+  usePageMeta(meta);
+
   // Bad slug → bounce to the home page rather than 404; better UX,
   // and the visitor still lands on something useful.
-  useEffect(() => {
-    if (!v) return;
-    const dom = typeof window !== 'undefined' ? window.location.origin : '';
-    document.title = `Ivy - ${capFirst(v.angle)} run their business in one place`;
-    const upsert = (attr, key, value) => {
-      let el = document.querySelector(`meta[${attr}="${key}"]`);
-      if (!el) {
-        el = document.createElement('meta');
-        el.setAttribute(attr, key);
-        document.head.appendChild(el);
-      }
-      el.setAttribute('content', value);
-    };
-    upsert('name', 'description', `${v.headline} ${v.sub}`);
-    upsert('property', 'og:title', `Ivy for ${v.angle}`);
-    upsert('property', 'og:description', v.headline);
-    upsert('property', 'og:url', dom + '/for/' + slug);
-    upsert('property', 'og:type', 'website');
-  }, [v, slug]);
-
   if (!v) return <Navigate to="/" replace/>;
   const Icon = Icons[v.icon] || Icons.Check;
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './lib/auth.jsx';
@@ -7,7 +7,7 @@ import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { registerServiceWorker } from './lib/pwa.js';
 import { initNativeStatusBar } from './lib/nativeStatusBar.js';
 import { isNative } from './lib/platform.js';
-import App from './App.jsx';
+import App, { preloadRoute } from './App.jsx';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/global.css';
@@ -95,18 +95,43 @@ function FatalFallback({ resetError, error }) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary fallback={({ resetError, error }) => <FatalFallback resetError={resetError} error={error}/>}>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
-  </React.StrictMode>,
-);
+// Pre-rendered public pages (scripts/prerender.mjs) arrive with the page
+// already in #root and <html data-prerendered>. Once React has committed its
+// own, identical render, drop the marker: it also releases the CSS
+// animations the static copy keeps paused until React owns the DOM, so
+// every entrance animation plays exactly once.
+function PrerenderHandoff() {
+  useEffect(() => {
+    document.documentElement.removeAttribute('data-prerendered');
+    document.getElementById('prerender-freeze')?.remove();
+  }, []);
+  return null;
+}
 
-// Offline app shell + install/update prompts (no-op in dev).
-registerServiceWorker();
-initNativeStatusBar();
+function mount() {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <ErrorBoundary fallback={({ resetError, error }) => <FatalFallback resetError={resetError} error={error}/>}>
+        <BrowserRouter>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
+      <PrerenderHandoff/>
+    </React.StrictMode>,
+  );
+
+  // Offline app shell + install/update prompts (no-op in dev).
+  registerServiceWorker();
+  initNativeStatusBar();
+}
+
+// On a pre-rendered page the visitor is already reading the content, so
+// fetch the route's chunk first: React's first commit is then the page
+// itself rather than the route spinner (see src/lib/lazyRoute.js).
+if (!isNative() && document.documentElement.hasAttribute('data-prerendered')) {
+  preloadRoute(window.location.pathname).catch(() => {}).then(mount);
+} else {
+  mount();
+}

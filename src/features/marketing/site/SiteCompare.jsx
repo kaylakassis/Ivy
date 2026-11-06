@@ -2,6 +2,7 @@
 // pixel-faithfully from the ivy-site-handoff prototype (compare.html).
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { siteUrl } from '../../../lib/pageMeta.js';
 import { SignupCta } from './Chrome.jsx';
 
 const PAGE_CSS = `
@@ -42,9 +43,9 @@ const PAGE_CSS = `
 export default function SiteCompare() {
   useSiteFonts();
   usePageMeta({
-    title: 'Ivy vs HoneyBook vs Calendly vs the DIY Stack - Honest Comparison',
-    description: "Looking for a HoneyBook alternative or Calendly alternative? An honest comparison of Ivy vs HoneyBook, Calendly, and the DIY tool stack for solo service businesses - including when Ivy might NOT be right for you. Ivy is $8.99/week, one plan.",
-    canonical: 'https://joinivy.ai/compare',
+    title: 'Ivy vs HoneyBook vs Calendly vs the DIY Stack | Ivy',
+    description: 'Ivy vs HoneyBook, Calendly and the DIY tool stack for solo service businesses: an honest comparison, including when Ivy might not be right for you. $8.99/week.',
+    canonical: siteUrl('/compare'),
   });
   return (
     <div className="site-root">

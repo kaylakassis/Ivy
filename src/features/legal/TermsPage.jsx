@@ -17,7 +17,8 @@ export const TERMS_VERSION = '2026-05-05';
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" lastUpdated="May 5, 2026">
+    <LegalPage title="Terms of Service" lastUpdated="May 5, 2026" path="/terms"
+      description="The Terms of Service that govern your access to and use of Ivy. By creating an account or using the Service, you agree to be bound by these Terms.">
       <P><strong>Effective version: {TERMS_VERSION}.</strong> These Terms
         of Service ("Terms") govern your access to and use of Ivy (the
         "Service"), operated by Ivy ("Ivy", "we",

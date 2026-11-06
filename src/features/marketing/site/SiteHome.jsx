@@ -3,32 +3,41 @@
 // from Chrome.jsx; page-specific CSS + interactivity live here.
 import { useEffect, useRef, useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
-import { STACK_TOTAL } from '../../../lib/pricing.js';
+import { STACK_TOTAL, IVY_PRICE, IVY_PRICE_ANNUAL, TRIAL_DAYS, ANNUAL_SAVINGS_PCT } from '../../../lib/pricing.js';
+import { SITE_ORIGIN, OG_IMAGE } from '../../../lib/pageMeta.js';
 import ProductVideo, { playProductVideo } from './ProductVideo.jsx';
 import { SignupCta } from './Chrome.jsx';
+import { APP_STORE_URL } from './AppStoreBadge.jsx';
 
+// Prices come from src/lib/pricing.js so the structured data can never
+// disagree with the pricing page or the paywall.
 const JSON_LD = {
   '@context': 'https://schema.org',
   '@graph': [
     {
       '@type': 'Organization',
-      '@id': 'https://joinivy.ai/#org',
+      '@id': `${SITE_ORIGIN}/#org`,
       name: 'Ivy',
-      url: 'https://joinivy.ai',
+      url: SITE_ORIGIN,
+      logo: `${SITE_ORIGIN}/icon-512.png`,
+      image: OG_IMAGE,
       description: 'Ivy is the all-in-one business platform for solopreneurs, with an AI assistant that does your busywork.',
+      sameAs: [APP_STORE_URL],
     },
     {
       '@type': 'SoftwareApplication',
       name: 'Ivy',
-      url: 'https://joinivy.ai',
+      url: SITE_ORIGIN,
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web, iOS, Android',
+      installUrl: APP_STORE_URL,
+      image: OG_IMAGE,
       description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, website builder, and an AI assistant that performs real tasks. Payments go directly to the owner's own Stripe account at Stripe's standard rate.",
       offers: [
-        { '@type': 'Offer', price: '8.99', priceCurrency: 'USD', description: '$8.99 per week after a 14-day free trial ($0 today)' },
-        { '@type': 'Offer', price: '374.99', priceCurrency: 'USD', description: 'Annual plan, $374.99/year (save about 20%)' },
+        { '@type': 'Offer', price: String(IVY_PRICE), priceCurrency: 'USD', description: `$${IVY_PRICE} per week after a ${TRIAL_DAYS}-day free trial ($0 today)` },
+        { '@type': 'Offer', price: String(IVY_PRICE_ANNUAL), priceCurrency: 'USD', description: `Annual plan, $${IVY_PRICE_ANNUAL}/year (save about ${ANNUAL_SAVINGS_PCT}%)` },
       ],
-      publisher: { '@id': 'https://joinivy.ai/#org' },
+      publisher: { '@id': `${SITE_ORIGIN}/#org` },
     },
   ],
 };
@@ -285,9 +294,9 @@ const PAGE_CSS = `
 export default function SiteHome() {
   useSiteFonts();
   usePageMeta({
-    title: 'Ivy - All-in-One Business Platform for Solopreneurs | Booking, Invoicing, CRM & AI',
-    description: 'Ivy is the all-in-one business platform for solo service businesses - massage therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $8.99/week, one plan, 14-day free trial.',
-    canonical: 'https://joinivy.ai/',
+    title: 'Ivy - All-in-One Business Platform for Solopreneurs',
+    description: 'All-in-one business platform for solo service businesses: booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork.',
+    canonical: `${SITE_ORIGIN}/`,
     ogType: 'website',
     jsonLd: JSON_LD,
   });
