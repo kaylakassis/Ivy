@@ -244,7 +244,7 @@ export default function Editor({
               fontSize: 11, color: 'var(--muted)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              {publicUrl ? publicUrl.replace(/^https?:\/\//, '') : 'Set a handle to publish'}
+              {publicUrl ? publicUrl.replace(/^https?:\/\//, '') : 'Choose a site address to publish'}
             </div>
           </div>
         </div>
@@ -377,7 +377,7 @@ export default function Editor({
           className="btn btn-primary"
           onClick={handlePublish}
           disabled={publishing || !site.handle}
-          title={!site.handle ? 'Set a handle first' : (publicUrl ? `Publish to ${publicUrl}` : 'Publish')}
+          title={!site.handle ? 'Choose your site address first' : (publicUrl ? `Publish to ${publicUrl}` : 'Publish')}
           style={{ opacity: (publishing || !site.handle) ? 0.6 : 1, order: isMobile ? -3 : undefined }}
         >
           <Icons.Arrow size={13} sw={2} />
@@ -422,7 +422,7 @@ export default function Editor({
         ) : (
           <div style={{ position: 'relative' }}>
             <button className="btn btn-outline" onClick={() => setScheduleOpen((o) => !o)}
-              disabled={!site.handle} title={!site.handle ? 'Set a handle first' : 'Schedule publish for later'}
+              disabled={!site.handle} title={!site.handle ? 'Choose your site address first' : 'Schedule publish for later'}
               style={{ opacity: site.handle ? 1 : 0.6 }}>
               <Icons.Clock size={13}/>{!isMobile && <span style={{ marginLeft: 6 }}>Schedule</span>}
             </button>
@@ -661,6 +661,14 @@ export default function Editor({
             mobile={isMobile}
             currentPage={currentPage}
             onPageChange={(patch) => currentPage && renamePage(currentPage.id, patch)}
+            pages={site.pages}
+            sections={activeSections}
+            onOpenLibrary={() => {
+              // Desktop: the library is the left rail, already visible; just
+              // deselect so the eye lands on "Add section". Phone: switch tab.
+              setSelectedId(null);
+              if (isMobile) setMobileTab('outline');
+            }}
           />
         )}
       </div>
@@ -713,7 +721,7 @@ function SiteVisibilityButton({ visibility, onChange, isMobile }) {
   const icons  = { public: 'Globe',  private: 'Lock',      only_me: 'EyeOff' };
   const subs   = {
     public:  'Listed on Discover and your booking page.',
-    private: 'Hidden from lists. Anyone with /site/<handle> can view.',
+    private: 'Hidden from lists. Anyone with the link can view.',
     only_me: 'Hidden from everyone except you.',
   };
   const Icon = Icons[icons[visibility]] || Icons.Globe;
@@ -925,20 +933,21 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onR
 }
 
 // SiteStyleButton - toolbar dropdown that surfaces site-wide style
-// + SEO overrides decoupled from the template:
-//   • Font pair: 6 presets that override the template's font choice
-//   • Custom CSS: textarea injected as a <style> tag inside the site
-//     shell on both Canvas + PublicSite
-//   • Site SEO: default title / description / share image / favicon
-//     that every page inherits unless it sets its own overrides.
+// + search / sharing defaults decoupled from the template:
+//   • Font pair: presets that override the template's font choice
+//   • Site search listing: default title / description / share image /
+//     browser-tab icon that every page inherits unless it sets its own.
+// Owners never see code here. A site that already has customCss (set
+// before code was removed from the builder) gets a plain note with a
+// way to clear it; the field itself is no longer offered.
 function SiteStyleButton({ site, set }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab]   = useState('style');
   return (
     <div style={{ position: 'relative' }}>
       <button className="btn btn-outline" onClick={() => setOpen((v) => !v)}
-        title="Override fonts, drop custom CSS, set SEO defaults">
-        <Icons.Edit size={13}/> Style &amp; SEO
+        title="Fonts, search listing and share image">
+        <Icons.Edit size={13}/> Style &amp; search
         <Icons.ArrowDown size={11}/>
       </button>
       {open && (
@@ -953,7 +962,7 @@ function SiteStyleButton({ site, set }) {
             display: 'flex', flexDirection: 'column', gap: 14,
           }}>
             <div style={{ display: 'flex', gap: 4 }}>
-              {[['style','Style'], ['seo','SEO']].map(([id, label]) => (
+              {[['style','Fonts'], ['seo','Search and sharing']].map(([id, label]) => (
                 <button key={id} type="button" onClick={() => setTab(id)}
                   style={{
                     flex: 1, padding: '7px 8px', fontSize: 12.5, fontWeight: 600,
@@ -968,42 +977,41 @@ function SiteStyleButton({ site, set }) {
             {tab === 'style' && (
               <>
                 <div>
-                  <label style={fieldLabelSt}>Font pair</label>
+                  <label style={fieldLabelSt}>Fonts</label>
                   <select value={site.fontPair || ''}
                     onChange={(e) => set({ fontPair: e.target.value || null })}
                     style={fieldInputSt}>
-                    <option value="">Use template default</option>
+                    <option value="">Use the template's fonts</option>
                     {Object.entries(FONT_PAIRS).map(([id, fp]) => (
                       <option key={id} value={id}>{fp.label}</option>
                     ))}
                   </select>
                   <div style={fieldHintSt}>
-                    Overrides the template's display + body fonts site-wide.
+                    Changes the headline and body fonts on every page.
                   </div>
                 </div>
-                <div>
-                  <label style={fieldLabelSt}>Custom CSS</label>
-                  <textarea value={site.customCss || ''}
-                    onChange={(e) => set({ customCss: e.target.value })}
-                    placeholder="/* Style anything in your site - written exactly as standard CSS. */"
-                    rows={6}
-                    style={{ ...fieldInputSt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, resize: 'vertical', minHeight: 120 }}/>
-                  <div style={fieldHintSt}>
-                    Injected as a &lt;style&gt; tag inside the site shell. Use to tweak
-                    spacing, colors, hover states, fonts, etc. without changing the template.
+                {site.customCss ? (
+                  <div style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px dashed var(--border)' }}>
+                    <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                      This site has extra styling that was added with code before Ivy stopped using code. It still applies. You can clear it here.
+                    </div>
+                    <button type="button" className="btn btn-outline" onClick={() => set({ customCss: '' })}
+                      style={{ marginTop: 8, fontSize: 12, color: 'var(--danger)' }}>
+                      Clear the extra styling
+                    </button>
                   </div>
-                </div>
+                ) : null}
               </>
             )}
 
             {tab === 'seo' && (
               <>
                 <div style={{ ...fieldHintSt, marginTop: 0 }}>
-                  Defaults inherited by every page. Each page can override
-                  these from the right-rail inspector.
+                  Used by every page unless a page sets its own (click an empty
+                  spot on the canvas to set a page's own).
                 </div>
                 <div>
-                  <label style={fieldLabelSt}>Default site title</label>
+                  <label style={fieldLabelSt}>Site name shown in Google</label>
                   <input type="text" value={site.seoTitle || ''}
                     onChange={(e) => set({ seoTitle: e.target.value })}
                     placeholder={site.businessName || 'Your business'}
@@ -1011,24 +1019,24 @@ function SiteStyleButton({ site, set }) {
                     style={fieldInputSt}/>
                 </div>
                 <div>
-                  <label style={fieldLabelSt}>Default description</label>
+                  <label style={fieldLabelSt}>Short description shown in Google</label>
                   <textarea value={site.seoDescription || ''}
                     onChange={(e) => set({ seoDescription: e.target.value })}
-                    placeholder="A short pitch - shown in Google results and link previews."
+                    placeholder="A short pitch - shown in Google results and when the link is shared."
                     rows={3}
                     maxLength={400}
                     style={{ ...fieldInputSt, resize: 'vertical', lineHeight: 1.5 }}/>
                 </div>
                 <div>
-                  <label style={fieldLabelSt}>Default share image (1200×630 ideal)</label>
+                  <label style={fieldLabelSt}>Image shown when the site is shared (a wide photo works best)</label>
                   <ImageInput value={site.seoOgImage || ''}
                     onChange={(url) => set({ seoOgImage: url })}/>
                 </div>
                 <div>
-                  <label style={fieldLabelSt}>Favicon (browser tab icon)</label>
+                  <label style={fieldLabelSt}>Browser tab icon</label>
                   <ImageInput value={site.faviconUrl || ''}
                     onChange={(url) => set({ faviconUrl: url })}
-                    placeholder="https://… or upload a 64×64 PNG"/>
+                    placeholder="Upload a small square image"/>
                 </div>
               </>
             )}

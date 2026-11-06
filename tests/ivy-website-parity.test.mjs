@@ -207,7 +207,7 @@ async function run() {
       [{ action: 'explode', section_id: 'hero' }, /action must be one of/],
       [{ action: 'update', section_id: 'nope' }, /No section with id/],
       [{ action: 'add', page_slug: '', type: 'unicorn' }, /Unknown section type/],
-      [{ action: 'add', page_slug: '', type: 'custom_html' }, /only be added by the owner/],
+      [{ action: 'add', page_slug: '', type: 'custom_html' }, /no longer uses code sections/],
       [{ action: 'move_to_page', section_id: 'hero', target_page: 'nowhere' }, /No page with slug/],
       [{ action: 'move', section_id: 'hero', position: 'sideways' }, /position must be/],
       [{ action: 'update', section_id: 'hero', data: { notAField: 1 } }, /None of those fields/],

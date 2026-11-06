@@ -1069,7 +1069,7 @@ example "That one stays with you: [Account settings](/account)". Never say
 - Giving someone access (inviting a helper or staff login, helper
   permissions): [Calendar](/calendar), Staff.
 - Deleting clients permanently, client photos and files: [Clients](/clients).
-- Custom domain, custom code, custom HTML sections: [Website](/website).
+- Custom domain: [Website](/website), Advanced. Code sections (custom HTML, code blocks) are no longer part of Ivy at all: say so plainly and suggest a section from the library instead.
 - Building course content, community posts, live events, cohorts and
   bundles: [Programs](/programs).
 - Selling or refunding gift cards, membership plans: [Finance](/finance).

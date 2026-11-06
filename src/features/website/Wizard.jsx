@@ -75,7 +75,7 @@ export default function Wizard({ onLaunch }) {
           />
         </Field>
 
-        <Field label="Your handle" hint="Your public URL. Letters, numbers, and hyphens only.">
+        <Field label="Your site address" hint="This becomes the web address people visit. Letters, numbers and hyphens only.">
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, border: '1px solid var(--border-strong)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
             <span style={{ padding: '10px 12px', color: 'var(--muted)', fontSize: 13, background: 'var(--surface-2)', borderRight: '1px solid var(--border)' }}>
               joinivy.ai/site/
@@ -83,7 +83,7 @@ export default function Wizard({ onLaunch }) {
             <input
               value={effectiveHandle}
               onChange={(e) => setHandle(slugify(e.target.value))}
-              placeholder={autoHandle || 'your-handle'}
+              placeholder={autoHandle || 'your-business'}
               style={{ ...inputStyle, border: 0, borderRadius: 0, flex: 1 }}
             />
           </div>

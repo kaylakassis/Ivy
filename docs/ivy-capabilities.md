@@ -31,6 +31,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 
 - **Same draft.** Ivy edits the same draft the editor autosaves (`websites.pages` plus the home mirror in `sections`). It applies the same link sanitising as `PUT /api/website`.
 - **Same transforms.** Page and section moves call the editor's own `src/features/website/pageTransforms.js`. An Ivy move and an editor move give the same draft, including re-pointed anchor links ("#gallery" buttons now open the page the section moved to).
+- **Same field rules.** Section data is validated against `src/features/website/sections.js` defaults: unknown fields are dropped, list entries keep only the fields that type of entry has, strings are capped. Type rules match the editor: video links must be YouTube, Vimeo or Loom (`src/lib/videoEmbed.js`), hours get the readable "9:00 AM to 5:00 PM" text (`hoursText.js`), process steps are auto-numbered, Instagram / social usernames become profile links (`socialLinks.js`), a map address is looked up for a pin when the change runs (best effort, never required).
 - **The open editor follows along.** It reloads the draft when the owner approves an Ivy action (the `ivy:actions-ran` event) and when the tab regains focus (`syncFromServer` in `src/features/website/state.js`). The draft that was on screen becomes one undo step, so the owner can undo Ivy's change in the editor. The editor's stored undo history already discards itself when the server draft differs (`restoreHistory`, tested in `tests/website-history.test.mjs`).
 
 | Owner action in the editor | Ivy | Approval card says |
@@ -38,6 +39,8 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | See pages, sections, versions | `get_website` (read) | none (read only) |
 | Build a site from a template | `create_website` | Build the website from the "X" template... replaces the draft |
 | Edit section text / fields, change layout | `edit_website_section` update | Change the 'Hero' ("...") section on Home: headline to "..." |
+| Edit one entry of a list ("change step 2 of how it works", "remove the third review", "add a plan") | `edit_website_section` update with `item_number` + `item` (or `remove_item`; `list_field` when the section has two lists, e.g. pricing_table `tiers` / `rows`) | Change the 'Process / How it works' section on Home: step 2: title to "..." |
+| Every section type the editor offers (shop, stats, call to action, team, pricing, pricing comparison, newsletter, video, logos, blog posts, Instagram, countdown, hours, map, accordion, process, before / after, social feed, plus the originals) | `edit_website_section` add / update. Fields and list-entry fields per type come from `get_website` (`sectionTypes[].fields` / `.lists`); each section's current lists are in the outline (`lists`, numbered) | Add a 'Team' section to Home (bottom) |
 | Add a section | `edit_website_section` add | Add a 'FAQ' section to Home (bottom) |
 | Remove, hide, show a section | remove / hide / show | Hide the 'Gallery' section on Home (it stays in the draft...) |
 | Reorder sections on a page | move (`position` index/top/bottom) | Move the 'Footer' section on Home to top of 5 |
@@ -56,7 +59,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Sticky button, exit popup, redirects, form destinations, favicon, share image, visibility | Not yet | |
 | Site handle (public address) | Not yet (changes the public URL; `create_website` sets it on a first build) | |
 | Custom domain | Owner only: DNS and domain verification, detaching a verified domain has side effects | |
-| Custom HTML / code sections, custom CSS | Owner only: raw code goes straight onto the public site, so only the owner places it, by hand | |
+| Code sections (custom_html, code_snippet), custom CSS | Nobody: Ivy no longer uses code sections anywhere. The library does not offer them, the server refuses new ones, and Ivy refuses to add, edit, duplicate or copy one ("Ivy no longer uses code sections..."). A section that already exists keeps rendering; Ivy can remove, hide, show or move it, and the editor shows a plain panel with Remove / Open section library | |
 
 ## Calendar and bookings
 
@@ -199,6 +202,7 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/ivy-website-parity.test.mjs`: every website operation is held before approval, the card text is exact, and the draft equals the editor's transforms after approval. Also covers publish and schedule, discard and restore, invalid input, and workspace isolation.
 - `tests/ivy-owner-tools.test.mjs`: each parity tool is held before approval, gives the right result after approval, refuses invalid input, stays inside its workspace, and writes truthful ledger lines.
 - `tests/ivy-website-tools.test.mjs`: the original build, edit and publish flow, now with every draft edit approval-gated.
+- `tests/website-editors.test.mjs`: every section type has a plain-language editor (set equality with `sections.js`), the library and Ivy's catalog exclude code types, the server and Ivy refuse new code sections while existing ones still save and render, per-type field validation, and "step 2" list edits.
 - `tests/client-merge.test.mjs`: duplicate detection precision, "Not the same person", the merge moving every client reference (the list of tables is read from the database catalog), opt-outs, cards and autopay, exactly-once, workspace isolation, and the Ivy approval flow for `merge_clients` and `dismiss_duplicate`.
 - `tests/accountability-partner.test.mjs`: the partner's list (each signal, first names only, workspace isolation), the cron (quiet hours, one a day, away check-ins then stop, the switch, testers and helpers and no-plan owners skipped), the settings endpoint, snooze, and `accountability_partner` held before approval.
 - `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy, documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.

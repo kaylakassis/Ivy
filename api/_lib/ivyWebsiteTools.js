@@ -14,7 +14,10 @@
 // taps Approve, is what runs. Nothing goes public unless the owner approves
 // publish_website.
 import { sql } from './db.js';
-import { SECTION_TYPES, STARTER_PACKS, FONT_PAIRS, mkSection } from '../../src/features/website/sections.js';
+import { SECTION_TYPES, STARTER_PACKS, FONT_PAIRS, mkSection, LIBRARY_SECTIONS, LEGACY_CODE_TYPES } from '../../src/features/website/sections.js';
+import { videoEmbedUrl, VIDEO_HOSTS_LABEL } from '../../src/lib/videoEmbed.js';
+import { normalizeDay } from '../../src/features/website/hoursText.js';
+import { normalizeInstagram, normalizeSocialUrl, normalizeSocialPlatform, SOCIAL_PLATFORM_IDS } from '../../src/features/website/socialLinks.js';
 import { TEMPLATES } from '../../src/features/website/templates.js';
 import {
   moveSectionToPage, copySectionToPage, moveSectionWithinPage, cloneSection, findSectionPage, uniquePageSlug,
@@ -30,9 +33,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const slugify = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 const MAX_PAGES = 50;
 const MAX_SECTIONS = 40;
-// Section types Ivy never adds or edits: raw HTML/code goes on the public
-// site as is, so only the owner places it, by hand, in the editor.
-const OWNER_ONLY_TYPES = new Set(['custom_html', 'code_snippet']);
+// Legacy code sections (custom_html, code_snippet). Ivy no longer uses
+// code sections anywhere: these cannot be added or edited by Ivy (nor by
+// the owner in the editor any more); an existing one can still be removed,
+// hidden, shown or moved.
+const OWNER_ONLY_TYPES = LEGACY_CODE_TYPES;
+const CODE_ADD_REFUSED = 'Ivy no longer uses code sections, so that type cannot be added. Pick a section from the library instead (get_website lists them)';
+const CODE_EDIT_REFUSED = 'This section was added with code and Ivy no longer uses code sections. It can be removed, hidden or moved, but not edited or copied';
 
 const SECTION_ACTIONS = ['update', 'add', 'remove', 'hide', 'show', 'move', 'duplicate', 'move_to_page', 'copy_to_page'];
 const PAGE_ACTIONS = ['add', 'rename', 'remove', 'move', 'show_in_nav', 'hide_from_nav'];
@@ -59,7 +66,7 @@ export const WEBSITE_TOOLS = [
   },
   {
     name: 'edit_website_section',
-    description: "Change sections on the website draft, same as the editor: update (text/fields in `data`, layout `variant`), add (`type`), remove, hide, show, move (reorder on its page), duplicate, move_to_page / copy_to_page (to `target_page`, or to a new page named `new_page_title`; buttons that pointed at a moved section are re-pointed). Ids from get_website.",
+    description: "Change sections on the website draft, same as the editor: update (text/fields in `data`, layout `variant`, or one entry of a list with `item_number` + `item`, e.g. step 2 of a Process section), add (`type`), remove, hide, show, move (reorder on its page), duplicate, move_to_page / copy_to_page (to `target_page`, or to a new page named `new_page_title`; buttons that pointed at a moved section are re-pointed). Ids and each section's current lists (steps, items, members, tiers...) come from get_website. Links: '' = the default, '#book' = booking page, '#<page-slug>' = a page, or a full https address.",
     input_schema: {
       type: 'object',
       properties: {
@@ -67,7 +74,11 @@ export const WEBSITE_TOOLS = [
         page_slug:      { type: 'string', description: "Page of the section ('' = home). Needed for add." },
         section_id:     { type: 'string' },
         type:           { type: 'string', description: 'Section type for add.' },
-        data:           { type: 'object', description: 'Fields to set, e.g. {"headline":"...","cta":"Book now"}. Only fields of that section type.' },
+        data:           { type: 'object', description: 'Fields to set, e.g. {"headline":"...","cta":"Book now"}. Only fields of that section type; a list field replaces the whole list.' },
+        list_field:     { type: 'string', description: "Which list to change when the section has more than one (e.g. 'rows' or 'tiers' on a pricing_table). Optional when there is only one." },
+        item_number:    { type: 'integer', description: '1-based position of the list entry to change or remove (step 2 = 2).' },
+        item:           { type: 'object', description: 'Fields to set on that entry (with item_number), or a new entry to add at the end (without item_number).' },
+        remove_item:    { type: 'boolean', description: 'With item_number: remove that entry.' },
         variant:        { type: 'string' },
         position:       { description: "Zero-based index, or 'top' / 'bottom' (default bottom)." },
         target_page:    { type: 'string', description: 'Slug of the page to move/copy to.' },
@@ -203,6 +214,28 @@ function sectionSummary(s) {
   for (const k of ['headline', 'sub', 'cta', 'ctaLink', 'body', 'title']) if (typeof d[k] === 'string' && d[k]) out[k] = d[k].slice(0, 160);
   if (Array.isArray(d.items)) out.items = d.items.length;
   if (Array.isArray(d.images)) out.images = d.images.length;
+  if (OWNER_ONLY_TYPES.has(s.type)) { out.legacyCode = true; return out; }
+  // Every list the section has (steps, items, members, tiers, rows, days,
+  // logos, posts, photos), numbered the way a visitor counts them, so Ivy
+  // can change "step 2" without guessing. Text is clipped.
+  const lists = {};
+  for (const [k, v] of Object.entries(d)) {
+    if (!Array.isArray(v) || !v.length) continue;
+    lists[k] = v.slice(0, 20).map((it, i) => {
+      if (!it || typeof it !== 'object') return { n: i + 1, value: typeof it === 'string' ? it.slice(0, 120) : it };
+      const row = { n: i + 1 };
+      for (const [ik, iv] of Object.entries(it)) {
+        if (ik === 'id') continue;
+        if (typeof iv === 'string') row[ik] = iv.slice(0, 120);
+        else if (Array.isArray(iv)) row[ik] = iv.slice(0, 20).map((x) => (typeof x === 'string' ? x.slice(0, 80) : x));
+        else if (typeof iv === 'number' || typeof iv === 'boolean' || iv === null) row[ik] = iv;
+      }
+      return row;
+    });
+    if (v.length > 20) lists[k].push({ more: v.length - 20 });
+  }
+  if (Object.keys(lists).length) out.lists = lists;
+  for (const k of ['videoUrl', 'url', 'address', 'endDate', 'platform', 'showMap', 'showOutOfStock']) if (d[k] != null && d[k] !== '') out[k] = typeof d[k] === 'string' ? d[k].slice(0, 200) : d[k];
   return out;
 }
 
@@ -243,30 +276,184 @@ function fmtWhen(d, tz) {
 }
 
 const TEMPLATE_PACKS = Object.values(STARTER_PACKS).map((p) => ({ id: p.id, label: p.label, description: p.desc }));
-const SECTION_CATALOG = Object.entries(SECTION_TYPES).filter(([type]) => !OWNER_ONLY_TYPES.has(type)).map(([type, cfg]) => ({
-  type, label: cfg.label, description: cfg.desc,
-  variants: (cfg.variants || []).map((v) => v.id),
-  fields: Object.keys(typeof cfg.default === 'function' ? cfg.default('') : {}),
-}));
+const sectionDefaults = (type) => (typeof SECTION_TYPES[type]?.default === 'function' ? SECTION_TYPES[type].default('') : {});
+// Field names of one entry of a list field (from the type's default
+// data), or null for a list of plain strings.
+function itemShape(type, key) {
+  const d = sectionDefaults(type)[key];
+  if (!Array.isArray(d) || !d.length || !d[0] || typeof d[0] !== 'object') return null;
+  return Object.keys(d[0]);
+}
+const SECTION_CATALOG = LIBRARY_SECTIONS.map((cfg) => {
+  const defaults = sectionDefaults(cfg.type);
+  const lists = {};
+  for (const k of Object.keys(defaults)) { const shape = itemShape(cfg.type, k); if (shape) lists[k] = shape.filter((x) => x !== 'id'); else if (Array.isArray(defaults[k])) lists[k] = 'text'; }
+  return {
+    type: cfg.type, label: cfg.label, description: cfg.desc,
+    variants: (cfg.variants || []).map((v) => v.id),
+    fields: Object.keys(defaults),
+    ...(Object.keys(lists).length ? { lists } : {}),
+  };
+});
+
+const S = (v, n = 4000) => String(v ?? '').slice(0, n);
+const LIST_MAX = 60;
+
+// One entry of a list field, limited to the fields that type of entry
+// has (unknown fields are dropped; an entry with none of them is refused
+// with the field list, so Ivy can retry). Strings are capped.
+function cleanItem(type, key, raw, idx, prev = null) {
+  const shape = itemShape(type, key);
+  if (!shape) {
+    if (typeof raw === 'string') return S(raw, 400);
+    if (typeof raw === 'number' || typeof raw === 'boolean') return raw;
+    throw new Error(`Each entry of ${key} on a ${typeLabel(type)} section is a short text`);
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Each entry of ${key} needs these fields: ${shape.filter((k) => k !== 'id').join(', ')}`);
+  const out = prev && typeof prev === 'object' ? { ...prev } : {};
+  let any = false;
+  for (const k of shape) {
+    if (!(k in raw)) continue;
+    const v = raw[k];
+    if (k === 'id') { if (v != null) out.id = S(v, 64); continue; }
+    if (Array.isArray(v)) out[k] = v.slice(0, LIST_MAX).map((x) => (typeof x === 'string' ? S(x, 400) : x));
+    else if (typeof v === 'string') out[k] = S(v);
+    else if (typeof v === 'number' || typeof v === 'boolean' || v === null) out[k] = v;
+    else continue;
+    any = true;
+  }
+  if (!any) throw new Error(`None of those are fields of a ${key} entry on a ${typeLabel(type)} section. Fields: ${shape.filter((k) => k !== 'id').join(', ')}`);
+  if (!out.id) out.id = `${key.slice(0, 1)}${Date.now().toString(36)}${idx}${Math.floor(Math.random() * 1e4)}`;
+  return out;
+}
 
 // Merge owner-facing fields into section.data. Keys must already exist on
 // the section (its type's defaults), so Ivy cannot invent fields the
-// renderer ignores. Strings are capped; arrays and objects pass through.
-// Returns the keys that were set.
+// renderer ignores. Strings are capped; list entries are checked against
+// the entry shape of that list. Returns the keys that were set.
 function mergeData(section, data) {
-  const defaults = typeof SECTION_TYPES[section.type]?.default === 'function' ? SECTION_TYPES[section.type].default('') : {};
+  const defaults = sectionDefaults(section.type);
   section.data = section.data && typeof section.data === 'object' ? section.data : {};
   const set = [];
   for (const [k, v] of Object.entries(data)) {
     if (!(k in defaults) && !(k in section.data)) continue;
-    if (typeof v === 'string') section.data[k] = v.slice(0, 4000);
+    if (typeof v === 'string') section.data[k] = S(v);
     else if (typeof v === 'number' || typeof v === 'boolean' || v === null) section.data[k] = v;
-    else if (Array.isArray(v)) section.data[k] = v.slice(0, 60);
+    else if (Array.isArray(v)) section.data[k] = v.slice(0, LIST_MAX).map((it, i) => cleanItem(section.type, k, it, i));
     else if (typeof v === 'object') section.data[k] = v;
     else continue;
     set.push(k);
   }
   return set;
+}
+
+// The one list field of a section, or the named one.
+function listFieldOf(section, wanted) {
+  const defaults = sectionDefaults(section.type);
+  const listKeys = Object.keys(defaults).filter((k) => Array.isArray(defaults[k]));
+  if (wanted) {
+    if (!listKeys.includes(String(wanted))) throw new Error(`"${wanted}" is not a list on a ${typeLabel(section.type)} section${listKeys.length ? `. Lists: ${listKeys.join(', ')}` : ''}`);
+    return String(wanted);
+  }
+  if (listKeys.length === 1) return listKeys[0];
+  if (!listKeys.length) throw new Error(`A ${typeLabel(section.type)} section has no list to change`);
+  throw new Error(`Say which list with list_field: ${listKeys.join(', ')}`);
+}
+
+// Change one entry of a list ("step 2", "the third review"): update it,
+// remove it, or add a new one at the end. Returns a plain-English part.
+function editListItem(section, a) {
+  const key = listFieldOf(section, a.list_field);
+  const list = Array.isArray(section.data[key]) ? section.data[key].slice() : [];
+  const singular = key.replace(/s$/, '');
+  const n = a.item_number == null || a.item_number === '' ? null : Number(a.item_number);
+  if (n != null && (!Number.isInteger(n) || n < 1 || n > list.length)) {
+    throw new Error(list.length ? `item_number must be between 1 and ${list.length} (the section has ${list.length} ${key})` : `That section has no ${key} yet; add one with item (no item_number)`);
+  }
+  if (a.remove_item === true) {
+    if (n == null) throw new Error('remove_item needs item_number');
+    list.splice(n - 1, 1);
+    section.data[key] = list;
+    return `remove ${singular} ${n}`;
+  }
+  if (!a.item || typeof a.item !== 'object' || Array.isArray(a.item)) throw new Error('item must be an object of fields to set');
+  if (n == null) {
+    if (list.length >= LIST_MAX) throw new Error(`Up to ${LIST_MAX} ${key}`);
+    list.push(cleanItem(section.type, key, a.item, list.length));
+    section.data[key] = list;
+    return `add ${singular} ${list.length}`;
+  }
+  list[n - 1] = cleanItem(section.type, key, a.item, n - 1, list[n - 1]);
+  section.data[key] = list;
+  const changed = Object.keys(a.item).filter((k) => k !== 'id').slice(0, 4).map((k) => (typeof a.item[k] === 'string' ? `${k} to "${clip(a.item[k], 50)}"` : k));
+  return `${singular} ${n}: ${changed.join(', ')}`;
+}
+
+// Type-specific tidy-up after a merge, same as the editor does as the
+// owner types. Throws a plain message for a value the site cannot show.
+const pad2 = (n) => String(n).padStart(2, '0');
+function finishSection(section, prevData = {}) {
+  const d = section.data;
+  const t = section.type;
+  if (t === 'video' && typeof d.videoUrl === 'string' && d.videoUrl.trim() && !videoEmbedUrl(d.videoUrl)) {
+    throw new Error(`That is not a ${VIDEO_HOSTS_LABEL} link. Ask the owner for the link from the video's Share button`);
+  }
+  if (t === 'hours' && Array.isArray(d.days)) d.days = d.days.map(normalizeDay);
+  if (t === 'process' && Array.isArray(d.steps) && d.steps.every((s) => !String(s.number ?? '').trim() || /^\d{1,2}$/.test(String(s.number).trim()))) {
+    d.steps = d.steps.map((s, i) => ({ ...s, number: pad2(i + 1) }));
+  }
+  if (t === 'instagram' && typeof d.url === 'string') d.url = normalizeInstagram(d.url);
+  if (t === 'social_feed') {
+    if (d.platform != null) {
+      const p = normalizeSocialPlatform(d.platform);
+      if (!p) throw new Error(`platform must be one of: ${SOCIAL_PLATFORM_IDS.join(', ')}`);
+      d.platform = p;
+    }
+    if (typeof d.url === 'string') d.url = normalizeSocialUrl(d.platform, d.url);
+  }
+  if (t === 'countdown' && typeof d.endDate === 'string' && d.endDate.trim()) {
+    const at = new Date(d.endDate);
+    if (Number.isNaN(at.getTime())) throw new Error('endDate must be a date and time, e.g. 2026-12-01T09:00:00-05:00');
+    d.endDate = at.toISOString();
+  }
+  if (t === 'map') {
+    const addressChanged = typeof d.address === 'string' && d.address.trim() && d.address.trim() !== String(prevData.address || '').trim();
+    const pinGiven = Number.isFinite(Number(d.lat)) && Number.isFinite(Number(d.lng)) && d.lat != null && d.lng != null;
+    // A new address with no pin: find it on the map when the change runs.
+    if (addressChanged && (!pinGiven || (d.lat === prevData.lat && d.lng === prevData.lng))) section.__geocode = d.address.trim();
+  }
+}
+
+// Best-effort address lookup (same service the editor's "Find this address
+// on the map" uses). Never fails the save: without a pin the section shows
+// the address only.
+async function geocodeAddress(address) {
+  try {
+    const params = new URLSearchParams({ q: address, format: 'json', addressdetails: '0', limit: '1' });
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { 'User-Agent': 'Ivy/1.0 (https://joinivy.ai; geocoding via Nominatim)', Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return null;
+    const data = await r.json().catch(() => []);
+    const top = Array.isArray(data) ? data[0] : null;
+    if (!top) return null;
+    const lat = Number(top.lat); const lng = Number(top.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  } catch { return null; }
+}
+
+// Resolve any pending map lookups, then drop the marker field.
+async function resolveGeocodes(pages) {
+  for (const p of pages) {
+    for (const s of p.sections || []) {
+      if (!s.__geocode) continue;
+      const pin = await geocodeAddress(s.__geocode);
+      if (pin) { s.data.lat = pin.lat; s.data.lng = pin.lng; }
+      delete s.__geocode;
+    }
+  }
+  return pages;
 }
 
 function describeFieldChanges(section, keys) {
@@ -290,7 +477,7 @@ function planSectionEdit(row, workspaceId, a) {
   if (!SECTION_ACTIONS.includes(action)) throw new Error(`action must be one of: ${SECTION_ACTIONS.join(', ')}`);
   const biz = row.business_name || '';
   const save = (next, extra = {}) => async () => {
-    const saved = await savePages(workspaceId, next);
+    const saved = await savePages(workspaceId, await resolveGeocodes(next));
     return { ok: true, ...extra, pages: saved.map((p) => ({ slug: p.slug || '', title: p.title, sections: (p.sections || []).map(sectionSummary) })) };
   };
 
@@ -299,13 +486,14 @@ function planSectionEdit(row, workspaceId, a) {
     const page = pages.find((p) => p.slug === slug);
     if (!page) throw noPage(slug, pages);
     const type = String(a.type || '');
-    if (OWNER_ONLY_TYPES.has(type)) throw new Error(`${typeLabel(type)} sections can only be added by the owner in the Website editor.`);
+    if (OWNER_ONLY_TYPES.has(type)) throw new Error(CODE_ADD_REFUSED);
     if (!SECTION_TYPES[type]) throw new Error(`Unknown section type "${type}"`);
     if (page.sections.length >= MAX_SECTIONS) throw new Error(`A page can hold up to ${MAX_SECTIONS} sections`);
     const pos = parsePosition(a.position);
     const s = mkSection(type, biz);
     if (a.variant && (SECTION_TYPES[type].variants || []).some((v) => v.id === a.variant)) s.variant = a.variant;
     if (a.data && typeof a.data === 'object') mergeData(s, a.data);
+    finishSection(s, {});
     page.sections.splice(indexFor(pos, page.sections.length), 0, s);
     const where = `${pageName(page)} (${posWords(pos)})`;
     return {
@@ -324,11 +512,13 @@ function planSectionEdit(row, workspaceId, a) {
   const name = sectionName(s);
   const on = pageName(page);
   if (OWNER_ONLY_TYPES.has(s.type) && (action === 'update' || action === 'duplicate' || action === 'copy_to_page')) {
-    throw new Error(`${typeLabel(s.type)} sections can only be edited by the owner in the Website editor.`);
+    throw new Error(CODE_EDIT_REFUSED);
   }
 
   if (action === 'update') {
     const parts = [];
+    const prevData = JSON.parse(JSON.stringify(s.data || {}));
+    s.data = s.data && typeof s.data === 'object' ? s.data : {};
     if (a.variant) {
       const v = (SECTION_TYPES[s.type]?.variants || []).find((x) => x.id === a.variant);
       if (!v) throw new Error(`"${a.variant}" is not a layout of ${s.type}. Layouts: ${(SECTION_TYPES[s.type]?.variants || []).map((x) => x.id).join(', ') || 'none'}`);
@@ -337,13 +527,15 @@ function planSectionEdit(row, workspaceId, a) {
     }
     if (a.data && typeof a.data === 'object' && !Array.isArray(a.data)) {
       const keys = mergeData(s, a.data);
-      if (!keys.length && !parts.length) {
+      if (!keys.length && !parts.length && a.item == null && a.remove_item !== true) {
         const fields = Object.keys(SECTION_TYPES[s.type]?.default?.('') || {});
         throw new Error(`None of those fields exist on a ${s.type} section. Fields: ${fields.join(', ')}`);
       }
       if (keys.length) parts.push(describeFieldChanges(s, keys));
     }
-    if (!parts.length) throw new Error('Nothing to change: pass data and/or variant');
+    if (a.item != null || a.remove_item === true || a.item_number != null) parts.push(editListItem(s, a));
+    if (!parts.length) throw new Error('Nothing to change: pass data, variant, or item / item_number');
+    finishSection(s, prevData);
     return {
       summary: `Change the ${name} section on ${on}: ${parts.join('; ')}`,
       done: `Website draft: changed the ${name} section on ${on}`,
@@ -450,7 +642,7 @@ function planPageEdit(row, workspaceId, a) {
     if (pages.some((p) => p.slug === newSlug)) throw new Error(`A page with slug "${newSlug}" already exists`);
     const types = Array.isArray(a.section_types) && a.section_types.length ? a.section_types.slice(0, MAX_SECTIONS).map(String) : ['hero', 'footer'];
     const bad = types.find((t) => !SECTION_TYPES[t] || OWNER_ONLY_TYPES.has(t));
-    if (bad) throw new Error(`Unknown section type "${bad}"`);
+    if (bad) throw new Error(OWNER_ONLY_TYPES.has(bad) ? CODE_ADD_REFUSED : `Unknown section type "${bad}"`);
     const page = {
       id: `pg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6)}`, slug: newSlug, title, inNav: true,
       sections: types.map((t) => mkSection(t, row.business_name || '')),
