@@ -78,7 +78,9 @@ async function handler(req, res) {
              FROM workspaces w
              JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
              LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
-            WHERE w.subscription_status IN ('trialing', 'active')
+            WHERE (w.subscription_status IN ('trialing', 'active')
+                   -- Complimentary access: no trial or plan, but set up like anyone.
+                   OR w.comp_until > NOW())
               AND w.onboarded_at IS NOT NULL
               AND w.onboarded_at < NOW() - INTERVAL '2 days'
               AND w.onboarded_at > NOW() - INTERVAL '30 days'

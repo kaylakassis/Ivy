@@ -26,12 +26,13 @@ function mkRes() {
 const cronReq = () => ({ method: 'POST', url: '/api/cron/setup-nudge', headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
 
 // Onboarded owner. opts: onboardedDaysAgo, verified, complete (full setup), nudged.
-async function mkOwner(tag, { onboardedDaysAgo = 3, verified = false, complete = false, nudged = false }) {
+async function mkOwner(tag, { onboardedDaysAgo = 3, verified = false, complete = false, nudged = false, comp = false }) {
   const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at, email_verified_at)
     VALUES (${`${tag}@example.com`}, 'x', '2026-05-05', NOW(), ${verified ? new Date().toISOString() : null})
     RETURNING id`).rows[0].id;
-  const ws = (await sql`INSERT INTO workspaces (owner_id, subscription_status, onboarded_at, setup_nudge_sent_at)
-    VALUES (${uid}, 'trialing', NOW() - ${`${onboardedDaysAgo} days`}::interval, ${nudged ? new Date().toISOString() : null})
+  const ws = (await sql`INSERT INTO workspaces (owner_id, subscription_status, onboarded_at, setup_nudge_sent_at, comp_until)
+    VALUES (${uid}, ${comp ? 'incomplete' : 'trialing'}, NOW() - ${`${onboardedDaysAgo} days`}::interval, ${nudged ? new Date().toISOString() : null},
+            ${comp ? new Date(Date.now() + 90 * 864e5).toISOString() : null})
     RETURNING id`).rows[0].id;
   if (complete) {
     await sql`INSERT INTO calendar_settings (workspace_id, biz_name, slug, availability)
@@ -63,6 +64,7 @@ async function run() {
     const done   = await mkOwner(`${tag}-done`,   { onboardedDaysAgo: 3, verified: true, complete: true });
     const fresh  = await mkOwner(`${tag}-fresh`,  { onboardedDaysAgo: 1, verified: true, complete: false });
     const already = await mkOwner(`${tag}-already`, { onboardedDaysAgo: 3, verified: true, complete: false, nudged: true });
+    const comped = await mkOwner(`${tag}-comp`, { onboardedDaysAgo: 3, verified: true, complete: false, comp: true });
 
     const res1 = mkRes();
     await setupNudge(cronReq(), res1);
@@ -71,6 +73,7 @@ async function run() {
     assert(await nudgeAt(done.ws) === null, 'fully-set-up owner is NOT nudged');
     assert(await nudgeAt(fresh.ws) === null, 'too-fresh owner (<2 days) is NOT selected');
     assert(await nudgeAt(already.ws) !== null, 'already-nudged owner stays stamped (skipped)');
+    assert(await nudgeAt(comped.ws) !== null, 'complimentary-access owner (no trial or plan) with a gap gets nudged');
 
     console.log('\n[3] second run does not re-fire');
     const before = await nudgeAt(gap.ws);
