@@ -19,9 +19,10 @@ import { SITE_HISTORY_PREFIX } from '../../lib/deviceCache.js';
 import { IVY_ACTIONS_RAN_EVENT } from '../ivy/openIvy.js';
 import * as H from './history.js';
 import {
-  cloneSection, moveSectionWithinPage, uniquePageSlug,
+  cloneSection, moveSectionWithinPage, uniquePageSlug, findSectionPage,
   moveSectionToPage as moveToPage, copySectionToPage as copyToPage,
 } from './pageTransforms.js';
+import { isLegacyCodeType } from './sections.js';
 
 let pageCounter = 0;
 function mkPageId() {
@@ -425,6 +426,9 @@ export function useWebsite({ userId = null } = {}) {
     updatePage(currentPage.id, (p) => {
       const i = p.sections.findIndex((sec) => sec.id === id);
       if (i < 0) return p;
+      // Legacy code sections can stay, but never multiply (the server
+      // refuses a new one too).
+      if (isLegacyCodeType(p.sections[i].type)) return p;
       const next = p.sections.slice();
       next.splice(i + 1, 0, cloneSection(p.sections[i]));
       return { ...p, sections: next };
@@ -474,6 +478,8 @@ export function useWebsite({ userId = null } = {}) {
   const copySectionToPage = useCallback((sectionId, target, position = 'bottom') => {
     let out = { copied: false, pageId: null, newId: null };
     mutate((s) => {
+      const src = findSectionPage(s.pages, sectionId)?.sections.find((x) => x.id === sectionId);
+      if (src && isLegacyCodeType(src.type)) return s;
       const t = resolveTarget(s, target);
       const r = copyToPage(t.pages, sectionId, t.pageId, position);
       if (!r.copied) return s;

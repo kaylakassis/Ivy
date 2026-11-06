@@ -11,6 +11,7 @@
 // whatever the per-section renderer outputs - keeps the renderers focused.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveSiteLink } from '../../lib/siteLinks.js';
+import { videoEmbedUrl, VIDEO_HOSTS_LABEL } from '../../lib/videoEmbed.js';
 import { safeHref } from '../../lib/safeHref.js';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // These modules only load when a customer site is rendered or edited, so
@@ -697,10 +698,10 @@ function Heading({ text, sub, align = 'center', editable = false, onCommit = nul
   );
 }
 
-function Fallback({ data }) {
+function Fallback() {
   return (
     <section style={{ padding: 48, textAlign: 'center', color: 'var(--site-muted)' }}>
-      Unsupported section: {JSON.stringify(data)}
+      This section can't be shown.
     </section>
   );
 }
@@ -791,6 +792,7 @@ function CtaBanner({ data, editable, onUpdate }) {
 
 // ---------- Team ----------
 function Team({ data }) {
+  const link = useLink();
   const members = data.members || [];
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
@@ -812,7 +814,9 @@ function Team({ data }) {
                 border: '1px solid var(--site-border)',
               }}/>
               <div style={{ marginTop: 18, textAlign: 'center' }}>
-                <div style={{ fontSize: 20, fontWeight: 550, fontFamily: 'var(--site-font-display)' }}>{m.name}</div>
+                <div style={{ fontSize: 20, fontWeight: 550, fontFamily: 'var(--site-font-display)' }}>
+                  {m.link ? <a href={link(m.link)} style={{ color: 'inherit', textDecoration: 'underline', textDecorationThickness: 1, textUnderlineOffset: 3 }}>{m.name}</a> : m.name}
+                </div>
                 <div style={{ fontSize: 12, color: 'var(--site-muted)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{m.role}</div>
                 {m.bio && <p style={{ margin: '14px 0 0', fontSize: 14, color: 'var(--site-fg-2)', lineHeight: 1.55 }}>{m.bio}</p>}
               </div>
@@ -946,7 +950,7 @@ function Newsletter({ data, handle, editable }) {
 
 // ---------- Video ----------
 function Video({ data }) {
-  const embedUrl = toEmbedUrl(data.videoUrl);
+  const embedUrl = videoEmbedUrl(data.videoUrl);
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
       <div style={container}>
@@ -972,7 +976,7 @@ function Video({ data }) {
               alignItems: 'center', justifyContent: 'center',
               fontSize: 13, color: 'var(--site-muted)',
             }}>
-              Paste a YouTube or Vimeo URL in the Inspector to embed the video.
+              {data.videoUrl ? `That link is not a ${VIDEO_HOSTS_LABEL} video.` : 'Add a link to your video in the Edit panel.'}
             </div>
           )}
         </div>
@@ -981,31 +985,9 @@ function Video({ data }) {
   );
 }
 
-// Convert YouTube / Vimeo watch URLs into the corresponding embed URL.
-// Returns null when the URL doesn't match a known provider.
-function toEmbedUrl(url) {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    const host = u.hostname.replace(/^www\./, '');
-    if (host === 'youtube.com' || host === 'm.youtube.com') {
-      const v = u.searchParams.get('v');
-      if (v) return `https://www.youtube.com/embed/${v}`;
-    }
-    if (host === 'youtu.be') {
-      return `https://www.youtube.com/embed${u.pathname}`;
-    }
-    if (host === 'vimeo.com') {
-      const id = u.pathname.replace(/^\//, '');
-      if (/^\d+$/.test(id)) return `https://player.vimeo.com/video/${id}`;
-    }
-    // Generic - assume the URL is already an embed URL.
-    return url;
-  } catch { return null; }
-}
-
 // ---------- Featured-in logos ----------
 function Logos({ data }) {
+  const link = useLink();
   const logos = data.logos || [];
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
@@ -1019,17 +1001,20 @@ function Logos({ data }) {
           display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
           gap: 48, opacity: 0.75,
         }}>
-          {logos.map((l) => (
-            l.imgUrl ? (
-              <img key={l.id} src={l.imgUrl} alt={l.name}
-                style={{ height: 32, width: 'auto', filter: 'grayscale(100%)' }}/>
+          {logos.map((l) => {
+            const inner = l.imgUrl ? (
+              <img src={l.imgUrl} alt={l.name}
+                style={{ height: 32, width: 'auto', filter: 'grayscale(100%)', display: 'block' }}/>
             ) : (
-              <div key={l.id} style={{
+              <div style={{
                 fontFamily: 'var(--site-font-display)', fontSize: 22, fontWeight: 500,
                 letterSpacing: '-0.01em', color: 'var(--site-fg-2)',
               }}>{l.name}</div>
-            )
-          ))}
+            );
+            return l.link
+              ? <a key={l.id} href={link(l.link)} title={l.name} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
+              : <React.Fragment key={l.id}>{inner}</React.Fragment>;
+          })}
         </div>
       </div>
     </section>
@@ -1166,7 +1151,7 @@ function Instagram({ data }) {
             </a>
           ) : (
             <div style={{ fontSize: 13, color: 'var(--site-muted)' }}>
-              Paste an Instagram post or reel URL in the Inspector.
+              Add your Instagram username or a post link in the Edit panel.
             </div>
           )}
         </div>
@@ -1284,10 +1269,14 @@ function Hours({ data }) {
 }
 
 // ---------- Map (OpenStreetMap iframe - no API key required) ----------
-function Map({ data }) {
+function Map({ data, editable }) {
   const zoom = Number(data.zoom) || 14;
-  const lat  = Number(data.lat) || 0;
-  const lng  = Number(data.lng) || 0;
+  const lat  = Number(data.lat);
+  const lng  = Number(data.lng);
+  // No pin until the address has been found (lat/lng set by the editor's
+  // lookup). Older sites may still carry the old default pin.
+  const hasPin = data.lat != null && data.lng != null && Number.isFinite(lat) && Number.isFinite(lng);
+  const show = data.showMap !== false;
   const span = 0.01 / Math.max(0.5, zoom / 14);
   // OSM expects bbox=lonMin,latMin,lonMax,latMax.
   const bbox = [lng - span, lat - span, lng + span, lat + span].join(',');
@@ -1295,10 +1284,17 @@ function Map({ data }) {
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
       <div style={container}>
-        {data.headline && <Heading text={data.headline} sub={data.address}/>}
-        <div style={{ marginTop: data.headline ? 32 : 0, borderRadius: 'var(--site-radius)', overflow: 'hidden', border: '1px solid var(--site-border)' }}>
-          <iframe title="Map" src={src} style={{ width: '100%', height: 360, border: 0 }} loading="lazy"/>
-        </div>
+        {(data.headline || data.address) && <Heading text={data.headline || ''} sub={data.address}/>}
+        {show && hasPin && (
+          <div style={{ marginTop: data.headline ? 32 : 0, borderRadius: 'var(--site-radius)', overflow: 'hidden', border: '1px solid var(--site-border)' }}>
+            <iframe title="Map" src={src} style={{ width: '100%', height: 360, border: 0 }} loading="lazy"/>
+          </div>
+        )}
+        {show && !hasPin && editable && (
+          <div style={{ marginTop: 24, padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--site-muted)', border: '1px dashed var(--site-border)', borderRadius: 'var(--site-radius)' }}>
+            Type your address in the Edit panel and we will put it on the map.
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1385,7 +1381,9 @@ function BeforeAfter({ data }) {
   );
 }
 
-// ---------- Social feed (generic embed) ----------
+// ---------- Social feed (a button to the owner's profile) ----------
+const SOCIAL_LABELS = { tiktok: 'TikTok', x: 'X', twitter: 'X', linkedin: 'LinkedIn', facebook: 'Facebook', youtube: 'YouTube', threads: 'Threads', instagram: 'Instagram' };
+export function socialLabel(p) { return SOCIAL_LABELS[String(p || '').toLowerCase()] || (p ? String(p) : 'social'); }
 function SocialFeed({ data }) {
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
@@ -1399,11 +1397,11 @@ function SocialFeed({ data }) {
               background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
               borderRadius: 'var(--site-radius)', textDecoration: 'none', fontWeight: 600,
             }}>
-              View on {data.platform || 'social'} →
+              View on {socialLabel(data.platform)} →
             </a>
           ) : (
             <div style={{ fontSize: 13, color: 'var(--site-muted)' }}>
-              Paste a {data.platform || 'social'} URL in the Inspector.
+              Add your {socialLabel(data.platform)} profile in the Edit panel.
             </div>
           )}
         </div>
@@ -1433,8 +1431,8 @@ function CustomHtml({ data }) {
 // Cart state lives in sessionStorage keyed by handle so a refresh
 // doesn't dump it. Checkout POSTs to /api/site/:handle/checkout which
 // resolves to a Stripe Checkout Session URL the browser navigates to.
-function Shop({ section, handle }) {
-  const { headline = 'Shop', sub = '', showOutOfStock = false } = section.props || {};
+function Shop({ data, handle }) {
+  const { headline = 'Shop', sub = '', showOutOfStock = false } = data || {};
   const [products, setProducts] = React.useState(null);
   const [err, setErr]           = React.useState(null);
   const [cart, setCart]         = React.useState({});           // { productId: qty }

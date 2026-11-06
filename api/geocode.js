@@ -10,7 +10,7 @@ import { requireUser } from './_lib/auth.js';
 import { readBody } from './_lib/body.js';
 import { requireSameOrigin } from './_lib/security.js';
 import { enforce, getClientIp } from './_lib/rate-limit.js';
-import { badRequest, methodNotAllowed, ok, serverError } from './_lib/json.js';
+import { badRequest, methodNotAllowed, ok, serverError, serviceUnavailable } from './_lib/json.js';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 // Nominatim's usage policy requires a real User-Agent identifying the app.
@@ -46,10 +46,18 @@ export default async function handler(req, res) {
       addressdetails: '0',
       limit: '1',
     });
-    const r = await fetch(`${NOMINATIM}?${params.toString()}`, {
-      headers: { 'User-Agent': UA, 'Accept': 'application/json' },
-    });
-    if (!r.ok) return badRequest(res, `Geocoder returned HTTP ${r.status}`);
+    let r;
+    try {
+      r = await fetch(`${NOMINATIM}?${params.toString()}`, {
+        headers: { 'User-Agent': UA, 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch {
+      // The map service is down or unreachable: not our error, and the
+      // owner can simply try again.
+      return serviceUnavailable(res, 'The map service is not reachable right now. Please try again in a moment.');
+    }
+    if (!r.ok) return serviceUnavailable(res, 'The map service is not responding right now. Please try again in a moment.');
     const data = await r.json().catch(() => []);
     if (!Array.isArray(data) || data.length === 0) {
       return ok(res, { match: null });

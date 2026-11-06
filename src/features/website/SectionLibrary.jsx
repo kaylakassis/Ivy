@@ -17,7 +17,7 @@
 //     copies the section to another page.
 import React, { useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
-import { SECTION_LIST, SECTION_TYPES, SECTION_CATEGORIES } from './sections.js';
+import { LIBRARY_SECTIONS, SECTION_TYPES, SECTION_CATEGORIES } from './sections.js';
 import { usePointerReorder, gripKeyDown } from './usePointerReorder.js';
 import { dropGapToIndex } from './pageTransforms.js';
 import { ActionMenu } from './EditorOverlays.jsx';
@@ -36,7 +36,7 @@ export default function SectionLibrary({
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return SECTION_LIST.filter((s) => {
+    return LIBRARY_SECTIONS.filter((s) => {
       if (category !== 'all' && (s.category || 'content') !== category) return false;
       if (!needle) return true;
       return (

@@ -10,14 +10,22 @@ export const SECTION_CATEGORIES = {
   content:      { label: 'Content' },
   cta:          { label: 'Calls to action' },
   commerce:     { label: 'Pricing & commerce' },
-  embed:        { label: 'Embeds & media' },
+  embed:        { label: 'Media & social' },
 };
+
+// Section types that were added by pasting code. They are no longer in the
+// library (owners never see or type code in Ivy), Ivy's tools refuse to add
+// or edit them, and the server refuses new ones. Sites that already have
+// one keep rendering exactly as before; the editor shows a plain panel with
+// Remove / Open section library.
+export const LEGACY_CODE_TYPES = new Set(['code_snippet', 'custom_html']);
+export const isLegacyCodeType = (type) => LEGACY_CODE_TYPES.has(type);
 
 export const SECTION_TYPES = {
   hero: {
     label: 'Hero',
     icon: 'Home',
-    desc: 'Big headline + call to action',
+    desc: 'Big headline and a button',
     category: 'header',
     variants: [
       { id: 'center',      label: 'Centered' },
@@ -39,12 +47,13 @@ export const SECTION_TYPES = {
   },
   // Product storefront. Renders live from /api/site/:handle/products
   // (active products only) - owners manage the catalog in
-  // Finance → Products, no per-section editing here. Add-to-cart +
-  // checkout are wired in SectionRenderer's Shop renderer.
+  // Finance → Products; the section itself only has a heading, an intro
+  // and a sold-out toggle. Add-to-cart + checkout are wired in
+  // SectionRenderer's Shop renderer.
   shop: {
     label: 'Shop',
     icon: 'Gift',
-    desc: 'Sell products with add-to-cart',
+    desc: 'Sell your products, with a cart and checkout',
     category: 'commerce',
     default: () => ({
       headline: 'Shop',
@@ -55,7 +64,7 @@ export const SECTION_TYPES = {
   services: {
     label: 'Services',
     icon: 'Dollar',
-    desc: 'What you offer + pricing',
+    desc: 'What you offer, with prices',
     category: 'commerce',
     variants: [
       { id: 'grid', label: 'Grid (3-up)' },
@@ -76,7 +85,7 @@ export const SECTION_TYPES = {
   about: {
     label: 'About',
     icon: 'Users',
-    desc: 'Your story + photo',
+    desc: 'Your story and a photo',
     category: 'content',
     default: () => ({
       headline: 'About Me',
@@ -157,7 +166,7 @@ export const SECTION_TYPES = {
   contact: {
     label: 'Contact',
     icon: 'Mail',
-    desc: 'Contact form + info',
+    desc: 'A contact form and your details',
     category: 'cta',
     default: () => ({
       headline: 'Get in Touch',
@@ -170,7 +179,7 @@ export const SECTION_TYPES = {
   footer: {
     label: 'Footer',
     icon: 'Globe',
-    desc: 'Copyright + links',
+    desc: 'Your business name at the bottom of the page',
     category: 'content',
     default: (biz) => ({
       businessName: biz || 'My Business',
@@ -181,7 +190,7 @@ export const SECTION_TYPES = {
   stats: {
     label: 'Stats',
     icon: 'Trending',
-    desc: 'Counters - clients served, years in business, etc.',
+    desc: 'Big numbers: clients served, years in business, and so on',
     category: 'social_proof',
     default: () => ({
       headline: '',
@@ -194,9 +203,9 @@ export const SECTION_TYPES = {
     }),
   },
   cta_banner: {
-    label: 'CTA banner',
+    label: 'Call to action',
     icon: 'Spark',
-    desc: 'Full-width pull quote with a button',
+    desc: 'A bold line with a button, edge to edge',
     category: 'cta',
     default: () => ({
       headline: 'Ready to start?',
@@ -208,20 +217,20 @@ export const SECTION_TYPES = {
   team: {
     label: 'Team',
     icon: 'Users',
-    desc: 'Bios + photos for multi-person practices',
+    desc: 'Photos, names and short bios of your team',
     category: 'content',
     default: () => ({
       headline: 'Meet the team',
       members: [
-        { id: 'm1', name: 'Sam Johnson', role: 'Lead practitioner', bio: 'Short bio - what they do, what makes them great.', imgUrl: '' },
-        { id: 'm2', name: 'Alex Rivera', role: 'Associate',         bio: 'Short bio - what they do, what makes them great.', imgUrl: '' },
+        { id: 'm1', name: 'Sam Johnson', role: 'Lead practitioner', bio: 'Short bio - what they do, what makes them great.', imgUrl: '', link: '' },
+        { id: 'm2', name: 'Alex Rivera', role: 'Associate',         bio: 'Short bio - what they do, what makes them great.', imgUrl: '', link: '' },
       ],
     }),
   },
   pricing: {
     label: 'Pricing tiers',
     icon: 'Dollar',
-    desc: 'Side-by-side package comparison',
+    desc: 'Plans side by side, each with a button',
     category: 'commerce',
     default: () => ({
       headline: 'Pricing',
@@ -236,45 +245,46 @@ export const SECTION_TYPES = {
   newsletter: {
     label: 'Newsletter',
     icon: 'Mail',
-    desc: 'Email-capture form',
+    desc: 'Let visitors leave their email address',
     category: 'cta',
     default: () => ({
       headline: 'Stay in touch',
       sub: 'Occasional emails about what I am working on - no spam.',
       buttonText: 'Subscribe',
       placeholder: 'you@example.com',
+      successMessage: "You're subscribed - thanks!",
     }),
   },
   video: {
     label: 'Video',
     icon: 'Image',
-    desc: 'Embedded video (YouTube/Vimeo URL)',
+    desc: 'A video from YouTube, Vimeo or Loom',
     category: 'embed',
     default: () => ({
       headline: '',
       sub: '',
-      videoUrl: '',  // e.g. https://www.youtube.com/watch?v=...
+      videoUrl: '',  // the normal watch / share link; the renderer converts it
     }),
   },
   logos: {
     label: 'Featured in',
     icon: 'Globe',
-    desc: 'Logos / press strip - "as seen in"',
+    desc: 'A row of logos: press, partners, "as seen in"',
     category: 'social_proof',
     default: () => ({
       headline: 'Featured in',
       logos: [
-        { id: 'l1', name: 'Vogue',    imgUrl: '' },
-        { id: 'l2', name: 'NYT',      imgUrl: '' },
-        { id: 'l3', name: 'Forbes',   imgUrl: '' },
-        { id: 'l4', name: 'WSJ',      imgUrl: '' },
+        { id: 'l1', name: 'Vogue',    imgUrl: '', link: '' },
+        { id: 'l2', name: 'NYT',      imgUrl: '', link: '' },
+        { id: 'l3', name: 'Forbes',   imgUrl: '', link: '' },
+        { id: 'l4', name: 'WSJ',      imgUrl: '', link: '' },
       ],
     }),
   },
   pricing_table: {
     label: 'Pricing comparison',
     icon: 'Dollar',
-    desc: 'Feature-by-feature table comparing tiers (long-form vs short cards)',
+    desc: 'A table comparing your plans feature by feature',
     category: 'commerce',
     default: () => ({
       headline: 'Compare plans',
@@ -292,34 +302,36 @@ export const SECTION_TYPES = {
   blog: {
     label: 'Blog / posts',
     icon: 'Doc',
-    desc: 'Recent posts strip - title + excerpt + link',
+    desc: 'Your latest articles: title, short preview and a link',
     category: 'content',
     default: () => ({
       headline: 'Latest writing',
       sub: '',
       posts: [
-        { id: 'p1', title: 'How I think about pricing', excerpt: 'A short snippet that previews the post.', url: '#',        date: '2026-04-12' },
-        { id: 'p2', title: 'The 3 questions I ask',     excerpt: 'A short snippet that previews the post.', url: '#',        date: '2026-03-28' },
-        { id: 'p3', title: 'My intake process, refined', excerpt: 'A short snippet that previews the post.', url: '#',       date: '2026-03-01' },
+        { id: 'p1', title: 'How I think about pricing', excerpt: 'A short preview of the post.', url: '#',        date: '2026-04-12' },
+        { id: 'p2', title: 'The 3 questions I ask',     excerpt: 'A short preview of the post.', url: '#',        date: '2026-03-28' },
+        { id: 'p3', title: 'My intake process, refined', excerpt: 'A short preview of the post.', url: '#',       date: '2026-03-01' },
       ],
     }),
   },
   instagram: {
     label: 'Instagram',
     icon: 'Image',
-    desc: 'Instagram embed (single post or profile)',
+    desc: 'Show an Instagram post, or a button to your profile',
     category: 'embed',
     default: () => ({
       headline: 'Follow along',
       sub: '',
-      url: '',  // https://www.instagram.com/p/<id>/  OR  /<handle>/
+      url: '',  // a post / reel link shows the post; a profile link or username shows a button
     }),
   },
+  // Legacy: no longer in the library (see LEGACY_CODE_TYPES).
   code_snippet: {
-    label: 'Code / pre-formatted',
+    label: 'Code block',
     icon: 'Doc',
-    desc: 'Monospace code block (e.g. API examples, recipes, configs)',
+    desc: 'Added with code (no longer offered)',
     category: 'embed',
+    legacy: true,
     default: () => ({
       headline: '',
       language: 'plain',
@@ -329,7 +341,7 @@ export const SECTION_TYPES = {
   countdown: {
     label: 'Countdown',
     icon: 'Calendar',
-    desc: 'Live counter to a launch / event / deadline',
+    desc: 'A live countdown to a launch, event or deadline',
     category: 'cta',
     default: () => ({
       headline: 'Launching soon',
@@ -343,38 +355,43 @@ export const SECTION_TYPES = {
   hours: {
     label: 'Hours of operation',
     icon: 'Calendar',
-    desc: 'Brick-and-mortar opening hours table',
+    desc: 'Your opening hours, day by day',
     category: 'content',
+    // Each day keeps `open` / `close` (24h "HH:MM") and `closed`; the
+    // editor writes the visitor-facing `hours` text from them, which is
+    // what the renderers show (older sites only have `hours`).
     default: () => ({
       headline: 'Hours',
       timezone: '',
       days: [
-        { id: 'd1', label: 'Mon', hours: '9 – 5' },
-        { id: 'd2', label: 'Tue', hours: '9 – 5' },
-        { id: 'd3', label: 'Wed', hours: '9 – 5' },
-        { id: 'd4', label: 'Thu', hours: '9 – 5' },
-        { id: 'd5', label: 'Fri', hours: '9 – 5' },
-        { id: 'd6', label: 'Sat', hours: 'Closed' },
-        { id: 'd7', label: 'Sun', hours: 'Closed' },
+        { id: 'd1', label: 'Monday',    open: '09:00', close: '17:00', closed: false, hours: '9:00 AM to 5:00 PM' },
+        { id: 'd2', label: 'Tuesday',   open: '09:00', close: '17:00', closed: false, hours: '9:00 AM to 5:00 PM' },
+        { id: 'd3', label: 'Wednesday', open: '09:00', close: '17:00', closed: false, hours: '9:00 AM to 5:00 PM' },
+        { id: 'd4', label: 'Thursday',  open: '09:00', close: '17:00', closed: false, hours: '9:00 AM to 5:00 PM' },
+        { id: 'd5', label: 'Friday',    open: '09:00', close: '17:00', closed: false, hours: '9:00 AM to 5:00 PM' },
+        { id: 'd6', label: 'Saturday',  open: '',      close: '',      closed: true,  hours: 'Closed' },
+        { id: 'd7', label: 'Sunday',    open: '',      close: '',      closed: true,  hours: 'Closed' },
       ],
     }),
   },
   map: {
     label: 'Map',
     icon: 'Globe',
-    desc: 'Embedded OpenStreetMap of your location (no API key needed)',
+    desc: 'A map of your location, from your address',
     category: 'content',
+    // The owner types an address; the editor looks it up (api/geocode)
+    // and stores the pin. No map shows until a pin exists.
     default: () => ({
       headline: 'Find us',
       address: '',
-      // Default to NYC; owner sets lat/lng + zoom via the inspector.
-      lat: 40.7128, lng: -74.006, zoom: 14,
+      lat: null, lng: null, zoom: 14,
+      showMap: true,
     }),
   },
   accordion: {
     label: 'Accordion',
     icon: 'Chat',
-    desc: 'Collapsible Q&A - the FAQ variant for long lists',
+    desc: 'Questions that open and close, good for long lists',
     category: 'content',
     default: () => ({
       headline: 'Frequently asked',
@@ -388,7 +405,7 @@ export const SECTION_TYPES = {
   process: {
     label: 'Process / How it works',
     icon: 'Trending',
-    desc: 'Numbered steps explaining how you work',
+    desc: 'Numbered steps that explain how you work',
     category: 'content',
     default: () => ({
       headline: 'How it works',
@@ -403,7 +420,7 @@ export const SECTION_TYPES = {
   before_after: {
     label: 'Before / after',
     icon: 'Image',
-    desc: 'Side-by-side comparison images',
+    desc: 'Two photos side by side',
     category: 'social_proof',
     default: () => ({
       headline: 'Before & after',
@@ -417,7 +434,7 @@ export const SECTION_TYPES = {
   social_feed: {
     label: 'Social feed',
     icon: 'Globe',
-    desc: 'Generic embed: TikTok, Twitter, LinkedIn, YouTube',
+    desc: 'A button to your TikTok, X, LinkedIn, Facebook or YouTube',
     category: 'embed',
     default: () => ({
       headline: 'Latest',
@@ -426,11 +443,13 @@ export const SECTION_TYPES = {
       url: '',
     }),
   },
+  // Legacy: no longer in the library (see LEGACY_CODE_TYPES).
   custom_html: {
-    label: 'Custom HTML',
+    label: 'Custom code',
     icon: 'Doc',
-    desc: 'Power-user escape hatch - embeds owner-supplied HTML (sandboxed)',
+    desc: 'Added with code (no longer offered)',
     category: 'embed',
+    legacy: true,
     default: () => ({
       html: '<div style="padding:48px;text-align:center;font-family:sans-serif">Paste any HTML here. Renders inside a sandboxed iframe.</div>',
       height: 280,
@@ -439,6 +458,9 @@ export const SECTION_TYPES = {
 };
 
 export const SECTION_LIST = Object.entries(SECTION_TYPES).map(([type, cfg]) => ({ type, ...cfg }));
+// What the section library offers (and what Ivy can add): everything that
+// is not a legacy code type.
+export const LIBRARY_SECTIONS = SECTION_LIST.filter((s) => !s.legacy && !LEGACY_CODE_TYPES.has(s.type));
 
 let counter = 0;
 export function mkSection(type, businessName = '') {
@@ -539,10 +561,11 @@ function buildPage({ slug = '', title = 'Home', sections = [], inNav = true } = 
 //   build(businessName)        - function returning a `pages` array
 //                                ready to drop into state.js's site.pages
 //
-// Packs lean into the new section types (stats, cta_banner, team,
-// pricing, newsletter, video, logos, pricing_table, blog, instagram,
-// code_snippet) + the variants we shipped (hero split_image / image_bg,
-// services list / cards_image) + per-section style + entry animations.
+// Packs lean into the newer section types (stats, cta_banner, team,
+// pricing, newsletter, video, logos, pricing_table, blog, instagram) +
+// the variants we shipped (hero split_image / image_bg, services list /
+// cards_image) + per-section style + entry animations. Never a legacy
+// code type.
 export const STARTER_PACKS = {
   service_pro: {
     id: 'service_pro',

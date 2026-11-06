@@ -28,6 +28,7 @@ import path from 'node:path';
 import { TEMPLATES } from '../../src/features/website/templates.js';
 import { FONT_PAIRS } from '../../src/features/website/sections.js';
 import { sectionAnchors, resolveSiteLink } from '../../src/lib/siteLinks.js';
+import { videoEmbedUrl } from '../../src/lib/videoEmbed.js';
 
 // Per-render link context (anchors on this page, the site's pages, the
 // link base). Rendering is synchronous, so a module-level slot is safe.
@@ -253,7 +254,7 @@ function renderTeam(s) {
   const members = (d.members || []).map((m) => `
     <li>
       ${m.imgUrl ? `<img src="${attr(m.imgUrl)}" alt="${attr(m.name || '')}" loading="lazy"/>` : ''}
-      <h3>${esc(m.name || '')}</h3>
+      <h3>${m.link ? `<a href="${attr(link(m.link))}">${esc(m.name || '')}</a>` : esc(m.name || '')}</h3>
       ${m.role ? `<p class="ivy-role">${esc(m.role)}</p>` : ''}
       ${m.bio ? `<p>${esc(m.bio)}</p>` : ''}
     </li>`).join('');
@@ -293,13 +294,16 @@ function renderVideo(s) {
   return `<section class="ivy-video">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
-    ${d.videoUrl ? `<p><a href="${attr(safeHref(d.videoUrl))}">Watch video</a></p>` : ''}
+    ${d.videoUrl && videoEmbedUrl(d.videoUrl) ? `<p><a href="${attr(safeHref(d.videoUrl))}">Watch video</a></p>` : ''}
   </section>`;
 }
 
 function renderLogos(s) {
   const d = s.data || {};
-  const logos = (d.logos || []).map((l) => `<li>${esc(l.name || '')}</li>`).join('');
+  const logos = (d.logos || []).map((l) => {
+    const inner = l.imgUrl ? `<img src="${attr(l.imgUrl)}" alt="${attr(l.name || '')}" loading="lazy"/>` : esc(l.name || '');
+    return `<li>${l.link ? `<a href="${attr(link(l.link))}">${inner}</a>` : inner}</li>`;
+  }).join('');
   return `<section class="ivy-logos">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     <ul>${logos}</ul>
@@ -425,12 +429,13 @@ function renderBeforeAfter(s) {
   </section>`;
 }
 
+const SOCIAL_LABELS = { tiktok: 'TikTok', x: 'X', twitter: 'X', linkedin: 'LinkedIn', facebook: 'Facebook', youtube: 'YouTube', threads: 'Threads', instagram: 'Instagram' };
 function renderSocialFeed(s) {
   const d = s.data || {};
   return `<section class="ivy-social-feed">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
-    ${d.url ? `<p><a href="${attr(safeHref(d.url))}">View on ${esc(d.platform || 'social')}</a></p>` : ''}
+    ${d.url ? `<p><a href="${attr(safeHref(d.url))}">View on ${esc(SOCIAL_LABELS[String(d.platform || '').toLowerCase()] || d.platform || 'social')}</a></p>` : ''}
   </section>`;
 }
 

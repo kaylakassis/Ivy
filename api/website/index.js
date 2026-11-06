@@ -76,6 +76,36 @@ function sanitizeStickyCta(p) {
   };
 }
 
+// Sections that were added by pasting code (custom_html, code_snippet).
+// Ivy no longer offers them: the library hides them, Ivy's tools refuse
+// them, and this guard refuses NEW ones on save. A site that already has
+// one keeps saving (and rendering) it exactly as before, matched by id
+// across the draft, the live copy and a scheduled copy.
+const LEGACY_CODE_TYPES = new Set(['custom_html', 'code_snippet']);
+const CODE_SECTION_REFUSED = 'Code sections can no longer be added. Pick a section from the library instead.';
+
+function codeSectionIds(...lists) {
+  const ids = new Set();
+  const walk = (node, depth = 0) => {
+    if (!node || depth > 6) return;
+    if (Array.isArray(node)) { for (const x of node) walk(x, depth + 1); return; }
+    if (typeof node !== 'object') return;
+    if (LEGACY_CODE_TYPES.has(node.type) && node.id != null) ids.add(String(node.id));
+    if (Array.isArray(node.sections)) walk(node.sections, depth + 1);
+  };
+  for (const l of lists) walk(l);
+  return ids;
+}
+
+// Throws when `incoming` (pages or a sections list) carries a code
+// section whose id is not already stored on this website.
+function refuseNewCodeSections(incoming, row) {
+  const known = codeSectionIds(row?.pages, row?.sections, row?.published_pages, row?.published_sections, row?.scheduled_pages);
+  for (const id of codeSectionIds(incoming)) {
+    if (!known.has(id)) throw new Error(CODE_SECTION_REFUSED);
+  }
+}
+
 function sanitizePage(p, idx) {
   if (!p || typeof p !== 'object') throw new Error(`Page ${idx + 1} is malformed`);
   const id = String(p.id || '').slice(0, 64) || `p_${Date.now().toString(36)}_${idx}`;
@@ -117,6 +147,16 @@ export default async function handler(req, res) {
     if (req.method === 'PUT') {
       const body = await readBody(req);
       const patch = {};
+      // The stored row, so new code sections can be told from existing ones.
+      const existing = ('sections' in body || 'pages' in body || 'scheduledPages' in body)
+        ? await getOrCreate(workspaceId) : null;
+      try {
+        if ('sections' in body && Array.isArray(body.sections)) refuseNewCodeSections(body.sections, existing);
+        if ('pages' in body && Array.isArray(body.pages)) refuseNewCodeSections(body.pages, existing);
+        if ('scheduledPages' in body && Array.isArray(body.scheduledPages)) refuseNewCodeSections(body.scheduledPages, existing);
+      } catch (e) {
+        return badRequest(res, e.message);
+      }
 
       if ('handle' in body) {
         const h = body.handle == null ? null : String(body.handle).toLowerCase().trim();
