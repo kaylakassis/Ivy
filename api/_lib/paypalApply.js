@@ -8,7 +8,7 @@
 // directly - can't double-apply.
 import { sql } from './db.js';
 import { withResolvedClientId } from './clientResolve.js';
-import { computeTotals } from './finance.js';
+import { invoicePaymentState } from './invoicePayments.js';
 import { notifyOwnerSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
 
@@ -70,36 +70,41 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
     return 'already-paid';
   }
 
-  const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
   // Guard against a partial/under-capture (or currency mismatch) silently
-  // flipping the invoice to fully paid. Only settle when the captured
-  // amount covers the invoice total (1¢ tolerance for rounding). PayPal
-  // checkout amount is the invoice total - no Stripe-Tax add-on to expect.
-  const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
-  const underpaid = paidAmountDollars < expectedTotal - 0.01;
+  // flipping the invoice to fully paid. Only settle when everything
+  // captured so far covers what is due after any gift card (1¢ tolerance
+  // for rounding). The pay link charges only what is left, so earlier part
+  // payments add up; the same capture (return page + webhook) counts once.
+  const st = invoicePaymentState(inv, { paymentId: parsed.paymentId || null, amountCents: Math.round(Number(parsed.amountCents || 0)) });
+  if (st.seen) return 'already-applied';
+  const paidAmountDollars = st.paidTotal;
 
-  if (underpaid) {
+  if (st.underpaid) {
     const partialActivity = [
       ...(inv.activity || []),
-      { ts: new Date().toISOString(), kind: 'partial-payment',
-        text: `Partial PayPal payment · $${paidAmountDollars.toFixed(2)} of $${expectedTotal.toFixed(2)}` },
+      { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: parsed.paymentId || null,
+        text: `Partial PayPal payment · $${st.thisPayment.toFixed(2)} · $${paidAmountDollars.toFixed(2)} of $${st.due.toFixed(2)} paid` },
     ];
-    // Record the amount + capture id but leave the invoice open (not paid).
-    await sql`
+    // Record the running total + capture id but leave the invoice open.
+    // Guarded on the total we read so two captures never overwrite each other.
+    const part = await sql`
       UPDATE invoices SET
         paid_amount           = ${paidAmountDollars},
         paid_method           = 'paypal',
         stripe_payment_intent = ${parsed.paymentId || null},
         activity              = ${JSON.stringify(partialActivity)}::jsonb,
         updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+        AND COALESCE(paid_amount, 0) = ${st.prior}
+      RETURNING id
     `;
+    if (part.rows.length === 0 && !parsed._retried) return applyPaymentToInvoice({ workspaceId, parsed: { ...parsed, _retried: true } });
     return 'partial-payment';
   }
 
   const newActivity = [
     ...(inv.activity || []),
-    { ts: new Date().toISOString(), kind: 'paid', text: `Paid by PayPal · $${paidAmountDollars.toFixed(2)}` },
+    { ts: new Date().toISOString(), kind: 'paid', text: `Paid by PayPal · $${st.thisPayment.toFixed(2)}${st.prior > 0 ? ` · $${paidAmountDollars.toFixed(2)} in total` : ''}` },
   ];
 
   const upd = await sql`

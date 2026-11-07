@@ -23,7 +23,7 @@ import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { findActiveByCode, applyGiftCardToInvoice, invoiceDueCents } from '../_lib/giftCards.js';
-import { markInvoicePaid } from '../_lib/invoicePayments.js';
+import { markInvoicePaid, settleOrCloseOpenCheckout } from '../_lib/invoicePayments.js';
 import { serializeInvoicePublic, fetchEnabledManualMethods } from '../_lib/finance.js';
 import { invoiceBusinessMeta } from '../_lib/branding.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
@@ -86,6 +86,15 @@ export default async function handler(req, res) {
         appliesCents: applies,
         remainingCents: due - applies,
       });
+    }
+
+    // A card checkout opened earlier was for the full amount: close it so
+    // the client cannot pay that AND use the gift card. If it was paid a
+    // moment ago, the invoice is settled and the card is left untouched.
+    const prev = await settleOrCloseOpenCheckout(inv);
+    if (prev === 'paid') return badRequest(res, 'This invoice is already paid, so the gift card was not used.');
+    if (prev === 'processing') {
+      return badRequest(res, 'A bank payment for this invoice is already on its way, so a gift card cannot be applied.');
     }
 
     let result;

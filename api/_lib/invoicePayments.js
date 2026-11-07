@@ -8,29 +8,102 @@ import { computeTotals, paidMethodLabel } from './finance.js';
 import { notifyOwnerSafe, notifyClientSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
 import { loadStripeCreds } from './stripeCreds.js';
-import { fetchCheckoutSession } from './stripe.js';
+import { fetchCheckoutSession, expireCheckoutSession } from './stripe.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Where a payment leaves an invoice. paid_amount on a still-open invoice
+// is the running total of part payments so far (the pay link already
+// charges only what is left), so a new payment ADDS to it, and the
+// invoice is settled once that running total covers what is due after
+// any gift card. `seen` = this payment id is already in the running total
+// (the paired Checkout + PaymentIntent events, a webhook retry, the PayPal
+// return page racing its webhook) and must not be added again.
+// Shared by the Stripe, Square and PayPal apply paths.
+export function invoicePaymentState(inv, { paymentId = null, amountCents = null } = {}) {
+  const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
+  const giftCredit = Number(inv.gift_card_credit_cents || 0) / 100;
+  const due = Math.max(0, Math.round((totals.total - giftCredit) * 100) / 100);
+  const open = ['draft', 'sent', 'overdue'].includes(inv.status);
+  const prior = open ? Math.max(0, Math.round(Number(inv.paid_amount || 0) * 100) / 100) : 0;
+  const seen = !!paymentId && prior > 0 && (
+    inv.stripe_payment_intent === paymentId
+    || (inv.activity || []).some((a) => a?.kind === 'partial-payment' && a.paymentId === paymentId));
+  const thisPayment = amountCents != null ? Math.round(Number(amountCents)) / 100 : null;
+  const paidTotal = thisPayment == null ? Math.max(due, prior) : Math.round((prior + thisPayment) * 100) / 100;
+  return { totals, due, prior, seen, thisPayment, paidTotal, underpaid: thisPayment != null && paidTotal < due - 0.01 };
+}
+
+// A DIFFERENT payment landed on an invoice that is already settled (two
+// checkouts both paid, or the client paid after the owner marked it paid
+// by hand). The money really moved, so it must not vanish silently: note
+// it on the invoice and tell the owner so they can refund it. Once per
+// payment id (the paired Checkout + PaymentIntent events carry the same id).
+async function flagExtraPayment({ inv, paymentIntent, amountCents, method }) {
+  if (!paymentIntent || method === 'gift_card') return false;
+  if (inv.stripe_payment_intent === paymentIntent || inv.autopay_payment_intent === paymentIntent) return false;
+  if ((inv.activity || []).some((a) => a?.paymentId === paymentIntent)) return false;
+  const amount = amountCents != null ? Math.round(Number(amountCents)) / 100 : null;
+  if (amount != null && !(amount > 0)) return false;
+  const entry = {
+    ts: new Date().toISOString(), kind: 'duplicate-payment', paymentId: paymentIntent,
+    text: `A second payment${amount != null ? ` of ${fmtMoney(amount)}` : ''} came in after this invoice was already paid. Refund it from your payment dashboard if it was a mistake.`,
+  };
+  const upd = await sql`
+    UPDATE invoices SET
+      activity   = COALESCE(activity, '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb,
+      updated_at = NOW()
+    WHERE id = ${inv.id} AND workspace_id = ${inv.workspace_id}
+      AND NOT (COALESCE(activity, '[]'::jsonb) @> ${JSON.stringify([{ paymentId: paymentIntent }])}::jsonb)
+    RETURNING id
+  `;
+  if (upd.rows.length === 0) return false;
+  notifyOwnerSafe({
+    workspaceId: inv.workspace_id, type: 'payments',
+    payload: {
+      title: 'Invoice paid twice',
+      body: `${inv.client_name || 'A client'} · ${inv.number}: another ${amount != null ? fmtMoney(amount) + ' ' : ''}payment came in after it was already paid. Refund it from your payment dashboard if it was a mistake.`,
+      url: `/finance?invoice=${inv.id}`,
+      tag: `invoice-paid-twice-${inv.id}`,
+    },
+  });
+  return true;
+}
+
 // Idempotent. Marks the invoice paid (status, paid fields, activity) and,
 // only when it actually transitions, fires the owner push + client receipt
 // - matching the webhook so whichever path wins first is the one that
-// notifies. Returns 'paid' | 'already-paid' | 'invoice-not-found'.
-export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method = 'card', sessionId = null }) {
+// notifies. Returns 'paid' | 'partial-payment' | 'already-paid' | 'invoice-not-found'.
+export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method = 'card', sessionId = null, _attempt = 0 }) {
   const { rows } = await sql`SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`;
   const inv = rows[0];
   if (!inv) return 'invoice-not-found';
-  if (inv.status === 'paid' || inv.status === 'refunded') return 'already-paid';
+  if (inv.status === 'paid' || inv.status === 'refunded') {
+    await flagExtraPayment({ inv, paymentIntent, amountCents, method });
+    return 'already-paid';
+  }
+  const retry =() => markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method, sessionId, _attempt: _attempt + 1 });
 
-  const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
   // A gift card applied on the public pay page already covers part of the
   // total, so a card payment only has to cover the remainder (and a
-  // 'gift_card' payment is the credit itself covering everything).
-  const giftCredit = Number(inv.gift_card_credit_cents || 0) / 100;
-  const dueAfterCredit = Math.max(0, Math.round((totals.total - giftCredit) * 100) / 100);
-  const paidAmount = amountCents != null ? Math.round(Number(amountCents)) / 100 : dueAfterCredit;
+  // 'gift_card' payment is the credit itself covering everything). Part
+  // payments already recorded count toward it too.
+  const giftOnly = method === 'gift_card';
+  const st = invoicePaymentState(inv, { paymentId: paymentIntent, amountCents: giftOnly ? null : amountCents });
+  // This exact payment is already in the running total.
+  if (st.seen) return 'partial-payment';
+  const dueAfterCredit = st.due;
+  // A gift card that covers the rest after a part payment keeps that
+  // payment on record (amount, method, payment id) so a refund goes back
+  // through the processor that took it; the credit has its own column.
+  const keepPrior = giftOnly && st.prior > 0;
+  const paidAmount = giftOnly
+    ? (keepPrior ? st.prior : (amountCents != null ? Math.round(Number(amountCents)) / 100 : dueAfterCredit))
+    : st.paidTotal;
+  const paidMethod = keepPrior ? (inv.paid_method || 'card') : method;
+  const paidIntent = keepPrior ? (inv.stripe_payment_intent || null) : (paymentIntent || null);
 
   // Guard against an UNDER-payment flipping the invoice to fully paid (e.g. the
   // invoice amount was edited up after the Checkout session was created for the
@@ -38,13 +111,15 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   // partial payment but leave the invoice open. Stripe-Tax can make the charged
   // amount EXCEED the base total — that's expected, so only under-payment is a
   // problem (1¢ tolerance for rounding).
-  if (amountCents != null && method !== 'gift_card' && paidAmount < dueAfterCredit - 0.01) {
+  if (!giftOnly && st.underpaid) {
     const partialActivity = [
       ...(inv.activity || []),
-      { ts: new Date().toISOString(), kind: 'partial-payment',
-        text: `Partial card payment · ${fmtMoney(paidAmount)} of ${fmtMoney(dueAfterCredit)}` },
+      { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: paymentIntent || null,
+        text: `Partial card payment · ${fmtMoney(st.thisPayment)} · ${fmtMoney(paidAmount)} of ${fmtMoney(dueAfterCredit)} paid` },
     ];
-    await sql`
+    // Guarded on the running total we read, so a second payment landing at
+    // the same moment re-reads and adds on top instead of overwriting.
+    const part = await sql`
       UPDATE invoices SET
         paid_amount           = ${paidAmount},
         paid_method           = ${method},
@@ -54,14 +129,18 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
         payment_processing_method = NULL,
         activity              = ${JSON.stringify(partialActivity)}::jsonb,
         updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+        AND COALESCE(paid_amount, 0) = ${st.prior}
+      RETURNING id
     `;
+    if (part.rows.length === 0 && _attempt < 3) return retry();
     return 'partial-payment';
   }
 
   const newActivity = [
     ...(inv.activity || []),
-    { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(paidAmount)}` },
+    { ts: new Date().toISOString(), kind: 'paid',
+      text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(giftOnly || st.prior === 0 ? paidAmount : st.thisPayment)}${!giftOnly && st.prior > 0 ? ` · ${fmtMoney(paidAmount)} in total` : ''}` },
   ];
 
   const upd = await sql`
@@ -69,8 +148,8 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
       status                = 'paid',
       paid_at               = NOW(),
       paid_amount           = ${paidAmount},
-      paid_method           = ${method},
-      stripe_payment_intent = ${paymentIntent || null},
+      paid_method           = ${paidMethod},
+      stripe_payment_intent = ${paidIntent},
       stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
       payment_processing_at = NULL,
       payment_processing_method = NULL,
@@ -78,9 +157,16 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
       activity              = ${JSON.stringify(newActivity)}::jsonb,
       updated_at            = NOW()
     WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+      AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
     RETURNING id
   `;
-  if (upd.rows.length === 0) return 'already-paid'; // lost a race with the webhook / another confirm
+  if (upd.rows.length === 0) {
+    // Lost a race: the webhook / another confirm already settled it, or a
+    // part payment landed in between (then this one counts on top of it).
+    const now = (await sql`SELECT status FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`).rows[0];
+    if (now && now.status !== 'paid' && now.status !== 'refunded' && _attempt < 3) return retry();
+    return 'already-paid';
+  }
 
   // Autopay charges say so (and with which card), so the owner can tell
   // a hands-off payment from one the client made.
@@ -110,6 +196,32 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   }
   notifyInvoicePaid({ workspaceId, invoiceId, totalAmount: paidAmount, method });
   return 'paid';
+}
+
+// A Stripe checkout opened earlier for this invoice (another tab, another
+// device, the email link clicked twice) stays payable until it is closed,
+// so the client could pay the same invoice twice, or pay the full amount
+// after a gift card already covered part of it. Call before a new payment
+// can start. Returns 'paid' (that checkout was paid a moment ago; the
+// invoice is now settled), 'processing' (a bank debit from it is on its
+// way), 'closed' or 'none'.
+export async function settleOrCloseOpenCheckout(inv) {
+  const sid = inv?.stripe_session_id;
+  if (!sid || !String(sid).startsWith('cs_')) return 'none';
+  if (await reconcileStripeInvoice(inv).catch(() => false)) return 'paid';
+  const fresh = await sql`SELECT payment_processing_at FROM invoices WHERE id = ${inv.id} AND workspace_id = ${inv.workspace_id}`;
+  if (fresh.rows[0]?.payment_processing_at) return 'processing';
+  await expireStripeCheckout(inv.workspace_id, sid);
+  return 'closed';
+}
+
+// Close one Stripe checkout on the workspace's account. Best effort: one
+// that already finished or expired is fine to leave alone.
+export async function expireStripeCheckout(workspaceId, sessionId) {
+  try {
+    const creds = await loadStripeCreds(workspaceId);
+    await expireCheckoutSession({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, sessionId });
+  } catch { /* already complete / expired, or not reachable */ }
 }
 
 // Stripe-only self-heal: if an unpaid invoice carries a Stripe checkout

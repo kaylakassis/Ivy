@@ -541,6 +541,12 @@ async function run() {
   assert((await enrollment(lProg.id, lClient))?.status === 'cancelled', 'legacy: deleted revokes');
   r = await fireLegacy('checkout.session.completed', { id: `cs_legacy_1_${STAMP}`, mode: 'payment', status: 'complete', payment_status: 'paid', amount_total: 1500, payment_intent: `pi_legacy_1_${STAMP}`, metadata: { workspace_id: L.wid, program_id: lProg.id, client_id: lClient, purpose: 'program' } }, L.wid, L.whSecret);
   assert(r.statusCode === 200 && r.body.applied === 'program-purchase', `legacy webhook fulfils a one-time program purchase (got ${JSON.stringify(r.body)})`);
+  // A full refund made in the payment dashboard ends the access on the
+  // legacy webhook too (it used to keep the client enrolled for free).
+  assert((await enrollment(lProg.id, lClient))?.status === 'active', 'legacy: purchase enrollment active');
+  r = await fireLegacy('charge.refunded', { id: `ch_legacy_1_${STAMP}`, payment_intent: `pi_legacy_1_${STAMP}`, amount: 1500, amount_refunded: 1500, metadata: {} }, L.wid, L.whSecret);
+  assert(r.statusCode === 200 && r.body.applied === 'program-refund' && r.body.result === 'revoked', `legacy webhook: full refund of a program purchase is applied (got ${JSON.stringify(r.body)})`);
+  assert((await enrollment(lProg.id, lClient))?.status === 'cancelled', 'legacy: refunded purchase no longer has access');
 
   // ════════════════════════════════════════════════════════════════════
   console.log('\n[4] archived business refuses new purchases');

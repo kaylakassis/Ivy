@@ -9,7 +9,8 @@
 import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
-import { fetchFinanceSettings, computeTotals } from '../../_lib/finance.js';
+import { fetchFinanceSettings } from '../../_lib/finance.js';
+import { invoicePaymentState } from '../../_lib/invoicePayments.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
@@ -116,18 +117,23 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
     console.warn('[webhooks/square] invoice', invoiceId, 'already paid by a different payment id - ignoring');
     return;
   }
+  // Square re-sends payment.updated (still COMPLETED) when a payment is
+  // refunded; that must never flip a refunded or void invoice back to paid.
+  if (inv.status === 'refunded' || inv.status === 'voided') return;
 
-  const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
   // Don't let a partial/under-capture (or currency mismatch) flip the
-  // invoice to fully paid. Only settle when the captured amount covers the
-  // invoice total (1¢ tolerance). Square checkout amount is the invoice
-  // total - no Stripe-Tax add-on to expect here.
-  const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
-  if (paidAmountDollars < expectedTotal - 0.01) {
+  // invoice to fully paid. Only settle when everything captured so far
+  // covers what is due after any gift card (1¢ tolerance). The pay link
+  // charges only what is left, so part payments add up; payment.created
+  // and payment.updated for one payment count once.
+  const st = invoicePaymentState(inv, { paymentId: parsed.paymentId || null, amountCents: Math.round(Number(parsed.amountCents || 0)) });
+  if (st.seen) return;
+  const paidAmountDollars = st.paidTotal;
+  if (st.underpaid) {
     const partialActivity = [
       ...(inv.activity || []),
-      { ts: new Date().toISOString(), kind: 'partial-payment',
-        text: `Partial Square payment · $${paidAmountDollars.toFixed(2)} of $${expectedTotal.toFixed(2)}` },
+      { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: parsed.paymentId || null,
+        text: `Partial Square payment · $${st.thisPayment.toFixed(2)} · $${paidAmountDollars.toFixed(2)} of $${st.due.toFixed(2)} paid` },
     ];
     await sql`
       UPDATE invoices SET
@@ -136,7 +142,8 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
         stripe_payment_intent = ${parsed.paymentId || null},
         activity              = ${JSON.stringify(partialActivity)}::jsonb,
         updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+        AND COALESCE(paid_amount, 0) = ${st.prior}
     `;
     return;
   }
@@ -146,7 +153,7 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
     {
       ts: new Date().toISOString(),
       kind: 'paid',
-      text: `Paid by Square · $${paidAmountDollars.toFixed(2)}`,
+      text: `Paid by Square · $${st.thisPayment.toFixed(2)}${st.prior > 0 ? ` · $${paidAmountDollars.toFixed(2)} in total` : ''}`,
     },
   ];
 

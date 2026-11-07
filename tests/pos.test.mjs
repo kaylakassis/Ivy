@@ -9,6 +9,7 @@ import { sql } from '../api/_lib/db.js';
 import { signSession } from '../api/_lib/auth.js';
 import { decrementStock, restoreStock } from '../api/_lib/products.js';
 import saleHandler from '../api/pos/sale.js';
+import todayHandler from '../api/pos/today.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -73,6 +74,22 @@ async function run() {
     assert(r.statusCode === 400, 'sale rejected (400) when a line is out of stock');
     assert((await stockOf(okP)) === 5, 'the in-stock line was NOT deducted (compensated)');
     assert((await stockOf(outP)) === 1, 'the out-of-stock line untouched');
+
+    console.log("\n[e2e] a sale is dated in the business's time zone and shows in today's drawer");
+    // Pick a zone whose calendar date differs from the UTC date right now,
+    // so a UTC-dated sale would land on the wrong day.
+    const tz = new Date().getUTCHours() >= 12 ? 'Pacific/Kiritimati' : 'Etc/GMT+12';
+    const localToday = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    await sql`INSERT INTO calendar_settings (workspace_id, timezone) VALUES (${wid}, ${tz})
+      ON CONFLICT (workspace_id) DO UPDATE SET timezone = ${tz}`;
+    const before = mockRes();
+    await todayHandler({ method: 'GET', headers: { cookie }, query: {} }, before);
+    r = await sale({ items: [{ description: 'Late walk-in', quantity: 1, rate: 25 }], payment: 'cash', taxRate: 0 });
+    assert(r.statusCode === 200 && r.body?.invoice?.issueDate === localToday, `issue date is the business's today ${localToday} (got ${r.body?.invoice?.issueDate})`);
+    const after = mockRes();
+    await todayHandler({ method: 'GET', headers: { cookie }, query: {} }, after);
+    assert(after.body?.cashCount === before.body?.cashCount + 1 && Math.abs(after.body?.cashTotal - before.body?.cashTotal - 25) < 0.001,
+      `the $25 cash sale is in today's drawer (${before.body?.cashTotal} -> ${after.body?.cashTotal})`);
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;
