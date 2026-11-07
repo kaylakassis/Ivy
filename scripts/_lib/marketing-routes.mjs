@@ -8,7 +8,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VERTICALS } from '../../src/features/marketing/verticalsData.js';
-import { COMPETITORS } from '../../src/features/marketing/compareData.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -29,7 +28,6 @@ const STATIC_PAGES = [
   { path: '/pricing',      priority: '0.9', sources: [SITE('SitePricing.jsx'), 'src/lib/pricing.js'] },
   { path: '/tour',         priority: '0.8', sources: [SITE('SiteTour.jsx')] },
   { path: '/features',     priority: '0.8', sources: [SITE('SiteFeatures.jsx')] },
-  { path: '/compare',      priority: '0.8', sources: [SITE('SiteCompare.jsx')] },
   { path: '/about',        priority: '0.6', sources: [SITE('SiteAbout.jsx')] },
   { path: '/support',      priority: '0.6', sources: [SITE('SiteSupport.jsx')] },
   { path: '/security',     priority: '0.6', sources: [MKT('SecurityPage.jsx')] },
@@ -46,11 +44,7 @@ export function marketingRoutes() {
     path: `/for/${slug}`, priority: '0.7',
     sources: [MKT('verticalsData.js'), MKT('VerticalPage.jsx')],
   }));
-  const competitors = Object.keys(COMPETITORS).map((slug) => ({
-    path: `/vs/${slug}`, priority: '0.7',
-    sources: [MKT('compareData.js'), MKT('ComparePage.jsx')],
-  }));
-  return [...STATIC_PAGES, ...verticals, ...competitors]
+  return [...STATIC_PAGES, ...verticals]
     .map((r) => ({ ...r, sources: [...r.sources, ...SHARED] }));
 }
 

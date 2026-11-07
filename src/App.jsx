@@ -101,8 +101,6 @@ const VerticalPage  = lazyRoute(() => import('./features/marketing/VerticalPage.
 const SitePricing     = lazyRoute(() => import('./features/marketing/site/SitePricing.jsx'));
 const SiteTour        = lazyRoute(() => import('./features/marketing/site/SiteTour.jsx'));
 const SiteFeatures    = lazyRoute(() => import('./features/marketing/site/SiteFeatures.jsx'));
-const SiteCompare     = lazyRoute(() => import('./features/marketing/site/SiteCompare.jsx'));
-const ComparePage     = lazyRoute(() => import('./features/marketing/ComparePage.jsx'));
 const SecurityPage    = lazyRoute(() => import('./features/marketing/SecurityPage.jsx'));
 const MobilePage      = lazyRoute(() => import('./features/marketing/MobilePage.jsx'));
 const IntegrationsPage = lazyRoute(() => import('./features/marketing/IntegrationsPage.jsx'));
@@ -112,14 +110,13 @@ const IntegrationsPage = lazyRoute(() => import('./features/marketing/Integratio
 const PRERENDERED_ROUTES = {
   '/privacy': PrivacyPage, '/terms': TermsPage, '/do-not-sell': DoNotSellPage,
   '/about': SiteAbout, '/support': SiteSupport, '/pricing': SitePricing,
-  '/tour': SiteTour, '/features': SiteFeatures, '/compare': SiteCompare,
+  '/tour': SiteTour, '/features': SiteFeatures,
   '/security': SecurityPage, '/mobile': MobilePage, '/integrations': IntegrationsPage,
 };
 export function preloadRoute(pathname) {
   const p = String(pathname || '/').replace(/\/+$/, '') || '/';
   const C = PRERENDERED_ROUTES[p]
-    || (p.startsWith('/for/') ? VerticalPage : null)
-    || (p.startsWith('/vs/') ? ComparePage : null);
+    || (p.startsWith('/for/') ? VerticalPage : null);
   return C ? C.preload() : Promise.resolve();
 }
 
@@ -358,10 +355,10 @@ export default function App() {
         <Route path="/support"     element={<WebOnly><SiteSupport /></WebOnly>} />
         <Route path="/tour"        element={<WebOnly><SiteTour /></WebOnly>} />
         <Route path="/features"    element={<WebOnly><SiteFeatures /></WebOnly>} />
-        <Route path="/compare"     element={<WebOnly><SiteCompare /></WebOnly>} />
+        <Route path="/compare"     element={<Navigate to="/features" replace />} />
         <Route path="/for/:slug"   element={<WebOnly><VerticalPage /></WebOnly>} />
         <Route path="/pricing"     element={<WebOnly><SitePricing /></WebOnly>} />
-        <Route path="/vs/:slug"    element={<WebOnly><ComparePage /></WebOnly>} />
+        <Route path="/vs/:slug"    element={<Navigate to="/features" replace />} />
         <Route path="/security"    element={<WebOnly><SecurityPage /></WebOnly>} />
         <Route path="/mobile"      element={<WebOnly><MobilePage /></WebOnly>} />
         <Route path="/integrations" element={<WebOnly><IntegrationsPage /></WebOnly>} />

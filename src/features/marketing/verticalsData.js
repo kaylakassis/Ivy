@@ -206,7 +206,7 @@ export const VERTICALS = {
   'yoga-instructors': {
     icon: 'Heart', angle: 'yoga instructors',
     homeLine: 'Class capacity, drop-ins vs members, waivers.',
-    headline: 'Class scheduling + memberships, without Mindbody bloat.',
+    headline: 'Class scheduling + memberships, without the bloat.',
     sub: 'Run drop-in classes, sell class packs, manage members - all in one calendar with cleaner pricing than legacy fitness software.',
     bullets: [
       { title: 'Class capacity', body: 'Set max per class. Waitlist fills automatically when a spot opens.' },

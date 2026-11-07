@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
 import { siteUrl } from '../../../lib/pageMeta.js';
-import { MONTHLY_STACK_SAVINGS } from '../../../lib/pricing.js';
+import { MONTHLY_STACK_SAVINGS, TOOL_STACK, STACK_TOTAL } from '../../../lib/pricing.js';
 import { SignupCta } from './Chrome.jsx';
 
 const JSON_LD = {
@@ -191,19 +191,14 @@ export default function SitePricing() {
       <section className="center">
         <div className="container">
           <span className="eyebrow">Do the math</span>
-          <h2>Save about $99/mo - most solos spend $138/month or even more on stitched-together SaaS.</h2>
-          <p className="section-sub">The tools most solo businesses end up running in parallel. Ivy does each of these - and then makes them talk to each other so the booking → invoice → message → follow-up is one fluid motion.</p>
+          <h2>Save about ${MONTHLY_STACK_SAVINGS}/mo compared with a typical stack of separate tools.</h2>
+          <p className="section-sub">The kinds of tools most solo businesses end up running side by side, at entry-level prices. Ivy does each of these, and then makes them talk to each other so the booking → invoice → message → follow-up is one fluid motion.</p>
           <div className="math">
-            <div className="rowm"><span className="t">HoneyBook<small>clients + invoices + contracts</small></span><span className="p">$39/mo</span></div>
-            <div className="rowm"><span className="t">Calendly<small>booking pages + reminders</small></span><span className="p">$12/mo</span></div>
-            <div className="rowm"><span className="t">Acuity Scheduling<small>advanced scheduling + intake forms</small></span><span className="p">$16/mo</span></div>
-            <div className="rowm"><span className="t">QuickBooks Self-Employed<small>invoices + expenses + taxes</small></span><span className="p">$20/mo</span></div>
-            <div className="rowm"><span className="t">Mailchimp<small>newsletter + email blasts</small></span><span className="p">$13/mo</span></div>
-            <div className="rowm"><span className="t">Squarespace<small>website + custom domain</small></span><span className="p">$23/mo</span></div>
-            <div className="rowm"><span className="t">DocuSign<small>legally-binding e-signatures</small></span><span className="p">$15/mo</span></div>
-            <div className="rowm total"><span className="t">Total replaced</span><span className="p">$138+/mo on average → $8.99/week</span></div>
+            {TOOL_STACK.map((t) => (
+              <div key={t.label} className="rowm"><span className="t">{t.label}<small>{t.replaces}</small></span><span className="p">${t.monthly}/mo</span></div>
+            ))}
+            <div className="rowm total"><span className="t">Total replaced</span><span className="p">${STACK_TOTAL}+/mo for a typical stack → $8.99/week</span></div>
           </div>
-          <p style={{ marginTop: 20, fontSize: 14 }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>See the full comparison: Ivy vs HoneyBook vs Calendly →</a></p>
           <div className="trust-grid">
             <div className="trust-card"><h4>Stripe-verified partner</h4><p>Your money goes straight to your Stripe - we never touch it.</p></div>
             <div className="trust-card"><h4>Cancel anytime</h4><p>No contracts, no notice period. Cancel from account page.</p></div>

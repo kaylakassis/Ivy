@@ -182,6 +182,20 @@
       "maxDuration": 300
     }
   },
+  "redirects": [
+    {
+      "source": "/compare",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/features",
+      "permanent": true
+    },
+    {
+      "source": "/vs/:slug",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/features",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
@@ -227,11 +241,6 @@
       "destination": "/prerender/features.html"
     },
     {
-      "source": "/compare",
-      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
-      "destination": "/prerender/compare.html"
-    },
-    {
       "source": "/about",
       "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/about.html"
@@ -275,11 +284,6 @@
       "source": "/for/:slug",
       "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/for/:slug.html"
-    },
-    {
-      "source": "/vs/:slug",
-      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
-      "destination": "/prerender/vs/:slug.html"
     },
     {
       "source": "/((?!api/|assets/|fonts/).*)",

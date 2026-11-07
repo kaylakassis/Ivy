@@ -3,7 +3,7 @@
 // from Chrome.jsx; page-specific CSS + interactivity live here.
 import { useEffect, useRef, useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
-import { STACK_TOTAL, IVY_PRICE, IVY_PRICE_ANNUAL, TRIAL_DAYS, ANNUAL_SAVINGS_PCT } from '../../../lib/pricing.js';
+import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, IVY_PRICE_ANNUAL, TRIAL_DAYS, ANNUAL_SAVINGS_PCT } from '../../../lib/pricing.js';
 import { SITE_ORIGIN, OG_IMAGE } from '../../../lib/pageMeta.js';
 import ProductVideo, { playProductVideo } from './ProductVideo.jsx';
 import { SignupCta } from './Chrome.jsx';
@@ -517,22 +517,17 @@ export default function SiteHome() {
       <section className="alt">
         <div className="container center">
           <span className="eyebrow">One price. Every tool you'd otherwise piece together.</span>
-          <h2>You're probably spending {'$' + STACK_TOTAL}/month or more on stitched-together tools.</h2>
-          <p className="section-sub">On average, solo businesses spend {'$' + STACK_TOTAL}/month - or even more - running tools like these in parallel. Ivy does each of them, then makes them talk to each other, so booking → invoice → message → follow-up is one fluid motion.</p>
+          <h2>A typical tool stack adds up to {'$' + STACK_TOTAL}/month or more.</h2>
+          <p className="section-sub">Booking in one app, invoices in another, contracts in a third. Here's what a typical setup of separate tools costs at entry-level prices. Ivy does each of them, then makes them talk to each other, so booking → invoice → message → follow-up is one fluid motion.</p>
           <div className="replace-grid">
-            <div className="replace-card"><div className="tool">HoneyBook</div><div className="price">$39/mo</div><div className="with">clients + invoices + contracts</div></div>
-            <div className="replace-card"><div className="tool">Calendly</div><div className="price">$12/mo</div><div className="with">booking pages + reminders</div></div>
-            <div className="replace-card"><div className="tool">Acuity Scheduling</div><div className="price">$16/mo</div><div className="with">advanced scheduling + intake forms</div></div>
-            <div className="replace-card"><div className="tool">QuickBooks Self-Employed</div><div className="price">$20/mo</div><div className="with">invoices + expenses + taxes</div></div>
-            <div className="replace-card"><div className="tool">Mailchimp</div><div className="price">$13/mo</div><div className="with">newsletter + email blasts</div></div>
-            <div className="replace-card"><div className="tool">Squarespace</div><div className="price">$23/mo</div><div className="with">website + custom domain</div></div>
-            <div className="replace-card"><div className="tool">DocuSign</div><div className="price">$15/mo</div><div className="with">legally-binding e-signatures</div></div>
+            {TOOL_STACK.map((t) => (
+              <div key={t.label} className="replace-card"><div className="tool">{t.label}</div><div className="price">${t.monthly}/mo</div><div className="with">{t.replaces}</div></div>
+            ))}
           </div>
           <div className="replace-total">
-            <span className="old">{'$' + STACK_TOTAL}+/mo on average</span>
+            <span className="old">{'$' + STACK_TOTAL}+/mo for a typical stack</span>
             <span className="new">$8.99<small>/week · everything included</small></span>
           </div>
-          <p style={{ marginTop: '20px', fontSize: '14px' }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>See how Ivy compares to HoneyBook, Calendly, and the DIY stack →</a></p>
         </div>
       </section>
 

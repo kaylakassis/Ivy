@@ -40,14 +40,14 @@ const HIDE_PREFIXES = [
   '/book/', '/sign/', '/invoice/', '/quote/', '/review/', '/site/', '/embed/',
   '/privacy', '/terms', '/support',
   '/helper/invite',  // accept page: no shell yet
-  '/tour', '/features', '/compare', '/waitlist', '/account-recover', '/do-not-sell',
+  '/tour', '/features', '/waitlist', '/account-recover', '/do-not-sell',
   // Marketing pages: the floating pill overlapped page content (e.g. the
   // pricing card) and confused logged-out visitors. The Business/Client
   // switch is surfaced on marketing pages via the AudienceToggle in the
   // nav/footer instead (MarketingShell.jsx). The floating pill stays for
   // the logged-in app shells (dashboard, /me) where switching is the point.
   '/pricing', '/blog', '/about', '/security', '/integrations', '/mobile',
-  '/for/', '/vs/',
+  '/for/',
 ];
 
 export default function ViewToggle() {

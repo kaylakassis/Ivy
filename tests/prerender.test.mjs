@@ -21,7 +21,6 @@ import { pathToFileURL } from 'node:url';
 import { startDistServer } from '../scripts/_lib/serve-dist.mjs';
 import { ROOT, SITE_ORIGIN, marketingRoutes, blogPosts, sitemapEntries } from '../scripts/_lib/marketing-routes.mjs';
 import { VERTICALS } from '../src/features/marketing/verticalsData.js';
-import { COMPETITORS } from '../src/features/marketing/compareData.js';
 
 const DIST = path.join(ROOT, 'dist');
 
@@ -50,7 +49,6 @@ const EXPECTED_H1 = {
   '/pricing': 'Simple pricing.One plan, no per-seat math.',
   '/tour': 'Everything Ivy does, in 13 stops.',
   '/features': "Everything your business needs.Nothing it doesn't.",
-  '/compare': 'Ivy vs HoneyBook vs Calendlyvs doing it all yourself.',
   '/about': 'One tool, made well, that respectsyour data and your time.',
   '/support': 'Stuck on something?',
   '/security': 'Your data. Your clients. Your control.',
@@ -61,7 +59,6 @@ const EXPECTED_H1 = {
   '/do-not-sell': 'Do Not Sell or Share My Personal Information',
 };
 for (const [slug, v] of Object.entries(VERTICALS)) EXPECTED_H1[`/for/${slug}`] = v.headline;
-for (const [slug, c] of Object.entries(COMPETITORS)) EXPECTED_H1[`/vs/${slug}`] = c.headline;
 
 const vercelConfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
 const middleware = await import(pathToFileURL(path.join(ROOT, 'middleware.js')).href);
@@ -117,7 +114,7 @@ try {
       try { parsed = JSON.parse(decode(ld)); } catch { /* fails below */ }
       check(parsed && parsed['@context'] === 'https://schema.org', `${p}: JSON-LD does not parse`);
     }
-    if (p.startsWith('/for/') || p.startsWith('/vs/')) {
+    if (p.startsWith('/for/')) {
       check(lds.some((ld) => ld.includes('"BreadcrumbList"')), `${p}: BreadcrumbList missing`);
     }
     if (p === '/') {

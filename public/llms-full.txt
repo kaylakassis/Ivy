@@ -95,7 +95,6 @@ Ivy is built by a business owner, for business owners, by a small team on purpos
 - Features: https://www.joinivy.ai/features
 - Pricing: https://www.joinivy.ai/pricing
 - Tour: https://www.joinivy.ai/tour
-- Compare: https://www.joinivy.ai/compare
 - About: https://www.joinivy.ai/about
 - Support: https://www.joinivy.ai/support
 - Security and data: https://www.joinivy.ai/security
@@ -107,9 +106,6 @@ Ivy is built by a business owner, for business owners, by a small team on purpos
 
 Ivy for specific businesses:
 https://www.joinivy.ai/for/massage-therapists, https://www.joinivy.ai/for/hair-stylists, https://www.joinivy.ai/for/personal-trainers, https://www.joinivy.ai/for/coaches, https://www.joinivy.ai/for/cleaners, https://www.joinivy.ai/for/photographers, https://www.joinivy.ai/for/videographers, https://www.joinivy.ai/for/makeup-artists, https://www.joinivy.ai/for/nail-techs, https://www.joinivy.ai/for/lash-artists, https://www.joinivy.ai/for/estheticians, https://www.joinivy.ai/for/yoga-instructors, https://www.joinivy.ai/for/pilates-teachers, https://www.joinivy.ai/for/tattoo-artists, https://www.joinivy.ai/for/doulas, https://www.joinivy.ai/for/tutors, https://www.joinivy.ai/for/music-teachers, https://www.joinivy.ai/for/life-coaches, https://www.joinivy.ai/for/career-coaches, https://www.joinivy.ai/for/consultants, https://www.joinivy.ai/for/dog-walkers, https://www.joinivy.ai/for/pet-groomers, https://www.joinivy.ai/for/real-estate-agents, https://www.joinivy.ai/for/event-planners, https://www.joinivy.ai/for/wedding-planners, https://www.joinivy.ai/for/freelance-designers, https://www.joinivy.ai/for/copywriters, https://www.joinivy.ai/for/handymen
-
-Switching guides (Ivy vs another tool):
-https://www.joinivy.ai/vs/honeybook, https://www.joinivy.ai/vs/dubsado, https://www.joinivy.ai/vs/vagaro, https://www.joinivy.ai/vs/mindbody, https://www.joinivy.ai/vs/acuity, https://www.joinivy.ai/vs/calendly, https://www.joinivy.ai/vs/practice, https://www.joinivy.ai/vs/paperbell
 
 ## Blog
 

@@ -14,7 +14,7 @@ import { useLaunchMode } from '../../../lib/launchMode.js';
 // the blog posts. Everything else stays client-side.
 const NAV = [
   ['/', 'Home'], ['/tour', 'Tour'], ['/features', 'Features'],
-  ['/pricing', 'Pricing'], ['/compare', 'Compare'], ['/blog', 'Blog'], ['/about', 'About'],
+  ['/pricing', 'Pricing'], ['/blog', 'Blog'], ['/about', 'About'],
 ];
 
 // Sets document head per page: title, description, canonical, og/twitter,
@@ -75,7 +75,7 @@ export function SiteFooter() {
           <AppStoreBadge height={40} className="foot-badge"/>
         </div>
         <div className="foot-cols">
-          <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/compare">Compare</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
+          <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
           <div className="foot-col"><h5>Who it's for</h5>{FOOTER_VERTICALS.map(([slug, label]) => <a key={slug} href={`/for/${slug}`}>{label}</a>)}<a href="/features#who">All businesses</a></div>
           <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
           <div className="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><SignupCta>Get started</SignupCta><a href="/me">Client portal</a></div>

@@ -1,6 +1,6 @@
 # Ivy - www.joinivy.ai
 #
-# Public: the marketing pages, /for/*, /vs/*, the blog, pricing, legal.
+# Public: the marketing pages, /for/*, the blog, pricing, legal.
 # Private or tokenised (never indexed): the API, the app itself, the client
 # portal, the admin console, and every signed link a client receives
 # (contracts, invoices, quotes, review requests, public program pages).

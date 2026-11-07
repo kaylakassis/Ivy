@@ -32,7 +32,6 @@ Ivy is made for solo service businesses: massage therapists, coaches, hair styli
 - [Features](https://www.joinivy.ai/features)
 - [Pricing](https://www.joinivy.ai/pricing)
 - [Tour](https://www.joinivy.ai/tour)
-- [Compare Ivy with HoneyBook, Calendly and a do-it-yourself stack](https://www.joinivy.ai/compare)
 - [About](https://www.joinivy.ai/about)
 - [Support](https://www.joinivy.ai/support)
 - [Security and data](https://www.joinivy.ai/security)
@@ -74,16 +73,6 @@ Ivy is made for solo service businesses: massage therapists, coaches, hair styli
 - [Copywriters](https://www.joinivy.ai/for/copywriters)
 - [Handymen](https://www.joinivy.ai/for/handymen)
 
-## Switching to Ivy from another tool
-
-- [Ivy vs HoneyBook](https://www.joinivy.ai/vs/honeybook)
-- [Ivy vs Dubsado](https://www.joinivy.ai/vs/dubsado)
-- [Ivy vs Vagaro](https://www.joinivy.ai/vs/vagaro)
-- [Ivy vs Mindbody](https://www.joinivy.ai/vs/mindbody)
-- [Ivy vs Acuity](https://www.joinivy.ai/vs/acuity)
-- [Ivy vs Calendly](https://www.joinivy.ai/vs/calendly)
-- [Ivy vs Practice](https://www.joinivy.ai/vs/practice)
-- [Ivy vs Paperbell](https://www.joinivy.ai/vs/paperbell)
 
 ## Blog
 

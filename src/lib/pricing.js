@@ -15,13 +15,15 @@
 // weekly price, which would compare a month against a week and flatter the
 // number by about $30.
 export const TOOL_STACK = [
-  { name: 'HoneyBook',  monthly: 39, replaces: 'clients + invoices + contracts' },
-  { name: 'Calendly',   monthly: 12, replaces: 'booking pages + reminders' },
-  { name: 'Acuity Scheduling', monthly: 16, replaces: 'advanced scheduling + intake forms' },
-  { name: 'QuickBooks Self-Employed', monthly: 20, replaces: 'invoices + expenses + taxes' },
-  { name: 'Mailchimp',  monthly: 13, replaces: 'newsletter + email blasts' },
-  { name: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
-  { name: 'DocuSign',   monthly: 15, replaces: 'legally-binding e-signatures' },
+  // `label` is what the site shows (Kayla: never name other products on
+  // the site); `source` is only our record of where each price comes from.
+  { label: 'Client management app', source: 'HoneyBook', monthly: 39, replaces: 'clients + invoices + contracts' },
+  { label: 'Scheduling app', source: 'Calendly', monthly: 12, replaces: 'booking pages + reminders' },
+  { label: 'Advanced scheduling app', source: 'Acuity Scheduling', monthly: 16, replaces: 'advanced scheduling + intake forms' },
+  { label: 'Bookkeeping app', source: 'QuickBooks Self-Employed', monthly: 20, replaces: 'invoices + expenses + taxes' },
+  { label: 'Email marketing app', source: 'Mailchimp', monthly: 13, replaces: 'newsletter + email blasts' },
+  { label: 'Website builder', source: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
+  { label: 'E-signature app', source: 'DocuSign', monthly: 15, replaces: 'legally-binding e-signatures' },
 ];
 
 export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
