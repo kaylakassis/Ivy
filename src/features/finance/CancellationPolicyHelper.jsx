@@ -54,6 +54,8 @@ const CSS = `
   .cph-preview-col{position:static}
   .cph-preview{max-height:none}
   .cph-foot{padding-left:16px;padding-right:16px}
+  .cph-foot > div:first-child{flex-basis:100%}
+  .cph-foot .btn{flex:1 1 0;justify-content:center}
 }
 `;
 
