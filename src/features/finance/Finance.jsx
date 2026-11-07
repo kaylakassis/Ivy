@@ -444,7 +444,8 @@ function InvoicesSection({
               <span style={{ fontWeight: 600 }}>{selected.size} selected</span>
               <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}
                 onClick={() => setSelected(new Set(pickable.map((i) => i.id)))}>
-                Select all {pickable.length}
+                {/* With paging, only the loaded invoices can be picked; say so. */}
+                {hasMore ? `Select all ${pickable.length} shown` : `Select all ${pickable.length}`}
               </button>
               <div style={{ flex: 1 }}/>
               <button type="button" className="btn btn-ghost" style={{ fontSize: 12, padding: '5px 10px' }}
