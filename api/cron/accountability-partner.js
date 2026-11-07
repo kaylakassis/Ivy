@@ -39,7 +39,7 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 import {
   computeSignals, messageableItems, isFresh, composeMessage, renderPartnerEmail,
-  resolvePartnerSettings, firstNameOf,
+  resolvePartnerSettings, firstNameOf, withPartnerRef, recordPartnerEvent, recordMentions, checkPartnerMentions,
   SEND_FROM_HOUR, SEND_UNTIL_HOUR, AWAY_FIRST_DAYS, AWAY_SECOND_DAYS,
 } from '../_lib/accountability.js';
 
@@ -52,7 +52,7 @@ const WEEKLY_HOURS = 6.5 * 24;
 // Active plan or live trial, same rule as the weekly recap
 // (isWorkspaceActive): trial still running, paid period running, past_due
 // in its retry window, or a complimentary grant.
-const ACTIVE_PLAN = `(
+export const ACTIVE_PLAN = `(
   (w.subscription_status = 'trialing' AND w.trial_ends_at > NOW())
   OR (w.subscription_status = 'active' AND (w.subscription_period_end IS NULL OR w.subscription_period_end > NOW()))
   OR (w.subscription_status = 'past_due')
@@ -136,25 +136,45 @@ export function shouldEmail({ kind, weekly = false, emailEnabled, hasEmail, reac
   return !!(emailEnabled && hasEmail);
 }
 
+// The admin view's name for each kind of message.
+export function sendKind(plan) {
+  if (plan.kind === 'away1') return 'away3';
+  if (plan.kind === 'away2') return 'away7';
+  return plan.weekly ? 'weekly' : 'daily';
+}
+
 async function deliver(r, plan) {
   const settings = resolvePartnerSettings(r.notification_prefs, r.accountability_prefs);
   const msg = composeMessage({ kind: plan.kind, items: plan.items });
   const tag = plan.kind === 'digest' ? 'accountability-partner' : 'accountability-away';
+  // Counted for the admin view (no text stored). Its id tags the links so
+  // "opened from this message" can be counted; without it the links are
+  // the plain ones.
+  const eventId = await recordPartnerEvent({
+    workspaceId: r.workspace_id, userId: r.owner_id, event: 'sent', kind: sendKind(plan), itemCount: plan.items.length,
+  });
   // Push + bell. notifyOwner records the bell row first, then pushes to
   // every device; the 'accountability' switch gates both.
   const pushed = await notifyOwner({
     workspaceId: r.workspace_id, type: 'accountability',
-    payload: { title: msg.title, body: msg.body, url: msg.url, tag },
+    payload: { title: msg.title, body: msg.body, url: eventId ? withPartnerRef(msg.url, `n.${eventId}`) : msg.url, tag },
   }).catch(() => ({ sent: 0 }));
-  const reachedDevice = Number(pushed?.sent || 0) > 0;
+  const pushDevices = Number(pushed?.sent || 0);
+  const reachedDevice = pushDevices > 0;
   let emailed = false;
   if (shouldEmail({ kind: plan.kind, weekly: plan.weekly, emailEnabled: settings.emailEnabled, hasEmail: !!r.email, reachedDevice })) {
-    const mail = renderPartnerEmail({ kind: plan.kind, items: plan.items, firstName: firstNameOf(r.name), baseUrl: appUrl() });
+    const mail = renderPartnerEmail({ kind: plan.kind, items: plan.items, firstName: firstNameOf(r.name), baseUrl: appUrl(), ref: eventId ? `e.${eventId}` : null });
     const out = await sendEmailToUser({
       userId: r.owner_id, type: 'accountability', to: r.email,
       subject: mail.subject, html: mail.html, text: mail.text,
     }).catch(() => null);
     emailed = !!out?.sent;
+  }
+  if (eventId) {
+    await sql`UPDATE partner_events SET push_devices = ${pushDevices}, emailed = ${emailed} WHERE id = ${eventId}`.catch(() => {});
+    // The items the message named: the push and bell show the first three,
+    // the email up to six.
+    await recordMentions(eventId, r.workspace_id, plan.items.slice(0, emailed ? 6 : 3));
   }
   return { pushed: reachedDevice, emailed };
 }
@@ -168,6 +188,10 @@ async function handler(req, res) {
     let emptied = false;
 
     await withDeadline(async (deadline) => {
+      // First, a bounded pass over items named in earlier messages: were
+      // they cleared? (admin view only; never sends anything).
+      counts.mentions = await checkPartnerMentions({ shardFilter: shardClause({ shard, shards }, 'm.workspace_id'), deadline })
+        .catch((err) => { console.warn('[accountability-partner] mention check failed:', err.message); return null; });
       while (Date.now() < deadline) {
         const { rows } = await sql.query(candidateQuery(shardFilter));
         if (rows.length === 0) { emptied = true; break; }

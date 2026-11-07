@@ -953,7 +953,8 @@ async function planPartner(ws, a) {
     summary: `${parts.join('. ')}.`,
     done: `Updated your accountability partner: ${parts.map((p) => p.split('.')[0]).join('; ').toLowerCase()}`,
     apply: async () => {
-      const next = await savePartnerSettings(userId, patch);
+      // The approval card above carries the same warning as the settings screen.
+      const next = await savePartnerSettings(userId, patch, { source: 'ivy' });
       return { ok: true, enabled: next.enabled, email: next.emailEnabled, frequency: next.frequency };
     },
   };

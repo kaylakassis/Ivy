@@ -113,7 +113,11 @@ export async function readPartnerSettings(userId) {
   return resolvePartnerSettings(rows[0]?.notification_prefs, rows[0]?.accountability_prefs);
 }
 
-export async function savePartnerSettings(userId, { notificationPatch = {}, prefsPatch = {} }) {
+// `source` says where a turn off / on came from, for the admin view:
+// 'settings' (Account > Notifications, which asks first with the warning),
+// 'ivy' (Ivy's approval card, which carries the same warning) or 'other'.
+export async function savePartnerSettings(userId, { notificationPatch = {}, prefsPatch = {} }, { source = 'other' } = {}) {
+  const wasOn = 'accountability' in notificationPatch ? (await readPartnerSettings(userId)).enabled : null;
   if (Object.keys(notificationPatch).length) {
     await sql`
       UPDATE users SET notification_prefs = COALESCE(notification_prefs, '{}'::jsonb) || ${JSON.stringify(notificationPatch)}::jsonb
@@ -128,7 +132,126 @@ export async function savePartnerSettings(userId, { notificationPatch = {}, pref
     if (prefsPatch.kinds) next.kinds = { ...(cur.kinds || {}), ...prefsPatch.kinds };
     await sql`UPDATE users SET accountability_prefs = ${JSON.stringify(next)}::jsonb WHERE id = ${userId}`;
   }
-  return readPartnerSettings(userId);
+  const after = await readPartnerSettings(userId);
+  if (wasOn !== null) await recordPartnerToggle(userId, wasOn, after.enabled, source);
+  return after;
+}
+
+// ── tracking for the admin view (counts only) ───────────────────────────
+// Best effort: tracking never blocks or fails what the owner asked for.
+export async function recordPartnerEvent({ workspaceId, userId = null, event, kind = null, source = null, itemCount = null }) {
+  try {
+    const { rows } = await sql`
+      INSERT INTO partner_events (workspace_id, user_id, event, kind, source, item_count)
+      VALUES (${workspaceId}, ${userId}, ${event}, ${kind}, ${source}, ${itemCount})
+      RETURNING id`;
+    return rows[0]?.id || null;
+  } catch (err) {
+    console.warn('[accountability] event not recorded:', err.message);
+    return null;
+  }
+}
+
+// A turn off / on of the partner switch, from any route.
+export async function recordPartnerToggle(userId, wasOn, isOn, source = 'other') {
+  if (wasOn === isOn || !userId) return;
+  try {
+    const { rows } = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} ORDER BY created_at ASC LIMIT 1`;
+    if (!rows[0]) return;
+    await recordPartnerEvent({
+      workspaceId: rows[0].id, userId, event: isOn ? 'turned_on' : 'turned_off',
+      source: ['settings', 'ivy'].includes(source) ? source : 'other',
+    });
+  } catch { /* tracking only */ }
+}
+
+// The owner opened the app from a partner message's own link (?ptr=...).
+// Only their own sends can be marked.
+export async function markPartnerClicked(userId, ref) {
+  if (!userId || !PARTNER_REF_RE.test(String(ref || ''))) return false;
+  const [ch, id] = String(ref).split('.');
+  const { rowCount } = await sql`
+    UPDATE partner_events
+       SET clicked_at = COALESCE(clicked_at, NOW()),
+           click_channel = COALESCE(click_channel, ${ch === 'e' ? 'email' : 'notification'}),
+           opened_at = COALESCE(opened_at, CASE WHEN NOW() <= created_at + INTERVAL '24 hours' THEN NOW() END)
+     WHERE id = ${id} AND user_id = ${userId} AND event = 'sent'`;
+  return rowCount > 0;
+}
+
+// ── was the thing a message named cleared? ──────────────────────────────
+// A partner message names items (reply to Jane, send Maria's document...).
+// Each is stored as a partner_mentions row with the ids of the things it
+// named. While it is younger than MENTION_WINDOW_HOURS the cron re-runs
+// just that item's detector every MENTION_RECHECK_MINUTES: once none of
+// the named things are still waiting (or the item is gone from the list)
+// it is cleared. Checks are periodic, so a clearance just before the 48
+// hours can be seen just after and count as not cleared in time: the
+// rate can only be too low, never too high.
+export const MENTION_WINDOW_HOURS = 48;
+export const MENTION_RECHECK_MINUTES = 110;
+const realIds = (ids) => (Array.isArray(ids) ? ids : []).map(String)
+  .filter((x) => !/^[nu]\d+$/.test(x)).map((x) => x.split(':')[0]);
+
+export function mentionCleared(mentionIds, current) {
+  if (!current) return true;
+  const named = realIds(mentionIds);
+  if (!named.length) return false; // a count-only item (quiet week): cleared only when it is gone
+  const now = new Set(realIds(current.ids));
+  return !named.some((id) => now.has(id));
+}
+
+export async function recordMentions(eventId, workspaceId, items) {
+  for (const it of items || []) {
+    if (!it || !DETECTORS[it.key]) continue;
+    await sql`
+      INSERT INTO partner_mentions (event_id, workspace_id, signal_key, item_ids)
+      VALUES (${eventId}, ${workspaceId}, ${it.key}, ${JSON.stringify((it.ids || []).slice(0, 50).map(String))}::jsonb)`
+      .catch(() => {});
+  }
+}
+
+export async function checkPartnerMentions({ limit = 300, shardFilter = '', deadline = Infinity } = {}) {
+  const out = { checked: 0, cleared: 0, settled: 0 };
+  const { rows } = await sql.query(
+    `SELECT m.id, m.workspace_id, m.signal_key, m.item_ids,
+            (m.mentioned_at <= NOW() - INTERVAL '${MENTION_WINDOW_HOURS} hours') AS expired
+       FROM partner_mentions m
+      WHERE m.settled = FALSE
+        AND (m.checked_at IS NULL OR m.checked_at <= NOW() - INTERVAL '${MENTION_RECHECK_MINUTES} minutes')
+        ${shardFilter}
+      ORDER BY m.checked_at ASC NULLS FIRST
+      LIMIT $1`,
+    [Math.max(1, Math.min(2000, limit))],
+  );
+  const cache = new Map();
+  for (const m of rows) {
+    if (Date.now() >= deadline) break;
+    if (m.expired) {
+      await sql`UPDATE partner_mentions SET settled = TRUE, checked_at = NOW() WHERE id = ${m.id}`;
+      out.settled++;
+      continue;
+    }
+    const k = `${m.workspace_id}|${m.signal_key}`;
+    try {
+      if (!cache.has(k)) {
+        const tz = await workspaceTimeZone(m.workspace_id);
+        // No safe(): a failed query must never read as "cleared".
+        cache.set(k, await DETECTORS[m.signal_key](m.workspace_id, tz));
+      }
+    } catch {
+      await sql`UPDATE partner_mentions SET checked_at = NOW() WHERE id = ${m.id}`;
+      continue;
+    }
+    out.checked++;
+    if (mentionCleared(m.item_ids, cache.get(k))) {
+      await sql`UPDATE partner_mentions SET cleared_at = NOW(), settled = TRUE, checked_at = NOW() WHERE id = ${m.id}`;
+      out.cleared++;
+    } else {
+      await sql`UPDATE partner_mentions SET checked_at = NOW() WHERE id = ${m.id}`;
+    }
+  }
+  return out;
 }
 
 // ── text helpers ───────────────────────────────────────────────────────
@@ -618,30 +741,36 @@ const ORDER = [
   'quiet_clients', 'packages_low', 'reviews_reply', 'quiet_week', 'duplicates',
 ];
 
+// Every detector by the key of the item it produces. computeSignals runs
+// them all; the admin view's "was it cleared?" check (checkPartnerMentions)
+// re-runs just the one a partner message named.
+const DETECTORS = {
+  unread_messages: (ws) => unreadMessages(ws),
+  leads_waiting: (ws) => leadsWaiting(ws),
+  deposit_reviews: (ws) => depositReviews(ws),
+  autopay_failed: (ws) => autopayFailed(ws),
+  invoices_overdue: (ws) => invoicesOverdue(ws),
+  deposits_unpaid_today: (ws, tz) => depositsUnpaidToday(ws, tz),
+  docs_unsent: (ws) => docsUnsent(ws),
+  docs_unsigned: (ws) => docsUnsigned(ws),
+  invoices_draft: (ws) => invoicesDraft(ws),
+  tasks_due: (ws, tz) => tasksDue(ws, tz),
+  setup: (ws) => setupGap(ws),
+  quiet_clients: (ws) => quietClientsSignal(ws),
+  packages_low: (ws) => packagesLow(ws),
+  reviews_reply: (ws) => reviewsToReply(ws),
+  duplicates: (ws) => duplicates(ws),
+  quiet_week: (ws, tz) => quietWeek(ws, tz),
+  missing_email: (ws, tz) => missingEmail(ws, tz),
+};
+export const SIGNAL_KEYS = Object.keys(DETECTORS);
+
 // Everything that needs the owner's attention right now, most important
 // first. `tz` may be passed by a caller that already has it.
 export async function computeSignals(workspaceId, { tz: tzIn } = {}) {
   if (!workspaceId) return [];
   const tz = tzIn || await workspaceTimeZone(workspaceId);
-  const found = await Promise.all([
-    safe(unreadMessages(workspaceId)),
-    safe(leadsWaiting(workspaceId)),
-    safe(depositReviews(workspaceId)),
-    safe(autopayFailed(workspaceId)),
-    safe(invoicesOverdue(workspaceId)),
-    safe(depositsUnpaidToday(workspaceId, tz)),
-    safe(docsUnsent(workspaceId)),
-    safe(docsUnsigned(workspaceId)),
-    safe(invoicesDraft(workspaceId)),
-    safe(tasksDue(workspaceId, tz)),
-    safe(setupGap(workspaceId)),
-    safe(quietClientsSignal(workspaceId)),
-    safe(packagesLow(workspaceId)),
-    safe(reviewsToReply(workspaceId)),
-    safe(duplicates(workspaceId)),
-    safe(quietWeek(workspaceId, tz)),
-    safe(missingEmail(workspaceId, tz)),
-  ]);
+  const found = await Promise.all(Object.values(DETECTORS).map((fn) => safe(fn(workspaceId, tz))));
   return found.filter(Boolean)
     .map((it) => ({ ...it, fingerprint: fingerprintOf(it) }))
     .sort((a, b) => (a.priority - b.priority) || (ORDER.indexOf(a.key) - ORDER.indexOf(b.key)));
@@ -753,10 +882,23 @@ export function composeMessage({ kind = 'digest', items = [] }) {
 export function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-export function renderEmailBody({ msg, items = [], firstName = '', baseUrl = '' }) {
+// Tags an app link with the partner message it came from (?ptr=<channel>.<id>)
+// so the admin view can count "opened from the message". Only app-relative
+// paths are tagged; anything else is returned unchanged.
+export const PARTNER_REF_RE = /^[ne]\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function withPartnerRef(href, ref) {
+  const h = String(href || '');
+  if (!ref || !PARTNER_REF_RE.test(ref) || !h.startsWith('/')) return h;
+  const hashAt = h.indexOf('#');
+  const path = hashAt >= 0 ? h.slice(0, hashAt) : h;
+  const hash = hashAt >= 0 ? h.slice(hashAt) : '';
+  return `${path}${path.includes('?') ? '&' : '?'}ptr=${ref}${hash}`;
+}
+
+export function renderEmailBody({ msg, items = [], firstName = '', baseUrl = '', ref = null }) {
   const hi = firstName ? `Hi ${escapeHtml(firstName)},` : 'Hi,';
   const list = items.slice(0, 6).map((it) => {
-    const url = `${baseUrl}${it.href && it.href.startsWith('/') ? it.href : '/dashboard'}`;
+    const url = `${baseUrl}${withPartnerRef(it.href && it.href.startsWith('/') ? it.href : '/dashboard', ref)}`;
     return `<li style="margin:0 0 10px;">
       <a href="${escapeHtml(url)}" style="font-weight:600;color:#5CC98E;">${escapeHtml(it.title)}</a>
       ${it.detail ? `<br><span style="font-size:13px;opacity:.8;">${escapeHtml(it.detail)}</span>` : ''}
@@ -773,17 +915,19 @@ export const PARTNER_EMAIL_FOOTER = 'You get this because your accountability pa
 
 // The full email: { subject, html, text }. Shared by the cron and the
 // admin email preview, so the preview is the real thing.
-export function renderPartnerEmail({ kind = 'digest', items = [], firstName = '', baseUrl = '' }) {
+// `ref` (optional, 'e.<event id>') tags the email's links for the admin
+// view's "opened from the message" count.
+export function renderPartnerEmail({ kind = 'digest', items = [], firstName = '', baseUrl = '', ref = null }) {
   const msg = composeMessage({ kind, items });
   const html = emailShell({
     heading: msg.heading,
     preheader: msg.subject,
-    body: renderEmailBody({ msg, items, firstName, baseUrl }),
+    body: renderEmailBody({ msg, items, firstName, baseUrl, ref }),
     ctaText: 'Open Ivy',
-    ctaUrl: `${baseUrl}/dashboard`,
+    ctaUrl: `${baseUrl}${withPartnerRef('/dashboard', ref)}`,
     footer: PARTNER_EMAIL_FOOTER,
   });
-  const lines = items.slice(0, 6).map((it) => `- ${it.title}${it.detail ? ` (${it.detail})` : ''}: ${baseUrl}${it.href}`);
+  const lines = items.slice(0, 6).map((it) => `- ${it.title}${it.detail ? ` (${it.detail})` : ''}: ${baseUrl}${withPartnerRef(it.href, ref)}`);
   const text = [firstName ? `Hi ${firstName},` : 'Hi,', '', msg.intro, '', ...lines, '', msg.outro, PARTNER_TITLE, '', PARTNER_EMAIL_FOOTER].join('\n');
   return { subject: msg.subject, html, text, msg };
 }
@@ -802,7 +946,9 @@ export async function localToday(tz) {
 export async function snoozeToday(workspaceId, on) {
   const tz = await workspaceTimeZone(workspaceId);
   const day = on ? await localToday(tz) : null;
-  await sql`UPDATE workspaces SET partner_snoozed_day = ${day}::date WHERE id = ${workspaceId}`;
+  const { rows } = await sql`
+    UPDATE workspaces SET partner_snoozed_day = ${day}::date WHERE id = ${workspaceId} RETURNING owner_id`;
+  if (on && rows[0]) await recordPartnerEvent({ workspaceId, userId: rows[0].owner_id, event: 'snoozed' });
   return !!on;
 }
 export async function isSnoozedToday(workspaceId, tz) {

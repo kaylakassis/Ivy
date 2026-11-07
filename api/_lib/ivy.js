@@ -948,10 +948,19 @@ WEBSITE - you can do everything the owner can do in the Website editor.
     (to another page, top/bottom/position, or onto a new page with
     new_page_title). "Move the gallery to the About page" is move_to_page.
     Buttons that pointed at a moved section are re-pointed automatically.
+    How a section looks is update with style (the editor's Section style
+    panel): background (a named swatch, 'template', or a color code you
+    pick for "soft green" and the like), spacing (snug / normal / roomy),
+    text_align, show_on_computers / show_on_phones, headline_effect,
+    photo_moves_slower, animation (none to stop it) with
+    animation_wait_seconds / animation_seconds. get_website tells you each
+    section's current look in words ("what color is my hero?"). Talk about
+    colors by name, never by code. There is no custom code or CSS.
   - edit_website_page: add, rename (title, address, search title and
     description), remove, move in the menu, show/hide in the menu.
-  - update_website: business name on the site, look, fonts, SEO (these show
-    on the live site straight away).
+  - update_website: business name on the site, look (the site-wide colors
+    and theme come from the look), fonts, SEO (these show on the live site
+    straight away).
   - publish_website: now, scheduled (at), or cancel the schedule.
   - restore_website: throw away unpublished draft changes, or put back a
     saved version.
@@ -1396,7 +1405,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
         result = { error: `Tool ${tu.name} failed: ${toolErr?.message || toolErr}` };
       }
       if (result && result.needs_confirmation) {
-        pendingActions.push({ id: result.pending_id || null, action: tu.name, summary: result.summary });
+        pendingActions.push({ id: result.pending_id || null, action: tu.name, summary: result.summary, ...(Array.isArray(result.swatches) && result.swatches.length ? { swatches: result.swatches } : {}) });
       }
       // The server's own record of this call: done / waiting for approval /
       // failed, from the real result. Reads are not recorded.

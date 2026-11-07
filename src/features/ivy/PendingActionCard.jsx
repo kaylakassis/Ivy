@@ -10,6 +10,30 @@
 import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { useSuccessFlash } from '../../components/motion/useSuccessFlash.js';
+import { safeBackground, safeHeadlineGradient } from '../website/styleSafety.js';
+
+// Website style changes carry colour chips ({ label, color }) so the owner
+// sees the colour itself, never a bare code. Only the editor's own swatch
+// values or a plain #rrggbb are painted; anything else is skipped.
+export function ColorChips({ swatches }) {
+  const list = (Array.isArray(swatches) ? swatches : [])
+    .filter((s) => s && typeof s.label === 'string' && (safeBackground(s.color) || safeHeadlineGradient(s.color)))
+    .slice(0, 4);
+  if (!list.length) return null;
+  return (
+    <span style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
+      {list.map((s, i) => (
+        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--fg-2)' }}>
+          <span aria-hidden="true" data-testid="color-chip" style={{
+            width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+            border: '1px solid var(--border-strong)', background: safeBackground(s.color) || safeHeadlineGradient(s.color),
+          }}/>
+          {s.label}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 export default function PendingActionCard({ actions, onApprove, onDismiss, busy }) {
   const [approveFlash, flashApprove] = useSuccessFlash();
@@ -30,6 +54,7 @@ export default function PendingActionCard({ actions, onApprove, onDismiss, busy 
         {actions.map((a, i) => (
           <li key={i} style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.4, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
             {a.summary || a.action}
+            <ColorChips swatches={a.swatches}/>
           </li>
         ))}
       </ul>

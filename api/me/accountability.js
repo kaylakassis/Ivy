@@ -7,6 +7,10 @@
 //   PATCH → { enabled?, emailEnabled?, frequency?, kinds? } change settings.
 //   POST  → { action: 'snooze' | 'unsnooze' } "Not today" from the
 //           dashboard card: no partner message today and the card folds.
+//           { action: 'opened', ref } the app was opened from a partner
+//           message's link (?ptr=...); { action: 'warning_kept' } the
+//           owner saw the turn-off warning and kept it on. Both only feed
+//           the admin view's counts.
 //
 // Owners only: a helper-only account gets 403 (ensureWorkspace). Every
 // read and write is for the signed-in owner's own business.
@@ -16,6 +20,7 @@ import { readBody } from '../_lib/body.js';
 import { enforce } from '../_lib/rate-limit.js';
 import {
   partnerOverview, readPartnerSettings, cleanSettingsPatch, savePartnerSettings, snoozeToday,
+  markPartnerClicked, recordPartnerEvent,
   PARTNER_KIND_LABELS, PARTNER_FREQUENCY_LABELS, PARTNER_KINDS, PARTNER_FREQUENCIES,
 } from '../_lib/accountability.js';
 import { recordWorkspaceAudit } from '../_lib/audit.js';
@@ -47,6 +52,14 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const action = String(body.action || '');
+      if (action === 'opened') {
+        const marked = await markPartnerClicked(user.id, String(body.ref || '').slice(0, 60));
+        return ok(res, { ok: true, marked });
+      }
+      if (action === 'warning_kept') {
+        await recordPartnerEvent({ workspaceId, userId: user.id, event: 'warning_kept', source: 'settings' });
+        return ok(res, { ok: true });
+      }
       if (action !== 'snooze' && action !== 'unsnooze') return badRequest(res, "action must be 'snooze' or 'unsnooze'");
       const snoozedToday = await snoozeToday(workspaceId, action === 'snooze');
       return ok(res, { snoozedToday });
@@ -54,7 +67,9 @@ export default async function handler(req, res) {
 
     const patch = cleanSettingsPatch(body);
     if (patch.error) return badRequest(res, patch.error);
-    const settings = await savePartnerSettings(user.id, patch);
+    // This screen always shows the turn-off warning before it sends
+    // enabled: false (AccountabilityPartnerRow.jsx), hence 'settings'.
+    const settings = await savePartnerSettings(user.id, patch, { source: 'settings' });
     if ('accountability' in patch.notificationPatch) {
       await recordWorkspaceAudit(req, {
         workspaceId, actor: user,

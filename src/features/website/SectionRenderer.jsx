@@ -3,9 +3,11 @@
 //
 // Section-level overrides (set via Inspector):
 //   section.variant - which layout to use (e.g. 'left' vs 'center' hero)
-//   section.style.background - custom CSS color/gradient/image
+//   section.style.background - a swatch or #rrggbb (sectionStyle.js)
 //   section.style.padding    - density key from PADDING_DENSITIES
 //   section.style.textAlign  - 'left' | 'center' | 'right' override
+// Only values the editor offers are applied (safeBackground and friends in
+// sectionStyle.js), so no stored string can add CSS of its own.
 //
 // The wrapper here applies the style overrides as a thin shell around
 // whatever the per-section renderer outputs - keeps the renderers focused.
@@ -19,6 +21,7 @@ import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 ensureBuilderFonts();
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
+import { safeBackground, safeHeadlineGradient, safePadding, safeTextAlign, normalizeAnimate } from './sectionStyle.js';
 import CancellationPolicySection, { PolicyFooterLink } from './CancellationPolicySection.jsx';
 
 // Link context for the public site: section anchors on this page, the
@@ -36,28 +39,30 @@ export default function SectionRenderer({ section, handle, editable = false, onU
   const Comp = RENDERERS[section.type] || Fallback;
   const style = section.style || {};
   const wrapperStyle = {};
-  if (style.background) wrapperStyle.background = style.background;
-  if (style.padding && PADDING_DENSITIES[style.padding]) {
-    wrapperStyle.padding = PADDING_DENSITIES[style.padding];
-  }
-  if (style.textAlign) wrapperStyle.textAlign = style.textAlign;
+  const bg = safeBackground(style.background);
+  if (bg) wrapperStyle.background = bg;
+  if (safePadding(style.padding)) wrapperStyle.padding = PADDING_DENSITIES[style.padding];
+  if (safeTextAlign(style.textAlign)) wrapperStyle.textAlign = style.textAlign;
   const hideMobile  = !!style.hideOnMobile;
   const hideDesktop = !!style.hideOnDesktop;
-  const hasOverride = Object.keys(wrapperStyle).length > 0 || hideMobile || hideDesktop || style.headlineGradient || style.parallax;
+  const grad = safeHeadlineGradient(style.headlineGradient);
+  const hasOverride = Object.keys(wrapperStyle).length > 0 || hideMobile || hideDesktop || grad || style.parallax;
   const rendered = (
     <Comp data={section.data} handle={handle} variant={section.variant} editable={editable} onUpdate={onUpdate}/>
   );
   // Per-section CSS overlays: hide-on-breakpoint + gradient-text on the
   // first h1/h2 of this section + parallax on the first background-image
   // section. All scoped via [data-section-id="..."] so they can't leak.
+  // The id goes into a CSS string, so quotes and backslashes are escaped.
+  const sel = section.id ? `[data-section-id="${String(section.id).replace(/[\\"]/g, '\\$&').replace(/[\r\n<>]/g, '')}"]` : '';
   const scopedCss = section.id ? [
-    hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
-    hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
-    style.headlineGradient
-      ? `[data-section-id="${section.id}"] h1, [data-section-id="${section.id}"] h2 { background: ${style.headlineGradient}; -webkit-background-clip: text; background-clip: text; color: transparent; }`
+    hideMobile  ? `@media (max-width: 720px)  { ${sel} { display: none !important; } }` : '',
+    hideDesktop ? `@media (min-width: 721px)  { ${sel} { display: none !important; } }` : '',
+    grad
+      ? `${sel} h1, ${sel} h2 { background: ${grad}; -webkit-background-clip: text; background-clip: text; color: transparent; }`
       : '',
     style.parallax
-      ? `[data-section-id="${section.id}"] section { background-attachment: fixed !important; }`
+      ? `${sel} section { background-attachment: fixed !important; }`
       : '',
   ].filter(Boolean).join(' ') : '';
   const inner = (hasOverride || anchor)
@@ -65,10 +70,8 @@ export default function SectionRenderer({ section, handle, editable = false, onU
     : rendered;
   // Animation key can be a plain string ('fade') OR an object
   // ({ type, delayMs, durationMs }) for fine-grained control.
-  if (!section.animate) return inner;
-  const animCfg = typeof section.animate === 'string'
-    ? { type: section.animate }
-    : section.animate;
+  const animCfg = normalizeAnimate(section.animate);
+  if (!animCfg) return inner;
   return <AnimateOnView animate={animCfg.type} delayMs={animCfg.delayMs} durationMs={animCfg.durationMs}>{inner}</AnimateOnView>;
 }
 
