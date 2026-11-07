@@ -628,6 +628,12 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
       mode: 'live',
     });
   } catch (err) {
+    // Calls the service already answered cost real tokens: count them (and
+    // the message) like a finished turn, so a failing turn cannot get
+    // around the daily, monthly or platform caps.
+    if (workspaceId && turn.usage && (turn.usage.input_tokens || turn.usage.output_tokens)) {
+      await recordUsage(workspaceId, { usage: turn.usage, model }).catch(() => {});
+    }
     const facts = failureFacts(err);
     // eslint-disable-next-line no-console
     console.error('[ivy] live reply failed:', facts.status, facts.name, facts.apiType, facts.message);
@@ -895,6 +901,8 @@ create DRAFTS or internal records; nothing leaves the building):
 - create_product, create_package, create_expense, create_goal, create_time_entry.
 - create_document_from_template.
 - create_booking - needs client_id + date + start_min/end_min in minutes-from-midnight.
+  Approval-gated: the client is emailed a confirmation (with any notes), so
+  the owner taps Approve first.
 - add_bookings_from_list - several appointments at once, for example read from a photo or screenshot of the owner's schedule, another booking app, or a paper appointment book.
 - import_clients_from_list - many clients at once, read from a list the owner sends you.
 
@@ -1016,7 +1024,9 @@ OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   changes something, and the MORE OF THE APP tools above; remember (saving a
   note to your memory); update_client when it changes a client's email or
   phone; toggle_workflow when it turns ON an automation that emails, texts or
-  sends documents to clients. You CAN do all of these for the owner now.
+  sends documents to clients; create_suggested_workflow when that automation
+  sends documents; create_booking (the client gets a confirmation email).
+  You CAN do all of these for the owner now.
 - INVOICES: what you can do depends on where the invoice stands. Call
   search_invoices first; each result has status_line (quote it) and allowed
   (true, or the reason it can't be done). Never tell the owner nothing can
@@ -1346,6 +1356,17 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
   // every tool call did, so both survive if this function throws midway.
   const state = turn || { ledger: [], pendingActions: [] };
   const pendingActions = state.pendingActions;
+  // The tokens spent so far, kept on `turn` after every answered call, so a
+  // turn that fails later (an empty answer, an error on a later call) is
+  // still counted against the caps by generateReply.
+  const keepUsage = () => {
+    state.usage = {
+      input_tokens: totalIn,
+      output_tokens: totalOut,
+      cache_read_input_tokens: totalCacheRead,
+      cache_creation_input_tokens: totalCacheCreate,
+    };
+  };
 
   // Wall-clock budget. The api/ivy function is capped at 60s (vercel.json); if
   // the model + tool loop runs past that, Vercel kills the function and the
@@ -1382,6 +1403,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
     totalOut         += Number(u.output_tokens || 0);
     totalCacheRead   += Number(u.cache_read_input_tokens || 0);
     totalCacheCreate += Number(u.cache_creation_input_tokens || 0);
+    keepUsage();
 
     // If Claude isn't asking for a tool, we're done - extract text.
     if (response.stop_reason !== 'tool_use') break;
@@ -1445,6 +1467,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
     totalOut         += Number(u.output_tokens || 0);
     totalCacheRead   += Number(u.cache_read_input_tokens || 0);
     totalCacheCreate += Number(u.cache_creation_input_tokens || 0);
+    keepUsage();
     response = final;
   }
 
@@ -1612,7 +1635,7 @@ function fmtCtx(ctx) {
         ...s.actions.map((a) => `  • ${a}`));
     }
     lines.push(
-      '- If the owner wants it, call create_suggested_workflow (no arguments) to set up exactly this automation. Every action is a draft or reminder the owner reviews - nothing is auto-sent or auto-charged. They can also tap "Automate this" on their dashboard.',
+      '- If the owner wants it, call create_suggested_workflow (no arguments) to set up exactly this automation. Nothing is auto-charged and invoices stay drafts; if it sends a document to clients, the owner approves it on a card first. They can also tap "Automate this" on their dashboard.',
       '- If they ask WHY, or want to see the pattern before committing, call explain_workflow_suggestion first and answer from the real clients/counts it returns - never invent specifics.',
     );
   }

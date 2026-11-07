@@ -367,7 +367,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'create_booking',
-    description: 'Schedule a booking for a client. Resolve the client_id via search_clients first if you only have a name. Date format YYYY-MM-DD; start/end in minutes-from-midnight (e.g. 540 = 9:00 AM).',
+    description: 'APPROVAL-GATED (the client is emailed a booking confirmation, with any notes). Schedule a booking for a client. Resolve the client_id via search_clients first if you only have a name. Date format YYYY-MM-DD; start/end in minutes-from-midnight (e.g. 540 = 9:00 AM).',
     input_schema: {
       type: 'object',
       properties: {
@@ -464,7 +464,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'create_suggested_workflow',
-    description: "Create the automation Ivy already detected from the owner's recent habits (surfaced in your context as an \"Automation opportunity\"). Call with no arguments once the owner agrees to that specific automation - the server re-derives and creates exactly the detected workflow (draft/reminder actions only, nothing auto-sends). Returns { created:false } when there's no current suggestion. Never use this to build an arbitrary workflow - that's create_workflow.",
+    description: "Create the automation Ivy already detected from the owner's recent habits (surfaced in your context as an \"Automation opportunity\"). Call with no arguments once the owner agrees to that specific automation - the server re-derives and creates exactly the detected workflow. When that automation sends a document to clients, the call is held for the owner's Approve. Returns { created:false } when there's no current suggestion. Never use this to build an arbitrary workflow - that's create_workflow.",
     input_schema: {
       type: 'object',
       properties: {
@@ -1001,6 +1001,9 @@ export const SENSITIVE_TOOLS = new Set([
   ...APP_SENSITIVE,
   // Many appointments (and possibly new clients) at once, read from a photo.
   'add_bookings_from_list',
+  // One appointment: the client is emailed a confirmation (with any note),
+  // so it is an outbound send like reschedule_booking.
+  'create_booking',
   // Many clients at once, read from a file, a screenshot or a photo.
   'import_clients_from_list',
   'send_message_to_client',
@@ -1054,6 +1057,7 @@ function workflowHasOutboundActions(name, a) {
 async function needsArgumentApproval(name, a, ctx) {
   if (appToolNeedsApproval(name, a)) return true;
   if (name === 'create_workflow') return workflowHasOutboundActions(name, a);
+  if (name === 'create_suggested_workflow') return !!(await outboundSuggestion(ctx));
   if (name === 'update_client') return !!(await clientContactChange(a, ctx));
   if (name === 'toggle_workflow') return !!(await outboundWorkflowBeingEnabled(a, ctx));
   return false;
@@ -1092,6 +1096,26 @@ async function outboundWorkflowBeingEnabled(a, ctx) {
     return outbound.length ? { ...row, outbound } : null;
   } catch { return null; }
 }
+
+// create_suggested_workflow: the detected automation can include a
+// send_document step (a document goes to every new client on its own), the
+// same indirect outbound path create_workflow is gated for. Returns the
+// suggestion when it sends anything, else null.
+async function currentSuggestion(ctx) {
+  if (!ctx?.workspaceId) return null;
+  try {
+    const { detectWorkflowSuggestion, dismissedWorkflowSuggestions } = await import('./workflowSuggest.js');
+    const dismissed = await dismissedWorkflowSuggestions(ctx.workspaceId);
+    return await detectWorkflowSuggestion(ctx.workspaceId, { dismissed });
+  } catch { return null; }
+}
+async function outboundSuggestion(ctx) {
+  const s = await currentSuggestion(ctx);
+  return s && outboundActionTypes(s.workflow?.actions).length ? s : null;
+}
+// What the approved automation must still be when the owner taps Approve:
+// the card names these exact steps, so anything else is not created.
+const suggestionFingerprint = (s) => JSON.stringify(s?.workflow?.actions || []);
 
 // ── Labels for the approval card ─────────────────────────────────────
 // The owner approves what they can read: names, numbers, dates and amounts,
@@ -1162,7 +1186,13 @@ async function describeSensitiveAction(name, a, ctx = {}) {
     case 'import_clients_from_list':
       return describeClientImport(a, ctx);
     case 'send_message_to_client':
-      return `Send a portal message to ${await clientLabel(ctx, a.client_id)}: "${String(a.text || '').slice(0, 160)}"`;
+      // The whole message (the tool caps it at 4000 characters): the owner
+      // approves every word that will be sent, never just the start of it.
+      return `Send a portal message to ${await clientLabel(ctx, a.client_id)}: "${String(a.text || '').trim()}"`;
+    case 'create_booking':
+      return describeBooking(a, ctx);
+    case 'create_suggested_workflow':
+      return describeSuggestedWorkflow(ctx);
     case 'send_invoice':
       return `Email ${await invoiceLabel(ctx, a.invoice_id)}${a.client_id ? ` to ${await clientLabel(ctx, a.client_id)}` : ''}`;
     case 'cancel_booking':
@@ -1225,9 +1255,11 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       if (a.buffer_minutes != null) parts.push(`buffer minutes → ${a.buffer_minutes}`);
       if (a.accent_color != null) parts.push(`accent color → ${a.accent_color}`);
       if (a.logo_url !== undefined) parts.push(a.logo_url ? `logo URL → ${a.logo_url}` : 'remove logo');
-      if (a.email_signature != null) parts.push(`email signature → "${String(a.email_signature).slice(0, 60)}…"`);
+      // The signature goes on every email to clients and the lead reply to
+      // every new lead on its own: show every word, as the tool saves it.
+      if (a.email_signature != null) parts.push(`email signature → "${String(a.email_signature).trim().slice(0, 2000)}"`);
       if (a.lead_instant_reply_enabled != null) parts.push(`instant lead reply → ${a.lead_instant_reply_enabled ? 'on' : 'off'}`);
-      if (a.lead_instant_reply_message != null) parts.push(`lead-reply message updated`);
+      if (a.lead_instant_reply_message != null) parts.push(`automatic reply to new leads → "${String(a.lead_instant_reply_message).trim().slice(0, 2000)}"`);
       return `Update settings: ${parts.length ? parts.join('; ') : '(no fields supplied)'}`;
     }
     case 'set_availability': {
@@ -1290,11 +1322,53 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       const acts = Array.isArray(a.actions) ? a.actions : [];
       const outbound = acts.filter((x) => OUTBOUND_WORKFLOW_ACTIONS.has(x?.type))
         .map((x) => x.type.replace(/_/g, ' '));
-      return `Create an automation "${a.name || '(unnamed)'}" that will ${outbound.join(' + ') || 'run actions'} to clients automatically whenever "${a.trigger_type || 'a trigger'}" fires — this sends outbound to clients on its own, without asking each time.`;
+      // The words each send will use, in full: they go to clients on their
+      // own, every time, so the owner approves the text itself.
+      const words = [];
+      for (const x of acts) {
+        const c = (x && typeof x.config === 'object' && x.config) || {};
+        if (x?.type === 'send_email') words.push(`Email subject: "${String(c.subject || '').trim()}"\nEmail: "${String(c.body || '').trim()}"`);
+        else if (x?.type === 'send_sms') words.push(`Text: "${String(c.body || '').trim()}"`);
+        else if (x?.type === 'send_document') words.push(`Document: ${await templateLabel(ctx, c.templateId)}`);
+      }
+      return `Create an automation "${a.name || '(unnamed)'}" that will ${outbound.join(' + ') || 'run actions'} to clients automatically whenever "${a.trigger_type || 'a trigger'}" fires. This sends outbound to clients on its own, without asking each time.${words.length ? `\n${words.join('\n')}` : ''}`;
     }
     default:
       return `Run ${name}`;
   }
+}
+
+async function templateLabel(ctx, id) {
+  if (!id || !ctx?.workspaceId) return '(unknown document)';
+  const row = await lookupRow(() => sql`SELECT name FROM documents WHERE id = ${String(id)} AND workspace_id = ${ctx.workspaceId} AND is_template = TRUE`);
+  return row ? `"${row.name}"` : '(unknown document)';
+}
+
+async function describeBooking(a, ctx = {}) {
+  const who = await lookupRow(() => sql`SELECT name FROM clients WHERE id = ${String(a.client_id)} AND workspace_id = ${ctx.workspaceId}`);
+  const svc = a.service_id
+    ? await lookupRow(() => sql`SELECT name FROM services WHERE id = ${String(a.service_id)} AND workspace_id = ${ctx.workspaceId}`)
+    : null;
+  const name = who?.name || 'the client';
+  const notes = a.notes ? String(a.notes).trim().slice(0, 4000) : '';
+  return `Book ${name} on ${fmtDay(a.date)}, ${fmtMinAsTime(a.start_min)} to ${fmtMinAsTime(a.end_min)}${svc ? ` (${svc.name})` : ''}. `
+    + `${name} gets the booking confirmation email${notes ? ` with this note: "${notes}"` : ''}.`;
+}
+
+async function describeSuggestedWorkflow(ctx = {}) {
+  const s = await currentSuggestion(ctx);
+  if (!s) return 'Create the suggested automation';
+  const steps = [];
+  for (const x of s.workflow?.actions || []) {
+    const c = x?.config || {};
+    if (x?.type === 'send_document') steps.push(`send the document ${await templateLabel(ctx, c.templateId)} to them`);
+    else if (x?.type === 'create_invoice') steps.push(`draft their invoice (not sent; you review and send it)`);
+    else if (x?.type === 'create_task') steps.push(`add a task for you ("${String(c.title || '').replace(/\{\{clientName\}\}/g, 'the client')}")`);
+    else if (x?.type) steps.push(String(x.type).replace(/_/g, ' '));
+  }
+  const when = s.workflow?.triggerType === 'client_created' ? 'every new client' : 'every client after a completed appointment';
+  return `Turn on the automation "${s.workflow?.name || 'Suggested automation'}": for ${when}, ${steps.join(', then ')}. `
+    + 'This sends to clients on its own, without asking each time.';
 }
 
 async function describeBulkBookings(a, ctx = {}) {
@@ -1350,6 +1424,14 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
     // that would do more than they asked).
     const refusal = await refuseBeforeApproval(name, a, ctx);
     if (refusal) return { error: refusal };
+    if (name === 'create_suggested_workflow') {
+      // Pin the approval to the automation on the card: if the detected
+      // one has changed by the time the owner taps, nothing is created.
+      const s = await currentSuggestion(ctx);
+      if (!s) return { created: false, reason: 'There is no automation suggestion for this workspace right now.' };
+      a.signature = s.signature;
+      a.expected_actions = suggestionFingerprint(s);
+    }
     return await holdForApproval(name, a, ctx);
   }
   try {
@@ -1387,6 +1469,9 @@ async function refuseBeforeApproval(name, a, ctx) {
   if (name === 'adjust_availability') {
     const p = parseAvailabilityChanges(a);
     if (p.error) return `${p.error}. Nothing was changed.`;
+  }
+  if (name === 'create_booking') {
+    try { await checkBookingArgs(ctx?.workspaceId, a); } catch (err) { return `${String(err?.message || err).replace(/\.$/, '')}. Nothing was changed.`; }
   }
   return null;
 }
@@ -2569,7 +2654,12 @@ async function import_clients_from_list({ workspaceId, args }) {
   };
 }
 
-async function create_booking({ workspaceId, args }) {
+// The checks create_booking makes before writing anything. Also run when the
+// model asks (refuseBeforeApproval), so a call that cannot work is refused
+// before the owner is shown a card. Returns { client, dateStr, startMin,
+// endMin } or throws an owner-readable error.
+const BOOKING_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+async function checkBookingArgs(workspaceId, args) {
   const required = ['client_id', 'date', 'start_min', 'end_min'];
   for (const k of required) {
     if (args?.[k] == null) throw new Error(`Missing ${k}`);
@@ -2579,6 +2669,7 @@ async function create_booking({ workspaceId, args }) {
   const startMin = clampInt(args.start_min, 0, 0, 24 * 60 - 1);
   const endMin = clampInt(args.end_min, 0, 1, 24 * 60);
   if (endMin <= startMin) throw new Error('end_min must be > start_min');
+  if (!BOOKING_UUID_RE.test(String(args.client_id))) throw new Error('Unknown client');
 
   // Verify ownership of the client + service + staff before INSERT.
   const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${args.client_id} AND workspace_id = ${workspaceId}`;
@@ -2597,6 +2688,12 @@ async function create_booking({ workspaceId, args }) {
   if (!cl.rows[0].email) {
     throw new Error(`${cl.rows[0].name} has no email on file. Add an email to their client profile first, then book them.`);
   }
+  return { client: cl.rows[0], dateStr, startMin, endMin };
+}
+
+async function create_booking({ workspaceId, args }) {
+  const { client, dateStr, startMin, endMin } = await checkBookingArgs(workspaceId, args);
+  const cl = { rows: [client] };
   const { rows } = await sql`
     INSERT INTO bookings (
       workspace_id, service_id, client_id, client_name, client_email,
@@ -2738,6 +2835,10 @@ async function create_suggested_workflow({ workspaceId, args }) {
   // something the owner didn't actually agree to.
   if (args?.signature && String(args.signature) !== suggestion.signature) {
     return { created: false, reason: 'The suggestion has changed since it was shown; re-check with the owner before creating.' };
+  }
+  // Recorded when the call was held for approval: the steps on the card.
+  if (args?.expected_actions != null && String(args.expected_actions) !== suggestionFingerprint(suggestion)) {
+    return { created: false, reason: 'The suggested automation has changed since the card was shown, so nothing was created. Ask Ivy again to see the current one.' };
   }
   let clean;
   try {

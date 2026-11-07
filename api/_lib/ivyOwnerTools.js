@@ -208,7 +208,7 @@ async function planReview(ws, a) {
   if (!text && !r.owner_response) throw new Error('That review has no reply to remove');
   return {
     summary: text
-      ? `${r.owner_response ? 'Replace your public reply on' : 'Reply publicly to'} ${who} ("${clip(r.text, 60)}") with: "${clip(text, 300)}". Anyone who sees your reviews can read it.`
+      ? `${r.owner_response ? 'Replace your public reply on' : 'Reply publicly to'} ${who} ("${clip(r.text, 60)}") with: "${text}". Anyone who sees your reviews can read it.`
       : `Remove your public reply from ${who}`,
     done: text ? `Replied publicly to ${who}` : `Removed your reply from ${who}`,
     apply: async () => {
@@ -252,7 +252,8 @@ async function planBookingStatus(ws, a, ctx) {
     if (completionLogOf(b)[date]) throw new Error('That appointment is already marked complete');
     const notes = a.notes ? String(a.notes).slice(0, 8000) : '';
     return {
-      summary: `Mark ${label} as completed${notes ? ` with the note "${clip(notes, 120)}"` : ''}`,
+      // The note is shown to the client: the card carries every word of it.
+      summary: `Mark ${label} as completed${notes ? ` with the note "${notes}"` : ''}`,
       done: `Marked ${label} completed`,
       apply: async () => {
         try {
