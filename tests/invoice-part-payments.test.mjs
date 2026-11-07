@@ -15,6 +15,13 @@
 //       stay open)
 //   [5] Square: same as [4] through the signed webhook, and payment.created
 //       plus payment.updated for one payment count once
+//   [6] Square: the payment.updated sent for a refund never flips a
+//       refunded invoice back to paid
+//   [7] a new pay link closes the Stripe checkout it replaces (so two tabs
+//       cannot both be paid); a checkout already paid settles the invoice
+//       instead of opening another
+//   [8] applying a gift card closes the full-amount checkout already open;
+//       if that checkout was paid, the card is not used
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/invoice-part-payments.test.mjs
 import crypto from 'node:crypto';
@@ -256,6 +263,25 @@ async function run() {
   row = await invRow(inv8.id);
   assert(!stripeCalls.some((x) => /\/checkout\/sessions$/.test(x.url)), 'no new checkout when the last one was already paid');
   assert(row.status === 'paid' && r.statusCode === 400, `the invoice is marked paid instead (${row.status}, ${r.statusCode} ${JSON.stringify(r.body)})`);
+
+  console.log('\n[8] applying a gift card closes the full-amount checkout already open');
+  const inv9 = await mkInvoice(S, `PP-S4-${STAMP}`, 100);
+  await call(invoicePayHandler, req({ query: { token: inv9.raw } }));
+  const open9 = (await invRow(inv9.id)).stripe_session_id;
+  stripeCalls.length = 0;
+  const code9 = await mkCard(S.wid, 4000);
+  r = await call(giftCardHandler, req({ body: { token: inv9.raw, code: code9, action: 'apply' } }));
+  assert(r.body?.applied === true && r.body?.remainingCents === 6000, `card applied, $60 left (${JSON.stringify(r.body?.remainingCents)})`);
+  assert(stripeCalls.some((x) => x.url.endsWith(`/checkout/sessions/${open9}/expire`)), 'the $100 checkout opened before the card was applied is closed');
+  // ...and if that checkout had been paid already, the card is not used.
+  const inv10 = await mkInvoice(S, `PP-S5-${STAMP}`, 50);
+  await call(invoicePayHandler, req({ query: { token: inv10.raw } }));
+  paidSessions.add((await invRow(inv10.id)).stripe_session_id);
+  const code10 = await mkCard(S.wid, 4000);
+  r = await call(giftCardHandler, req({ body: { token: inv10.raw, code: code10, action: 'apply' } }));
+  const card10 = (await sql`SELECT balance_cents FROM gift_cards WHERE workspace_id = ${S.wid} AND code_hash = ${hashCode(normalizeCode(code10))}`).rows[0];
+  row = await invRow(inv10.id);
+  assert(r.statusCode === 400 && row.status === 'paid' && Number(card10.balance_cents) === 4000, `a paid checkout settles the invoice and the card keeps its balance (${r.statusCode} ${row.status} ${card10.balance_cents})`);
 
   for (const m of made) {
     await sql`DELETE FROM gift_cards WHERE workspace_id = ${m.wid}`;

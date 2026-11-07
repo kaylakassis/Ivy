@@ -8,7 +8,7 @@ import { computeTotals, paidMethodLabel } from './finance.js';
 import { notifyOwnerSafe, notifyClientSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
 import { loadStripeCreds } from './stripeCreds.js';
-import { fetchCheckoutSession } from './stripe.js';
+import { fetchCheckoutSession, expireCheckoutSession } from './stripe.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -157,6 +157,32 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   }
   notifyInvoicePaid({ workspaceId, invoiceId, totalAmount: paidAmount, method });
   return 'paid';
+}
+
+// A Stripe checkout opened earlier for this invoice (another tab, another
+// device, the email link clicked twice) stays payable until it is closed,
+// so the client could pay the same invoice twice, or pay the full amount
+// after a gift card already covered part of it. Call before a new payment
+// can start. Returns 'paid' (that checkout was paid a moment ago; the
+// invoice is now settled), 'processing' (a bank debit from it is on its
+// way), 'closed' or 'none'.
+export async function settleOrCloseOpenCheckout(inv) {
+  const sid = inv?.stripe_session_id;
+  if (!sid || !String(sid).startsWith('cs_')) return 'none';
+  if (await reconcileStripeInvoice(inv).catch(() => false)) return 'paid';
+  const fresh = await sql`SELECT payment_processing_at FROM invoices WHERE id = ${inv.id} AND workspace_id = ${inv.workspace_id}`;
+  if (fresh.rows[0]?.payment_processing_at) return 'processing';
+  await expireStripeCheckout(inv.workspace_id, sid);
+  return 'closed';
+}
+
+// Close one Stripe checkout on the workspace's account. Best effort: one
+// that already finished or expired is fine to leave alone.
+export async function expireStripeCheckout(workspaceId, sessionId) {
+  try {
+    const creds = await loadStripeCreds(workspaceId);
+    await expireCheckoutSession({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, sessionId });
+  } catch { /* already complete / expired, or not reachable */ }
 }
 
 // Stripe-only self-heal: if an unpaid invoice carries a Stripe checkout

@@ -15,9 +15,8 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { computeTotals } from '../_lib/finance.js';
 import { getProvider } from '../_lib/payments/index.js';
-import { reconcileStripeInvoice } from '../_lib/invoicePayments.js';
+import { reconcileStripeInvoice, settleOrCloseOpenCheckout, expireStripeCheckout } from '../_lib/invoicePayments.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
-import { expireCheckoutSession } from '../_lib/stripe.js';
 import { savedCardRowForInvoice, ensureStripeCustomer, chargeInvoiceWithSavedCard } from '../_lib/savedCards.js';
 import { fulfillInvoicePaymentIntent, markInvoiceProcessing } from '../_lib/checkoutFulfillment.js';
 import { appUrl } from '../_lib/tokens.js';
@@ -26,15 +25,6 @@ import crypto from 'node:crypto';
 
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
-}
-
-// Close an earlier Stripe checkout for this invoice. Best effort: one that
-// already finished or expired is fine to leave alone.
-async function expireInvoiceSession(workspaceId, sessionId) {
-  try {
-    const creds = await loadStripeCreds(workspaceId);
-    await expireCheckoutSession({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, sessionId });
-  } catch { /* already complete / expired, or not reachable */ }
 }
 
 export default async function handler(req, res) {
@@ -109,16 +99,11 @@ export default async function handler(req, res) {
       // closed, so the client could pay the same invoice twice. If it was
       // paid a moment ago, settle the invoice instead of opening another;
       // otherwise close it before a new payment can start.
-      const prevSession = name === 'stripe' && /^cs_/.test(String(inv.stripe_session_id || '')) ? inv.stripe_session_id : null;
-      if (prevSession) {
-        if (await reconcileStripeInvoice(inv).catch(() => false)) {
-          return badRequest(res, 'This invoice is already paid. Thank you!');
-        }
-        const fresh = await sql`SELECT payment_processing_at FROM invoices WHERE id = ${inv.id}`;
-        if (fresh.rows[0]?.payment_processing_at) {
-          return badRequest(res, 'A bank payment for this invoice is already on its way. It usually clears within 4 business days.');
-        }
-        await expireInvoiceSession(inv.workspace_id, prevSession);
+      const prevSession = inv.stripe_session_id || null;
+      const prev = await settleOrCloseOpenCheckout(inv);
+      if (prev === 'paid') return badRequest(res, 'This invoice is already paid. Thank you!');
+      if (prev === 'processing') {
+        return badRequest(res, 'A bank payment for this invoice is already on its way. It usually clears within 4 business days.');
       }
       // When Stripe Tax is the source of truth it adds tax on top of the
       // amount we send (tax_behavior=exclusive). The invoice's own tax_rate
@@ -213,8 +198,8 @@ export default async function handler(req, res) {
         RETURNING o.old_id
       `;
       const replaced = swap.rows[0]?.old_id;
-      if (name === 'stripe' && replaced && replaced !== prevSession && replaced !== session.sessionId && /^cs_/.test(String(replaced))) {
-        await expireInvoiceSession(inv.workspace_id, replaced);
+      if (replaced && replaced !== prevSession && replaced !== session.sessionId && String(replaced).startsWith('cs_')) {
+        await expireStripeCheckout(inv.workspace_id, replaced);
       }
     } catch (e) {
       return badRequest(res, e.message || 'Online payment is not enabled for this invoice.');
