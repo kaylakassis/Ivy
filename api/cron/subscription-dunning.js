@@ -85,7 +85,7 @@ async function handler(req, res) {
       while (Date.now() < deadline) {
         // eslint-disable-next-line no-await-in-loop
         const dueForDunning = await sql`
-          SELECT id, subscription_past_due_since, subscription_failed_attempts
+          SELECT id, subscription_past_due_since, subscription_failed_attempts, subscription_last_dunning_at
           FROM workspaces
           WHERE subscription_status = 'past_due'
             AND subscription_past_due_since IS NOT NULL
@@ -102,14 +102,33 @@ async function handler(req, res) {
 
         for (const w of dueForDunning.rows) {
           scanned++;
+          let claimed = false;
           try {
+            // Claim before sending: the stamp is written first, gated on the
+            // workspace still being due, so two overlapping runs (a cron
+            // event delivered twice, or a manual run) email the owner once.
+            // eslint-disable-next-line no-await-in-loop
+            const claim = await sql`
+              UPDATE workspaces SET subscription_last_dunning_at = NOW()
+              WHERE id = ${w.id}
+                AND subscription_status = 'past_due'
+                AND subscription_suspended_at IS NULL
+                AND (
+                  subscription_last_dunning_at IS NULL
+                  OR subscription_last_dunning_at <= NOW() - (${DUNNING_EMAIL_EVERY_HOURS} || ' hours')::interval
+                )
+              RETURNING id
+            `;
+            if (claim.rows.length === 0) continue;
+            claimed = true;
             // We don't have the original amount/currency on the workspace
             // row - that lives on the Stripe invoice. The notify helper
             // already handles a minimal call (no nextAttemptAt is fine,
             // it just omits that line). Owner gets a reminder; if they
             // want detail they click into Billing.
             // eslint-disable-next-line no-await-in-loop
-            await notifyPaymentFailed({ workspaceId: w.id });
+            const mail = await notifyPaymentFailed({ workspaceId: w.id });
+            if (mail?.ok === false) throw new Error(`dunning email failed: ${mail.reason || 'send error'}`);
             notifyOwnerSafe({
               workspaceId: w.id, type: 'payments',
               payload: {
@@ -119,13 +138,14 @@ async function handler(req, res) {
                 tag: `subscription-dunning-${w.id}`,
               },
             });
-            // eslint-disable-next-line no-await-in-loop
-            await sql`
-              UPDATE workspaces SET subscription_last_dunning_at = NOW()
-              WHERE id = ${w.id}
-            `;
             dunned++;
           } catch (err) {
+            // A failure after the claim hands the row back (previous stamp)
+            // so the owner is not left without the warning until tomorrow.
+            if (claimed) {
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE workspaces SET subscription_last_dunning_at = ${w.subscription_last_dunning_at || null} WHERE id = ${w.id}`.catch(() => {});
+            }
             // eslint-disable-next-line no-console
             console.error('[subscription-dunning] failed for workspace', w.id, err.message);
           }

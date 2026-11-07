@@ -10,9 +10,10 @@
 //       dashboard echo is a no-op (no second state change, no second
 //       email); a further refund is a 400; subscriptions and manual grants
 //       are refused with plain copy
-//   [2] gift card: partial trims the balance, full voids the card, the
-//       buyer is emailed once per refund, the echo is a no-op, over-refund 400,
-//       another owner cannot reach it
+//   [2] gift card: the refund is capped at what is left on the card (money
+//       already spent is not refunded); partial trims the balance, refunding
+//       what is left voids the card, the buyer is emailed once per refund,
+//       the echo is a no-op, over-refund 400, another owner cannot reach it
 //   [3] package: partial recorded (bundle untouched), full cancels the
 //       bundle and zeroes credits, echo no-op, over-refund 400, an
 //       owner-sold bundle with no online payment has nothing to refund
@@ -238,12 +239,15 @@ async function run() {
   await sql`UPDATE gift_cards SET balance_cents = 7000 WHERE id = ${card.id}`;
   r = await call(giftCardList, req({ cookie: A.cookie }));
   assert(r.body.cards.find((c) => c.id === card.id)?.paidOnline === true, 'owner list says the card was paid online (refundable)');
+  assert(r.body.cards.find((c) => c.id === card.id)?.refundableCents === 7000, 'owner list: $70 refundable, what is left on the card');
 
   const refundCard = (over = {}, cookie = A.cookie) => call(giftCardRefund, req({ method: 'POST', cookie, body: { id: card.id, ...over } }));
   r = await refundCard({}, B.cookie);
   assert(r.statusCode === 400 && /not found/i.test(r.body.error), "owner B cannot refund A's card");
-  r = await refundCard({ amountCents: 10001 });
-  assert(r.statusCode === 400 && /more than remaining/.test(r.body.error), 'over-refund → 400');
+  stripeCalls.length = 0;
+  r = await refundCard({ amountCents: 7001 });
+  assert(r.statusCode === 400 && /up to \$70\.00, what's left on the card/.test(r.body.error), `more than what is left on the card → 400 (${r.body.error})`);
+  assert(refundCalls().length === 0, 'no processor call for a refused refund');
   emails.length = 0; stripeCalls.length = 0;
   r = await refundCard({ amountCents: 2500 });
   assert(r.statusCode === 200 && r.body.refund.amountCents === 2500 && r.body.refund.fullyRefunded === false, `partial $25 → 200 (${JSON.stringify(r.body.refund)})`);
@@ -256,20 +260,24 @@ async function run() {
   assert(mails.length === 1 && /\$25\.00/.test(mails[0].subject) && new RegExp(`gift card ending ${card.code_last4}`).test(mails[0].subject) && /partial refund/.test(mails[0].html) && /balance on the gift card has been lowered/.test(mails[0].html), `buyer emailed once about the partial (${mails[0]?.subject})`);
   r = await fire('charge.refunded', { id: 'ch_card', payment_intent: piCard, amount: 10000, amount_refunded: 2500 }, A.acct);
   assert(r.body.ignored === 'refund already recorded' && Number((await cardRow(card.id)).balance_cents) === 4500 && refundMailsTo(buyer).length === 1, 'dashboard echo: no double-apply, no second email');
+  stripeCalls.length = 0;
   r = await refundCard({});
-  assert(r.statusCode === 200 && r.body.refund.amountCents === 7500 && r.body.refund.fullyRefunded === true, `remainder $75 → fully refunded (${JSON.stringify(r.body.refund)})`);
+  assert(r.statusCode === 200 && r.body.refund.amountCents === 4500 && r.body.refund.cardVoided === true && r.body.refund.fullyRefunded === false,
+    `remainder is the $45 left on the card, not the $75 the buyer paid and has not had back (${JSON.stringify(r.body.refund)})`);
+  rc = refundCalls();
+  assert(rc.length === 1 && rc[0].body.amount === '4500', `processor refund for $45 (${rc[0]?.body.amount})`);
   c = await cardRow(card.id);
-  assert(Number(c.balance_cents) === 0 && c.status === 'voided' && Number(c.refunded_cents) === 10000, 'full refund voids the card and zeroes the balance');
+  assert(Number(c.balance_cents) === 0 && c.status === 'voided' && Number(c.refunded_cents) === 7000, 'refunding what is left voids the card and zeroes the balance');
   mails = refundMailsTo(buyer);
-  assert(mails.length === 2 && /fully refunded/.test(mails[1].html) && /can no longer be used/.test(mails[1].html), 'full-refund email: card can no longer be used');
-  r = await fire('charge.refunded', { id: 'ch_card', payment_intent: piCard, amount: 10000, amount_refunded: 10000 }, A.acct);
-  assert(r.body.ignored === 'refund already recorded' && refundMailsTo(buyer).length === 2, 'full echo is a no-op');
+  assert(mails.length === 2 && /can no longer be used/.test(mails[1].html) && !/fully refunded/.test(mails[1].html), 'email: card can no longer be used (and does not claim a full refund)');
+  r = await fire('charge.refunded', { id: 'ch_card', payment_intent: piCard, amount: 10000, amount_refunded: 7000 }, A.acct);
+  assert(r.body.ignored === 'refund already recorded' && refundMailsTo(buyer).length === 2, 'echo is a no-op');
   r = await refundCard({});
-  assert(r.statusCode === 400 && /fully refunded/.test(r.body.error), 'a further refund → 400');
+  assert(r.statusCode === 400 && /nothing left on the card/i.test(r.body.error), `a further refund → 400 (${r.body.error})`);
   assert((await audits(A.wid, 'gift_card.refund')).length === 2, 'two audit rows for the card');
   r = await call(giftCardList, req({ cookie: A.cookie }));
   const summary = r.body.summary;
-  assert(summary.refundedCents === 10000 && summary.redeemedCents === 0, `owner summary: $100 refunded, nothing counted as redeemed (${JSON.stringify(summary)})`);
+  assert(summary.refundedCents === 7000 && summary.redeemedCents === 3000, `owner summary: $70 refunded, the $30 spent counted as redeemed (${JSON.stringify(summary)})`);
   // An owner-issued card (no online payment) has nothing to refund.
   const manual = (await sql`INSERT INTO gift_cards (workspace_id, code_hash, code_last4, original_amount_cents, balance_cents, status)
     VALUES (${A.wid}, ${`hash-${STAMP}`}, 'MANL', 5000, 5000, 'active') RETURNING id`).rows[0];

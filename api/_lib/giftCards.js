@@ -26,6 +26,12 @@ export function hashCode(rawNormalized) {
   return crypto.createHash('sha256').update(String(rawNormalized)).digest('hex');
 }
 
+export function giftCardRefundableCents(row) {
+  if (!row || row.status === 'voided') return 0;
+  const notRefunded = Math.max(0, Number(row.original_amount_cents || 0) - Number(row.refunded_cents || 0));
+  return Math.max(0, Math.min(Number(row.balance_cents || 0), notRefunded));
+}
+
 export function serializeGiftCard(row) {
   if (!row) return null;
   return {
@@ -44,6 +50,10 @@ export function serializeGiftCard(row) {
     // Sold through the public page (so a refund can go back through the
     // processor). Owner-issued cards would be false.
     paidOnline:          !!row.stripe_payment_intent,
+    // The most a refund can give back: what is left on the card (money
+    // already spent stays spent), never more than was paid and not yet
+    // refunded. 0 once the card is void.
+    refundableCents:     giftCardRefundableCents(row),
     createdAt:           row.created_at,
   };
 }

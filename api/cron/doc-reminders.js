@@ -41,7 +41,7 @@ async function handler(req, res) {
     const { rows } = await sql.query(
       `SELECT
          d.id, d.workspace_id, d.recipient_client_id, d.recipient_name,
-         d.recipient_email, d.name, d.sent_at,
+         d.recipient_email, d.name, d.sent_at, d.last_overdue_reminder_at,
          EXTRACT(DAY FROM NOW() - d.sent_at)::int AS days_outstanding
        FROM documents d
        WHERE d.status = 'sent'
@@ -59,7 +59,21 @@ async function handler(req, res) {
     let pinged = 0;
     const getBranding = makeBrandingCache();
     for (const d of rows) {
+      let claimed = false;
       try {
+        // Claim before sending: the stamp is written first, gated on the
+        // document still being due a reminder, so two overlapping runs (a
+        // cron event delivered twice, or a manual run) remind once.
+        const claim = await sql.query(
+          `UPDATE documents SET last_overdue_reminder_at = NOW()
+            WHERE id = $1 AND status = 'sent'
+              AND (last_overdue_reminder_at IS NULL
+                   OR last_overdue_reminder_at <= NOW() - ($2 || ' hours')::interval)
+            RETURNING id`,
+          [d.id, String(REPEAT_AFTER_HOURS)],
+        );
+        if (claim.rows.length === 0) continue;
+        claimed = true;
         const days = Math.max(1, d.days_outstanding || 1);
         const recipient = d.recipient_name || 'A client';
 
@@ -152,12 +166,13 @@ async function handler(req, res) {
           }
         }
 
-        await sql`
-          UPDATE documents SET last_overdue_reminder_at = NOW()
-          WHERE id = ${d.id}
-        `;
         pinged++;
       } catch (err) {
+        // A failure after the claim hands the row back (previous stamp) so
+        // it is retried instead of staying quiet for a week.
+        if (claimed) {
+          await sql`UPDATE documents SET last_overdue_reminder_at = ${d.last_overdue_reminder_at || null} WHERE id = ${d.id}`.catch(() => {});
+        }
         // eslint-disable-next-line no-console
         console.warn('[doc-reminders] failed for doc', d.id, err.message);
         reportError(err, { extra: { docId: d.id, workspaceId: d.workspace_id } });

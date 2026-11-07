@@ -4,8 +4,9 @@
 // digest_groups_daily.
 //
 // Runs at 08:30 UTC daily (just after morning standup time on the
-// US east coast). Idempotent: stamps users.digest_last_sent_at so a
-// re-run in the same calendar day is a no-op.
+// US east coast). Idempotent: claims users.digest_last_sent_at BEFORE
+// sending so a re-run (or an overlapping run) in the same day is a no-op;
+// a failed send hands the claim back.
 import { sql } from '../_lib/db.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
 import { sendEmailToUser, emailShell } from '../_lib/email.js';
@@ -27,7 +28,7 @@ async function handler(req, res) {
     // client member, opted-in, and not already sent in the last 23h
     // (so a re-run during the same window doesn't re-send).
     const { rows: users } = await sql`
-      SELECT DISTINCT u.id, u.email, u.name
+      SELECT DISTINCT u.id, u.email, u.name, u.digest_last_sent_at
         FROM users u
         JOIN clients c ON c.user_id = u.id
         JOIN group_thread_members m
@@ -45,6 +46,7 @@ async function handler(req, res) {
 
     let sent = 0, failed = 0;
     for (const u of users) {
+      let claimed = false;
       try {
         const { rows: items } = await sql.query(
           `SELECT t.id AS thread_id, t.name AS group_name,
@@ -84,8 +86,19 @@ async function handler(req, res) {
               </div>`).join('')}
           </div>`).join('');
 
+        // Claim before sending: stamp first, gated on not being sent in
+        // the window, so two overlapping runs send one digest.
+        const claim = await sql`
+          UPDATE users SET digest_last_sent_at = NOW()
+           WHERE id = ${u.id}
+             AND (digest_last_sent_at IS NULL OR digest_last_sent_at < NOW() - INTERVAL '23 hours')
+          RETURNING id
+        `;
+        if (claim.rows.length === 0) continue;
+        claimed = true;
+
         const branding = await fetchBranding(null).catch(() => ({}));
-        await sendEmailToUser({
+        const out = await sendEmailToUser({
           userId: u.id, type: 'messages',
           to: u.email,
           subject: `${totalUnread} new group message${totalUnread === 1 ? '' : 's'}`,
@@ -98,9 +111,14 @@ async function handler(req, res) {
             branding,
           }),
         });
-        await sql`UPDATE users SET digest_last_sent_at = NOW() WHERE id = ${u.id}`;
+        if (out?.ok === false) throw new Error(`digest email failed: ${out.reason || 'send error'}`);
         sent++;
       } catch (err) {
+        // A failure after the claim hands it back so tomorrow's run (or a
+        // retry) sends the digest instead of skipping a day.
+        if (claimed) {
+          await sql`UPDATE users SET digest_last_sent_at = ${u.digest_last_sent_at || null} WHERE id = ${u.id}`.catch(() => {});
+        }
         // eslint-disable-next-line no-console
         console.warn('[group-digest] failed for', u.id, err.message);
         failed++;

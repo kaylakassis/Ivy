@@ -9,6 +9,7 @@
 import { sql } from './db.js';
 import { withResolvedClientId } from './clientResolve.js';
 import { invoicePaymentState } from './invoicePayments.js';
+import { applyProviderRefundEvent } from './invoiceRefundSync.js';
 import { notifyOwnerSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
 
@@ -87,16 +88,25 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
     ];
     // Record the running total + capture id but leave the invoice open.
     // Guarded on the total we read so two captures never overwrite each other.
+    // The same statement writes this capture's ledger row (invoiceLedger.js).
     const part = await sql`
-      UPDATE invoices SET
-        paid_amount           = ${paidAmountDollars},
-        paid_method           = 'paypal',
-        stripe_payment_intent = ${parsed.paymentId || null},
-        activity              = ${JSON.stringify(partialActivity)}::jsonb,
-        updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
-        AND COALESCE(paid_amount, 0) = ${st.prior}
-      RETURNING id
+      WITH upd AS (
+        UPDATE invoices SET
+          paid_amount           = ${paidAmountDollars},
+          paid_method           = 'paypal',
+          stripe_payment_intent = ${parsed.paymentId || null},
+          activity              = ${JSON.stringify(partialActivity)}::jsonb,
+          updated_at            = NOW()
+        WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+          AND COALESCE(paid_amount, 0) = ${st.prior}
+        RETURNING id, workspace_id, currency
+      ), led AS (
+        INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+        SELECT workspace_id, id, 'paypal', ${parsed.paymentId || null}, ${st.thisPayment}::numeric, currency FROM upd
+         WHERE ${st.thisPayment}::numeric > 0
+        ON CONFLICT DO NOTHING
+      )
+      SELECT id FROM upd
     `;
     if (part.rows.length === 0 && !parsed._retried) return applyPaymentToInvoice({ workspaceId, parsed: { ...parsed, _retried: true } });
     return 'partial-payment';
@@ -107,19 +117,34 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
     { ts: new Date().toISOString(), kind: 'paid', text: `Paid by PayPal · $${st.thisPayment.toFixed(2)}${st.prior > 0 ? ` · $${paidAmountDollars.toFixed(2)} in total` : ''}` },
   ];
 
+  // Guarded on the running total read above, so a capture landing at the
+  // same moment is not overwritten; the same statement writes the ledger row.
   const upd = await sql`
-    UPDATE invoices SET
-      status                = 'paid',
-      paid_at               = NOW(),
-      paid_amount           = ${paidAmountDollars},
-      paid_method           = 'paypal',
-      stripe_payment_intent = ${parsed.paymentId || null},
-      view_token_hash       = NULL,
-      activity              = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at            = NOW()
-    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
-    RETURNING id, number, client_name
+    WITH upd AS (
+      UPDATE invoices SET
+        status                = 'paid',
+        paid_at               = NOW(),
+        paid_amount           = ${paidAmountDollars},
+        paid_method           = 'paypal',
+        stripe_payment_intent = ${parsed.paymentId || null},
+        view_token_hash       = NULL,
+        activity              = ${JSON.stringify(newActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+        AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
+      RETURNING id, number, client_name, workspace_id, currency
+    ), led AS (
+      INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+      SELECT workspace_id, id, 'paypal', ${parsed.paymentId || null}, ${Math.round((paidAmountDollars - st.prior) * 100) / 100}::numeric, currency FROM upd
+       WHERE ${Math.round((paidAmountDollars - st.prior) * 100) / 100}::numeric > 0
+      ON CONFLICT DO NOTHING
+    )
+    SELECT id, number, client_name FROM upd
   `;
+  if (upd.rows.length === 0 && !parsed._retried) {
+    const now = (await sql`SELECT status FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`).rows[0];
+    if (now && now.status !== 'paid' && now.status !== 'refunded') return applyPaymentToInvoice({ workspaceId, parsed: { ...parsed, _retried: true } });
+  }
   if (upd.rows.length === 0) return 'already-paid';
 
   // Owner push + client receipt - parity with the Stripe path at
@@ -147,63 +172,24 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
 }
 
 // Apply a refund/reversal from a PayPal webhook (or a dashboard-initiated
-// refund picked up out-of-band). Idempotent via the refund id recorded in
-// the invoice activity log.
+// refund picked up out-of-band) to the capture it was made on: that
+// capture's ledger row and the invoice totals (invoiceRefundSync.js), for
+// ANY capture on the invoice, not only the latest. Counted once per refund
+// id (a redelivery, or the echo of a refund Ivy made).
 export async function applyRefundToInvoice({ workspaceId, parsed }) {
   if (!parsed.paymentId) return 'no-capture';
-  const { rows: invRows } = await sql`
-    SELECT * FROM invoices
-    WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${parsed.paymentId}
-    LIMIT 1
-  `;
-  const inv = invRows[0];
-  if (!inv) {
+  const out = await applyProviderRefundEvent({
+    workspaceId, provider: 'paypal', paymentId: parsed.paymentId, refundId: parsed.refundId || null,
+    amountCents: parsed.amountCents, reason: parsed.reason || null, label: 'PayPal',
+  });
+  if (out.result === 'not-found') {
     // eslint-disable-next-line no-console
     console.warn('[paypal] no invoice matches capture', parsed.paymentId, '- ignoring refund');
     return 'invoice-not-found';
   }
-  const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;
-  if (refundAmount <= 0) return 'zero-amount';
-
-  const activity = inv.activity || [];
-  if (parsed.refundId && activity.some((a) => a.kind === 'refund' && a.stripeRefundId === parsed.refundId)) {
-    return 'already-applied';
-  }
-
-  const alreadyRefunded = Number(inv.refunded_amount || 0);
-  const newRefunded = +(alreadyRefunded + refundAmount).toFixed(2);
-  const paidAmount = Number(inv.paid_amount || 0);
-  const fullyRefunded = paidAmount > 0 && newRefunded >= paidAmount - 0.005;
-  const newStatus = fullyRefunded ? 'refunded' : inv.status;
-
-  const newActivity = [
-    ...activity,
-    {
-      ts: new Date().toISOString(),
-      kind: 'refund',
-      text: `Refunded $${refundAmount.toFixed(2)} (PayPal${parsed.reason ? ` · ${parsed.reason}` : ''})`,
-      ...(parsed.refundId ? { stripeRefundId: parsed.refundId } : {}),
-    },
-  ];
-
-  // Concurrency predicate on the value we read (mirrors the charge.refunded
-  // guard in api/webhooks/stripe-platform.js): two overlapping deliveries
-  // would otherwise both read the same refunded_amount and the second write
-  // silently overwrites the first (lost update). 0 rows = the other writer
-  // already folded a refund in → treat as already applied.
-  const upd = await sql`
-    UPDATE invoices SET
-      status          = ${newStatus},
-      refunded_amount = ${newRefunded},
-      refunded_at     = NOW(),
-      activity        = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at      = NOW()
-    WHERE id = ${inv.id} AND workspace_id = ${workspaceId}
-      AND COALESCE(refunded_amount, 0) = ${alreadyRefunded}
-    RETURNING id
-  `;
-  if (upd.rows.length === 0) return 'already-applied';
-  return fullyRefunded ? 'refunded' : 'partial-refund';
+  if (out.result === 'zero-amount') return 'zero-amount';
+  if (out.result === 'already') return 'already-applied';
+  return out.invoice?.status === 'refunded' ? 'refunded' : 'partial-refund';
 }
 
 // Apply a normalized PayPal subscription event (from parseWebhookEvent's

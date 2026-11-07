@@ -58,18 +58,30 @@ export default async function handler(req, res) {
     // side-effects below on whether OUR statement actually flipped
     // the row. Mirrors the per-workspace Stripe webhook pattern at
     // api/webhooks/stripe/[workspaceId].js:465-487.
+    // The same statement writes the ledger row for the money the owner
+    // received by hand: what this adds on top of any part payments already
+    // recorded (invoiceLedger.js), so a later refund comes off the right
+    // payment.
     const updated = await sql`
-      UPDATE invoices SET
-        status = 'paid',
-        paid_at = NOW(),
-        paid_method = ${method},
-        paid_amount = ${received},
-        view_token_hash = NULL,
-        activity = ${JSON.stringify(newActivity)}::jsonb,
-        updated_at = NOW()
-      WHERE id = ${id} AND workspace_id = ${workspaceId}
-        AND status IN ('draft', 'sent', 'overdue')
-      RETURNING *
+      WITH upd AS (
+        UPDATE invoices i SET
+          status = 'paid',
+          paid_at = NOW(),
+          paid_method = ${method},
+          paid_amount = ${received},
+          view_token_hash = NULL,
+          activity = ${JSON.stringify(newActivity)}::jsonb,
+          updated_at = NOW()
+        FROM invoices prev
+        WHERE prev.id = i.id AND i.id = ${id} AND i.workspace_id = ${workspaceId}
+          AND i.status IN ('draft', 'sent', 'overdue')
+        RETURNING i.*, COALESCE(prev.paid_amount, 0) AS prior_paid
+      ), led AS (
+        INSERT INTO invoice_payments (workspace_id, invoice_id, provider, amount, currency)
+        SELECT workspace_id, id, 'manual', ${received}::numeric - prior_paid, currency FROM upd
+         WHERE ${received}::numeric - prior_paid > 0
+      )
+      SELECT * FROM upd
     `;
     if (updated.rows.length === 0) {
       // Lost the race - someone else already marked it. Return the

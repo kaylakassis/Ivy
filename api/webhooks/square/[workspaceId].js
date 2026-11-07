@@ -11,6 +11,7 @@ import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
 import { invoicePaymentState } from '../../_lib/invoicePayments.js';
+import { applyProviderRefundEvent } from '../../_lib/invoiceRefundSync.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
@@ -135,16 +136,29 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
       { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: parsed.paymentId || null,
         text: `Partial Square payment · $${st.thisPayment.toFixed(2)} · $${paidAmountDollars.toFixed(2)} of $${st.due.toFixed(2)} paid` },
     ];
-    await sql`
-      UPDATE invoices SET
-        paid_amount           = ${paidAmountDollars},
-        paid_method           = 'card',
-        stripe_payment_intent = ${parsed.paymentId || null},
-        activity              = ${JSON.stringify(partialActivity)}::jsonb,
-        updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
-        AND COALESCE(paid_amount, 0) = ${st.prior}
+    // The same statement writes this payment's ledger row (invoiceLedger.js).
+    const part = await sql`
+      WITH upd AS (
+        UPDATE invoices SET
+          paid_amount           = ${paidAmountDollars},
+          paid_method           = 'card',
+          stripe_payment_intent = ${parsed.paymentId || null},
+          activity              = ${JSON.stringify(partialActivity)}::jsonb,
+          updated_at            = NOW()
+        WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+          AND COALESCE(paid_amount, 0) = ${st.prior}
+        RETURNING id, workspace_id, currency
+      ), led AS (
+        INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+        SELECT workspace_id, id, 'square', ${parsed.paymentId || null}, ${st.thisPayment}::numeric, currency FROM upd
+         WHERE ${st.thisPayment}::numeric > 0
+        ON CONFLICT DO NOTHING
+      )
+      SELECT id FROM upd
     `;
+    // Lost a race with another payment on the same invoice: count this one
+    // on top of it (a throw lets Square retry the event).
+    if (part.rows.length === 0 && !parsed._retried) return applyPaymentToInvoice({ workspaceId, parsed: { ...parsed, _retried: true } });
     return;
   }
 
@@ -158,18 +172,31 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
   ];
 
   const upd = await sql`
-    UPDATE invoices SET
-      status                = 'paid',
-      paid_at               = NOW(),
-      paid_amount           = ${paidAmountDollars},
-      paid_method           = 'card',
-      stripe_payment_intent = ${parsed.paymentId || null},
-      view_token_hash       = NULL,
-      activity              = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at            = NOW()
-    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
-    RETURNING id, number, client_name
+    WITH upd AS (
+      UPDATE invoices SET
+        status                = 'paid',
+        paid_at               = NOW(),
+        paid_amount           = ${paidAmountDollars},
+        paid_method           = 'card',
+        stripe_payment_intent = ${parsed.paymentId || null},
+        view_token_hash       = NULL,
+        activity              = ${JSON.stringify(newActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+        AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
+      RETURNING id, number, client_name, workspace_id, currency
+    ), led AS (
+      INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+      SELECT workspace_id, id, 'square', ${parsed.paymentId || null}, ${st.thisPayment}::numeric, currency FROM upd
+       WHERE ${st.thisPayment}::numeric > 0
+      ON CONFLICT DO NOTHING
+    )
+    SELECT id, number, client_name FROM upd
   `;
+  if (upd.rows.length === 0 && !parsed._retried) {
+    const now = (await sql`SELECT status FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`).rows[0];
+    if (now && !['paid', 'refunded', 'voided'].includes(now.status)) return applyPaymentToInvoice({ workspaceId, parsed: { ...parsed, _retried: true } });
+  }
   // Race guard: a concurrent retry can land here too - if our UPDATE
   // didn't flip the row, somebody else's already did. Don't double-fire
   // the owner push or the client receipt email.
@@ -196,78 +223,23 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
   });
 }
 
-// Apply a Square refund event to the matching invoice. Triggers:
+// Apply a Square refund event to the payment it was made on. Triggers:
 //   - Owner clicks Refund in Ivy → /api/invoices/refund calls Square →
 //     Square responds PENDING → eventual refund.updated webhook with
-//     COMPLETED arrives here. We bump refunded_amount + activity entry.
-//   - Owner refunds directly in Square dashboard → same webhook → same
-//     code path. Without this, the invoice stays 'paid' in Ivy while
-//     the customer's money is back. Status flips to 'refunded' when the
-//     cumulative refund amount reaches the invoice total.
-//
-// Dedupes by event refund_id stored in the activity log (we already
-// stamp it from the invoices/refund.js path), AND by paid_amount
-// reconciliation - if cumulative refunds match what's already recorded,
-// skip the write.
+//     COMPLETED arrives here. Ivy already counted that refund id on the
+//     payment, so this adds nothing.
+//   - Owner refunds directly in Square dashboard, against ANY payment on
+//     the invoice → that payment's ledger row and the invoice totals move
+//     (invoiceRefundSync.js). Without this, the invoice stays 'paid' in
+//     Ivy while the customer's money is back. Status flips to 'refunded'
+//     when everything paid is back.
+// Counted once per refund id (a redelivery, or the app's own refund).
 async function applyRefundToInvoice({ workspaceId, parsed }) {
-  // Find the invoice via the payment we stored when the original
-  // checkout completed. stripe_payment_intent doubles as the generic
-  // provider payment-id field - Square pays us by payment_id, refunds
-  // reference that same payment_id, so we match on it.
-  if (!parsed.paymentId) return;
-  const { rows: invRows } = await sql`
-    SELECT * FROM invoices
-    WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${parsed.paymentId}
-    LIMIT 1
-  `;
-  const inv = invRows[0];
-  if (!inv) {
+  const out = await applyProviderRefundEvent({
+    workspaceId, provider: 'square', paymentId: parsed.paymentId || null, refundId: parsed.refundId || null,
+    amountCents: parsed.amountCents, reason: parsed.reason || null, label: 'Square',
+  });
+  if (out.result === 'not-found') {
     console.warn('[webhooks/square] no invoice matches payment', parsed.paymentId, '- ignoring refund');
-    return;
   }
-  const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;
-  if (refundAmount <= 0) return;
-
-  // Idempotency: if this exact refund id has already been recorded in
-  // the activity log, skip. The invoices/refund.js path stamps
-  // stripeRefundId on the activity entry it appends, so dashboard
-  // refunds and our-initiated refunds dedupe through the same shape.
-  const activity = inv.activity || [];
-  if (parsed.refundId && activity.some((a) => a.kind === 'refund' && a.stripeRefundId === parsed.refundId)) {
-    return;
-  }
-
-  const alreadyRefunded = Number(inv.refunded_amount || 0);
-  const newRefunded = +(alreadyRefunded + refundAmount).toFixed(2);
-  const paidAmount = Number(inv.paid_amount || 0);
-  const fullyRefunded = paidAmount > 0 && newRefunded >= paidAmount - 0.005;
-  const newStatus = fullyRefunded ? 'refunded' : inv.status;
-
-  const newActivity = [
-    ...activity,
-    {
-      ts: new Date().toISOString(),
-      kind: 'refund',
-      text: `Refunded $${refundAmount.toFixed(2)} (Square${parsed.reason ? ` · ${parsed.reason}` : ''})`,
-      ...(parsed.refundId ? { stripeRefundId: parsed.refundId } : {}),
-    },
-  ];
-
-  // Concurrency predicate on the value we read (mirrors the charge.refunded
-  // guard in api/webhooks/stripe-platform.js): two overlapping deliveries
-  // would otherwise both read the same refunded_amount and the second write
-  // silently overwrites the first (lost update). 0 rows = the other writer
-  // already folded a refund in → already applied, nothing more to do.
-  const upd = await sql`
-    UPDATE invoices SET
-      status          = ${newStatus},
-      refunded_amount = ${newRefunded},
-      refunded_at     = NOW(),
-      activity        = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at      = NOW()
-    WHERE id = ${inv.id} AND workspace_id = ${workspaceId}
-      AND COALESCE(refunded_amount, 0) = ${alreadyRefunded}
-    RETURNING id
-  `;
-  if (upd.rows.length === 0) return;
 }

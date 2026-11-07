@@ -118,20 +118,29 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
         text: `Partial card payment · ${fmtMoney(st.thisPayment)} · ${fmtMoney(paidAmount)} of ${fmtMoney(dueAfterCredit)} paid` },
     ];
     // Guarded on the running total we read, so a second payment landing at
-    // the same moment re-reads and adds on top instead of overwriting.
+    // the same moment re-reads and adds on top instead of overwriting. The
+    // same statement writes this payment's ledger row (invoiceLedger.js).
     const part = await sql`
-      UPDATE invoices SET
-        paid_amount           = ${paidAmount},
-        paid_method           = ${method},
-        stripe_payment_intent = ${paymentIntent || null},
-        stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
-        payment_processing_at = NULL,
-        payment_processing_method = NULL,
-        activity              = ${JSON.stringify(partialActivity)}::jsonb,
-        updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
-        AND COALESCE(paid_amount, 0) = ${st.prior}
-      RETURNING id
+      WITH upd AS (
+        UPDATE invoices SET
+          paid_amount           = ${paidAmount},
+          paid_method           = ${method},
+          stripe_payment_intent = ${paymentIntent || null},
+          stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
+          payment_processing_at = NULL,
+          payment_processing_method = NULL,
+          activity              = ${JSON.stringify(partialActivity)}::jsonb,
+          updated_at            = NOW()
+        WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+          AND COALESCE(paid_amount, 0) = ${st.prior}
+        RETURNING id, workspace_id, currency
+      ), led AS (
+        INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+        SELECT workspace_id, id, 'stripe', ${paymentIntent || null}, ${st.thisPayment}::numeric, currency FROM upd
+         WHERE ${st.thisPayment}::numeric > 0
+        ON CONFLICT DO NOTHING
+      )
+      SELECT id FROM upd
     `;
     if (part.rows.length === 0 && _attempt < 3) return retry();
     return 'partial-payment';
@@ -143,22 +152,37 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
       text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(giftOnly || st.prior === 0 ? paidAmount : st.thisPayment)}${!giftOnly && st.prior > 0 ? ` · ${fmtMoney(paidAmount)} in total` : ''}` },
   ];
 
+  // This payment's ledger row, written by the same statement: what it adds
+  // to the running total (a gift card that settles the rest after a part
+  // payment adds nothing to paid_amount, so it has no row; the credit has
+  // its own column).
+  const ledgerAmount = keepPrior ? 0 : Math.round((paidAmount - st.prior) * 100) / 100;
+  const ledgerProvider = giftOnly ? 'gift_card' : 'stripe';
+  const ledgerPaymentId = giftOnly ? `gift-card-${invoiceId}` : (paymentIntent || null);
   const upd = await sql`
-    UPDATE invoices SET
-      status                = 'paid',
-      paid_at               = NOW(),
-      paid_amount           = ${paidAmount},
-      paid_method           = ${paidMethod},
-      stripe_payment_intent = ${paidIntent},
-      stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
-      payment_processing_at = NULL,
-      payment_processing_method = NULL,
-      view_token_hash       = NULL,
-      activity              = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at            = NOW()
-    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
-      AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
-    RETURNING id
+    WITH upd AS (
+      UPDATE invoices SET
+        status                = 'paid',
+        paid_at               = NOW(),
+        paid_amount           = ${paidAmount},
+        paid_method           = ${paidMethod},
+        stripe_payment_intent = ${paidIntent},
+        stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
+        payment_processing_at = NULL,
+        payment_processing_method = NULL,
+        view_token_hash       = NULL,
+        activity              = ${JSON.stringify(newActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+        AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
+      RETURNING id, workspace_id, currency
+    ), led AS (
+      INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+      SELECT workspace_id, id, ${ledgerProvider}, ${ledgerPaymentId}, ${ledgerAmount}::numeric, currency FROM upd
+       WHERE ${ledgerAmount}::numeric > 0
+      ON CONFLICT DO NOTHING
+    )
+    SELECT id FROM upd
   `;
   if (upd.rows.length === 0) {
     // Lost a race: the webhook / another confirm already settled it, or a

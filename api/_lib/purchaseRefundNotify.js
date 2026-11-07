@@ -22,7 +22,7 @@ export const PURCHASE_KIND_LABELS = { program: 'program', gift_card: 'gift card'
 
 // kind: 'program' | 'gift_card' | 'package'. `label` names the thing
 // (program title, "gift card ending 1234", package name).
-export function renderPurchaseRefunded({ business, firstName, kind, label, amountCents, remainingCents, fully, branding }) {
+export function renderPurchaseRefunded({ business, firstName, kind, label, amountCents, remainingCents, fully, voided = false, branding }) {
   const fn = escapeHtml(firstName || 'there');
   const biz = escapeHtml(business || 'the business');
   const amt = fmtMoney(amountCents);
@@ -30,7 +30,7 @@ export function renderPurchaseRefunded({ business, firstName, kind, label, amoun
   const consequence = kind === 'program'
     ? (fully ? 'Your access to the program has ended.' : 'Your access to the program continues.')
     : kind === 'gift_card'
-      ? (fully ? 'The gift card can no longer be used.' : 'The balance on the gift card has been lowered to match.')
+      ? (fully || voided ? 'The gift card can no longer be used.' : 'The balance on the gift card has been lowered to match.')
       : (fully ? 'The remaining sessions on this package have been cancelled.' : 'Your remaining sessions are unchanged unless the business tells you otherwise.');
   const scope = fully
     ? `<p>This purchase is now fully refunded. ${consequence}</p>`
@@ -51,13 +51,13 @@ export function renderPurchaseRefunded({ business, firstName, kind, label, amoun
 // Send the email. `to` / `name` identify the buyer; `clientId` (when the
 // buyer is a client row) routes through the client's email preferences,
 // otherwise the (workspace, email) pair does. Never throws.
-export async function notifyPurchaseRefunded({ workspaceId, kind, label, amountCents, remainingCents, fully, clientId = null, to = null, name = null }) {
+export async function notifyPurchaseRefunded({ workspaceId, kind, label, amountCents, remainingCents, fully, voided = false, clientId = null, to = null, name = null }) {
   try {
     if (!to || !(Number(amountCents) > 0)) return { sent: false };
     const branding = await fetchBranding(workspaceId);
     const rendered = renderPurchaseRefunded({
       business: branding.businessName, firstName: (name || '').split(/\s+/)[0],
-      kind, label, amountCents: Number(amountCents), remainingCents: Math.max(0, Number(remainingCents || 0)), fully: !!fully, branding,
+      kind, label, amountCents: Number(amountCents), remainingCents: Math.max(0, Number(remainingCents || 0)), fully: !!fully, voided: !!voided, branding,
     });
     const common = { type: 'receipts', subject: rendered.subject, html: rendered.html, replyTo: branding.replyTo };
     const r = clientId

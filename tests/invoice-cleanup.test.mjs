@@ -458,6 +458,9 @@ async function run() {
   const ivOpenRow = await invRow(ivOpen.id);
   assert(out.ok && ivOpenRow.status === 'paid' && Number(ivOpenRow.paid_amount) === 75 && ivOpenRow.activity.some((a) => a.kind === 'paid'),
     'Ivy marking an unpaid invoice paid records what was collected and an activity line');
+  const ivOpenLedger = (await sql`SELECT provider, amount FROM invoice_payments WHERE invoice_id = ${ivOpen.id} AND workspace_id = ${A.wid}`).rows;
+  assert(ivOpenLedger.length === 1 && ivOpenLedger[0].provider === 'manual' && Number(ivOpenLedger[0].amount) === 75,
+    `the $75 is on the payment ledger as money received by hand (${JSON.stringify(ivOpenLedger)})`);
   out = await executeIvyTool('search_invoices', { query: ivPaid.number }, ctx);
   const hit = out.invoices?.[0];
   assert(hit && hit.status === 'refunded' && hit.money.owed === 0 && hit.allowed.archive === true && /money moved/.test(hit.allowed.delete),

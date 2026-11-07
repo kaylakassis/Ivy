@@ -29,7 +29,7 @@ export default async function handler(req, res) {
         -- Money that came off cards at bookings. Refunds also lower the
         -- balance (and void the card), so they are taken out here or a
         -- refunded card would read as "redeemed".
-        COALESCE(SUM(GREATEST(0, original_amount_cents - balance_cents - refunded_cents)), 0)::bigint AS redeemed_cents,
+        COALESCE(SUM(GREATEST(0, original_amount_cents - balance_cents - refund_hold_cents - refunded_cents)), 0)::bigint AS redeemed_cents,
         COALESCE(SUM(refunded_cents), 0)::bigint AS refunded_cents
       FROM gift_cards
       WHERE workspace_id = ${workspaceId}

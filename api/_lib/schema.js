@@ -5171,4 +5171,74 @@ CREATE INDEX IF NOT EXISTS idx_bookings_collect_invoice ON bookings (collect_inv
 CREATE INDEX IF NOT EXISTS idx_bookings_fee_invoice ON bookings (fee_invoice_id) WHERE fee_invoice_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices (client_id) WHERE client_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_message_threads_client ON message_threads (client_id);
+-- Per-payment ledger for invoices (1.0.6 money review). paid_amount on an
+-- invoice is a running total of every payment; this keeps each payment as
+-- its own row so a refund goes back to the payment that took the money,
+-- one provider refund per payment, and a refund made in a payment
+-- dashboard against ANY of an invoice's payments finds its row.
+-- provider_payment_id is the Stripe payment intent, Square payment id or
+-- PayPal capture id (NULL for money the owner recorded by hand); unique per
+-- provider within a business, so a webhook retry never adds a second row.
+-- refunded_amount never passes amount. refund_ids are the provider refund
+-- ids already counted, so a refund the app made and the webhook that
+-- reports it count once. backfilled = made from the invoice's own totals
+-- for an invoice paid before this table existed.
+CREATE TABLE IF NOT EXISTS invoice_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('stripe', 'square', 'paypal', 'gift_card', 'manual')),
+  provider_payment_id TEXT,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  currency TEXT,
+  refunded_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  refund_ids TEXT[] NOT NULL DEFAULT '{}',
+  backfilled BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT invoice_payments_refund_range CHECK (refunded_amount >= 0 AND refunded_amount <= amount)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_payments_provider_id
+  ON invoice_payments (workspace_id, provider, provider_payment_id) WHERE provider_payment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_payments_backfill
+  ON invoice_payments (invoice_id) WHERE backfilled;
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice
+  ON invoice_payments (workspace_id, invoice_id, created_at DESC);
+-- One in-app refund per invoice at a time (a lease, so a crashed request
+-- frees it after a couple of minutes).
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refund_started_at TIMESTAMPTZ;
+-- Backfill: one marked row per paid or part-paid invoice that has none,
+-- from what the invoice knows (the latest payment id and paid_amount).
+-- The provider is read the same way the refund path always has (PayPal by
+-- paid_method; Stripe ids start pi_ / ch_; another id is Square; no id is
+-- money recorded by hand, or a gift card that covered it all).
+INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency, refunded_amount, backfilled, created_at)
+SELECT i.workspace_id, i.id,
+       CASE
+         WHEN i.stripe_payment_intent IS NULL THEN CASE WHEN i.paid_method = 'gift_card' THEN 'gift_card' ELSE 'manual' END
+         WHEN i.paid_method = 'paypal' THEN 'paypal'
+         WHEN i.stripe_payment_intent ~ '^(pi_|ch_)' THEN 'stripe'
+         WHEN fs.payment_provider = 'square' OR i.paid_method = 'card' THEN 'square'
+         WHEN fs.payment_provider = 'paypal' THEN 'paypal'
+         ELSE 'stripe'
+       END,
+       i.stripe_payment_intent,
+       i.paid_amount,
+       i.currency,
+       LEAST(GREATEST(COALESCE(i.refunded_amount, 0), 0), i.paid_amount),
+       TRUE,
+       COALESCE(i.paid_at, i.sent_at, i.created_at)
+  FROM invoices i
+  LEFT JOIN finance_settings fs ON fs.workspace_id = i.workspace_id
+ WHERE i.paid_amount > 0
+   AND i.status IN ('paid', 'refunded', 'sent', 'overdue', 'draft', 'voided')
+   AND NOT EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id)
+ON CONFLICT DO NOTHING;
+-- Gift card refunds (1.0.6 money review): a refund gives back at most
+-- what is left on the card, and while the processor refund is in flight
+-- that amount is held off the balance so it cannot also be spent. The
+-- refund sync (charge.refunded, or the in-app refund right after the
+-- processor call) takes the refunded cents out of the hold instead of the
+-- balance; a failed processor refund puts the hold back on the balance.
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refund_hold_cents INT NOT NULL DEFAULT 0;
 `;

@@ -60,6 +60,7 @@ async function handler(req, res) {
 
     let scanned = 0, sent = 0, muted = 0, quiet = 0, inactive = 0, batches = 0;
     let emptied = false;
+    const failedIds = new Set();
 
     // Deadline-driven loop: keep pulling batches until the candidate
     // set drains or we approach the function timeout. The stamp-then-
@@ -76,7 +77,7 @@ async function handler(req, res) {
         // eslint-disable-next-line no-await-in-loop
         const { rows } = await sql.query(
           `SELECT w.id, w.owner_id, w.subscription_status, w.trial_ends_at,
-                  w.subscription_period_end, w.comp_until
+                  w.subscription_period_end, w.comp_until, w.weekly_recap_last_sent_at
              FROM workspaces w
              JOIN users u ON u.id = w.owner_id
             WHERE w.onboarded_at IS NOT NULL
@@ -93,30 +94,51 @@ async function handler(req, res) {
                 w.weekly_recap_last_sent_at IS NULL
                 OR w.weekly_recap_last_sent_at <= NOW() - ($1 || ' hours')::interval
               )
+              AND NOT (w.id = ANY($2::uuid[]))
               ${shardFilter}
             ORDER BY w.created_at ASC
             LIMIT ${BATCH_SIZE}`,
-          [String(REPEAT_AFTER_HOURS)],
+          [String(REPEAT_AFTER_HOURS), [...failedIds]],
         );
         if (rows.length === 0) { emptied = true; break; }
         scanned += rows.length;
         batches += 1;
         for (const r of rows) {
+          let claimed = false;
           try {
-            // Stamp-then-send: stamp first so a retried cron run can't
-            // double-send. The send itself is best-effort (the stamp
-            // sticks regardless), which is the right tradeoff for a
-            // weekly digest. Stamping also happens for a row the active
-            // check rejects below, so it cannot be re-pulled every batch.
+            // Claim-then-send: the stamp is written first, gated on the
+            // recap still being due, so a retried or overlapping run (the
+            // same cron event delivered twice, a manual run) skips a row
+            // another run already took. Stamping also happens for a row
+            // the active check rejects below, so it cannot be re-pulled
+            // every batch. A send that fails hands the claim back.
             // eslint-disable-next-line no-await-in-loop
-            await sql`UPDATE workspaces SET weekly_recap_last_sent_at = NOW() WHERE id = ${r.id}`;
+            const claim = await sql.query(
+              `UPDATE workspaces SET weekly_recap_last_sent_at = NOW()
+                WHERE id = $1
+                  AND (weekly_recap_last_sent_at IS NULL
+                       OR weekly_recap_last_sent_at <= NOW() - ($2 || ' hours')::interval)
+                RETURNING id`,
+              [r.id, String(REPEAT_AFTER_HOURS)],
+            );
+            if (claim.rows.length === 0) continue;
+            claimed = true;
             if (!isWorkspaceActive(r)) { inactive++; continue; }
             // eslint-disable-next-line no-await-in-loop
             const result = await notifyWeeklyRecap({ workspaceId: r.id, from, to });
+            if (result?.ok === false) throw new Error(`weekly recap email failed: ${result.reason || 'send error'}`);
             if (result?.sent) sent++;
             else if (result?.reason === 'muted') muted++;
             else if (result?.reason === 'no-activity') quiet++;
           } catch (err) {
+            if (claimed) {
+              // Hand the claim back for the next run; this run does not
+              // pick the row up again (failedIds), so a mail outage cannot
+              // spin the loop on the same workspaces.
+              failedIds.add(r.id);
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE workspaces SET weekly_recap_last_sent_at = ${r.weekly_recap_last_sent_at || null} WHERE id = ${r.id}`.catch(() => {});
+            }
             console.warn('[owner-weekly-recap] failed for workspace', r.id, err.message);
             reportError(err, { extra: { workspaceId: r.id } });
           }

@@ -158,10 +158,18 @@ export default async function handler(req, res) {
       // sale already succeeded, so a backfill miss must not fail it.
       if (cash) {
         try {
+          // Same statement: the cash payment's ledger row (invoiceLedger.js).
           const upd = await sql`
-            UPDATE invoices SET paid_amount = total, paid_method = 'cash'
-             WHERE id = ${invoice.id} AND workspace_id = ${workspaceId}
-             RETURNING *
+            WITH upd AS (
+              UPDATE invoices SET paid_amount = total, paid_method = 'cash'
+               WHERE id = ${invoice.id} AND workspace_id = ${workspaceId}
+               RETURNING *
+            ), led AS (
+              INSERT INTO invoice_payments (workspace_id, invoice_id, provider, amount, currency)
+              SELECT workspace_id, id, 'manual', paid_amount, currency FROM upd
+               WHERE paid_amount > 0 AND NOT EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = upd.id)
+            )
+            SELECT * FROM upd
           `;
           if (upd.rows[0]) invoice = upd.rows[0];
         } catch (e) {

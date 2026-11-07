@@ -498,10 +498,13 @@ export function renderPaymentFailed({ amountCents, currency, nextAttemptAt, firs
   return { subject: `Action needed: your Ivy payment didn't go through`, html, preheader };
 }
 
+// Returns the send result ({ ok, sent, reason }) so a caller that claimed
+// the send first (the dunning cron) can hand the claim back on a failure.
+// Never throws.
 export async function notifyPaymentFailed({ workspaceId, amountCents, currency, nextAttemptAt }) {
   try {
     const o = await loadOwner(workspaceId);
-    if (!o?.email) return;
+    if (!o?.email) return { ok: true, sent: false, reason: 'no-owner-email' };
     const rendered = renderPaymentFailed({
       amountCents, currency, nextAttemptAt,
       firstName: firstName(o.name), businessName: o.biz_name,
@@ -509,13 +512,14 @@ export async function notifyPaymentFailed({ workspaceId, amountCents, currency, 
     // Critical billing notice: no `type` → bypasses billing opt-out so a
     // past_due owner can't accidentally suppress the warning that keeps
     // them from getting locked out.
-    await sendEmailToUser({
+    return await sendEmailToUser({
       userId: o.owner_id, type: undefined,
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
   } catch (err) {
     console.error('[subscriptionNotify.failed] failed:', err.message);
     reportError(err, { extra: { workspaceId } });
+    return { ok: false, sent: false, reason: err.message };
   }
 }
 

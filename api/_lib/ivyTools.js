@@ -1918,16 +1918,26 @@ async function mark_invoice_paid({ workspaceId, args }) {
   // Only an unpaid invoice can be marked paid: never a void one (restore it
   // first) or a refunded one (that would count refunded money as income).
   // paid_amount and the activity line match the owner's Mark paid button.
+  // The same statement writes the ledger row for the money received by
+  // hand (what this adds on top of any part payments; invoiceLedger.js).
   const r = await sql`
-    UPDATE invoices SET
-      status = 'paid', paid_at = NOW(), paid_method = ${method},
-      paid_amount = GREATEST(total - gift_card_credit_cents / 100.0, 0),
-      activity = activity || jsonb_build_array(jsonb_build_object(
-        'ts', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-        'kind', 'paid', 'text', ${`Marked paid by ${method} (via Ivy)`}::text)),
-      view_token_hash = NULL, updated_at = NOW()
-    WHERE id = ${id} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
-    RETURNING id, number, status
+    WITH upd AS (
+      UPDATE invoices i SET
+        status = 'paid', paid_at = NOW(), paid_method = ${method},
+        paid_amount = GREATEST(i.total - i.gift_card_credit_cents / 100.0, 0),
+        activity = i.activity || jsonb_build_array(jsonb_build_object(
+          'ts', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+          'kind', 'paid', 'text', ${`Marked paid by ${method} (via Ivy)`}::text)),
+        view_token_hash = NULL, updated_at = NOW()
+      FROM invoices prev
+      WHERE prev.id = i.id AND i.id = ${id} AND i.workspace_id = ${workspaceId} AND i.status IN ('draft', 'sent', 'overdue')
+      RETURNING i.id, i.number, i.status, i.workspace_id, i.currency, i.paid_amount, COALESCE(prev.paid_amount, 0) AS prior_paid
+    ), led AS (
+      INSERT INTO invoice_payments (workspace_id, invoice_id, provider, amount, currency)
+      SELECT workspace_id, id, 'manual', paid_amount - prior_paid, currency FROM upd
+       WHERE paid_amount - prior_paid > 0
+    )
+    SELECT id, number, status FROM upd
   `;
   if (r.rows.length === 0) throw new Error('Invoice not found, or it is not unpaid (already paid, refunded or void)');
   return { ok: true, invoice: r.rows[0], method };
