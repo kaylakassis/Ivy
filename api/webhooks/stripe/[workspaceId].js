@@ -14,7 +14,7 @@ import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
-import { applyProgramSubscription } from '../../_lib/programs.js';
+import { applyProgramSubscription, revokeProgramPurchaseForRefund } from '../../_lib/programs.js';
 import {
   fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
   syncRefundToPurchases,
@@ -186,6 +186,12 @@ export default async function handler(req, res) {
       const invSync = await applyStripeChargeRefundToInvoice({ workspaceId, charge });
       if (invSync !== 'not-found') {
         return ok(res, { received: true, applied: invSync === 'applied' ? 'invoice-refund-synced' : 'refund already recorded' });
+      }
+      // A one-time program purchase: a full refund ends the access, same as
+      // the platform webhook (it used to stay open after the money went back).
+      const programResult = await revokeProgramPurchaseForRefund({ workspaceId, charge });
+      if (programResult !== 'not-found') {
+        return ok(res, { received: true, applied: 'program-refund', result: programResult });
       }
       const synced = await syncRefundToPurchases({ workspaceId, charge });
       return ok(res, { received: true, ...synced });
