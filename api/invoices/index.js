@@ -12,6 +12,43 @@ import {
 } from '../_lib/finance.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { withIdempotency } from '../_lib/idempotency.js';
+import { encodeCursor, decodeCursor, cursorPageSize, looksLikeDate, looksLikeTimestamp } from '../_lib/listCursor.js';
+// One page of the owner's invoice list, newest first, after the cursor.
+// Same filters as the list below (?status=, ?archived=only|all).
+async function listPage(req, res, workspaceId) {
+  const limit = cursorPageSize(req.query.limit);
+  let after = [null, null, null];
+  if (req.query.cursor) {
+    const c = decodeCursor(String(req.query.cursor), 3);
+    if (!c || !looksLikeDate(c[0]) || !looksLikeTimestamp(c[1])) return badRequest(res, 'That page link is out of date. Reload the list.');
+    after = c;
+  }
+  const status = req.query.status && VALID_STATUS.has(req.query.status) ? req.query.status : null;
+  const archivedMode = ['only', 'all'].includes(String(req.query.archived || '')) ? String(req.query.archived) : 'none';
+  const { rows } = await sql.query(
+    `SELECT *, issue_date::text AS cursor_issue_date, created_at::text AS cursor_created_at
+       FROM invoices
+      WHERE workspace_id = $1
+        AND ($2::text IS NULL OR status = $2::text)
+        AND (CASE $3::text WHEN 'only' THEN archived_at IS NOT NULL
+                           WHEN 'all'  THEN TRUE
+                           ELSE archived_at IS NULL END)
+        AND ($4::date IS NULL OR (issue_date, created_at, id) < ($4::date, $5::timestamptz, $6::uuid))
+      ORDER BY issue_date DESC, created_at DESC, id DESC
+      LIMIT $7`,
+    [workspaceId, status, archivedMode, after[0], after[1], after[2], limit + 1],
+  );
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  return ok(res, {
+    invoices: page.map(serializeInvoice),
+    hasMore,
+    nextOffset: null,
+    nextCursor: hasMore ? encodeCursor([last.cursor_issue_date, last.cursor_created_at, last.id]) : null,
+  });
+}
+
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
@@ -21,6 +58,11 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     if (req.method === 'GET') {
+      // Screen paging (the web Finance list): ?cursor= (empty for the first
+      // page) returns `limit` invoices (default 50) plus nextCursor. The
+      // tab counts and money totals come from GET /api/finance, never from
+      // the loaded page. Without ?cursor the list below is unchanged.
+      if (req.query.cursor !== undefined) return listPage(req, res, workspaceId);
       try {
         // Bounded pagination guardrail (see /api/clients for context).
         // Default 1000, hard ceiling 5000, returns hasMore + nextOffset.

@@ -15,6 +15,105 @@ import { sendClientInvite, inviteNewClientsEnabled } from '../_lib/clientNotify.
 import { celebrateFirstClient } from '../_lib/milestones.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { encodeCursor, decodeCursor, cursorPageSize, looksLikeTimestamp, containsPattern } from '../_lib/listCursor.js';
+
+// Tabs on the Clients screen. 'noemail' = no email on file (no reminders).
+const LIST_FILTERS = { all: null, active: 'active', leads: 'lead', paused: 'paused', noemail: 'noemail' };
+const clampDays = (raw, dflt) => {
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 1 ? Math.min(3650, n) : dflt;
+};
+
+// One page of the Clients list (most recently seen first), and/or the
+// numbers over the whole book (helpers: their visible clients only).
+async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
+  const filterKey = Object.prototype.hasOwnProperty.call(LIST_FILTERS, String(req.query.filter || 'all'))
+    ? String(req.query.filter || 'all') : 'all';
+  const filter = LIST_FILTERS[filterKey];
+  const stageFilter = filter && filter !== 'noemail' ? filter : null;
+  const noEmailOnly = filter === 'noemail';
+  const q = String(req.query.q || '').trim().slice(0, 200);
+  const pattern = q ? containsPattern(q) : null;
+  const out = {};
+
+  if (req.query.summary !== undefined) {
+    // The same rules the screen used to apply to its loaded list.
+    const windowDays = clampDays(req.query.window, 30);
+    const leadDays = clampDays(req.query.leadWindow, 30);
+    const s = (await sql`
+      SELECT
+        COUNT(*)::int AS all_n,
+        COUNT(*) FILTER (WHERE stage = 'active')::int AS active_n,
+        COUNT(*) FILTER (WHERE stage = 'lead')::int AS leads_n,
+        COUNT(*) FILTER (WHERE stage = 'paused')::int AS paused_n,
+        COUNT(*) FILTER (WHERE COALESCE(btrim(email), '') = '')::int AS noemail_n,
+        COUNT(*) FILTER (WHERE stage = 'active' AND joined_at >= NOW() - make_interval(days => ${windowDays}))::int AS recent_actives,
+        COUNT(*) FILTER (WHERE stage = 'lead' AND joined_at >= NOW() - make_interval(days => ${windowDays}))::int AS recent_leads,
+        COUNT(*) FILTER (WHERE stage = 'paused' AND COALESCE(last_seen_at, joined_at) >= NOW() - make_interval(days => ${windowDays}))::int AS churn_n,
+        COUNT(*) FILTER (WHERE stage = 'lead' AND joined_at >= NOW() - make_interval(days => ${leadDays}))::int AS leads_in_window
+      FROM clients
+      WHERE workspace_id = ${workspaceId}
+        AND (${scopeIds}::uuid[] IS NULL OR id = ANY(${scopeIds}::uuid[]))
+    `).rows[0];
+    const conv = s.recent_actives + s.recent_leads;
+    const churnBase = s.active_n + s.paused_n;
+    out.summary = {
+      counts: { all: s.all_n, active: s.active_n, leads: s.leads_n, paused: s.paused_n, noemail: s.noemail_n },
+      analytics: {
+        windowDays, leadWindowDays: leadDays,
+        recentActives: s.recent_actives, recentLeads: s.recent_leads,
+        conversionRate: conv === 0 ? 0 : Math.round((s.recent_actives / conv) * 100),
+        churnCount: s.churn_n,
+        churnRate: churnBase === 0 ? 0 : Math.round((s.churn_n / churnBase) * 100),
+        leadsInWindow: s.leads_in_window,
+      },
+    };
+    if (req.query.summary === 'only') return ok(res, out);
+  }
+
+  const limit = cursorPageSize(req.query.limit);
+  let after = [null, null];
+  if (req.query.cursor) {
+    const c = decodeCursor(String(req.query.cursor), 2);
+    if (!c || !looksLikeTimestamp(c[0])) return badRequest(res, 'That page link is out of date. Reload the list.');
+    after = c;
+  }
+  // Search matches the name, the email or any tag ("contains", any case).
+  const r = await sql`
+    SELECT *, COALESCE(last_seen_at, joined_at)::text AS cursor_seen
+      FROM clients
+     WHERE workspace_id = ${workspaceId}
+       AND (${scopeIds}::uuid[] IS NULL OR id = ANY(${scopeIds}::uuid[]))
+       AND (${stageFilter}::text IS NULL OR stage = ${stageFilter})
+       AND (${noEmailOnly} = FALSE OR COALESCE(btrim(email), '') = '')
+       AND (${pattern}::text IS NULL OR name ILIKE ${pattern} OR email ILIKE ${pattern}
+            OR EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ${pattern}))
+       AND (${after[0]}::timestamptz IS NULL
+            OR (COALESCE(last_seen_at, joined_at), id) < (${after[0]}::timestamptz, ${after[1]}::uuid))
+     ORDER BY COALESCE(last_seen_at, joined_at) DESC, id DESC
+     LIMIT ${limit + 1}
+  `;
+  const hasMore = r.rows.length > limit;
+  const page = hasMore ? r.rows.slice(0, limit) : r.rows;
+  const last = page[page.length - 1];
+  out.clients = page.map(project);
+  out.hasMore = hasMore;
+  out.nextOffset = null;
+  out.nextCursor = hasMore ? encodeCursor([last.cursor_seen, last.id]) : null;
+  // How many match this tab + search in all (first page only).
+  if (!req.query.cursor) {
+    const t = await sql`
+      SELECT COUNT(*)::int AS n FROM clients
+       WHERE workspace_id = ${workspaceId}
+         AND (${scopeIds}::uuid[] IS NULL OR id = ANY(${scopeIds}::uuid[]))
+         AND (${stageFilter}::text IS NULL OR stage = ${stageFilter})
+         AND (${noEmailOnly} = FALSE OR COALESCE(btrim(email), '') = '')
+         AND (${pattern}::text IS NULL OR name ILIKE ${pattern} OR email ILIKE ${pattern}
+              OR EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ${pattern}))`;
+    out.total = t.rows[0].n;
+  }
+  return ok(res, out);
+}
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -56,6 +155,15 @@ export default async function handler(req, res) {
                 LIMIT 1
               `;
           return ok(res, { clients: r.rows.map(project) });
+        }
+
+        // Screen paging (the web Clients list): ?cursor= (empty for the
+        // first page), with optional ?filter= and ?q=, and ?summary=1 for
+        // the tab counts and the analytics cards computed over the WHOLE
+        // book (never the loaded page). Without ?cursor / ?summary the
+        // list below is unchanged (iPhone 1.0.5 and the pickers use it).
+        if (req.query.cursor !== undefined || req.query.summary !== undefined) {
+          return listClientsPage(req, res, { workspaceId, scopeIds, project });
         }
 
         // Bounded pagination guardrail: previously this endpoint

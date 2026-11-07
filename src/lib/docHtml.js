@@ -65,6 +65,7 @@ export function safeDocHref(raw) {
   if (v == null) return null;
   const s = v.trim();
   // Browsers drop tabs and newlines inside a URL, which can hide a scheme.
+  // eslint-disable-next-line no-control-regex
   if (!s || s.length > 2000 || /[\u0000- \u007f-\u009f]/.test(s)) return null;
   if (!/^(https?:\/\/[^/?#]+|mailto:[^/?#\s]+@)/i.test(s)) return null;
   return s;

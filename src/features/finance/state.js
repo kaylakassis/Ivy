@@ -1,17 +1,41 @@
-// API-backed finance store: invoices + dashboard summary.
-import { useEffect, useState, useCallback } from 'react';
+// API-backed finance store: the invoice list (paged) + dashboard summary.
+//
+// The Finance list loads one page (50) for the current tab from
+// GET /api/invoices?cursor= and appends the next page on "Show more".
+// Tab counts and money totals come from GET /api/finance over every
+// invoice, never from the rows that happen to be loaded. Without ?cursor
+// the invoices endpoint still returns its old list (iPhone 1.0.5 and the
+// other screens use it).
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
 import { haptic } from '../../lib/celebrate.js';
 
-export function useInvoices() {
-  const [invoices, setInvoices] = useState([]);
+const PAGE = 50;
+// Tab -> server filter. Archived invoices only show under Archived.
+function tabQuery(tab) {
+  if (tab === 'archived') return 'archived=only';
+  if (tab && tab !== 'all') return `status=${encodeURIComponent(tab)}`;
+  return '';
+}
+const pageUrl = (tab, cursor) => `/invoices?cursor=${encodeURIComponent(cursor || '')}&limit=${PAGE}${tabQuery(tab) ? `&${tabQuery(tab)}` : ''}`;
+
+export function useInvoices({ tab = 'all' } = {}) {
+  const [invoices, setList]     = useState([]);
+  // An invoice opened by link (?invoice=<id>) that is not on a loaded page.
+  const [linked, setLinked]     = useState(null);
   const [summary, setSummary]   = useState(null);
   const [loading, setLoading]   = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [error, setError]       = useState(null);
-  // Pagination state (default page = 1000, server-capped at 5000).
-  const [hasMore, setHasMore]   = useState(false);
-  const [nextOffset, setNextOffset] = useState(null);
+  const [nextCursor, setNextCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const reqId = useRef(0);
+
+  // Every local change applies to the list and to a linked invoice alike.
+  const setInvoices = useCallback((fn) => {
+    setList(fn);
+    setLinked((l) => (l ? (fn([l])[0] || null) : l));
+  }, []);
 
   const refreshSummary = useCallback(async () => {
     try {
@@ -20,50 +44,60 @@ export function useInvoices() {
     } catch { /* non-fatal */ }
   }, []);
 
-  const load = useCallback(async (isLive = () => true) => {
+  const load = useCallback(async () => {
+    const id = ++reqId.current;
+    setListLoading(true);
     await Promise.all([
-      // archived=all: the page filters archived ones itself (the Archived
-      // tab), so one list serves every tab.
-      api.get('/invoices?archived=all').then((r) => {
-        if (!isLive()) return;
-        setInvoices(r.invoices || []);
-        setHasMore(!!r.hasMore);
-        setNextOffset(r.nextOffset ?? null);
+      api.get(pageUrl(tab, '')).then((r) => {
+        if (id !== reqId.current) return;
+        setList(r.invoices || []);
+        setNextCursor(r.nextCursor || null);
         setError(null);
       }),
-      api.get('/finance').then((r) => isLive() && setSummary(r.summary)),
+      api.get('/finance').then((r) => id === reqId.current && setSummary(r.summary)),
     ])
-      .catch((e) => isLive() && setError(e))
-      .finally(() => isLive() && setLoading(false));
-  }, []);
+      .catch((e) => id === reqId.current && setError(e))
+      .finally(() => { if (id === reqId.current) { setLoading(false); setListLoading(false); } });
+  }, [tab]);
 
   useEffect(() => {
-    let live = true;
-    load(() => live);
-    return () => { live = false; };
+    load();
+    return () => { reqId.current += 1; };
   }, [load]);
 
-  // Pull to refresh / back online: reload invoices and the summary.
+  // Pull to refresh / back online: reload the first page and the summary.
   const reload = useCallback(() => load(), [load]);
 
   const loadMore = useCallback(async () => {
-    if (!hasMore || nextOffset == null || loadingMore) return;
+    if (!nextCursor || loadingMore) return;
+    const id = reqId.current;
     setLoadingMore(true);
     try {
-      const r = await api.get(`/invoices?archived=all&offset=${nextOffset}`);
-      const existing = new Set(invoices.map((i) => i.id));
-      const fresh = (r.invoices || []).filter((i) => !existing.has(i.id));
-      setInvoices((prev) => [...prev, ...fresh]);
-      setHasMore(!!r.hasMore);
-      setNextOffset(r.nextOffset ?? null);
+      const r = await api.get(pageUrl(tab, nextCursor));
+      if (id !== reqId.current) return;
+      setList((prev) => {
+        const have = new Set(prev.map((i) => i.id));
+        return [...prev, ...(r.invoices || []).filter((i) => !have.has(i.id))];
+      });
+      setNextCursor(r.nextCursor || null);
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, nextOffset, loadingMore, invoices]);
+  }, [nextCursor, loadingMore, tab]);
+
+  // Find an invoice whether or not its page is loaded (deep links).
+  const ensureInvoice = useCallback(async (id) => {
+    if (!id) return null;
+    try {
+      const r = await api.get('/invoices/' + encodeURIComponent(id));
+      if (r.invoice) setLinked(r.invoice);
+      return r.invoice || null;
+    } catch { return null; }
+  }, []);
 
   const create = useCallback(async (input) => {
     const r = await api.post('/invoices', input);
-    setInvoices((xs) => [r.invoice, ...xs]);
+    setList((xs) => [r.invoice, ...xs]);
     await refreshSummary();
     return r.invoice;
   }, [refreshSummary]);
@@ -73,11 +107,12 @@ export function useInvoices() {
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r.invoice;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   const remove = useCallback(async (id) => {
     await api.del('/invoices/' + id);
-    setInvoices((xs) => xs.filter((i) => i.id !== id));
+    setList((xs) => xs.filter((i) => i.id !== id));
+    setLinked((l) => (l && l.id === id ? null : l));
     await refreshSummary();
   }, [refreshSummary]);
 
@@ -86,7 +121,7 @@ export function useInvoices() {
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r.invoice;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   // Resend an already-sent invoice. Uses the dedicated endpoint so the
   // recipient sees a "Reminder: ..." subject line and the activity log
@@ -96,7 +131,7 @@ export function useInvoices() {
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r.invoice;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   const markPaid = useCallback(async (id, method) => {
     const r = await api.post('/invoices/mark-paid', { id, method });
@@ -104,14 +139,14 @@ export function useInvoices() {
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r.invoice;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   const voidInvoice = useCallback(async (id, { notifyClient = false } = {}) => {
     const r = await api.post('/invoices/void', { id, notifyClient });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   // Archive (hide) or bring back settled invoices. Nothing is deleted and
   // revenue does not change. Returns { changed, skipped: [{ id, number, why }] }.
@@ -121,14 +156,14 @@ export function useInvoices() {
     setInvoices((xs) => xs.map((i) => byId.get(i.id) || i));
     await refreshSummary();
     return r;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   const refund = useCallback(async (id, { amount, reason } = {}) => {
     const r = await api.post('/invoices/refund', { id, amount, reason });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r;
-  }, [refreshSummary]);
+  }, [refreshSummary, setInvoices]);
 
   // Owner says the money the client claimed to send never arrived.
   // Clears the "says paid" banner; an optional message goes to the client.
@@ -136,11 +171,11 @@ export function useInvoices() {
     const r = await api.post('/invoices/clear-claim', { id, ...(message ? { message } : {}) });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     return r.invoice;
-  }, []);
+  }, [setInvoices]);
 
   return {
-    invoices, summary, loading, error,
+    invoices, linked, summary, loading, listLoading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim, archive,
-    hasMore, loadMore, loadingMore, reload,
+    hasMore: !!nextCursor, loadMore, loadingMore, reload, ensureInvoice,
   };
 }

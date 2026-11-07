@@ -77,7 +77,6 @@ const CLEANUP = splitStatements(SCHEMA_SQL).filter((s) => /^UPDATE (services|boo
   && s.includes("'^http://'"));
 async function runCleanup() {
   for (const stmt of CLEANUP) {
-    // eslint-disable-next-line no-await-in-loop
     await sql.query(stmt);
   }
 }
@@ -133,7 +132,6 @@ async function main() {
   assert(r.meeting_link_removed === 'javascript:alert(document.cookie)' && (await svcRow(sHttp)).location_label === 'https://zoom.us/j/111', 'rerun changes nothing');
   // Every surviving link saves again unchanged.
   for (const id of [sHttp, sOk]) {
-    // eslint-disable-next-line no-await-in-loop
     const lbl = (await svcRow(id)).location_label;
     assert(cleanMeetingLink(lbl).value === lbl, `a link kept by the clean-up passes the save check (${lbl})`);
   }
@@ -154,7 +152,6 @@ async function main() {
   assert(res.statusCode === 200, `old app save of the cleaned list works (${res.statusCode} ${JSON.stringify(res.body).slice(0, 120)})`);
   assert((await svcRow(sJs)).meeting_link_removed === 'javascript:alert(document.cookie)', 'removed link kept through an old app save');
   for (const bad of ['javascript:alert(1)', 'data:text/html,x', 'http://zoom.us/j/1', 'call me']) {
-    // eslint-disable-next-line no-await-in-loop
     res = await call(servicesApi, { method: 'PUT', cookie: A.cookie, body: { services: svcs.map((s) => asSent(s, s.id === sJs ? { locationLabel: bad } : {})) } });
     assert(res.statusCode === 400 && String(res.body?.error || res.body?.message || '').startsWith('Use a link that starts with https://'),
       `refused: ${bad} (${JSON.stringify(res.body)})`);
@@ -180,7 +177,6 @@ async function main() {
   assert(videoRoomUrlForService({ location_type: 'virtual', location_label: 'https://zoom.us/j/1' }) === 'https://zoom.us/j/1', 'an https link is used');
 
   for (const id of users) {
-    // eslint-disable-next-line no-await-in-loop
     await sql`DELETE FROM users WHERE id = ${id}`.catch(() => {});
   }
   console.log(`\n${pass} passed, ${fail} failed`);
