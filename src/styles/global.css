@@ -1035,6 +1035,18 @@ html.native .motion-drawer {
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+/* The page header is sticky. In the app the web view runs under the status
+   bar (contentInset "never"), so once a page scrolls, a header pinned at
+   top:0 slides under the clock. Pin it just below the clock instead, and
+   paint the status-bar strip so scrolled content never shows behind the
+   clock. The strip sits just above the header (40) and below every sheet,
+   drawer and dialog. */
+html.native .app-topbar.native { top: env(safe-area-inset-top, 0px) !important; }
+html.native .app-root::before {
+  content: ''; position: fixed; top: 0; left: 0; right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: var(--page); z-index: 41; pointer-events: none;
+}
 
 
 /* Touch feedback replaces hover. */
