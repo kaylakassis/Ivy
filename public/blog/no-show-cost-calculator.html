@@ -61,7 +61,7 @@
     <div class="pmeta">2026-03-16 &middot; 3 min read &middot; Ivy Blog</div>
   </header>
   <article class="post-body">
-<p>Move the sliders. The math uses industry no-show benchmarks and updates live.</p>
+<p>Move the sliders. The math uses your numbers and updates live.</p>
 <div class="calcbox">
   <label>Average service price <output id="nsPrice">$80</output></label>
   <input type="range" id="nsP" min="20" max="500" step="5" value="80" oninput="nsCalc()">
@@ -69,13 +69,13 @@
   <input type="range" id="nsA" min="3" max="80" value="25" oninput="nsCalc()">
   <label>Your current no-show rate <output id="nsRateOut">15%</output></label>
   <input type="range" id="nsR" min="2" max="35" value="15" oninput="nsCalc()">
-  <div class="calcrow"><span>Lost per month</span><b id="nsMonth">$1,300</b></div>
-  <div class="calcrow"><span>Lost per year</span><b id="nsYear">$15,600</b></div>
-  <div class="calcrow hl"><span>Recoverable with deposits + reminders (at a 4% no-show rate)</span><b id="nsSave">$11,440/yr</b></div>
+  <div class="calcrow"><span>Lost per month</span><b id="nsMonth">$1,299</b></div>
+  <div class="calcrow"><span>Lost per year</span><b id="nsYear">$15,588</b></div>
+  <div class="calcrow hl"><span>Recoverable with deposits + reminders (at a 4% no-show rate)</span><b id="nsSave">$11,431/yr</b></div>
 </div>
-<p class="tbl-note" style="font-size:12.5px;color:var(--dim)">Assumptions: your inputs, a 4.33-week month, and the documented drop to a 3-5% no-show rate (we use 4%) for businesses using deposits at booking. Typical rates without them: salons ~15%, medical ~18%, fitness ~20%.</p>
-<h2>Why the recovery number is realistic</h2>
-<div class="fact">Businesses requiring deposits at booking report <b>3-5% no-show rates versus 15-25%</b> without. SMS reminders independently cut no-shows by up to <b>38%</b>, with a <b>98% open rate</b>.</div>
+<p class="tbl-note" style="font-size:12.5px;color:var(--dim)">Assumptions: your inputs, a 4.33-week month, and an example target of a 4% no-show rate once deposits and reminders are in place. That target is an illustration, not a guarantee; your own booking history is the best guide.</p>
+<h2>How to read the recovery number</h2>
+<div class="fact">There's no reliable industry-wide figure for how far deposits and reminders cut no-shows, so treat 4% as a target to test against your own numbers. The best-studied evidence comes from healthcare, where a Cochrane review found text reminders <b>improved attendance compared with no reminder</b>.</div>
 <p>The playbook for capturing it is short: deposits or card-on-file at booking, a visible policy, and a reminder cadence that runs itself - the full breakdown is in our <a href="/blog/how-to-reduce-no-shows">no-show guide</a>.</p>
 <div class="cta-box"><h3>Recover most of that number</h3><p>Deposits, card on file, and automatic email + SMS reminders are built into every Ivy booking page.</p><a href="/signup" class="btn btn-primary">Start your 14-day free trial</a><p style="font-size:12px;color:var(--dim);margin:10px 0 0">$0 today &middot; Cancel anytime</p></div>
 <script>
@@ -95,7 +95,7 @@ nsCalc();
 </script>
 </article>
 </div>
-<div class="container"><div class="sources"><h3>Sources</h3><ul><li><a href="https://www.etisia.com/no-show-statistics" rel="noopener" target="_blank">Etisia - No-Show Statistics by Industry</a></li><li><a href="https://www.omnisend.com/blog/sms-marketing-statistics/" rel="noopener" target="_blank">Omnisend - SMS Marketing Statistics</a></li></ul></div></div>
+<div class="container"><div class="sources"><h3>Sources</h3><ul><li><a href="https://www.cochrane.org/CD007458" rel="noopener" target="_blank">Cochrane - Text message reminders for healthcare appointments (2013 review)</a></li></ul></div></div>
 <div class="container"><div class="back"><a href="/blog">&larr; All articles</a></div></div>
 <footer>
   <div class="container foot-inner">
