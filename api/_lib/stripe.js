@@ -368,10 +368,11 @@ export async function createSubscriptionCheckoutSession({
 // Close an open Checkout Session so it can no longer be paid. Stripe
 // refuses for a session that already completed or expired; callers treat
 // that as fine.
-export async function expireCheckoutSession({ secretKey, sessionId }) {
+export async function expireCheckoutSession({ secretKey, sessionId, stripeAccount }) {
   if (!sessionId) throw new Error('sessionId is required');
+  // stripeAccount: a session on a CONNECTED account (invoice pay links).
   return stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
-    method: 'POST', secretKey, idempotencyKey: `ivy-expire:${sessionId}`,
+    method: 'POST', secretKey, stripeAccount, idempotencyKey: `ivy-expire:${sessionId}`,
   });
 }
 

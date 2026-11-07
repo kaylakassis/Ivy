@@ -35,13 +35,21 @@ let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
 
 const stripeCalls = [];
+const paidSessions = new Set();
+let csN = 0;
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
   if (/api\.stripe\.com/.test(u)) {
     const body = Object.fromEntries(new URLSearchParams(String(init.body || '')));
-    stripeCalls.push({ url: u, body });
-    if (/\/checkout\/sessions$/.test(u)) return json({ id: `cs_pp_${stripeCalls.length}`, url: `https://checkout.example/cs_${stripeCalls.length}` });
+    stripeCalls.push({ url: u, body, headers: init.headers || {} });
+    if (/\/checkout\/sessions$/.test(u)) { csN++; return json({ id: `cs_pp_${STAMP}_${csN}`, url: `https://checkout.example/cs_${csN}` }); }
+    const got = u.match(/\/checkout\/sessions\/(cs_[^/?]+)(\?|$)/);
+    if (got && paidSessions.has(got[1])) {
+      const inv = (await sql`SELECT id, workspace_id FROM invoices WHERE stripe_session_id = ${got[1]}`).rows[0];
+      return json({ id: got[1], mode: 'payment', status: 'complete', payment_status: 'paid', payment_intent: `pi_for_${got[1]}`,
+        amount_total: 5000, payment_method_types: ['card'], metadata: { invoice_id: inv?.id, workspace_id: inv?.workspace_id } });
+    }
     return json({});
   }
   return json({ id: 'x' });
@@ -228,6 +236,26 @@ async function run() {
   await fireSquare(Q.wid, 'payment.updated', { ...pay7, refunded_money: { amount: 10000, currency: 'USD' } });
   row = await invRow(inv7.id);
   assert(row.status === 'refunded', `still refunded after the refund's payment.updated (${row.status})`);
+
+  console.log('\n[7] Stripe: a new pay link closes the one it replaces, so one invoice cannot be paid twice');
+  const inv8 = await mkInvoice(S, `PP-S3-${STAMP}`, 50);
+  stripeCalls.length = 0;
+  r = await call(invoicePayHandler, req({ query: { token: inv8.raw } }));
+  const first = (await invRow(inv8.id)).stripe_session_id;
+  assert(r.statusCode === 200 && /^cs_/.test(first || ''), `first pay link minted (${first})`);
+  stripeCalls.length = 0;
+  r = await call(invoicePayHandler, req({ query: { token: inv8.raw } }));
+  const second = (await invRow(inv8.id)).stripe_session_id;
+  const expired = stripeCalls.find((x) => x.url.endsWith(`/checkout/sessions/${first}/expire`));
+  assert(r.statusCode === 200 && second && second !== first, 'second pay link minted');
+  assert(!!expired && expired.headers?.['Stripe-Account'] === acct, `the first checkout was closed on the connected account (${stripeCalls.map((x) => x.url).join(', ')})`);
+  // If the earlier checkout was in fact paid a moment ago, no new one is opened.
+  stripeCalls.length = 0;
+  paidSessions.add(second);
+  r = await call(invoicePayHandler, req({ query: { token: inv8.raw } }));
+  row = await invRow(inv8.id);
+  assert(!stripeCalls.some((x) => /\/checkout\/sessions$/.test(x.url)), 'no new checkout when the last one was already paid');
+  assert(row.status === 'paid' && r.statusCode === 400, `the invoice is marked paid instead (${row.status}, ${r.statusCode} ${JSON.stringify(r.body)})`);
 
   for (const m of made) {
     await sql`DELETE FROM gift_cards WHERE workspace_id = ${m.wid}`;
