@@ -17,6 +17,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import SignaturePad, { typedToPng } from './SignaturePad.jsx';
 import PdfFieldSigner from './PdfFieldSigner.jsx';
 import { fieldLabel, initialsOf } from './fieldTypes.js';
+import { sanitizeDocHtml } from '../../lib/docHtml.js';
 
 const isFilled = (f, v) => (f.type === 'checkbox' ? v === 'true' : !!String(v ?? '').trim());
 
@@ -321,7 +322,7 @@ export default function SignPage() {
         </>
       ) : (
         <div className="card" style={{ padding: 'clamp(18px, 5vw, 32px)', marginBottom: 18 }}>
-          <div
+          <div className="doc-sign-body"
             style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
             dangerouslySetInnerHTML={{ __html: sanitize(doc.contentHtml || '') }}
           />
@@ -603,14 +604,10 @@ function PageWrap({ tweaks, children }) {
   );
 }
 
-// Allow only a tight set of tags (h1/h2/h3, p, br, strong, em, ul/ol/li).
-// Strip everything else. This is a safety net - content_html came from the
-// owner of the document, but we still don't want script tags in there.
+// The shared allowlist (src/lib/docHtml.js): the same rules the server
+// applies on save and on load, and the owner's editor and preview use.
 function sanitize(html) {
-  if (typeof html !== 'string') return '';
-  return html
-    .replace(/<\/?(?!\/?(?:h[1-3]|p|br|strong|em|ul|ol|li)\b)[^>]+>/gi, '')
-    .replace(/<(\/?)(h[1-3]|p|br|strong|em|ul|ol|li)\b[^>]*>/gi, '<$1$2>');
+  return typeof html === 'string' ? sanitizeDocHtml(html) : '';
 }
 
 const overlayS = {

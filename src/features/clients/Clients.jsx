@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
-import { useClients } from './state.js';
+import { useClients, usePickerClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import CustomFieldsSettings from './CustomFieldsSettings.jsx';
@@ -20,7 +20,6 @@ import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
 
 const DAY = 86400e3;
-const ROW_PAGE = 100;
 
 function timeAgo(iso) {
   if (!iso) return null;
@@ -33,19 +32,17 @@ function timeAgo(iso) {
 }
 
 export default function Clients() {
-  const { clients, loading, create, update, remove, refresh,
-          hasMore, loadMore, loadingMore } = useClients();
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
-  // Rows drawn so far. A book of 1000 clients rendered at once is ~20k
-  // DOM nodes and freezes a phone for seconds; draw a page at a time and
-  // start over whenever the tab or search changes.
-  const [shown, setShown] = useState(ROW_PAGE);
-  useEffect(() => { setShown(ROW_PAGE); }, [tab, query]);
   const [leadWindow, setLeadWindow] = useState(30);
   // Customizable window for conversion + churn rate calculations. Default
   // 30 days; owners can dial up to 365 to look at trailing trends.
   const [analyticsWindow, setAnalyticsWindow] = useState(30);
+  // The list is paged on the server (50 at a time, "Show more" for the
+  // next page) for the current tab and search; counts and the analytics
+  // cards are the server's numbers over the whole book.
+  const { clients, summary, total, loading, listLoading, create, update, remove, refresh,
+          hasMore, loadMore, loadingMore } = useClients({ tab, query, analyticsWindow, leadWindow });
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -118,7 +115,7 @@ export default function Clients() {
       .then((r) => { if (live) setMetricsById(r.metrics || {}); })
       .catch((e) => console.warn('[Clients] metrics fetch failed:', e.message));
     return () => { live = false; };
-  }, [clients.length]);
+  }, [summary?.counts?.all]);
 
   useEffect(() => {
     let live = true;
@@ -126,7 +123,7 @@ export default function Clients() {
       .then((r) => { if (live) setDupCount(Number(r.total) || 0); })
       .catch(() => { /* helpers and older servers: no entry */ });
     return () => { live = false; };
-  }, [clients.length, dupTick]);
+  }, [summary?.counts?.all, dupTick]);
 
   // After a merge: reload the list, and keep the kept client open when the
   // merge started from one of them.
@@ -199,53 +196,27 @@ export default function Clients() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  const { active, leads, paused, analytics } = useMemo(() => {
-    const now = Date.now();
-    const active = clients.filter((c) => c.stage === 'active');
-    const leads  = clients.filter((c) => c.stage === 'lead');
-    const paused = clients.filter((c) => c.stage === 'paused');
-    // Window the conversion + churn calculations to the configurable
-    // `analyticsWindow` (default 30d). Picking a longer window smooths
-    // out recent noise; shorter zooms in on the latest cohort.
-    const windowAgo = now - analyticsWindow * DAY;
-    const recentActives = active.filter((c) => new Date(c.joinedAt).getTime() >= windowAgo).length;
-    const recentLeads   = leads .filter((c) => new Date(c.joinedAt).getTime() >= windowAgo).length;
-    const denomConv = recentActives + recentLeads;
-    const conversionRate = denomConv === 0 ? 0 : Math.round((recentActives / denomConv) * 100);
-    const churnCount = paused.filter((c) =>
-      new Date(c.lastSeenAt || c.joinedAt).getTime() >= windowAgo,
-    ).length;
-    const denomChurn = active.length + paused.length;
-    const churnRate = denomChurn === 0 ? 0 : Math.round((churnCount / denomChurn) * 100);
-    const leadsInWindow = leads.filter(
-      (c) => (now - new Date(c.joinedAt).getTime()) / DAY <= leadWindow,
-    );
-    return {
-      active, leads, paused,
-      analytics: {
-        recentActives, recentLeads, conversionRate, churnCount, churnRate,
-        leadsInWindow, windowDays: analyticsWindow,
-      },
-    };
-  }, [clients, leadWindow, analyticsWindow]);
+  // Whole-book numbers from the server (GET /api/clients?summary=1).
+  const counts = summary?.counts || { all: 0, active: 0, leads: 0, paused: 0, noemail: 0 };
+  const analytics = summary?.analytics || {
+    recentActives: 0, recentLeads: 0, conversionRate: 0, churnCount: 0, churnRate: 0, leadsInWindow: 0,
+  };
 
-  // Clients with no email get no booking reminders or other emails.
-  const noEmail = clients.filter((c) => !(c.email || '').trim());
-  const counts = { all: clients.length, active: active.length, leads: leads.length, paused: paused.length, noemail: noEmail.length };
-
-  let rows = clients;
-  if (tab === 'active') rows = active;
-  if (tab === 'leads')  rows = leads;
-  if (tab === 'paused') rows = paused;
-  if (tab === 'noemail') rows = noEmail;
-  if (query.trim()) {
-    const q = query.trim().toLowerCase();
-    rows = rows.filter((c) =>
-      c.name.toLowerCase().includes(q) ||
-      (c.email || '').toLowerCase().includes(q) ||
-      (c.tags || []).some((t) => t.toLowerCase().includes(q)),
-    );
-  }
+  // The server already filtered this page by tab and search; the same
+  // test runs here so a row edited away from the tab (marked paused on the
+  // Active tab, say) leaves the list straight away.
+  const ql = query.trim().toLowerCase();
+  const rows = clients.filter((c) => {
+    if (tab === 'active' && c.stage !== 'active') return false;
+    if (tab === 'leads' && c.stage !== 'lead') return false;
+    if (tab === 'paused' && c.stage !== 'paused') return false;
+    if (tab === 'noemail' && (c.email || '').trim()) return false;
+    if (!ql) return true;
+    return (c.name || '').toLowerCase().includes(ql)
+      || (c.email || '').toLowerCase().includes(ql)
+      || (c.tags || []).some((t) => String(t).toLowerCase().includes(ql));
+  });
+  const remaining = total == null ? null : Math.max(0, total - clients.length);
 
   const setStage = (id, stage) => update(id, { stage });
 
@@ -255,7 +226,21 @@ export default function Clients() {
     setAddNotice(inviteNotice(made));
   };
 
-  const openClient = clients.find((c) => c.id === openId) || null;
+  // A client opened by link (?id=) may not be on a loaded page yet.
+  const [linkedClient, setLinkedClient] = useState(null);
+  const listedClient = clients.find((c) => c.id === openId) || null;
+  useEffect(() => {
+    if (!openId || listedClient || linkedClient?.id === openId) return undefined;
+    let live = true;
+    api.get('/clients/' + openId)
+      .then((r) => { if (live && r.client) setLinkedClient(r.client); })
+      .catch(() => { if (live) setOpenId(null); });
+    return () => { live = false; };
+  }, [openId, listedClient, linkedClient]);
+  const openClient = listedClient || (linkedClient?.id === openId ? linkedClient : null);
+  // Pickers that choose any client (merge, folder owner) get the full list
+  // while they are open.
+  const pickerClients = usePickerClients(!!mergeWith || !!openFolderId);
   const openFolder = folderState.folders.find((f) => f.id === openFolderId) || null;
   // Rows that appeared after the first load (a client just created) grow in
   // live; the ones that were there on load get the list stagger instead.
@@ -292,7 +277,7 @@ export default function Clients() {
       {openFolder && (
         <FolderDrawer
           folder={openFolder}
-          clients={clients}
+          clients={pickerClients || clients}
           onClose={() => setOpenFolderId(null)}
           onUpdate={(patch) => folderState.update(openFolder.id, patch)}
           onDelete={async () => { await folderState.remove(openFolder.id); setOpenFolderId(null); }}
@@ -335,12 +320,12 @@ export default function Clients() {
 
       {/* Analytics */}
       <div className="grid-auto">
-        <AnalyticCard label="Total clients" value={active.length + paused.length}
-          sub={`${active.length} active · ${paused.length} paused`} icon={<Icons.Users size={16} sw={1.8}/>}/>
+        <AnalyticCard label="Total clients" value={counts.active + counts.paused}
+          sub={`${counts.active} active · ${counts.paused} paused`} icon={<Icons.Users size={16} sw={1.8}/>}/>
         <AnalyticCard
           label={<>Leads in last <EditableNumber value={leadWindow} onChange={setLeadWindow} min={1} max={365}/> days</>}
-          value={analytics.leadsInWindow.length}
-          sub={`${leads.length} total leads`}
+          value={analytics.leadsInWindow}
+          sub={`${counts.leads} total leads`}
           icon={<Icons.Plus size={16} sw={2}/>}
           tone="accent"/>
         <AnalyticCard
@@ -360,7 +345,7 @@ export default function Clients() {
       {/* Filter + search */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div className="tab-row">
-          {[['all','All'],['active','Active'],['leads','Leads'],['paused','Paused'], ...(noEmail.length || tab === 'noemail' ? [['noemail', 'Missing email']] : [])].map(([id, label]) => (
+          {[['all','All'],['active','Active'],['leads','Leads'],['paused','Paused'], ...(counts.noemail || tab === 'noemail' ? [['noemail', 'Missing email']] : [])].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
               background: tab === id ? 'var(--surface)' : 'transparent',
@@ -405,7 +390,7 @@ export default function Clients() {
             <div style={{ textAlign: 'right' }}>Lifetime</div><div/>
           </div>
         )}
-        {loading ? (
+        {loading || (listLoading && rows.length === 0) ? (
           <div style={{ padding: 16 }}><SkelRowList rows={8} withAvatar/><Loader/></div>
         ) : rows.length === 0 ? (
           <div style={{ padding: 48 }}>
@@ -417,7 +402,7 @@ export default function Clients() {
                 : tab === 'noemail' ? 'Booking reminders can reach everyone.' : 'Try a different tab or clear your search.'}
             />
           </div>
-        ) : rows.slice(0, shown).map((c, i) => (
+        ) : rows.map((c, i) => (
           <GrowIn key={c.id} fresh={freshIds.has(c.id)}>{isMobile ? (
             <ClientCardMobile client={c} first={i === 0} index={i}
               metrics={metricsById[c.id]}
@@ -439,30 +424,17 @@ export default function Clients() {
           )}</GrowIn>
         ))}
 
-        {/* Load more - only renders when the server reports a page
-            past 1000 rows is available. Tab/search filters operate
-            on the loaded set; users with very large books may need
-            to load more pages before the filter has anything to
-            match against. Plain button (no infinite scroll) - most
-            workspaces never hit this, and keyboard accessibility +
-            visible state are simpler this way. */}
-        {rows.length > shown && (
-          <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
-            <button type="button" className="btn btn-outline" onClick={() => setShown((n) => n + ROW_PAGE)}
-              style={{ padding: '8px 18px', fontSize: 13 }}>
-              Show more ({rows.length - shown} more)
-            </button>
-          </div>
-        )}
-        {hasMore && tab === 'all' && !query && rows.length <= shown && (
+        {/* Next page from the server for this tab + search. */}
+        {hasMore && (
           <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
             <button
               type="button"
               className="btn btn-outline"
+              data-testid="clients-show-more"
               disabled={loadingMore}
               onClick={loadMore}
               style={{ padding: '8px 18px', fontSize: 13 }}>
-              {loadingMore ? 'Loading…' : `Load more (${clients.length} loaded)`}
+              {loadingMore ? 'Loading…' : remaining ? `Show more (${remaining} more)` : 'Show more'}
             </button>
           </div>
         )}
@@ -497,7 +469,11 @@ export default function Clients() {
           client={openClient}
           analyticsWindowDays={analyticsWindow}
           onClose={() => setOpenId(null)}
-          onUpdate={(patch) => update(openClient.id, patch)}
+          onUpdate={async (patch) => {
+            const saved = await update(openClient.id, patch);
+            if (saved && linkedClient?.id === saved.id) setLinkedClient(saved);
+            return saved;
+          }}
           onDelete={async () => { await remove(openClient.id); setOpenId(null); }}
           onOpenFolder={(id) => { setOpenId(null); folderState.refresh(); setOpenFolderId(id); }}
           onMakeFolder={() => makeFolder(openClient)}
@@ -515,7 +491,7 @@ export default function Clients() {
       {mergeWith && (
         <MergeWithPicker
           client={mergeWith}
-          clients={clients}
+          clients={pickerClients || clients}
           onClose={() => setMergeWith(null)}
           onMerged={afterMerge}
           onOpenClient={(id) => setOpenId(id)}

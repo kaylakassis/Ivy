@@ -102,6 +102,7 @@ export default async function handler(req, res) {
           settings: serializeSettings(settings),
           services: services.rows.map((r) => serializeService(r, {
             reminderDefaultMinutes: clientRemindersFrom(settings?.client_reminders ?? null).minutes,
+            owner: !req.helper,
           })),
           blocks:   [...blocks.rows.map(serializeBlock), ...sessionBlocks],
           // Helper mode (schedule permission): the calendar without revenue.

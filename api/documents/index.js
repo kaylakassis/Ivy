@@ -9,6 +9,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeDoc, cleanFields, fetchSignersBulk, VALID_KINDS, VALID_STATUS } from '../_lib/documents.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -80,7 +81,8 @@ export default async function handler(req, res) {
       // 200k for written docs; pass through null/empty for upload-kind
       // docs that don't have HTML at all.
       const rawHtml = body.contentHtml == null ? '' : String(body.contentHtml);
-      const contentHtml = rawHtml.slice(0, 200000);
+      // Saved through the same allowlist the editor and signing page use.
+      const contentHtml = sanitizeDocHtml(rawHtml.slice(0, 200000));
       const fields = cleanFields(body.fields ?? []);
 
       if (!name) return badRequest(res, 'Name is required');

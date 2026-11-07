@@ -123,6 +123,9 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
         depositAmount: Number(s.depositAmount) || 0,
         locationType: s.locationType || 'in_person',
         locationLabel: (s.locationLabel || '').trim() || null,
+        // A meeting link the server removed (not https): kept until the
+        // owner enters a new link or taps Dismiss (sent as null).
+        ...(s.meetingLinkRemoved !== undefined ? { meetingLinkRemoved: s.meetingLinkRemoved } : {}),
         visibility: ['public','private','only_me'].includes(s.visibility) ? s.visibility : 'public',
         travelBufferMinutes: Math.max(0, Math.min(240, Number(s.travelBufferMinutes) || 0)),
         cancellationFeeAmount: Math.max(0, Number(s.cancellationFeeAmount) || 0),
@@ -491,13 +494,33 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
 
           {/* Virtual → optional override URL. */}
           {service.locationType === 'virtual' && (
-            <input
-              value={service.locationLabel || ''}
-              onChange={(e) => onChange({ locationLabel: e.target.value })}
-              placeholder="https://zoom.us/j/your-personal-room"
-              maxLength={500}
-              style={inputSty}
-            />
+            <>
+              <input
+                value={service.locationLabel || ''}
+                onChange={(e) => onChange({ locationLabel: e.target.value })}
+                placeholder="https://zoom.us/j/your-personal-room"
+                maxLength={500}
+                inputMode="url"
+                style={inputSty}
+              />
+              {(service.locationLabel || '').trim() && !/^https:\/\//i.test((service.locationLabel || '').trim()) && (
+                <div style={{ fontSize: 11.5, color: 'var(--danger, #b42318)', marginTop: 6 }}>
+                  Use a link that starts with https://
+                </div>
+              )}
+              {service.meetingLinkRemoved && (
+                <div style={{ fontSize: 12, marginTop: 8, padding: '8px 10px', borderRadius: 8, background: 'var(--accent-soft)', lineHeight: 1.45 }}>
+                  We took out the meeting link you saved because it did not start with https://, so clients get an automatic video room for now. What you had saved:
+                  <div style={{ fontFamily: 'var(--font-mono, monospace)', wordBreak: 'break-all', margin: '4px 0' }}>{service.meetingLinkRemoved}</div>
+                  Paste the https:// version above to use it again.
+                  {' '}
+                  <button type="button" className="btn btn-ghost" style={{ padding: '2px 6px', fontSize: 12 }}
+                    onClick={() => onChange({ meetingLinkRemoved: null })}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </Field>
 

@@ -11,6 +11,7 @@ import { sql } from './db.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 
 function generateRawToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString('hex');
@@ -89,7 +90,7 @@ async function cloneAndSend({
       status, sign_token_hash, sent_at, activity,
       is_template, template_id
     ) VALUES (
-      ${workspaceId}, ${template.name}, ${template.kind}, ${template.content_html},
+      ${workspaceId}, ${template.name}, ${template.kind}, ${template.content_html == null ? null : sanitizeDocHtml(template.content_html)},
       ${template.file_url}, ${template.page_count}, ${template.fields},
       ${template.pdf_blob_pathname || null}, ${template.source_pdf_sha256 || null},
       ${recipientClientId}, ${recipientName}, ${recipientEmail},

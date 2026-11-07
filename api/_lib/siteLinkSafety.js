@@ -35,3 +35,17 @@ export function sanitizeSiteLinks(node, depth = 0) {
   }
   return out;
 }
+
+// Only https links are stored for anything a person pastes (program event
+// links, a virtual service's meeting link). Returns the normalised link,
+// null for blank, or undefined for anything else (http:, javascript:,
+// data:, a link with a login in it, text that is not a link).
+export function cleanHttpsUrl(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'https:' || u.username || u.password) return undefined;
+    return u.toString().slice(0, 1000);
+  } catch { return undefined; }
+}

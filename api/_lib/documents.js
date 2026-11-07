@@ -6,6 +6,12 @@ import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { notifyClientSafe } from './push.js';
 import { docFileUrl } from './docFiles.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
+
+// The body as shown or copied: always through the allowlist (src/lib/docHtml.js),
+// whatever was stored before it existed. The stored text itself is never
+// rewritten, so the completion hash of a signed document still matches.
+export const docBodyOut = (html) => (html == null ? html : sanitizeDocHtml(html));
 
 export const VALID_KINDS  = new Set(['written', 'pdf']);
 export const VALID_STATUS = new Set(['draft', 'sent', 'completed', 'voided', 'declined']);
@@ -29,7 +35,7 @@ export function serializeDoc(row, signers = []) {
     id:                  row.id,
     name:                row.name,
     kind:                row.kind,
-    contentHtml:         row.content_html,
+    contentHtml:         docBodyOut(row.content_html),
     fileUrl:             row.file_url,
     pdfBlobPathname:     row.pdf_blob_pathname || null,
     // A short-lived signed link (api/_lib/docFiles.js), never the raw
@@ -123,7 +129,7 @@ export function serializeDocPublic(row) {
     id:           row.id,
     name:         row.name,
     kind:         row.kind,
-    contentHtml:  row.content_html,
+    contentHtml:  docBodyOut(row.content_html),
     // Signed, expiring links to the PDFs (see api/_lib/docFiles.js).
     fileUrl:      row.file_url ? docFileUrl(row.id, 'source') : null,
     finalPdfUrl:  row.final_pdf_url ? docFileUrl(row.id, 'final') : null,
@@ -338,7 +344,7 @@ export async function cloneDocument({ workspaceId, src, name, asTemplate = false
       recipient_client_id, recipient_name, recipient_email
     ) VALUES (
       ${workspaceId}, ${String(name || src.name || 'Untitled').slice(0, 200)}, ${src.kind || 'written'},
-      ${src.content_html || null}, ${src.file_url || null}, ${src.pdf_blob_pathname || null},
+      ${docBodyOut(src.content_html) || null}, ${src.file_url || null}, ${src.pdf_blob_pathname || null},
       ${src.page_count || 1}, ${src.source_pdf_sha256 || null},
       ${JSON.stringify(fields)}::jsonb, ${!!asTemplate},
       ${asTemplate ? null : (src.is_template ? src.id : (src.template_id || null))},

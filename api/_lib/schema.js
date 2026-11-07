@@ -5171,4 +5171,32 @@ CREATE INDEX IF NOT EXISTS idx_bookings_collect_invoice ON bookings (collect_inv
 CREATE INDEX IF NOT EXISTS idx_bookings_fee_invoice ON bookings (fee_invoice_id) WHERE fee_invoice_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices (client_id) WHERE client_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_message_threads_client ON message_threads (client_id);
+-- Virtual service meeting links (1.0.6). A virtual service's location_label
+-- is the meeting link sent in confirmations and Join buttons; saves now
+-- accept only https links (cleanMeetingLink in api/_lib/calendar.js, same
+-- pattern as below). One-off clean-up of links saved before that check:
+--   1. A link that is not https even after upgrading http:// is removed
+--      from the service and kept, word for word, in meeting_link_removed.
+--      The owner's Services screen shows it so they can re-enter it; it is
+--      cleared when they save a new link, change the location, or dismiss it.
+--   2. An http:// link becomes the same link with https://.
+--   3. Bookings carry a copy of the service link (video_room_url): the same
+--      rule, except a removed copy is just cleared (the service keeps the
+--      owner's text; bookings have no owner-edited link of their own).
+-- Idempotent: after one run every stored link matches, so reruns change nothing.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS meeting_link_removed TEXT;
+UPDATE services
+   SET meeting_link_removed = location_label, location_label = NULL
+ WHERE location_type = 'virtual' AND location_label IS NOT NULL AND btrim(location_label) <> ''
+   AND NOT (regexp_replace(btrim(location_label), '^http://', 'https://', 'i') ~* '^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?([/?#][^[:space:]]*)?$');
+UPDATE services
+   SET location_label = regexp_replace(btrim(location_label), '^http://', 'https://', 'i')
+ WHERE location_type = 'virtual' AND btrim(location_label) ~* '^http://';
+UPDATE bookings
+   SET video_room_url = NULL
+ WHERE video_room_url IS NOT NULL
+   AND NOT (regexp_replace(btrim(video_room_url), '^http://', 'https://', 'i') ~* '^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?([/?#][^[:space:]]*)?$');
+UPDATE bookings
+   SET video_room_url = regexp_replace(btrim(video_room_url), '^http://', 'https://', 'i')
+ WHERE video_room_url ~* '^[[:space:]]*http://';
 `;

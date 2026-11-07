@@ -3,6 +3,7 @@
 import { sql } from './db.js';
 import { getOrSet, invalidate as cacheInvalidate } from './hotCache.js';
 import { serviceFollowsDefault } from './reminderSettings.js';
+import { cleanHttpsUrl } from './siteLinkSafety.js';
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export const VALID_HANDLE = HANDLE_RE;
@@ -163,6 +164,9 @@ export function serializeService(row, opts = {}) {
     depositAmount:     Number(row.deposit_amount || 0),
     locationType:      row.location_type || 'in_person',
     locationLabel:     row.location_label || '',
+    // Owner screens only: a meeting link the 1.0.6 clean-up removed
+    // because it was not an https link, kept so the owner can re-enter it.
+    ...(opts.owner ? { meetingLinkRemoved: row.meeting_link_removed || null } : {}),
     visibility:        row.visibility || 'public',
     travelBufferMinutes: row.travel_buffer_minutes || 0,
     // Per-service color the owner picked in ServicesDrawer for
@@ -190,6 +194,22 @@ export function serializeService(row, opts = {}) {
 export function publicLocationLabel(locationType, label) {
   if ((locationType || 'in_person') === 'virtual') return '';
   return label || '';
+}
+
+// A virtual service's meeting link (location_label) goes into every
+// confirmation email, calendar file and Join button, so only an https link
+// is stored: never http:, javascript:, data: or text that is not a link.
+// MEETING_LINK_RE has the same pattern as the one-off clean-up of older
+// links in api/_lib/schema.js (search "meeting_link_removed"), so a link
+// that survived the clean-up also saves again.
+export const MEETING_LINK_ERROR = 'Use a link that starts with https://';
+export const MEETING_LINK_RE = /^https:\/\/[A-Za-z0-9.-]+(:[0-9]{1,5})?([/?#]\S*)?$/i;
+export function cleanMeetingLink(value) {
+  const s = value == null ? '' : String(value).trim();
+  if (!s) return { value: null };
+  if (s.length > 500) return { error: 'That meeting link is too long (500 characters at most)' };
+  if (!MEETING_LINK_RE.test(s) || !cleanHttpsUrl(s)) return { error: MEETING_LINK_ERROR };
+  return { value: s };
 }
 
 // Compute the deposit owed for a booking against this service. Accepts
@@ -399,7 +419,9 @@ export function mintVideoRoomUrl() {
 // show the same link.
 export function videoRoomUrlForService(svc) {
   if (!svc || (svc.location_type || 'in_person') !== 'virtual') return null;
-  const own = (svc.location_label || '').toString().trim();
+  // Only an https link is ever copied onto a booking (saves are checked;
+  // this guards a row written before that check).
+  const own = cleanMeetingLink(svc.location_label).value;
   return own || mintVideoRoomUrl();
 }
 

@@ -174,6 +174,47 @@ async function run() {
     res = await call({ body: { id: r.pending_id }, userId: A.userId });
     assert(res.statusCode === 200 && Number((await sql`SELECT COUNT(*)::int AS n FROM ivy_memory WHERE workspace_id = ${A.workspaceId}`).rows[0].n) === 1, 'saved once approved');
 
+    console.log('\n[8b] mark_invoice_paid waits for approval and re-checks the invoice when approved');
+    assert(SENSITIVE_TOOLS.has('mark_invoice_paid'), 'mark_invoice_paid is in SENSITIVE_TOOLS');
+    const mkInvoice = async (ws, status, number, rate = 120) => (await sql`
+      INSERT INTO invoices (workspace_id, client_id, client_name, client_email, number, status, items, tax_rate, discount, sent_at, due_date)
+      VALUES (${ws}, ${ws === A.workspaceId ? cl : null}, ${`Dana Rivera ${S}`}, ${`dana-${S}@example.com`}, ${number}, ${status},
+        ${JSON.stringify([{ id: 'li1', description: 'Session', quantity: 1, rate }])}::jsonb, 0, 0, NOW(), CURRENT_DATE + 7)
+      RETURNING id`).rows[0].id;
+    const invStatus = async (id) => (await sql`SELECT status, paid_amount, paid_method FROM invoices WHERE id = ${id}`).rows[0];
+    const invOpen = await mkInvoice(A.workspaceId, 'sent', `MP-${S}-1`);
+    r = await executeIvyTool('mark_invoice_paid', { invoice_id: invOpen, method: 'cash', confirm: true }, { ...ctxA, sessionId: session });
+    assert(r.needs_confirmation === true && typeof r.pending_id === 'string', 'model call only records a pending row, even with confirm:true');
+    assert((await invStatus(invOpen)).status === 'sent', 'invoice still unpaid before approval');
+    assert(r.summary.includes(`MP-${S}-1`) && r.summary.includes(`Dana Rivera ${S}`) && r.summary.includes('$120.00') && /by cash/.test(r.summary) && !r.summary.includes(invOpen),
+      `card shows invoice number, client, amount and method, not the id (${r.summary})`);
+    const oddMethod = await executeIvyTool('mark_invoice_paid', { invoice_id: invOpen, method: 'bitcoin' }, ctxA);
+    assert(/by other/.test(oddMethod.summary || ''), 'an unknown method reads as "other", which is what would be recorded');
+    res = await call({ body: { id: r.pending_id }, userId: B.userId });
+    assert(res.statusCode === 404 && (await invStatus(invOpen)).status === 'sent', 'another workspace cannot approve it');
+    res = await call({ body: { id: r.pending_id }, userId: A.userId });
+    let st = await invStatus(invOpen);
+    assert(res.statusCode === 200 && /^Done\./.test(res.body?.message?.text || '') && st.status === 'paid' && Number(st.paid_amount) === 120 && st.paid_method === 'cash',
+      'approved: invoice marked paid by cash for $120');
+    // Paid in the app between the card and the tap: reported as not done.
+    const invRace = await mkInvoice(A.workspaceId, 'sent', `MP-${S}-2`);
+    r = await executeIvyTool('mark_invoice_paid', { invoice_id: invRace, method: 'check' }, { ...ctxA, sessionId: session });
+    assert(r.needs_confirmation === true, 'second invoice waits for approval');
+    await sql`UPDATE invoices SET status = 'voided' WHERE id = ${invRace}`;
+    res = await call({ body: { id: r.pending_id }, userId: A.userId });
+    st = await invStatus(invRace);
+    assert(res.statusCode === 200 && /^That didn't work/.test(res.body?.message?.text || '') && st.status === 'voided' && st.paid_amount == null,
+      `voided after the card: nothing changes and it is reported as not done (${res.body?.message?.text})`);
+    assert(res.body?.message?.actions?.[0]?.status === 'failed', 'ledger records it as failed');
+    // Refused before any card: already paid, void, or another workspace's invoice.
+    r = await executeIvyTool('mark_invoice_paid', { invoice_id: invOpen, method: 'cash' }, ctxA);
+    assert(!r.needs_confirmation && /already paid.*Nothing was changed/.test(r.error || ''), `already paid: refused, no card (${r.error})`);
+    const invB = await mkInvoice(B.workspaceId, 'sent', `MP-${S}-B`);
+    r = await executeIvyTool('mark_invoice_paid', { invoice_id: invB, method: 'cash' }, ctxA);
+    assert(!r.needs_confirmation && /not found/i.test(r.error || '') && !JSON.stringify(r).includes(`MP-${S}-B`), "another workspace's invoice: not found, nothing revealed");
+    r = await runApprovedTool('mark_invoice_paid', { invoice_id: invB, method: 'cash' }, ctxA);
+    assert(/not found/i.test(r.error || '') && (await invStatus(invB)).status === 'sent', "stored call against another workspace's invoice changes nothing");
+
     console.log('\n[9] send_message_to_client honours blocks');
     await sql`INSERT INTO contact_blocks (workspace_id, client_id, direction) VALUES (${A.workspaceId}, ${cl}, 'client_blocks_business')`;
     r = await runApprovedTool('send_message_to_client', { client_id: cl, text: 'Are you there?' }, ctxA);

@@ -41,15 +41,17 @@ const STATUS_META = {
 };
 
 export default function Finance() {
+  const [tab, setTab]               = useState('all');
+  // One page (50) of the current tab at a time, from the server; counts
+  // and totals are the server's (GET /api/finance).
   const {
-    invoices, summary, loading, error,
+    invoices, linked, summary, loading, listLoading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim, archive,
-    hasMore, loadMore, loadingMore,
+    hasMore, loadMore, loadingMore, ensureInvoice,
     reload: reloadInvoices,
-  } = useInvoices();
+  } = useInvoices({ tab });
   usePullRefresh(reloadInvoices);
 
-  const [tab, setTab]               = useState('all');
   const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | 'expenses'
   const [openId, setOpenId]         = useState(null);
   const [creatingBusy, setCreating] = useState(false);
@@ -97,8 +99,15 @@ export default function Finance() {
     return live.filter((i) => i.status === tab);
   }, [invoices, tab]);
 
-  const openInv = invoices.find((i) => i.id === openId) || null;
-  const sendingInv = invoices.find((i) => i.id === sendingId) || null;
+  // An invoice opened by link may be on a page not loaded yet: fetch it.
+  const findInv = (id) => (id ? invoices.find((i) => i.id === id) || (linked?.id === id ? linked : null) : null);
+  const openInv = findInv(openId);
+  const sendingInv = findInv(sendingId);
+  useEffect(() => {
+    if (openId && !openInv) ensureInvoice(openId).then((inv) => { if (!inv) setOpenId(null); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId]);
+  const remaining = Math.max(0, (counts[tab] ?? 0) - rows.length);
 
   const startNew = async (clientId = null) => {
     if (creatingBusy) return;
@@ -321,6 +330,7 @@ export default function Finance() {
           markPaid={markPaid} voidInvoice={voidInvoice} refund={refund} clearClaim={clearClaim}
           archive={archive} onOpenRecurring={() => { setOpenId(null); setSection('recurring'); }}
           hasMore={hasMore} loadMore={loadMore} loadingMore={loadingMore}
+          listLoading={listLoading} remaining={remaining}
         />
       )}
       </div>
@@ -329,10 +339,10 @@ export default function Finance() {
 }
 
 function InvoicesSection({
-  invoices, summary, counts, rows, tab, setTab, openInv, sendingInv,
+  summary, counts, rows, tab, setTab, openInv, sendingInv,
   setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund, clearClaim,
   archive, onOpenRecurring,
-  hasMore, loadMore, loadingMore,
+  hasMore, loadMore, loadingMore, listLoading, remaining,
 }) {
   // On phones the 7-column invoice grid forces sideways scrolling to see
   // status/total. Below this width we render each invoice as a stacked card.
@@ -478,7 +488,9 @@ function InvoicesSection({
               <div style={{ textAlign: 'right' }}>Total</div><div/><div/>
             </div>
           )}
-          {rows.length === 0 ? (
+          {rows.length === 0 && listLoading ? (
+            <div style={{ padding: 16 }}><SkelRowList rows={6}/></div>
+          ) : rows.length === 0 ? (
             <div style={{ padding: 48 }}>
               <EmptyNote
                 icon="Dollar"
@@ -497,19 +509,17 @@ function InvoicesSection({
               selecting={selecting} selectable={canPick(i)} selected={selected.has(i.id)}/>
           ))}
 
-          {/* Load more - only when the server reports a page past
-              1000 invoices. On filtered tabs the user-facing rows
-              might already be a small set; we still surface the
-              loader so filters can find matches on later pages. */}
+          {/* Next page of this tab from the server. */}
           {hasMore && (
             <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
               <button
                 type="button"
                 className="btn btn-outline"
+                data-testid="invoices-show-more"
                 disabled={loadingMore}
                 onClick={loadMore}
                 style={{ padding: '8px 18px', fontSize: 13 }}>
-                {loadingMore ? 'Loading…' : `Load more (${invoices.length} loaded)`}
+                {loadingMore ? 'Loading…' : remaining ? `Show more (${remaining} more)` : 'Show more'}
               </button>
             </div>
           )}

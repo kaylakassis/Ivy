@@ -27,6 +27,7 @@ import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import { put } from '@vercel/blob';
 import { assertPlatformBlobUrl } from './safeUrl.js';
 import { uploadPrefix } from './blobScope.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 
 const INK = rgb(0.05, 0.07, 0.12);
 const MUTED = rgb(0.30, 0.30, 0.32);
@@ -375,7 +376,7 @@ export async function renderWrittenPdf({ doc, fields, signers, hash, business })
   y -= 18;
 
   // Body.
-  const blocks = htmlToBlocks(doc.content_html || '');
+  const blocks = htmlToBlocks(sanitizeDocHtml(doc.content_html || ''));
   for (const b of blocks) {
     if (b.type === 'h1') { y -= 6; writeLines(b.text, { font: helvBold, size: 16, lead: 21 }); y -= 4; }
     else if (b.type === 'h2') { y -= 4; writeLines(b.text, { font: helvBold, size: 13.5, lead: 18 }); y -= 3; }

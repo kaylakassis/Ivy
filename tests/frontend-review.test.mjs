@@ -65,10 +65,16 @@ assert(/key=\{`\$\{location\.pathname\}\|\$\{me\?\.business\?\.workspaceId/.test
   'helper shell keys the screen by business as well as path');
 
 console.log('\n[5] Clients page draws a page of rows at a time');
+// 1.0.6: the page comes from the server (50 per request, see
+// tests/list-paging.test.mjs for the API side) instead of slicing a
+// 1000-row download in the browser.
 const clients = read('src/features/clients/Clients.jsx');
-assert(/rows\.slice\(0, shown\)\.map/.test(clients), 'rows are sliced to the drawn page');
-assert(/setShown\(ROW_PAGE\); \}, \[tab, query\]/.test(clients), 'the page resets when the tab or search changes');
-assert(/Show more/.test(clients), 'a Show more button reveals the next page');
+const clientsState = read('src/features/clients/state.js');
+assert(/const PAGE = 50;/.test(clientsState) && /p\.set\('cursor', cursor \|\| ''\)/.test(clientsState) && /p\.set\('limit', String\(PAGE\)\)/.test(clientsState),
+  'rows are loaded one page (50) at a time from the server');
+assert(/useClients\(\{ tab, query, analyticsWindow, leadWindow \}\)/.test(clients) && /\}, \[tab, q\]\);/.test(clientsState),
+  'the page resets when the tab or search changes');
+assert(/Show more/.test(clients) && /onClick=\{loadMore\}/.test(clients), 'a Show more button loads the next page');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
