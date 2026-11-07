@@ -322,7 +322,7 @@ export default function SignPage() {
         </>
       ) : (
         <div className="card" style={{ padding: 'clamp(18px, 5vw, 32px)', marginBottom: 18 }}>
-          <div
+          <div className="doc-sign-body"
             style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
             dangerouslySetInnerHTML={{ __html: sanitize(doc.contentHtml || '') }}
           />

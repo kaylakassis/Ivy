@@ -618,6 +618,9 @@ body.app-walled .view-toggle { display: none; }
 .rt-content li { margin: 0 0 4px; }
 .rt-content strong { font-weight: 700; }
 .rt-content em     { font-style: italic; }
+/* Links kept by the document allowlist (src/lib/docHtml.js): readable on
+   the dark editor and the signing page, not browser-default blue. */
+.rt-content a[href], .doc-sign-body a[href] { color: var(--accent); text-decoration: underline; }
 
 .doc-preview-body h1, .doc-preview-body h2 {
   font-family: var(--font-display);
