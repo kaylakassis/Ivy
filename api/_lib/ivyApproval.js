@@ -40,6 +40,12 @@ export async function executePendingAction({ row, workspaceId, userId }) {
     // eslint-disable-next-line no-console
     console.warn('[ivy approve] could not store the result:', err?.message);
   }
+  // A tool that answers "made nothing" (create_suggested_workflow when the
+  // automation on the card is no longer the one detected) did not run: it
+  // is reported as not done, never as "Done".
+  if (result && !result.error && result.created === false) {
+    result = { ...result, error: String(result.reason || 'Nothing was created') };
+  }
   const failed = !!(result && result.error);
   // Tools that word their own past-tense line from what really happened
   // (api/_lib/ivyAppTools.js): the Done message and ledger use it instead

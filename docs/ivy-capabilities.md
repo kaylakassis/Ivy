@@ -16,6 +16,8 @@ When you add a screen or an owner action, add a row here. Then either give Ivy a
 - **Every lookup is scoped.** Every query is scoped to `ctx.workspaceId`, which comes from the signed-in owner and never from the model's arguments. An id from another workspace reads as "not found".
 - **Writes need approval.** Every write in `SENSITIVE_TOOLS` goes through `executeIvyTool`. The call is first checked against the owner's current data (`refuseBeforeApproval`), so an invalid call is refused before any card appears. A valid call is stored in `ivy_pending_actions` with the card text. Only `POST /api/ivy/approve` runs the stored arguments (`api/_lib/ivyApproval.js`), at most once, and within 15 minutes.
   - Older routine "draft" tools still run without a card. They make internal records only: `create_*` drafts, `add_client`, `update_client` (except contact changes), `create_task`, `complete_task`, `mark_invoice_paid`, `toggle_workflow` (except turning on outbound) and `complete_onboarding`.
+  - Anything that sends to a client is held, including the indirect ways: `create_booking` (the client is emailed a confirmation), `create_workflow` with an email, text or document step, `create_suggested_workflow` when the detected automation sends a document, and `toggle_workflow` turning such an automation on.
+  - **The card shows every word that will go out.** A message, public review reply, client-visible note, automatic lead reply, email signature or automation email is shown in full on the card, never cut short, so nothing the owner has not read can ride along.
   - Every tool added under this rule is approval-gated.
 - **Truthful ledger.** Every write produces a ledger line from its real result (`ledgerEntry` in `api/_lib/ivyTools.js`).
   - A held call is "waiting", with the card text.
@@ -67,7 +69,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Owner action | Ivy |
 |---|---|
 | See upcoming / search bookings, weekly hours, blocked time | `list_upcoming_bookings`, `search_bookings`, `get_availability` |
-| Book an appointment | `create_booking` |
+| Book an appointment | `create_booking` (approval: the client is emailed a confirmation, and the card shows any note it carries) |
 | Add many appointments from a photo or list | `add_bookings_from_list` (approval) |
 | Reschedule, cancel (optionally notify) | `reschedule_booking`, `cancel_booking` (approval). Cancelling is the Calendar's cancel: never a fee, a paid deposit goes to Deposits to review (the card says so), a package session and gift card credit go back |
 | Deposits to review: refund or keep | `list_deposit_reviews`, `review_deposit_refund` (approval: "Refund Jordan's $20.00 deposit? (cancelled 2 days ahead, your policy refunds it)") |
@@ -157,7 +159,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Owner action | Ivy |
 |---|---|
 | Draft / send a campaign | `create_campaign`, `send_campaign` (approval, states the audience size) |
-| List, create, switch automations | `list_workflows`, `create_workflow`, `create_suggested_workflow`, `toggle_workflow` (approval when it sends outbound) |
+| List, create, switch automations | `list_workflows`, `create_workflow`, `create_suggested_workflow`, `toggle_workflow` (approval when it sends outbound; the card shows the email and text words in full) |
 | Delete an automation | `delete_workflow` (approval) |
 | Edit an existing automation's steps | Not yet (recreate it with `create_workflow`, then delete the old one) |
 | Read reviews | `list_reviews` |
