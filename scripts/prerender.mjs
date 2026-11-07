@@ -103,13 +103,15 @@ function snapshotInPage() {
   html.setAttribute('data-prerendered', '1');
   const head = html.querySelector('head');
   // Web fonts must not block first paint on the static page either. main.jsx
-  // promoted the preload to a stylesheet and the site chrome added its own
-  // font link; put the first back and drop the second (React re-adds it).
+  // promoted index.html's preload to a stylesheet; put it back the way
+  // index.html has it (main.jsx promotes it again on the live page). It is
+  // the page's one font request: it carries id="site-fonts", so the site
+  // chrome does not add a second.
   for (const link of head.querySelectorAll('link[rel="stylesheet"]')) {
     const href = link.getAttribute('href') || '';
     if (!href.startsWith('https://fonts.googleapis.com')) continue;
-    if (link.id === 'site-fonts') link.remove();
-    else { link.setAttribute('rel', 'preload'); link.setAttribute('as', 'style'); }
+    link.setAttribute('rel', 'preload');
+    link.setAttribute('as', 'style');
   }
   const freeze = document.createElement('style');
   freeze.id = 'prerender-freeze';

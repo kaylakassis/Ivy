@@ -1,91 +1,145 @@
-// Top-level route table. Most route components are lazy-loaded so a
-// fresh visit to /signin doesn't pull the entire business app + admin
-// console into the initial bundle. Eager:
-//   AuthPage, AppShell, ClientShell, RootRouter, RequireAuth, RoleRouter
-//   - first-paint critical or used by every authenticated request.
+// Top-level route table. Route components are lazy-loaded so a visitor
+// reading the marketing site does not download the business app, the
+// client portal or the sign-in pages before the page can start. Eager:
+//   RootRouter, RequireAuth, RoleRouter, the launch veil and app lock
+//   (native), and the small always-mounted helpers below.
 // Everything else loads on demand inside <Suspense>; the fallback is a
-// minimal centered spinner so navigation never feels stuck.
-import React, { Suspense, lazy } from 'react';
+// minimal centered spinner so navigation never feels stuck. Every lazy
+// route uses lazyRoute() so it can be fetched ahead of its first render:
+// main.jsx loads the current page's chunk before mounting where the page
+// used to be eager (pre-rendered pages, sign-in, sign-up) and warmApp()
+// starts the app shell for signed-in visitors and the phone app while the
+// session check runs, so nobody waits on a chunk they did not wait on
+// before.
+import React, { Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { isNative } from './lib/platform.js';
 import Loader from './components/motion/Loader.jsx';
-import AppShell from './components/layout/AppShell.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
 import PWAPrompts from './components/PWAPrompts.jsx';
 import NativeAppLock from './components/NativeAppLock.jsx';
 import LaunchVeil from './lib/launchVeil.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
-import AuthPage from './features/auth/AuthPage.jsx';
-import EarlyAccessGate from './features/auth/EarlyAccessGate.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
-import RootRouter from './features/marketing/RootRouter.jsx';
-import ClientShell from './features/client/ClientShell.jsx';
+import RootRouter, { MarketingHome } from './features/marketing/RootRouter.jsx';
 import { ClientPortalProvider } from './features/client/clientContext.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { isPlatformHost } from './lib/publicUrl.js';
 import { lazyRoute } from './lib/lazyRoute.js';
+import { rememberedLanding } from './lib/landing.js';
 import GetAppBanner from './components/GetAppBanner.jsx';
 
+const normalPath = (pathname) => String(pathname || '/').replace(/\/+$/, '') || '/';
+const under = (p, prefix) => p === prefix || p.startsWith(prefix + '/');
+// The chunk of the page a shell is about to show, from a path → component
+// map (exact match, else the longest matching prefix).
+function pageFor(map, pathname) {
+  const p = normalPath(pathname);
+  if (map[p]) return map[p];
+  const key = Object.keys(map).filter((k) => under(p, k)).sort((a, b) => b.length - a.length)[0];
+  return key ? map[key] : null;
+}
+const warm = (...components) => components.forEach((C) => { if (C) C.preload().catch(() => {}); });
+// Set by lib/auth.jsx while this device has a signed-in session.
+function hasSessionHint() {
+  try { return localStorage.getItem('ivy_signed_in') === '1'; } catch { return false; /* private mode */ }
+}
+
 // ── Lazy: business app pages ──
-const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
-const Clients     = lazy(() => import('./features/clients/Clients.jsx'));
-const ProgramsPage = lazy(() => import('./features/programs/ProgramsPage.jsx'));
-const PublicProgram = lazy(() => import('./features/programs/PublicProgram.jsx'));
-const ClientPrograms = lazy(() => import('./features/client/ClientPrograms.jsx'));
-const ClientProgram = lazy(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientProgram })));
-const ClientLesson = lazy(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientLesson })));
-const Calendar    = lazy(() => import('./features/calendar/Calendar.jsx'));
-const Finance     = lazy(() => import('./features/finance/Finance.jsx'));
-const Marketing   = lazy(() => import('./features/grow/Marketing.jsx'));
-const Reviews     = lazy(() => import('./features/reviews/Reviews.jsx'));
-const Messages    = lazy(() => import('./features/messages/Messages.jsx'));
-const Documents   = lazy(() => import('./features/documents/Documents.jsx'));
-const Website     = lazy(() => import('./features/website/Website.jsx'));
-const IvyPro      = lazy(() => import('./features/ivy/IvyPro.jsx'));
-const AccountPage = lazy(() => import('./features/account/AccountPage.jsx'));
-const AdminPage   = lazy(() => import('./features/admin/AdminPage.jsx'));
-const MorePage    = lazy(() => import('./features/more/MorePage.jsx'));
+const Dashboard   = lazyRoute(() => import('./features/dashboard/Dashboard.jsx'));
+const Clients     = lazyRoute(() => import('./features/clients/Clients.jsx'));
+const ProgramsPage = lazyRoute(() => import('./features/programs/ProgramsPage.jsx'));
+const PublicProgram = lazyRoute(() => import('./features/programs/PublicProgram.jsx'));
+const ClientPrograms = lazyRoute(() => import('./features/client/ClientPrograms.jsx'));
+const ClientProgram = lazyRoute(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientProgram })));
+const ClientLesson = lazyRoute(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientLesson })));
+const Calendar    = lazyRoute(() => import('./features/calendar/Calendar.jsx'));
+const Finance     = lazyRoute(() => import('./features/finance/Finance.jsx'));
+const Marketing   = lazyRoute(() => import('./features/grow/Marketing.jsx'));
+const Reviews     = lazyRoute(() => import('./features/reviews/Reviews.jsx'));
+const Messages    = lazyRoute(() => import('./features/messages/Messages.jsx'));
+const Documents   = lazyRoute(() => import('./features/documents/Documents.jsx'));
+const Website     = lazyRoute(() => import('./features/website/Website.jsx'));
+const IvyPro      = lazyRoute(() => import('./features/ivy/IvyPro.jsx'));
+const AccountPage = lazyRoute(() => import('./features/account/AccountPage.jsx'));
+const AdminPage   = lazyRoute(() => import('./features/admin/AdminPage.jsx'));
+const MorePage    = lazyRoute(() => import('./features/more/MorePage.jsx'));
 
 // ── Lazy: client portal ──
-const ClientHome      = lazy(() => import('./features/client/ClientHome.jsx'));
-const ClientMessages  = lazy(() => import('./features/client/ClientMessages.jsx'));
-const ClientBookings  = lazy(() => import('./features/client/ClientBookings.jsx'));
-const ClientInvoices  = lazy(() => import('./features/client/ClientInvoices.jsx'));
-const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx'));
-const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
-const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
-const ClientProfile   = lazy(() => import('./features/client/ClientProfile.jsx'));
-const AcceptGroupInvite = lazy(() => import('./features/client/AcceptGroupInvite.jsx'));
+const ClientHome      = lazyRoute(() => import('./features/client/ClientHome.jsx'));
+const ClientMessages  = lazyRoute(() => import('./features/client/ClientMessages.jsx'));
+const ClientBookings  = lazyRoute(() => import('./features/client/ClientBookings.jsx'));
+const ClientInvoices  = lazyRoute(() => import('./features/client/ClientInvoices.jsx'));
+const ClientDocuments = lazyRoute(() => import('./features/client/ClientDocuments.jsx'));
+const ClientDiscover  = lazyRoute(() => import('./features/client/ClientDiscover.jsx'));
+const ClientNotifications = lazyRoute(() => import('./features/client/ClientNotifications.jsx'));
+const ClientProfile   = lazyRoute(() => import('./features/client/ClientProfile.jsx'));
+const AcceptGroupInvite = lazyRoute(() => import('./features/client/AcceptGroupInvite.jsx'));
 
 // ── Lazy: helper shell (an owner's assistant with their own small view) ──
-const HelperShell        = lazy(() => import('./features/helper/HelperShell.jsx'));
-const HelperSchedule     = lazy(() => import('./features/helper/HelperSchedule.jsx'));
-const HelperAccount      = lazy(() => import('./features/helper/HelperAccount.jsx'));
-const HelperClients      = lazy(() => import('./features/helper/HelperClients.jsx'));
-const HelperMessages     = lazy(() => import('./features/helper/HelperMessages.jsx'));
-const AcceptHelperInvite = lazy(() => import('./features/helper/AcceptHelperInvite.jsx'));
-const NotFoundPage    = lazy(() => import('./features/marketing/NotFoundPage.jsx'));
+const HelperSchedule     = lazyRoute(() => import('./features/helper/HelperSchedule.jsx'));
+const HelperAccount      = lazyRoute(() => import('./features/helper/HelperAccount.jsx'));
+const HelperClients      = lazyRoute(() => import('./features/helper/HelperClients.jsx'));
+const HelperMessages     = lazyRoute(() => import('./features/helper/HelperMessages.jsx'));
+const AcceptHelperInvite = lazyRoute(() => import('./features/helper/AcceptHelperInvite.jsx'));
+const NotFoundPage    = lazyRoute(() => import('./features/marketing/NotFoundPage.jsx'));
 
 // ── Lazy: secondary auth flows + onboarding ──
-const ForgotPasswordPage = lazy(() => import('./features/auth/ForgotPasswordPage.jsx'));
-const ResetPasswordPage  = lazy(() => import('./features/auth/ResetPasswordPage.jsx'));
-const VerifyEmailPage    = lazy(() => import('./features/auth/VerifyEmailPage.jsx'));
-const AccountRecoverPage = lazy(() => import('./features/auth/AccountRecoverPage.jsx'));
-const OnboardingPage     = lazy(() => import('./features/onboarding/OnboardingPage.jsx'));
+const ForgotPasswordPage = lazyRoute(() => import('./features/auth/ForgotPasswordPage.jsx'));
+const ResetPasswordPage  = lazyRoute(() => import('./features/auth/ResetPasswordPage.jsx'));
+const VerifyEmailPage    = lazyRoute(() => import('./features/auth/VerifyEmailPage.jsx'));
+const AccountRecoverPage = lazyRoute(() => import('./features/auth/AccountRecoverPage.jsx'));
+const OnboardingPage     = lazyRoute(() => import('./features/onboarding/OnboardingPage.jsx'));
+
+// ── Lazy: the signed-in shells ──
+// The page each shell shows first, by path. A shell's importer starts that
+// page's chunk alongside its own, so opening /calendar fetches the shell
+// and the calendar at the same time, never one after the other.
+const OWNER_PAGES = {
+  '/dashboard': Dashboard, '/clients': Clients, '/programs': ProgramsPage, '/calendar': Calendar,
+  '/finance': Finance, '/marketing': Marketing, '/reviews': Reviews, '/messages': Messages,
+  '/documents': Documents, '/website': Website, '/ivy': IvyPro, '/account': AccountPage,
+  '/more': MorePage, '/admin': AdminPage,
+};
+const CLIENT_PAGES = {
+  '/me': ClientHome, '/me/messages': ClientMessages, '/me/bookings': ClientBookings,
+  '/me/invoices': ClientInvoices, '/me/documents': ClientDocuments, '/me/discover': ClientDiscover,
+  '/me/notifications': ClientNotifications, '/me/profile': ClientProfile, '/me/programs': ClientPrograms,
+};
+const HELPER_PAGES = {
+  '/helper': HelperSchedule, '/helper/clients': HelperClients, '/helper/messages': HelperMessages,
+  '/helper/account': HelperAccount,
+};
+const withPage = (map, importer) => () => {
+  warm(pageFor(map, window.location.pathname));
+  return importer();
+};
+const AppShell    = lazyRoute(withPage(OWNER_PAGES, () => import('./components/layout/AppShell.jsx')));
+const ClientShell = lazyRoute(withPage(CLIENT_PAGES, () => import('./features/client/ClientShell.jsx')));
+const HelperShell = lazyRoute(withPage(HELPER_PAGES, () => import('./features/helper/HelperShell.jsx')));
+
+// ── Lazy: sign in / sign up ──
+// Someone on the sign-in page is about to open the app: once the page is
+// up, fetch the business shell in the background.
+const AuthPage = lazyRoute(() => import('./features/auth/AuthPage.jsx').then((m) => {
+  setTimeout(() => warm(AppShell), 1500);
+  return m;
+}));
+const EarlyAccessGate = lazyRoute(() => import('./features/auth/EarlyAccessGate.jsx'));
 
 // ── Lazy: public surfaces (often a fresh visit's first hit) ──
-const PublicBooking = lazy(() => import('./features/calendar/PublicBooking.jsx'));
-const PublicPolicyPage = lazy(() => import('./features/calendar/PublicPolicyPage.jsx'));
-const PublicSite    = lazy(() => import('./features/website/PublicSite.jsx'));
-const EmbedContact  = lazy(() => import('./features/embed/EmbedContact.jsx'));
-const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
-const ConnectedPage = lazy(() => import('./features/finance/ConnectedPage.jsx'));
-const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
-const PublicQuote   = lazy(() => import('./features/finance/PublicQuote.jsx'));
-const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
-const WelcomePage   = lazy(() => import('./features/auth/WelcomePage.jsx'));
-const WaitlistPage    = lazy(() => import('./features/auth/WaitlistPage.jsx'));
+const PublicBooking = lazyRoute(() => import('./features/calendar/PublicBooking.jsx'));
+const PublicPolicyPage = lazyRoute(() => import('./features/calendar/PublicPolicyPage.jsx'));
+const PublicSite    = lazyRoute(() => import('./features/website/PublicSite.jsx'));
+const EmbedContact  = lazyRoute(() => import('./features/embed/EmbedContact.jsx'));
+const SignPage      = lazyRoute(() => import('./features/documents/SignPage.jsx'));
+const ConnectedPage = lazyRoute(() => import('./features/finance/ConnectedPage.jsx'));
+const PublicInvoice = lazyRoute(() => import('./features/finance/PublicInvoice.jsx'));
+const PublicQuote   = lazyRoute(() => import('./features/finance/PublicQuote.jsx'));
+const ReviewPage    = lazyRoute(() => import('./features/reviews/ReviewPage.jsx'));
+const WelcomePage   = lazyRoute(() => import('./features/auth/WelcomePage.jsx'));
+const WaitlistPage    = lazyRoute(() => import('./features/auth/WaitlistPage.jsx'));
 
 // ── Lazy: public marketing + legal pages ──
 // These are pre-rendered to static HTML at build time (scripts/prerender.mjs),
@@ -105,19 +159,55 @@ const SecurityPage    = lazyRoute(() => import('./features/marketing/SecurityPag
 const MobilePage      = lazyRoute(() => import('./features/marketing/MobilePage.jsx'));
 const IntegrationsPage = lazyRoute(() => import('./features/marketing/IntegrationsPage.jsx'));
 
-// Pre-rendered path → the chunk its route needs. "/" is MarketingHome,
-// which RootRouter imports eagerly, so it needs no preload.
+// Pre-rendered path → the chunk its route needs ("/" is handled below).
 const PRERENDERED_ROUTES = {
   '/privacy': PrivacyPage, '/terms': TermsPage, '/do-not-sell': DoNotSellPage,
   '/about': SiteAbout, '/support': SiteSupport, '/pricing': SitePricing,
   '/tour': SiteTour, '/features': SiteFeatures,
   '/security': SecurityPage, '/mobile': MobilePage, '/integrations': IntegrationsPage,
 };
+// The chunks a page needs before React's first commit, so the first thing
+// React paints is the page itself and never the route spinner: the
+// pre-rendered pages (the visitor is already reading them) and the sign-in
+// and sign-up entry pages (they used to be in the main bundle).
+// "/" needs the marketing home unless a signed-in visitor is about to be
+// sent on to the app (the server only pre-renders "/" for visitors without
+// a session cookie).
 export function preloadRoute(pathname) {
-  const p = String(pathname || '/').replace(/\/+$/, '') || '/';
+  const p = normalPath(pathname);
+  if (p === '/signin' || p === '/signup') return Promise.all([AuthPage.preload(), EarlyAccessGate.preload()]);
+  if (p === '/') {
+    const prerendered = document.documentElement.hasAttribute('data-prerendered');
+    return prerendered || !hasSessionHint() ? MarketingHome.preload() : Promise.resolve();
+  }
   const C = PRERENDERED_ROUTES[p]
     || (p.startsWith('/for/') ? VerticalPage : null);
   return C ? C.preload() : Promise.resolve();
+}
+
+// Signed-in visitors and the phone app are headed into the app, not the
+// marketing site: start fetching the shell (and, through the shell's
+// importer, the page) they will land on while the session check runs.
+// Nothing waits on this; it only makes sure the chunks are there by the
+// time the session is confirmed.
+export function warmApp(pathname) {
+  const signedIn = hasSessionHint();
+  const native = isNative();
+  if (!signedIn) {
+    // Phone app, signed out: the welcome screen, then sign in or sign up.
+    if (native) warm(WelcomePage, AuthPage, EarlyAccessGate);
+    return;
+  }
+  const p = normalPath(pathname);
+  if (under(p, '/me')) warm(ClientShell);
+  else if (under(p, '/helper')) warm(HelperShell);
+  else if (under(p, '/onboarding')) warm(OnboardingPage);
+  else if (p === '/') {
+    const landing = rememberedLanding();
+    if (landing === 'client') warm(ClientShell, ClientHome);
+    else if (landing === 'helper') warm(HelperShell, HelperSchedule);
+    else warm(AppShell, Dashboard);
+  } else if (native || pageFor(OWNER_PAGES, p)) warm(AppShell);
 }
 
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the

@@ -7,7 +7,7 @@ Short version of this file: https://www.joinivy.ai/llms.txt
 
 ## The idea
 
-Most one-person businesses run on five or six separate tools: one for booking, one for invoicing, another for payments, another for email, a spreadsheet or note app for the client list, plus an AI tool on top. The friction is in the seams between them. Ivy is one workspace where every part of the business lives: bookings know about clients, clients know about invoices, invoices know about payments, and the Ivy assistant knows about everything and can quietly nudge the owner, for example "Sarah hasn't booked in three weeks; want me to send a check-in?"
+Many one-person businesses run on several separate tools: one for booking, one for invoicing, another for payments, another for email, a spreadsheet or note app for the client list, plus an AI tool on top. The friction is in the seams between them. Ivy is one workspace where every part of the business lives: bookings know about clients, clients know about invoices, invoices know about payments, and the Ivy assistant knows about everything and can quietly nudge the owner, for example "Sarah hasn't booked in three weeks; want me to send a check-in?"
 
 Every feature ships in the one plan. There are no tiers, no locked doors and no "contact sales".
 

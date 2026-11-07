@@ -17,6 +17,11 @@ public/blog.css). Until the files exist, iPhone and Mac show Helvetica Neue,
 which was designed from the same drawings and is very close; Windows and
 Android show Inter.
 
+The build only keeps an `@font-face` rule while its file is in
+`public/fonts/` (`licensedFonts` in vite.config.js), so while the files are
+missing no page requests them (no 404s, no wasted round trips). Adding the
+files and rebuilding turns the rules back on by themselves.
+
 ## Getting the font (two routes)
 
 **1. Self-host (recommended, works inside the iPhone app and offline).**
