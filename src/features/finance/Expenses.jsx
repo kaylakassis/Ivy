@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { localISODate } from '../../lib/dateOnly.js';
 import { useViewport } from '../../lib/viewport.js';
 
 // Mirror api/_lib/expenses.js. Kept in sync by hand - small + stable.
@@ -62,7 +63,7 @@ export default function Expenses() {
   };
 
   const ytdTotal = useMemo(() => {
-    const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10);
+    const yearStart = `${new Date().getFullYear()}-01-01`;
     return items
       .filter((e) => e.date >= yearStart && e.isDeductible)
       .reduce((s, e) => s + Number(e.amount || 0), 0);
@@ -207,7 +208,7 @@ function SummaryTile({ label, value, hint }) {
 function ExpenseEditor({ expense, onClose, onSaved }) {
   const isNew = !expense.id;
   const [amount, setAmount]     = useState(expense.amount ?? '');
-  const [date, setDate]         = useState(expense.date || new Date().toISOString().slice(0, 10));
+  const [date, setDate]         = useState(expense.date || localISODate());
   const [category, setCategory] = useState(expense.category || 'supplies');
   const [vendor, setVendor]     = useState(expense.vendor || '');
   const [notes, setNotes]       = useState(expense.notes || '');

@@ -94,7 +94,11 @@ function HelperShellInner() {
         )}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
           <HelperTopbar isMobile={viewport.isMobile} onMenuClick={() => setDrawerOpen(true)} businessName={businessName} nav={nav}/>
-          <div key={location.pathname} className="page-frame page-enter">
+          {/* Keyed by the business too: switching business remounts the
+              screen once the new one has loaded, so its clients, schedule
+              and messages are fetched again for that business instead of
+              the previous business's list staying on screen. */}
+          <div key={`${location.pathname}|${me?.business?.workspaceId || ''}`} className="page-frame page-enter">
             {revoked ? (
               <div className="page-pad"><HelperGone kind="revoked" ctx={ctx}/></div>
             ) : notHelper ? (

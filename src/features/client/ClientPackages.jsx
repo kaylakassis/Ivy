@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import PolicyConsent, { usePolicyConsent } from '../calendar/PolicyConsent.jsx';
 import { api } from '../../lib/api.js';
+import { localISODate } from '../../lib/dateOnly.js';
 import { Sheet, ErrorNote, actionBtn, bookHref, plural, fmtDate } from './portalUi.jsx';
 
 // The used-up / expired prompt: shown on the package card and in the
@@ -147,7 +148,7 @@ export function RedeemPackageModal({ pkg, onClose, onBooked }) {
   const [firstDate, setFirstDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return localISODate(d);
   });
   const [startHm, setStartHm] = useState('10:00');
   const [occurrences, setOccurrences] = useState(Math.min(4, pkg.creditsRemaining));

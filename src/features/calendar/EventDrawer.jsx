@@ -142,7 +142,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
             letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
             Meeting room
           </div>
-          <a href={event.videoRoomUrl} target="_blank" rel="noopener noreferrer"
+          <a href={safeHref(event.videoRoomUrl)} target="_blank" rel="noopener noreferrer"
             style={{ fontSize: 12.5, color: 'var(--fg)', wordBreak: 'break-all', textDecoration: 'underline' }}>
             {event.videoRoomUrl}
           </a>

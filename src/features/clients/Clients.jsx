@@ -20,6 +20,7 @@ import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
 
 const DAY = 86400e3;
+const ROW_PAGE = 100;
 
 function timeAgo(iso) {
   if (!iso) return null;
@@ -36,6 +37,11 @@ export default function Clients() {
           hasMore, loadMore, loadingMore } = useClients();
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
+  // Rows drawn so far. A book of 1000 clients rendered at once is ~20k
+  // DOM nodes and freezes a phone for seconds; draw a page at a time and
+  // start over whenever the tab or search changes.
+  const [shown, setShown] = useState(ROW_PAGE);
+  useEffect(() => { setShown(ROW_PAGE); }, [tab, query]);
   const [leadWindow, setLeadWindow] = useState(30);
   // Customizable window for conversion + churn rate calculations. Default
   // 30 days; owners can dial up to 365 to look at trailing trends.
@@ -411,7 +417,7 @@ export default function Clients() {
                 : tab === 'noemail' ? 'Booking reminders can reach everyone.' : 'Try a different tab or clear your search.'}
             />
           </div>
-        ) : rows.map((c, i) => (
+        ) : rows.slice(0, shown).map((c, i) => (
           <GrowIn key={c.id} fresh={freshIds.has(c.id)}>{isMobile ? (
             <ClientCardMobile client={c} first={i === 0} index={i}
               metrics={metricsById[c.id]}
@@ -440,7 +446,15 @@ export default function Clients() {
             match against. Plain button (no infinite scroll) - most
             workspaces never hit this, and keyboard accessibility +
             visible state are simpler this way. */}
-        {hasMore && tab === 'all' && !query && (
+        {rows.length > shown && (
+          <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+            <button type="button" className="btn btn-outline" onClick={() => setShown((n) => n + ROW_PAGE)}
+              style={{ padding: '8px 18px', fontSize: 13 }}>
+              Show more ({rows.length - shown} more)
+            </button>
+          </div>
+        )}
+        {hasMore && tab === 'all' && !query && rows.length <= shown && (
           <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
             <button
               type="button"

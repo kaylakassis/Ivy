@@ -254,7 +254,7 @@ function ClientMessages() {
       )}
 
       {showConversation && (
-        <ConversationPane threadId={selectedId}
+        <ConversationPane key={selectedId || 'none'} threadId={selectedId}
           onUpdated={refreshThreads}
           onBack={isMobile ? () => setSelectedId(null) : null}/>
       )}

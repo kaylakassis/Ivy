@@ -15,6 +15,7 @@ import { SkelLine, SkelBlock, SkelRowList } from '../../components/Skeleton.jsx'
 import { useClientPortal } from './clientContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
+import { safeHref } from '../../lib/safeHref.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { ArchivedBadge, ArchivedNotice } from '../../components/ArchivedBusiness.jsx';
 import { whereLine } from './ClientBookings.jsx';
@@ -197,7 +198,7 @@ function NextAppointment({ b, more }) {
       </div>
       <div style={actionRow}>
         {b.videoRoomUrl && (
-          <a href={b.videoRoomUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={actionBtn}>
+          <a href={safeHref(b.videoRoomUrl)} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={actionBtn}>
             <Icons.Globe size={14} sw={1.8}/> Join video call
           </a>
         )}
