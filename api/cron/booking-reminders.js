@@ -153,6 +153,12 @@ export async function fetchDueBookings(cursor, shardFilter = '') {
     WHERE b.cancelled_at IS NULL
       AND b.date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - INTERVAL '1 day'
                      AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date + INTERVAL '8 days'
+      -- The same window as a plain UTC date range (every time zone's
+      -- "today" is within one day of UTC's), so idx_bookings_date_active
+      -- narrows the scan instead of reading every booking on the
+      -- platform on every run.
+      AND b.date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 2
+                     AND (NOW() AT TIME ZONE 'UTC')::date + 9
       AND (
         (
           (

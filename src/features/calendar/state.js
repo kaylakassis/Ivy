@@ -35,14 +35,18 @@ export const EMPTY_CAL = {
 // currently-visible window. A user navigating month-to-month will
 // see one fetch per month change; a workspace with 1000+ bookings
 // per month sees ~1000 rows per fetch instead of 10K+.
+export const SETUP_ONLY = { setupOnly: true };
+
 export function useCalendar(window) {
   const [cal, setCal] = useState(EMPTY_CAL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // { setupOnly: true }: settings and services only, no bookings (for
+  // screens that never show the schedule).
   const queryString = window?.from && window?.to
     ? `?from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
-    : '';
+    : window?.setupOnly ? '?only=setup' : '';
 
   const refresh = useCallback(async () => {
     const r = await api.get('/calendar' + queryString);

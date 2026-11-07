@@ -5154,4 +5154,21 @@ SELECT ae.workspace_id, w.owner_id, 'turned_off', 'settings', 'audit:' || ae.id:
       WHERE pe.workspace_id = ae.workspace_id AND pe.event = 'turned_off' AND pe.ref IS NULL
         AND pe.created_at BETWEEN ae.created_at - INTERVAL '2 minutes' AND ae.created_at + INTERVAL '2 minutes')
 ON CONFLICT (ref) WHERE ref IS NOT NULL DO NOTHING;
+-- Scale indexes for platform-wide crons and the Clients list (1.0.6 perf
+-- review). booking-reminders (every 10 minutes) filters on a UTC date range
+-- across every workspace; review-requests (hourly) checks each client's
+-- 30-day cooldown; the Clients tab sorts by last seen.
+CREATE INDEX IF NOT EXISTS idx_bookings_date_active ON bookings (date) WHERE cancelled_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_review_requested
+  ON bookings (workspace_id, review_requested_at) WHERE review_requested_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_ws_recent
+  ON clients (workspace_id, (COALESCE(last_seen_at, joined_at)) DESC);
+-- Foreign keys Postgres checks on every delete. Without these, deleting one
+-- invoice read the whole bookings table twice (collect / fee invoice links)
+-- and deleting one client read every invoice and thread on the platform, so
+-- deleting a business (data retention, admin) could run for hours.
+CREATE INDEX IF NOT EXISTS idx_bookings_collect_invoice ON bookings (collect_invoice_id) WHERE collect_invoice_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_fee_invoice ON bookings (fee_invoice_id) WHERE fee_invoice_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_client ON invoices (client_id) WHERE client_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_message_threads_client ON message_threads (client_id);
 `;

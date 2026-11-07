@@ -25,10 +25,17 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
     safe(sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status FROM finance_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
     safe(sql`SELECT launched, published_at FROM websites WHERE workspace_id = ${workspaceId}`, { rows: [] }),
     safe(sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId} AND (source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
-    safe(sql`SELECT COUNT(*)::int AS n FROM bookings b LEFT JOIN clients c ON c.id = b.client_id
-              WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL AND (c.source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
-    safe(sql`SELECT COUNT(*)::int AS n FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
-              WHERE i.workspace_id = ${workspaceId} AND i.status <> 'draft' AND (c.source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
+    // Bookings and invoices only need "is there one" (n is 0 or 1), not a
+    // count of the whole history: this runs on every dashboard load. The
+    // ORDER BY walks the workspace index so the first real row ends it.
+    safe(sql`SELECT COUNT(*)::int AS n FROM (
+               SELECT 1 FROM bookings b LEFT JOIN clients c ON c.id = b.client_id
+                WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL AND (c.source IS DISTINCT FROM 'demo')
+                ORDER BY b.date LIMIT 1) x`, { rows: [{ n: 0 }] }),
+    safe(sql`SELECT COUNT(*)::int AS n FROM (
+               SELECT 1 FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
+                WHERE i.workspace_id = ${workspaceId} AND i.status <> 'draft' AND (c.source IS DISTINCT FROM 'demo')
+                ORDER BY i.created_at DESC LIMIT 1) x`, { rows: [{ n: 0 }] }),
     safe(sql`SELECT booking_link_shared_at, first_booking_celebrated_at FROM workspaces WHERE id = ${workspaceId}`, { rows: [] }),
     // Wizard steps the owner chose "Skip for now" on.
     safe(sql`SELECT onboarding_state->'skippedSteps' AS skipped FROM users WHERE id = ${userId}`, { rows: [] }),

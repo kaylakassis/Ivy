@@ -87,6 +87,17 @@ export async function selectDueReviewRequests({ now = null } = {}) {
        AND b.review_requested_at IS NULL
        AND b.client_email IS NOT NULL AND b.client_email <> ''
        AND b.completion_log <> '{}'::jsonb
+       -- Only bookings with a completion in the window can match below.
+       -- Its keys are YYYY-MM-DD dates, so "has a key from the last couple
+       -- of weeks" is a safe superset (it allows for every time zone and
+       -- session length) that idx_bookings_completion_log can answer
+       -- without reading every completed booking ever made.
+       AND b.completion_log ?| ARRAY(
+             SELECT to_char(d, 'YYYY-MM-DD')
+               FROM generate_series(
+                      (COALESCE(${nowTs}::timestamptz, NOW()) AT TIME ZONE 'UTC')::date - 14,
+                      (COALESCE(${nowTs}::timestamptz, NOW()) AT TIME ZONE 'UTC')::date + 1,
+                      INTERVAL '1 day') AS d)
        -- the session is over: at least MIN_HOURS_AFTER ago, at most MAX_HOURS_AFTER
        AND EXISTS (
              SELECT 1 FROM jsonb_object_keys(b.completion_log) AS k, ref
@@ -128,6 +139,12 @@ export async function dueReviewRequests(opts = {}) {
   return rows.filter((r) => isWorkspaceActive(r));
 }
 
+// Hand a claimed booking back so a later run asks again.
+async function release(bookingId) {
+  await sql`UPDATE bookings SET review_requested_at = NULL WHERE id = ${bookingId} AND review_request_token_hash IS NULL`
+    .catch(() => {});
+}
+
 async function handler(req, res) {
   if (!(await cronAuthorized(req))) return unauthorized(res);
 
@@ -140,7 +157,16 @@ async function handler(req, res) {
     const getBranding = makeBrandingCache();
 
     for (const r of due.rows) {
+      let claimed = false;
       try {
+        // Claim the booking before emailing, so when two runs overlap (a
+        // cron event delivered twice, or a manual run) only one asks.
+        const claim = await sql`
+          UPDATE bookings SET review_requested_at = NOW()
+           WHERE id = ${r.id} AND review_requested_at IS NULL
+           RETURNING id`;
+        if (claim.rows.length === 0) continue;
+        claimed = true;
         const raw = generateRawToken(32);
         const hash = crypto.createHash('sha256').update(raw).digest('hex');
         const branding = await getBranding(r.workspace_id);
@@ -190,6 +216,7 @@ async function handler(req, res) {
         // but mints no usable token. Without this, a suppressed send burned
         // the booking forever and the client was never actually asked.
         if (sendRes?.reason === 'workspace-quota-exceeded') {
+          await release(r.id);
           continue;
         }
         // A FAILED send ({ ok: false } - Resend threw / provider outage) must
@@ -197,6 +224,7 @@ async function handler(req, res) {
         // burned the booking permanently even though the client never got the
         // email. Leave it for the next run to retry.
         if (sendRes?.ok === false) {
+          await release(r.id);
           failed++;
           continue;
         }
@@ -209,6 +237,7 @@ async function handler(req, res) {
         `;
         if (sendRes?.sent) sent++;
       } catch (err) {
+        if (claimed) await release(r.id);
         // eslint-disable-next-line no-console
         console.error('[cron/review-requests] failed for booking', r.id, err.message);
         failed++;

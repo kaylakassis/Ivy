@@ -93,6 +93,7 @@ async function handler(req, res) {
         scanned += rows.length;
         batches += 1;
         for (const r of rows) {
+          let claimed = false;
           try {
             // Nothing left to pay (a gift card or part payments cover it):
             // no reminder. Stamp it so it is not picked up every run.
@@ -109,14 +110,20 @@ async function handler(req, res) {
             // Status guard: if a payment landed between the candidate
             // SELECT and here, skip - don't re-mint a token and email
             // "overdue" about a just-paid invoice.
+            // Claim: the same UPDATE stamps the reminder, gated on it still
+            // being due, so when two runs overlap (a cron event delivered
+            // twice, or a manual run) only one of them emails the client.
             // eslint-disable-next-line no-await-in-loop
             const minted = await sql`
-              UPDATE invoices SET view_token_hash = ${hash}
+              UPDATE invoices SET view_token_hash = ${hash}, last_overdue_reminder_at = NOW()
                WHERE id = ${r.id} AND status IN ('sent', 'overdue')
                  AND payment_processing_at IS NULL
+                 AND (last_overdue_reminder_at IS NULL
+                      OR last_overdue_reminder_at <= NOW() - (${String(REPEAT_AFTER_HOURS)} || ' hours')::interval)
                RETURNING id
             `;
             if (minted.rows.length === 0) continue;
+            claimed = true;
             const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
             // eslint-disable-next-line no-await-in-loop
             await notifyInvoiceOverdue({
@@ -148,16 +155,15 @@ async function handler(req, res) {
                 tag: `inv-overdue-owner-${r.id}`,
               },
             });
-            // Stamp AFTER the sends so a mid-batch failure doesn't mute
-            // the row for a week — it'll be re-attempted on the next
-            // cron tick.
-            // eslint-disable-next-line no-await-in-loop
-            await sql`
-              UPDATE invoices SET last_overdue_reminder_at = NOW()
-              WHERE id = ${r.id}
-            `;
             pinged++;
           } catch (err) {
+            // A failure after the claim hands the row back (previous stamp)
+            // so it doesn't stay muted for a week.
+            if (claimed) {
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE invoices SET last_overdue_reminder_at = ${r.last_overdue_reminder_at} WHERE id = ${r.id}`
+                .catch(() => {});
+            }
             console.warn('[invoice-overdue] failed for invoice', r.id, err.message);
             reportError(err, { extra: { invoiceId: r.id, workspaceId: r.workspace_id } });
           }
