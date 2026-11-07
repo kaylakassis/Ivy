@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.mjs && npm run check:seo",
+    "build": "vite build && node scripts/prerender-step.mjs && npm run check:seo",
     "prerender": "node scripts/prerender.mjs",
     "check:seo": "node tests/prerender.test.mjs",
     "preview": "vite preview",

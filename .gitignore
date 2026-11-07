@@ -40,3 +40,6 @@ dev.log
 .windsurf/
 .zencoder/
 /skills/
+
+# CI hands pre-rendered marketing pages to the Vercel build (scripts/prerender-adopt.mjs)
+prerender-snapshots

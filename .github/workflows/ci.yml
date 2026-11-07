@@ -91,6 +91,21 @@ jobs:
         with:
           node-version: 22.x
 
+      # Vercel's build machines lack the system libraries a headless browser
+      # needs, so the marketing pages are pre-rendered here (same build as
+      # the test job) and handed to the Vercel build in prerender-snapshots/,
+      # which scripts/prerender-adopt.mjs adopts without a browser. The CLI
+      # uploads that folder with the sources (it does not read .gitignore).
+      - name: Pre-render marketing pages for the Vercel build
+        run: |
+          npm ci
+          npm run build
+          rm -rf prerender-snapshots
+          mkdir -p prerender-snapshots
+          cp -r dist/prerender prerender-snapshots/prerender
+          cp dist/marketing-sitemap.xml prerender-snapshots/marketing-sitemap.xml
+          test -f prerender-snapshots/prerender/manifest.json
+
       - name: Deploy to Vercel (production)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
