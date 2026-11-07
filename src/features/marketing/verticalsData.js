@@ -14,7 +14,7 @@ export const VERTICALS = {
     sub: "One workspace for booking, intake forms, payments, and the client portal - instead of stitching together three or four separate tools.",
     bullets: [
       { title: 'Auto-send intake forms', body: 'Attach a SOAP-note intake form to each service. Ivy sends it the moment a client books - no more "did you fill out the form?" texts.' },
-      { title: 'No-show reduction', body: 'Email + SMS reminders ship 24h and 2h before the session. Clients can confirm or reschedule from the link without calling.' },
+      { title: 'No-show reduction', body: 'Email + SMS reminders go out before every session: 1 day, 8 hours and 1 hour before by default, or whenever you choose. Clients can confirm or reschedule from the link without calling.' },
       { title: 'Built-in deposits', body: 'Charge a deposit on booking via your own Stripe. Walk-outs become non-issues.' },
       { title: 'Client portal', body: 'Past sessions, signed waivers, invoices, package balances - all in their pocket. Free for clients, forever.' },
     ],
@@ -25,7 +25,7 @@ export const VERTICALS = {
     angle: 'hair stylists & barbers',
     homeLine: 'Deposits on booking, packages for repeat clients, rebooking nudges.',
     headline: 'Booking, deposits, packages, and rebooking - all native.',
-    sub: "We don't take a cut of your sales - Stripe's standard processing fee is the only fee, and it goes straight to your account. One subscription covers booking, payments, and the client CRM.",
+    sub: "Payments go straight to your own Stripe account at Stripe's standard processing rate. One subscription covers booking, payments, and the client CRM.",
     bullets: [
       { title: 'Deposits on every booking', body: "Set a deposit per service. Stripe collects on confirm; the rest at the chair." },
       { title: 'Service packages', body: '5-pack of cut-and-color, 10-pack of trims. Sell the bundle; Ivy consumes a credit per booking automatically.' },

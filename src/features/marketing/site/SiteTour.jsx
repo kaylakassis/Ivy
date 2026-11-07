@@ -42,7 +42,7 @@ const STOPS = [
     id: 'calendar', act: 'run', area: 'Calendar & booking',
     title: 'Clients book themselves.',
     blurb: 'One link shows your real availability. They pick a time, pay the deposit and sign the intake while you’re with someone else.',
-    chips: ['Public booking page', 'Services with prices & durations', 'Deposits or full payment at booking', 'Intake forms & signatures in the flow', 'Per-weekday hours & blocked time', 'Reminders by email & SMS: 1 week, 2 days, 1 day, 2 hours', 'Card on file & no-show policy', 'Day, week, month views', 'Google Calendar sync', 'iCal feed to any calendar', 'Share by link, QR or embed', 'Reschedule & cancel with notice rules'],
+    chips: ['Public booking page', 'Services with prices & durations', 'Deposits or full payment at booking', 'Intake forms & signatures in the flow', 'Per-weekday hours & blocked time', 'Reminders by email & SMS, timed your way', 'Card on file & no-show policy', 'Day, week, month views', 'Google Calendar sync', 'iCal feed to any calendar', 'Share by link, QR or embed', 'Reschedule & cancel with notice rules'],
     mock: 'booking',
   },
   {

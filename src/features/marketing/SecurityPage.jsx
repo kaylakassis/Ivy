@@ -39,7 +39,7 @@ export default function SecurityPage() {
 
         <Section title="Payments - Stripe direct">
           <p>Payment data never touches our servers. You connect your own Stripe account during setup; client cards go straight to Stripe via their hosted checkout. We see the metadata (amount, status, customer email) but never the card number, CVV, or PAN.</p>
-          <p>We take <strong>zero percent</strong> of your payment volume. Stripe's standard ~2.9%+30¢ rate applies - same as on Stripe directly.</p>
+          <p>Payments go straight to your own Stripe account at Stripe's standard processing rate, the same as using Stripe directly.</p>
         </Section>
 
         <Section title="Encryption">

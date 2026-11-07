@@ -127,7 +127,7 @@ function tourAnswer(q) {
   if (/invoice|bill|charge|payment link|owe/.test(s)) return T.invoice.a;
   if (/revenue|income|earn|money|numbers|sales|month/.test(s)) return T.revenue.a;
   if (/remind|rebook|workflow|automat|follow.?up/.test(s)) return T.workflow.a;
-  if (/book|schedule|appoint|calendar|friday|monday|tomorrow/.test(s)) return "<b>✓ Booked.</b> I put it on the calendar with a confirmation and automatic reminders (1 week, 2 days, 1 day, and 2 hours before). Want a deposit collected too?";
+  if (/book|schedule|appoint|calendar|friday|monday|tomorrow/.test(s)) return "<b>✓ Booked.</b> I put it on the calendar with a confirmation and automatic reminders (1 day, 8 hours and 1 hour before). Want a deposit collected too?";
   if (/what can you|help|do you do|features/.test(s)) return "In the full app I work across your whole business: draft and send invoices, book sessions, chase quiet clients, build automations, answer questions from your live numbers, and more - about 30 real capabilities. Anything client-facing waits for your approval.";
   return "Great question - in the real app I'd answer that from your live business data (clients, calendar, invoices, numbers). This demo only has a small sample business, but that's exactly the kind of thing you can ask me once you're set up. Try one of the examples to see me in action!";
 }
