@@ -7,6 +7,8 @@
 //     stays visually rhythmic; per-competitor "yes/no/limited"
 //   • migration help offer (free CSV import)
 //   • pricing-delta callout
+//   • related: the /for/:slug pages most relevant to people leaving this
+//     tool, linked from the page (slugs from verticalsData.js)
 //
 // Update prices as competitors change them; we deliberately undercut
 // rather than overstate so the page ages well.
@@ -42,6 +44,7 @@ export const COMPETITORS = {
       "No native AI - you're left running ChatGPT side-by-side.",
       'Booking and calendar feel bolted-on; we built ours into the same record as the contract.',
     ],
+    related: ['photographers', 'videographers', 'freelance-designers', 'event-planners'],
     matrix: {
       crm: 'y', booking: 'l', invoicing: 'y', cardonfile: 'l',
       memberships: 'n', documents: 'y', messaging: 'y', clientportal: 'l',
@@ -60,6 +63,7 @@ export const COMPETITORS = {
       'Workflow add-ons cost extra. Our automations are included.',
       'No native AI. Ivy is a category leap, not an add-on.',
     ],
+    related: ['photographers', 'wedding-planners', 'coaches', 'copywriters'],
     matrix: {
       crm: 'y', booking: 'y', invoicing: 'y', cardonfile: 'l',
       memberships: 'n', documents: 'y', messaging: 'l', clientportal: 'y',
@@ -78,6 +82,7 @@ export const COMPETITORS = {
       'No native AI - Ivy spots quiet clients and drafts rebook nudges in seconds.',
       'Calendar UX hasn\'t modernized in years. Ours is built for 2026.',
     ],
+    related: ['hair-stylists', 'nail-techs', 'lash-artists', 'estheticians'],
     matrix: {
       crm: 'y', booking: 'y', invoicing: 'y', cardonfile: 'y',
       memberships: 'y', documents: 'l', messaging: 'l', clientportal: 'y',
@@ -96,6 +101,7 @@ export const COMPETITORS = {
       'Setup is heavy; live chat is paywalled to higher tiers.',
       'No native AI. Ivy takes actions; their AI just summarizes.',
     ],
+    related: ['yoga-instructors', 'pilates-teachers', 'personal-trainers', 'massage-therapists'],
     matrix: {
       crm: 'y', booking: 'y', invoicing: 'y', cardonfile: 'y',
       memberships: 'y', documents: 'l', messaging: 'l', clientportal: 'y',
@@ -114,6 +120,7 @@ export const COMPETITORS = {
       "No client portal. We give your clients one for free.",
       'No native AI - Ivy is a force multiplier, not a chat widget.',
     ],
+    related: ['massage-therapists', 'coaches', 'estheticians', 'tutors'],
     matrix: {
       crm: 'l', booking: 'y', invoicing: 'n', cardonfile: 'y',
       memberships: 'n', documents: 'l', messaging: 'l', clientportal: 'n',
@@ -132,6 +139,7 @@ export const COMPETITORS = {
       'No client records. No invoices. No documents. Just a calendar.',
       'No native AI. Ivy is the layer you keep wishing your tools had.',
     ],
+    related: ['coaches', 'consultants', 'tutors', 'career-coaches'],
     matrix: {
       crm: 'n', booking: 'y', invoicing: 'n', cardonfile: 'n',
       memberships: 'n', documents: 'n', messaging: 'n', clientportal: 'n',
@@ -150,6 +158,7 @@ export const COMPETITORS = {
       'No native AI yet. Ivy is here today.',
       "If you grow past one user, per-seat pricing surprises you.",
     ],
+    related: ['coaches', 'life-coaches', 'career-coaches', 'consultants'],
     matrix: {
       crm: 'y', booking: 'y', invoicing: 'l', cardonfile: 'l',
       memberships: 'l', documents: 'y', messaging: 'y', clientportal: 'y',
@@ -168,6 +177,7 @@ export const COMPETITORS = {
       "Pricing climbs fast once you cross 3 active clients.",
       'No native AI. Ivy is a category leap for coaching specifically.',
     ],
+    related: ['coaches', 'life-coaches', 'career-coaches', 'consultants'],
     matrix: {
       crm: 'y', booking: 'y', invoicing: 'l', cardonfile: 'l',
       memberships: 'l', documents: 'y', messaging: 'y', clientportal: 'y',

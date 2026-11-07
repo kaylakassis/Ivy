@@ -1,23 +1,71 @@
-// /vs/:slug - switch-from-competitor landing page.
+// /vs/:slug - switch-from-competitor landing page, on the marketing site's
+// design system (site/Chrome.jsx + site/LandingKit.jsx): same nav, footer,
+// type scale, cards and buttons as the home page and /compare.
 //
-// Same shell as the other marketing pages; data per-competitor comes
-// from compareData.js. Designed for high-intent search queries:
-// "<competitor> alternative", "switch from <competitor>", etc.
+// Data per competitor comes from compareData.js; keep its copy word for
+// word. Designed for high-intent search queries: "<competitor> alternative",
+// "switch from <competitor>", etc.
 import React, { useMemo } from 'react';
-import { Link, useParams, Navigate } from 'react-router-dom';
-import { Icons } from '../../components/Icons.jsx';
-import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
+import { useParams, Navigate } from 'react-router-dom';
+import { SiteNav, SiteFooter, StickyCta, useSiteFonts, BASE_CSS } from './site/Chrome.jsx';
+import { LANDING_CSS, Hero, PricingStrip, FinalCta, LinkTile, VerticalTile } from './site/LandingKit.jsx';
 import { COMPETITORS, FEATURE_ROWS, COMPETITOR_LIST } from './compareData.js';
-import { IVY_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
+import { VERTICALS } from './verticalsData.js';
+import { IVY_PRICE } from '../../lib/pricing.js';
 import { usePageMeta, siteUrl, breadcrumbs } from '../../lib/pageMeta.js';
 
 const SYMBOL = { y: '✓', n: '-', l: '~' };
-const SYMBOL_COLOR = { y: 'var(--accent)', n: 'var(--muted)', l: 'var(--fg-2)' };
 const SYMBOL_TITLE = { y: 'Included', n: 'Not available', l: 'Limited or paid add-on' };
+
+const PAGE_CSS = `
+/* PAINS */
+.site-root .lp-card.vs-pain .n{font-family:var(--head);font-size:30px;font-weight:600;color:var(--lime);line-height:1}
+/* MATRIX */
+.site-root .vs-tbl{max-width:880px;margin:40px auto 0;border:1px solid var(--border2);border-radius:16px;overflow:hidden;background:var(--bg)}
+.site-root .vs-tbl table{width:100%;border-collapse:collapse;font-size:14.5px}
+.site-root .vs-tbl th,.site-root .vs-tbl td{padding:13px 20px;border-bottom:1px solid var(--border);text-align:left}
+.site-root .vs-tbl tr:last-child td{border-bottom:none}
+.site-root .vs-tbl th{font-family:var(--head);font-weight:600;font-size:14.5px;background:var(--panel2)}
+.site-root .vs-tbl th:first-child{font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+.site-root .vs-tbl td:first-child{color:var(--text)}
+.site-root .vs-tbl .c{text-align:center;width:170px}
+.site-root .vs-tbl .ivy{background:var(--tint);border-left:1px solid rgba(76,186,127,.3);border-right:1px solid rgba(76,186,127,.3)}
+.site-root .vs-tbl th.ivy{color:var(--lime)}
+.site-root .vs-tbl .sym{font-weight:700;font-size:16px}
+.site-root .vs-tbl .sym-y{color:var(--lime)}
+.site-root .vs-tbl .sym-n{color:var(--dim)}
+.site-root .vs-tbl .sym-l{color:#fcd34d}
+.site-root .vs-tbl tr.price td{background:var(--panel2);font-family:var(--head);font-weight:600;font-size:15.5px;border-top:1px solid var(--border2)}
+.site-root .vs-tbl tr.price td.ivy{background:var(--tint);color:var(--lime)}
+.site-root .vs-note{max-width:880px;margin:14px auto 0;font-size:12.5px;color:var(--dim);text-align:center}
+/* MIGRATION */
+.site-root .vs-move{max-width:960px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center;background:var(--tint);border:1px solid rgba(76,186,127,.3);border-radius:20px;padding:44px 48px}
+.site-root .vs-move h2{color:var(--lime);margin-bottom:12px}
+.site-root .vs-move p{font-size:16px;color:var(--muted);max-width:560px}
+/* LINKS */
+.site-root .vs-links{display:grid;grid-template-columns:1fr 1fr;gap:48px}
+.site-root .vs-links h2{font-size:clamp(22px,2.4vw,28px);margin-bottom:20px}
+@media(max-width:900px){
+ .site-root .vs-move{grid-template-columns:1fr;gap:24px;padding:36px 32px}
+ .site-root .vs-links{grid-template-columns:1fr;gap:44px}
+}
+@media(max-width:560px){
+ .site-root .vs-tbl{border-radius:12px;margin-top:32px}
+ .site-root .vs-tbl table{font-size:13.5px}
+ .site-root .vs-tbl th,.site-root .vs-tbl td{padding:11px 10px}
+ .site-root .vs-tbl th:first-child,.site-root .vs-tbl td:first-child{padding-left:14px}
+ .site-root .vs-tbl .c{width:72px;padding-left:6px;padding-right:6px}
+ .site-root .vs-tbl th.c{font-size:13px}
+ .site-root .vs-tbl tr.price td{font-size:13.5px}
+ .site-root .vs-move{padding:28px 22px}
+ .site-root .vs-move .btn{width:100%;justify-content:center}
+}
+`;
 
 export default function ComparePage() {
   const { slug } = useParams();
   const c = COMPETITORS[slug];
+  useSiteFonts();
 
   const meta = useMemo(() => (c ? {
     title: `Ivy vs ${c.name} - switching guide`,
@@ -29,163 +77,124 @@ export default function ComparePage() {
 
   if (!c) return <Navigate to="/pricing" replace/>;
 
+  const related = (c.related || []).filter((s) => VERTICALS[s]);
+  const others = COMPETITOR_LIST.filter((x) => x.slug !== slug);
+
   return (
-    <MarketingShell>
-      <SimpleNav/>
-      <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 24px 64px' }}>
+    <div className="site-root">
+      <style>{BASE_CSS + LANDING_CSS + PAGE_CSS}</style>
+      <SiteNav active="/compare"/>
 
-        {/* Hero */}
-        <section style={{ marginBottom: 56 }}>
-          <div style={{
-            display: 'inline-block', padding: '4px 12px', borderRadius: 99,
-            background: 'var(--accent-soft)', color: 'var(--accent)',
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
-            textTransform: 'uppercase', marginBottom: 16,
-          }}>
-            Ivy vs {c.name}
-          </div>
-          <h1 style={{
-            margin: 0, fontFamily: 'var(--font-display)',
-            fontSize: 'clamp(32px, 4.5vw, 48px)', fontWeight: 500,
-            letterSpacing: '-0.025em', lineHeight: 1.1,
-          }}>
-            {c.headline}
-          </h1>
-          <p style={{
-            margin: '16px 0 0', maxWidth: 700,
-            fontSize: 16, lineHeight: 1.55, color: 'var(--fg-2)',
-          }}>
-            {c.sub}
-          </p>
-          <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Link to="/signup" className="btn btn-primary"
-              style={{ padding: '12px 22px', fontSize: 14, fontWeight: 600 }}>
-              Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={13} sw={2}/>
-            </Link>
-            <Link to="/pricing" className="btn btn-outline"
-              style={{ padding: '12px 18px', fontSize: 14 }}>
-              See pricing
-            </Link>
-          </div>
-        </section>
+      <Hero
+        crumbs={[['Home', '/'], ['Compare', '/compare']]}
+        eyebrow={`Ivy vs ${c.name}`}
+        title={c.headline}
+        sub={c.sub}
+        secondary={['/pricing', 'See pricing']}
+      />
 
-        {/* Pains */}
-        <section style={{ marginBottom: 56 }}>
-          <div className="metric-label" style={{ marginBottom: 12 }}>
-            Why solo owners switch
+      <section className="alt">
+        <div className="container">
+          <div className="lp-head center">
+            <span className="eyebrow">Why solo owners switch</span>
+            <h2>Why switch from {c.name}?</h2>
           </div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14,
-          }}>
+          <div className={`lp-grid n${c.pains.length}`}>
             {c.pains.map((p, i) => (
-              <div key={i} style={{
-                padding: '20px 18px', borderRadius: 12,
-                background: 'var(--surface)', border: '1px solid var(--border)',
-              }}>
-                <div style={{
-                  fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600,
-                  color: 'var(--accent)', lineHeight: 1, marginBottom: 10,
-                }}>
-                  {String(i + 1).padStart(2, '0')}
-                </div>
-                <div style={{ fontSize: 14, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-                  {p}
-                </div>
+              <div className="lp-card num vs-pain" key={i}>
+                <span className="n">{String(i + 1).padStart(2, '0')}</span>
+                <p>{p}</p>
               </div>
             ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Feature matrix */}
-        <section style={{ marginBottom: 56 }}>
-          <h2 style={{
-            margin: '0 0 18px', fontFamily: 'var(--font-display)',
-            fontSize: 26, fontWeight: 500, letterSpacing: '-0.02em',
-          }}>
-            Feature-by-feature comparison
-          </h2>
-          <div style={{
-            border: '1px solid var(--border)', borderRadius: 12,
-            background: 'var(--surface)', overflow: 'hidden',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+      <section>
+        <div className="container">
+          <div className="lp-head center">
+            <span className="eyebrow">Side by side</span>
+            <h2>Feature-by-feature comparison</h2>
+          </div>
+          <div className="vs-tbl">
+            <table>
               <thead>
-                <tr style={{ background: 'var(--surface-2)' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: 'var(--muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Capability</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--accent)' }}>Ivy</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>{c.name}</th>
+                <tr>
+                  <th>Capability</th>
+                  <th className="c ivy">Ivy</th>
+                  <th className="c">{c.name}</th>
                 </tr>
               </thead>
               <tbody>
                 {FEATURE_ROWS.map((row) => {
-                  const ours = 'y';
                   const theirs = c.matrix[row.key] || 'n';
                   return (
-                    <tr key={row.key} style={{ borderTop: '1px solid var(--border)' }}>
-                      <td style={{ padding: '10px 16px' }}>{row.label}</td>
-                      <td style={{ padding: '10px 16px', textAlign: 'center', color: SYMBOL_COLOR[ours], fontWeight: 700 }} title={SYMBOL_TITLE[ours]}>{SYMBOL[ours]}</td>
-                      <td style={{ padding: '10px 16px', textAlign: 'center', color: SYMBOL_COLOR[theirs], fontWeight: 700 }} title={SYMBOL_TITLE[theirs]}>{SYMBOL[theirs]}</td>
+                    <tr key={row.key}>
+                      <td>{row.label}</td>
+                      <td className="c ivy"><span className="sym sym-y" title={SYMBOL_TITLE.y} aria-label={SYMBOL_TITLE.y}>{SYMBOL.y}</span></td>
+                      <td className="c"><span className={`sym sym-${theirs}`} title={SYMBOL_TITLE[theirs]} aria-label={SYMBOL_TITLE[theirs]}>{SYMBOL[theirs]}</span></td>
                     </tr>
                   );
                 })}
-                <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)' }}>
-                  <td style={{ padding: '12px 16px', fontWeight: 600 }}>Price</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--accent)' }}>${IVY_PRICE}/week</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600 }}>{c.theirPrice}</td>
+                <tr className="price">
+                  <td>Price</td>
+                  <td className="c ivy">${IVY_PRICE}/week</td>
+                  <td className="c">{c.theirPrice}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <div style={{ marginTop: 10, fontSize: 11.5, color: 'var(--muted)' }}>
+          <p className="vs-note">
             ~ = limited or paid add-on. Comparison reflects publicly listed
             feature parity as of {new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long' })}.
-          </div>
-        </section>
-
-        {/* Migration help */}
-        <section style={{
-          marginBottom: 56,
-          padding: 28, borderRadius: 16,
-          background: 'var(--accent-soft)',
-          border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
-        }}>
-          <h2 style={{
-            margin: 0, fontFamily: 'var(--font-display)',
-            fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em',
-            color: 'var(--accent)',
-          }}>
-            We'll move your data over - free.
-          </h2>
-          <p style={{ margin: '10px 0 16px', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
-            Export your client list, booking history, and invoices from {c.name} (or share read-only access),
-            and our team will import everything into your new Ivy workspace within a business day. No charge,
-            no catch.
           </p>
-          <a href={`mailto:hello@joinivy.ai?subject=${encodeURIComponent(`Switching from ${c.name}`)}`}
-            className="btn btn-primary"
-            style={{ padding: '10px 18px', fontSize: 13, fontWeight: 600 }}>
-            Get migration help →
-          </a>
-        </section>
+        </div>
+      </section>
 
-        {/* Other comparisons */}
-        <section style={{ marginBottom: 56 }}>
-          <div className="metric-label" style={{ marginBottom: 12 }}>
-            Considering other tools?
+      <section className="alt">
+        <div className="container">
+          <div className="vs-move">
+            <div>
+              <h2>We'll move your data over - free.</h2>
+              <p>
+                Export your client list, booking history, and invoices from {c.name} (or share read-only access),
+                and our team will import everything into your new Ivy workspace within a business day. No charge,
+                no catch.
+              </p>
+            </div>
+            <a href={`mailto:hello@joinivy.ai?subject=${encodeURIComponent(`Switching from ${c.name}`)}`} className="btn btn-primary">
+              Get migration help
+            </a>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {COMPETITOR_LIST.filter((x) => x.slug !== slug).map((x) => (
-              <Link key={x.slug} to={`/vs/${x.slug}`}
-                className="btn btn-outline"
-                style={{ padding: '6px 12px', fontSize: 12.5, fontWeight: 500 }}>
-                vs {x.name}
-              </Link>
-            ))}
-          </div>
-        </section>
+        </div>
+      </section>
 
-      </main>
-      <SimpleFooter/>
-    </MarketingShell>
+      <section>
+        <div className="container vs-links">
+          <div>
+            <span className="eyebrow">More comparisons</span>
+            <h2>Considering other tools?</h2>
+            <div className="lp-tiles two compact">
+              {others.map((x) => <LinkTile key={x.slug} href={`/vs/${x.slug}`}>Ivy vs {x.name}</LinkTile>)}
+              <LinkTile href="/compare">All comparisons</LinkTile>
+            </div>
+          </div>
+          {related.length > 0 && (
+            <div>
+              <span className="eyebrow">Who it's for</span>
+              <h2>See Ivy for your kind of business.</h2>
+              <div className="lp-tiles two">
+                {related.map((s) => <VerticalTile key={s} slug={s}/>)}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <PricingStrip/>
+      <FinalCta/>
+      <SiteFooter/>
+      <StickyCta/>
+    </div>
   );
 }

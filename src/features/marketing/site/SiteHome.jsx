@@ -100,6 +100,18 @@ const PERSONAS = [
   ['contractor', 'Contractors'], ['tutor', 'Tutors'],
 ];
 
+// Persona tab → its /for page (slug in verticalsData.js, checked by
+// tests/vertical-pages.test.mjs) and the words after "See Ivy for".
+// "Everyone" and "Contractors" have no page of their own, so no link.
+const PERSONA_PAGES = {
+  therapist: ['massage-therapists', 'massage therapists'],
+  coach: ['coaches', 'coaches & consultants'],
+  stylist: ['hair-stylists', 'hair stylists & barbers'],
+  photographer: ['photographers', 'photographers'],
+  trainer: ['personal-trainers', 'personal trainers & fitness coaches'],
+  tutor: ['tutors', 'tutors'],
+};
+
 /* ---- Interactive tour ---- */
 const T = {
   quiet: {
@@ -277,6 +289,8 @@ const PAGE_CSS = `
 .site-root .msg.static{opacity:1;transform:none;animation:none}
 .site-root .typing{align-self:flex-start;color:var(--dim);font-size:13px;padding:4px 2px}
 @media(max-width:900px){.site-root .tour-wrap{grid-template-columns:1fr}}
+.site-root .persona-page{min-height:24px;margin-top:26px;font-size:14.5px;font-weight:500}
+.site-root .persona-page a:hover{opacity:.85}
 /* SCROLL REVEAL */
 @media (prefers-reduced-motion: no-preference){
  .site-root .reveal{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease}
@@ -354,6 +368,7 @@ export default function SiteHome() {
   /* ---- Persona picker state ---- */
   const [persona, setPersona] = useState('default');
   const d = P[persona];
+  const personaPage = PERSONA_PAGES[persona];
 
   /* ---- Interactive tour state ---- */
   const [messages, setMessages] = useState([]);
@@ -493,6 +508,9 @@ export default function SiteHome() {
               <div className="fix">→ Ivy watches. "Sarah's 22 days quiet - want me to send a check-in?"</div>
             </div>
           </div>
+          <p className="persona-page">
+            {personaPage && <a href={`/for/${personaPage[0]}`} className="lime">See Ivy for {personaPage[1]} →</a>}
+          </p>
         </div>
       </section>
 

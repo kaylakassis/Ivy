@@ -252,7 +252,7 @@ export default function WaitlistPage({ inviteError }) {
         </div>
 
         <footer style={{ paddingTop: 18, color: 'var(--muted)', fontSize: 12.5 }}>
-          © {new Date().getFullYear()} Ivy · <Link to="/privacy" style={{ color: 'inherit' }}>Privacy</Link> · <Link to="/terms" style={{ color: 'inherit' }}>Terms</Link>
+          © {new Date().getFullYear()} Ivy AI LLC · <Link to="/privacy" style={{ color: 'inherit' }}>Privacy</Link> · <Link to="/terms" style={{ color: 'inherit' }}>Terms</Link>
         </footer>
       </div>
     </div>

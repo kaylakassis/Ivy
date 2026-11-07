@@ -46,7 +46,7 @@ function renderFooter(appUrl) {
                       ${process.env.IVY_POSTAL_ADDRESS || 'Ivy · 1209 Orange St, Wilmington, DE 19801, USA'}
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:6px">
-                      © ${year} Ivy. All rights reserved.
+                      © ${year} Ivy AI LLC. All rights reserved.
                     </p>
                     <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>`;
 }

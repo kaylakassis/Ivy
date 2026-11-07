@@ -3,8 +3,13 @@
 // Pure data - no React imports - so MarketingHome can pull this
 // without dragging the VerticalPage component into the index chunk.
 //
-// Adding a vertical: drop a row here, link from anywhere; everything
-// else (route, SEO meta, cross-links) is already wired.
+// Adding a vertical: drop a row here and add its slug to one of the
+// VERTICAL_GROUPS below; everything else (route, SEO meta, cross-links,
+// pre-render, sitemap) is already wired.
+//
+// `use` is the day-one setup sentence, stored as the three steps the page
+// shows under "How to get started". The steps joined with a space are the
+// sentence, word for word, so keep any edit to it in the same pieces.
 export const VERTICALS = {
   'massage-therapists': {
     icon: 'Spark',
@@ -18,7 +23,11 @@ export const VERTICALS = {
       { title: 'Built-in deposits', body: 'Charge a deposit on booking via your own Stripe. Walk-outs become non-issues.' },
       { title: 'Client portal', body: 'Past sessions, signed waivers, invoices, package balances - all in their pocket. Free for clients, forever.' },
     ],
-    use: "Add your sessions (60-min massage, 90-min, deep-tissue), set Mon-Fri 9-5 availability, share /book/your-name, and you're live.",
+    use: [
+      'Add your sessions (60-min massage, 90-min, deep-tissue),',
+      'set Mon-Fri 9-5 availability,',
+      "share /book/your-name, and you're live.",
+    ],
   },
   'hair-stylists': {
     icon: 'Gift',
@@ -32,7 +41,11 @@ export const VERTICALS = {
       { title: 'Rebooking nudges', body: "Ivy spots clients who haven't rebooked since their last cut and drafts a check-in you can send in one tap." },
       { title: 'Reviews where it matters', body: 'Auto-prompt for a review after the appointment. Highlights show up on your /book/your-name page.' },
     ],
-    use: 'Add cut, color, mani, etc. with prices. Set deposits where it matters. Tag returning clients as "active" and Ivy quietly tracks their cadence.',
+    use: [
+      'Add cut, color, mani, etc. with prices.',
+      'Set deposits where it matters.',
+      'Tag returning clients as "active" and Ivy quietly tracks their cadence.',
+    ],
   },
   'personal-trainers': {
     icon: 'Trending',
@@ -46,7 +59,11 @@ export const VERTICALS = {
       { title: 'Session packs', body: '10-pack of training, $850. Ivy bills upfront and consumes one credit per session - refunds the credit if you cancel.' },
       { title: 'Quiet-client alerts', body: "Ivy lists who hasn't booked in 3+ weeks and drafts personalized check-ins. Two-tap to send." },
     ],
-    use: 'Set up your services (1-on-1, group HIIT, nutrition consult) with capacities, build packages, share the booking link, and Ivy starts watching.',
+    use: [
+      'Set up your services (1-on-1, group HIIT, nutrition consult) with capacities,',
+      'build packages,',
+      'share the booking link, and Ivy starts watching.',
+    ],
   },
   'coaches': {
     icon: 'Doc',
@@ -60,7 +77,11 @@ export const VERTICALS = {
       { title: 'Discovery → engagement', body: '15-min discovery → if they convert, the agreement, deposit invoice, and follow-up cadence all chain off the same client record.' },
       { title: 'Ivy as your prep assistant', body: 'Ask "Pull up everything on Sarah before our 3pm call" - Ivy summarizes their notes, last session, and open work.' },
     ],
-    use: 'Service: "Discovery call (free)" + "Strategy engagement ($X)". Attach your agreement to the second. Drop the booking link in your bio.',
+    use: [
+      'Service: "Discovery call (free)" + "Strategy engagement (your price)".',
+      'Attach your agreement to the second.',
+      'Drop the booking link in your bio.',
+    ],
   },
   'cleaners': {
     icon: 'Check',
@@ -74,7 +95,11 @@ export const VERTICALS = {
       { title: 'Invoice on completion', body: 'Mark the booking complete → Ivy drafts the invoice with your standard line items. Edit, send, paid in 2 minutes.' },
       { title: 'Client portal for repeat work', body: 'Long-time clients book recurring jobs themselves through their portal. No more "can you come Thursday?" texts.' },
     ],
-    use: 'Add services (deep clean, weekly clean, move-out), set deposit %, build a recurring service for your standing customers, share the link.',
+    use: [
+      'Add services (deep clean, weekly clean, move-out), set deposit %,',
+      'build a recurring service for your standing customers,',
+      'share the link.',
+    ],
   },
   'photographers': {
     icon: 'Image', angle: 'photographers',
@@ -87,7 +112,11 @@ export const VERTICALS = {
       { title: 'Branded gallery page', body: 'Build a gallery page on your own custom domain that mirrors your brand - clients see your name, not ours.' },
       { title: 'Lead capture from your site', body: 'Embed an inquiry form on any site; new leads land in your CRM with their wedding date already populated.' },
     ],
-    use: 'Add packages (engagement, half-day, full-day), upload your standard contract, share your booking link.',
+    use: [
+      'Add packages (engagement, half-day, full-day),',
+      'upload your standard contract,',
+      'share your booking link.',
+    ],
   },
   'videographers': {
     icon: 'Image', angle: 'videographers',
@@ -100,7 +129,11 @@ export const VERTICALS = {
       { title: 'Recurring retainers', body: 'Bill monthly content packages on a recurring invoice - set it once and it sends every cycle.' },
       { title: 'Tax-ready expenses', body: 'Track equipment, mileage, contractor fees - exports straight into your tax software.' },
     ],
-    use: 'Add your packages, build a project template for each shoot type, share the inquiry link on your site.',
+    use: [
+      'Add your packages,',
+      'build a project template for each shoot type,',
+      'share the inquiry link on your site.',
+    ],
   },
   'makeup-artists': {
     icon: 'Spark', angle: 'makeup artists',
@@ -113,7 +146,11 @@ export const VERTICALS = {
       { title: 'Deposit + tip flow', body: 'Deposit at booking; tip prompt in the post-event invoice. Stripe handles both.' },
       { title: 'Inspiration uploads', body: "Clients upload reference images to their booking. You see them when prepping - no more buried email attachments." },
     ],
-    use: 'Add trial and wedding-day services, set travel buffer, share /book/your-name.',
+    use: [
+      'Add trial and wedding-day services,',
+      'set travel buffer,',
+      'share /book/your-name.',
+    ],
   },
   'nail-techs': {
     icon: 'Heart', angle: 'nail techs',
@@ -124,9 +161,13 @@ export const VERTICALS = {
       { title: 'Smart rebook reminders', body: 'Set rotation (3wk, 4wk, 6wk); Ivy nudges clients before their slot lapses.' },
       { title: 'Service packages', body: '5-pack of fills, 10-pack of full sets. Clients buy ahead; Ivy consumes a credit per booking.' },
       { title: 'Deposit-or-card-on-file', body: 'Either charge a small deposit on booking, or save card-on-file to auto-charge no-shows.' },
-      { title: 'Memberships', body: 'Monthly nails plan for $X. Auto-renew, auto-book, no-thinking-required.' },
+      { title: 'Memberships', body: 'Monthly nails plan at your price. Auto-renew, auto-book, no-thinking-required.' },
     ],
-    use: 'Add services with durations, set rotation cycles, turn on rebook nudges.',
+    use: [
+      'Add services with durations,',
+      'set rotation cycles,',
+      'turn on rebook nudges.',
+    ],
   },
   'lash-artists': {
     icon: 'Spark', angle: 'lash artists',
@@ -139,7 +180,11 @@ export const VERTICALS = {
       { title: 'Fill cadence tracking', body: '2-week vs 3-week clients show in different reminder buckets automatically.' },
       { title: 'Card on file', body: 'Auto-charge for late cancellations per your policy - no awkward Venmo asks.' },
     ],
-    use: 'Add full set, fill, and removal services. Upload intake template. Tag clients by cadence.',
+    use: [
+      'Add full set, fill, and removal services.',
+      'Upload intake template.',
+      'Tag clients by cadence.',
+    ],
   },
   'estheticians': {
     icon: 'Heart', angle: 'estheticians',
@@ -152,7 +197,11 @@ export const VERTICALS = {
       { title: 'Retail on invoices', body: 'Add retail products as invoice line items and sell them right alongside services.' },
       { title: 'Photo consent', body: 'Built-in consent form for before/after images. Client e-signs; you can use the photos.' },
     ],
-    use: 'Add facials + add-ons, build a monthly membership, store your intake form.',
+    use: [
+      'Add facials + add-ons,',
+      'build a monthly membership,',
+      'store your intake form.',
+    ],
   },
   'yoga-instructors': {
     icon: 'Heart', angle: 'yoga instructors',
@@ -165,7 +214,11 @@ export const VERTICALS = {
       { title: 'Liability waiver flow', body: 'First-time bookers must e-sign your waiver before the calendar confirms.' },
       { title: 'Member-only classes', body: 'Some classes only show in the member portal - drop-ins see the public schedule.' },
     ],
-    use: 'Add your class types, set capacity, build a monthly unlimited tier, share your booking link.',
+    use: [
+      'Add your class types, set capacity,',
+      'build a monthly unlimited tier,',
+      'share your booking link.',
+    ],
   },
   'pilates-teachers': {
     icon: 'Heart', angle: 'pilates teachers',
@@ -178,7 +231,11 @@ export const VERTICALS = {
       { title: 'Monthly member tier', body: 'Sell a monthly membership that auto-charges; book the standing weekly slot as a recurring series.' },
       { title: 'Prepaid credits', body: 'Sell session packs with an expiry window; each booking draws a credit, and cancellations free it to rebook.' },
     ],
-    use: 'Add private + duet + class services, set equipment capacity, build a monthly tier.',
+    use: [
+      'Add private + duet + class services,',
+      'set equipment capacity,',
+      'build a monthly tier.',
+    ],
   },
   'tattoo-artists': {
     icon: 'Edit', angle: 'tattoo artists',
@@ -191,7 +248,10 @@ export const VERTICALS = {
       { title: 'Deposit + per-session balance', body: 'Up-front deposit on consult, balance per session - Stripe handles both.' },
       { title: 'Aftercare follow-up', body: 'Auto-message at 1 week + 1 month for healing check-ins and rebook prompts.' },
     ],
-    use: 'Add consult, design, and per-hour session services. Build a project template.',
+    use: [
+      'Add consult, design, and per-hour session services.',
+      'Build a project template.',
+    ],
   },
   'doulas': {
     icon: 'Heart', angle: 'doulas & birth coaches',
@@ -204,7 +264,11 @@ export const VERTICALS = {
       { title: 'Everything on one record', body: 'Keep every client’s key info, documents, and history on one record you can reference fast.' },
       { title: 'Postpartum follow-up', body: 'Auto-schedule the postpartum visits within X weeks of due date.' },
     ],
-    use: 'Build the birth-support package, set service types, share with your local OB referral list.',
+    use: [
+      'Build the birth-support package,',
+      'set service types,',
+      'share with your local OB referral list.',
+    ],
   },
   'tutors': {
     icon: 'Doc', angle: 'tutors',
@@ -217,7 +281,11 @@ export const VERTICALS = {
       { title: 'Session packs', body: '10 hours of SAT prep up front. Auto-consumed per session.' },
       { title: 'Pause + resume', body: 'Summer break? Pause the recurrence; resume in fall with one click.' },
     ],
-    use: 'Add subject-tagged services, save the parent’s contact + card, build a session pack.',
+    use: [
+      'Add subject-tagged services,',
+      'save the parent’s contact + card,',
+      'build a session pack.',
+    ],
   },
   'music-teachers': {
     icon: 'Spark', angle: 'music teachers',
@@ -230,7 +298,11 @@ export const VERTICALS = {
       { title: 'Recital tickets', body: 'Sell tickets to year-end recitals through your booking page.' },
       { title: 'Sheet music delivery', body: 'Attach PDF sheet music to a booking; it lives privately in the student’s portal.' },
     ],
-    use: 'Add 30/45/60-min lesson services, set recurring weekly, configure makeup policy.',
+    use: [
+      'Add 30/45/60-min lesson services,',
+      'set recurring weekly,',
+      'configure makeup policy.',
+    ],
   },
   'life-coaches': {
     icon: 'Spark', angle: 'life coaches',
@@ -243,7 +315,11 @@ export const VERTICALS = {
       { title: 'Notes & history', body: 'Keep private notes and a full session history on every client so progress is always in context.' },
       { title: 'Inter-session prompts', body: 'Auto-message between sessions with reflection prompts you design once.' },
     ],
-    use: 'Add discovery call + coaching session services, build retainer package, upload your agreement.',
+    use: [
+      'Add discovery call + coaching session services,',
+      'build retainer package,',
+      'upload your agreement.',
+    ],
   },
   'career-coaches': {
     icon: 'Trending', angle: 'career coaches',
@@ -256,7 +332,11 @@ export const VERTICALS = {
       { title: 'Salary-negotiation packages', body: 'Bundle 3 strategy calls + offer review - sold as a fixed package.' },
       { title: 'Reviews & testimonials', body: 'Auto-request a review after the engagement and showcase wins on your booking page.' },
     ],
-    use: 'Add review + live coaching services, build the negotiation package, share your booking link.',
+    use: [
+      'Add review + live coaching services,',
+      'build the negotiation package,',
+      'share your booking link.',
+    ],
   },
   'consultants': {
     icon: 'Trending', angle: 'consultants',
@@ -269,7 +349,11 @@ export const VERTICALS = {
       { title: 'Time + expenses', body: 'Track billable hours + reimbursable expenses. They flow onto the next invoice automatically.' },
       { title: 'Tax-ready exports', body: 'Schedule-C summary plus QuickBooks/Xero CSV exports, ready to hand your CPA.' },
     ],
-    use: 'Add your discovery + project + retainer services. Build a proposal template. Configure Stripe.',
+    use: [
+      'Add your discovery + project + retainer services.',
+      'Build a proposal template.',
+      'Configure Stripe.',
+    ],
   },
   'dog-walkers': {
     icon: 'Spark', angle: 'dog walkers & pet sitters',
@@ -282,7 +366,11 @@ export const VERTICALS = {
       { title: 'Recurring billing', body: 'Monthly walk plan auto-charges. Late-cancel fees built in.' },
       { title: 'Key-pickup notes', body: 'Track lockbox codes per client, encrypted on their record.' },
     ],
-    use: 'Add walk + sit services, build a monthly plan, share your booking link.',
+    use: [
+      'Add walk + sit services,',
+      'build a monthly plan,',
+      'share your booking link.',
+    ],
   },
   'pet-groomers': {
     icon: 'Spark', angle: 'pet groomers',
@@ -295,7 +383,11 @@ export const VERTICALS = {
       { title: 'Recurring grooms', body: 'Monthly or 6-week cadence; auto-book the standing slot.' },
       { title: 'Breed-aware pricing', body: 'Per-breed price tier so you don\'t under-charge for doodles.' },
     ],
-    use: 'Add groom services per size, set vaccination requirement, build a recurring slot.',
+    use: [
+      'Add groom services per size,',
+      'set vaccination requirement,',
+      'build a recurring slot.',
+    ],
   },
   'real-estate-agents': {
     icon: 'Home', angle: 'real-estate agents',
@@ -308,7 +400,11 @@ export const VERTICALS = {
       { title: 'Disclosure + offer signing', body: 'Multi-signer e-sign for every document in the file.' },
       { title: 'Lead pipeline', body: 'Track every contact by stage and tag - from new lead to active client - on one CRM.' },
     ],
-    use: 'Add showing services, set your client stages + tags, upload your disclosure templates.',
+    use: [
+      'Add showing services,',
+      'set your client stages + tags,',
+      'upload your disclosure templates.',
+    ],
   },
   'event-planners': {
     icon: 'Calendar', angle: 'event planners',
@@ -321,7 +417,11 @@ export const VERTICALS = {
       { title: 'Stage payments', body: 'Deposit on contract, then balance invoices as you hit milestones - clients pay in a tap.' },
       { title: 'Everything on one record', body: 'Contracts, invoices, notes, and tasks for the event live together - the full picture in one tap.' },
     ],
-    use: 'Build an event template, set milestone billing, upload your standard contract.',
+    use: [
+      'Build an event template,',
+      'set milestone billing,',
+      'upload your standard contract.',
+    ],
   },
   'wedding-planners': {
     icon: 'Heart', angle: 'wedding planners',
@@ -334,7 +434,11 @@ export const VERTICALS = {
       { title: 'Stage payments', body: 'Deposit on signing, then milestone invoices as the date nears - clients pay in a tap.' },
       { title: 'Task timeline', body: 'Build the run-of-show as dated tasks and check them off as the day unfolds.' },
     ],
-    use: 'Build a wedding project template, set milestone schedule, upload contract + questionnaire.',
+    use: [
+      'Build a wedding project template,',
+      'set milestone schedule,',
+      'upload contract + questionnaire.',
+    ],
   },
   'freelance-designers': {
     icon: 'Edit', angle: 'freelance designers',
@@ -347,7 +451,10 @@ export const VERTICALS = {
       { title: 'Async deliverables', body: 'Attach final files to the project and share them through the client’s portal.' },
       { title: 'Time + expense tracking', body: 'Track billable hours; auto-flow onto the next invoice.' },
     ],
-    use: 'Add discovery + project + retainer services. Build a proposal template.',
+    use: [
+      'Add discovery + project + retainer services.',
+      'Build a proposal template.',
+    ],
   },
   'copywriters': {
     icon: 'Doc', angle: 'copywriters',
@@ -360,7 +467,11 @@ export const VERTICALS = {
       { title: 'Project-based work', body: 'Sales page, email sequence, white paper - bill flat-rate; deliver via signed file.' },
       { title: 'Async revisions', body: 'Client requests revisions inside the project record. No emails lost.' },
     ],
-    use: 'Add retainer + project services, build voice templates, configure retainer schedule.',
+    use: [
+      'Add retainer + project services,',
+      'build voice templates,',
+      'configure retainer schedule.',
+    ],
   },
   'handymen': {
     icon: 'Edit', angle: 'handymen',
@@ -373,6 +484,37 @@ export const VERTICALS = {
       { title: 'Job-site invoicing', body: 'Mark complete → invoice drafts itself with your standard line items.' },
       { title: 'Recurring jobs', body: '"Quarterly gutter clean" or "monthly pool service" - set the recurrence once.' },
     ],
-    use: 'Add service categories, set deposit %, install the app on your phone.',
+    use: [
+      'Add service categories,',
+      'set deposit %,',
+      'install the app on your phone.',
+    ],
   },
 };
+
+// The /for pages grouped for the directory on /features#who and the
+// "Different business? Ivy fits." block on each /for page. Every slug in
+// VERTICALS appears in exactly one group (tests/vertical-pages.test.mjs).
+export const VERTICAL_GROUPS = [
+  ['Beauty', ['hair-stylists', 'nail-techs', 'lash-artists', 'estheticians', 'makeup-artists', 'tattoo-artists']],
+  ['Wellness & fitness', ['massage-therapists', 'personal-trainers', 'yoga-instructors', 'pilates-teachers', 'doulas']],
+  ['Coaching & consulting', ['coaches', 'life-coaches', 'career-coaches', 'consultants']],
+  ['Creative', ['photographers', 'videographers', 'freelance-designers', 'copywriters']],
+  ['Lessons', ['tutors', 'music-teachers']],
+  ['Home & pets', ['cleaners', 'handymen', 'dog-walkers', 'pet-groomers']],
+  ['Events & property', ['event-planners', 'wedding-planners', 'real-estate-agents']],
+];
+
+// The most-searched professions: shown first on each /for page. (The site
+// footer's "Who it's for" column keeps its own short list in Chrome.jsx so
+// the home page chunk does not carry this file.)
+export const POPULAR_VERTICALS = [
+  'massage-therapists', 'hair-stylists', 'personal-trainers', 'coaches',
+  'photographers', 'cleaners', 'tutors', 'estheticians', 'consultants',
+];
+
+// "Coaches & consultants" from "coaches & consultants".
+export function verticalLabel(slug) {
+  const a = VERTICALS[slug]?.angle || '';
+  return a.charAt(0).toUpperCase() + a.slice(1);
+}

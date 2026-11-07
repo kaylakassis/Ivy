@@ -6,6 +6,7 @@ import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
 import { siteUrl } from '../../../lib/pageMeta.js';
 import { SignupCta } from './Chrome.jsx';
+import { TILES_CSS, VerticalGroups } from './LandingKit.jsx';
 
 const PAGE_CSS = `
 .site-root h1{font-size:clamp(36px,4.6vw,54px);letter-spacing:-.025em;line-height:1.1;margin-bottom:18px}
@@ -54,7 +55,7 @@ export default function SiteFeatures() {
   });
   return (
     <div className="site-root">
-      <style>{BASE_CSS + PAGE_CSS}</style>
+      <style>{BASE_CSS + PAGE_CSS + TILES_CSS}</style>
       <SiteNav active="/features" />
 
       <header className="page-head">
@@ -198,7 +199,17 @@ export default function SiteFeatures() {
         </div>
       </section>
 
-      <section className="cta-final">
+      <section id="who" style={{ scrollMarginTop: 64 }}>
+        <div className="container">
+          <div className="center" style={{ marginBottom: 40 }}>
+            <span className="eyebrow">Who it's for</span>
+            <h2>Built for businesses of one.</h2>
+          </div>
+          <VerticalGroups/>
+        </div>
+      </section>
+
+      <section className="cta-final alt">
         <div className="container">
           <h2>See it all in one trial.</h2>
           <p className="section-sub" style={{ margin: '0 auto 30px' }}>Every feature unlocked from day one. 14 days free, $0 today.</p>
