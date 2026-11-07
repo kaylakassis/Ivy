@@ -61,10 +61,40 @@ export function serializeGiftCard(row) {
 // Public-facing balance lookup. Used by /api/gift-cards/check (public)
 // and the booking flow when a code is entered. NEVER returns the full
 // code - only display fragments.
+// A refund hold (purchaseRefunds.js) older than this belongs to a refund
+// that never finished: the request died between holding the amount and
+// the processor call. It goes back on the balance at the next read. If the
+// processor refund did go through after all, its charge.refunded notice
+// still takes it off the balance then (the sync takes it from the hold
+// first, the balance otherwise).
+export const REFUND_HOLD_TTL_MINUTES = 15;
+
+// Put expired refund holds back on the balance: for one card, one code or
+// a whole business. Cheap no-op when there is nothing stuck.
+export async function releaseStaleGiftCardHolds({ workspaceId, cardId = null, codeHash = null }) {
+  if (!workspaceId) return 0;
+  const r = await sql`
+    UPDATE gift_cards SET
+      balance_cents     = balance_cents + refund_hold_cents,
+      refund_hold_cents = 0,
+      refund_hold_at    = NULL,
+      status            = CASE WHEN status = 'depleted' THEN 'active' ELSE status END,
+      updated_at        = NOW()
+    WHERE workspace_id = ${workspaceId}
+      AND refund_hold_cents > 0
+      AND (refund_hold_at IS NULL OR refund_hold_at < NOW() - (${String(REFUND_HOLD_TTL_MINUTES)} || ' minutes')::interval)
+      AND (${cardId}::uuid IS NULL OR id = ${cardId}::uuid)
+      AND (${codeHash}::text IS NULL OR code_hash = ${codeHash}::text)
+    RETURNING id
+  `;
+  return r.rows.length;
+}
+
 export async function findActiveByCode(workspaceId, rawCode) {
   const norm = normalizeCode(rawCode);
   if (norm.length < 8) return null;
   const hash = hashCode(norm);
+  await releaseStaleGiftCardHolds({ workspaceId, codeHash: hash }).catch(() => {});
   const r = await sql`
     SELECT * FROM gift_cards
      WHERE workspace_id = ${workspaceId}
@@ -178,12 +208,14 @@ function fmtMoney(cents) {
 }
 
 // What is still owed on an invoice row, in cents, after partial payments
-// already recorded and any gift card credit already applied.
+// already recorded (net of any refunded since: money given back is owed
+// again) and any gift card credit already applied.
 export function invoiceDueCents(inv) {
   const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
   const paid = Math.round(Number(inv.paid_amount || 0) * 100);
-  const credit = Number(inv.gift_card_credit_cents || 0);
-  return Math.max(0, Math.round(totals.total * 100) - paid - credit);
+  const refunded = Math.min(paid, Math.max(0, Math.round(Number(inv.refunded_amount || 0) * 100)));
+  const credit = Math.max(0, Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0));
+  return Math.max(0, Math.round(totals.total * 100) - (paid - refunded) - credit);
 }
 
 // Apply a gift card to a sent invoice. `inv` is the full invoices row (the

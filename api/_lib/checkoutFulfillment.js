@@ -785,6 +785,7 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
       UPDATE gift_cards SET
         balance_cents     = CASE WHEN ${fully} THEN 0 ELSE GREATEST(0, balance_cents - GREATEST(0, ${delta} - refund_hold_cents)) END,
         refund_hold_cents = GREATEST(0, refund_hold_cents - ${delta}),
+        refund_hold_at    = CASE WHEN refund_hold_cents - ${delta} <= 0 THEN NULL ELSE refund_hold_at END,
         refunded_cents    = ${refundedCents},
         status            = CASE WHEN ${fully} OR balance_cents - GREATEST(0, ${delta} - refund_hold_cents) <= 0 THEN 'voided' ELSE status END,
         updated_at        = NOW()

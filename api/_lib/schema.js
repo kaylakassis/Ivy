@@ -5241,4 +5241,8 @@ ON CONFLICT DO NOTHING;
 -- processor call) takes the refunded cents out of the hold instead of the
 -- balance; a failed processor refund puts the hold back on the balance.
 ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refund_hold_cents INT NOT NULL DEFAULT 0;
+-- When the hold was placed. A hold older than 15 minutes belongs to a
+-- refund that never finished (the request died between the hold and the
+-- processor call) and is put back on the balance at the next read.
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refund_hold_at TIMESTAMPTZ;
 `;

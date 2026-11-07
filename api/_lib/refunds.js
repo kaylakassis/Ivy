@@ -145,6 +145,13 @@ async function refundClaimedInvoice({ workspaceId, id, amountIn, reasonIn, audit
         failure = err;
         break;
       }
+      // Answered, but refused (Square FAILED / REJECTED, PayPal FAILED /
+      // CANCELLED): no money moved, so nothing is recorded.
+      if (['failed', 'rejected', 'canceled', 'cancelled', 'denied'].includes(String(out?.status || '').toLowerCase())) {
+        const who = row.provider === 'square' ? 'Square' : row.provider === 'paypal' ? 'PayPal' : 'the payment processor';
+        failure = new Error(`The refund did not go through at ${who} (status ${String(out.status).toUpperCase()}). No money was returned for that payment.`);
+        break;
+      }
       // Stripe reports refunds as a running total per payment (the
       // charge.refunded echo carries it), so the row moves UP to it; Square
       // and PayPal report each refund by id, so the id makes it count once

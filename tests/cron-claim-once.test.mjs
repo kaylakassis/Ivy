@@ -5,6 +5,9 @@
 // The same holds for the owner emails (subscription dunning, the weekly
 // recap), the client group digest and the unsigned-document reminder; and
 // when the email fails, the claim is handed back so a later run retries.
+// The one-time owner emails that already claimed first (plan ending, setup
+// nudge, trial reminder, re-engagement) now hand the claim back too when
+// the email is not accepted, still sending at most once.
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/cron-claim-once.test.mjs
 
@@ -17,6 +20,10 @@ import dunningCron from '../api/cron/subscription-dunning.js';
 import digestCron from '../api/cron/group-digest.js';
 import docCron from '../api/cron/doc-reminders.js';
 import recapCron from '../api/cron/owner-weekly-recap.js';
+import planEndingCron from '../api/cron/plan-ending.js';
+import setupNudgeCron from '../api/cron/setup-nudge.js';
+import trialCron from '../api/cron/trial-reminders.js';
+import reengageCron from '../api/cron/owner-reengage.js';
 
 process.env.ADMIN_SECRET ||= 'test-admin-secret';
 
@@ -188,6 +195,49 @@ async function run() {
     [g, h] = await twice(recapCron, '/api/cron/owner-weekly-recap');
     assert(g.statusCode === 200 && h.statusCode === 200, 'both runs return 200');
     assert(sentTo.get(recapTo) === 1, `owner got exactly one weekly recap (got ${sentTo.get(recapTo) || 0})`);
+
+    // One-time owner emails: one email under two runs at once; a failed
+    // email leaves the row unstamped for the next run.
+    const pair = async (label, setup) => {
+      const okTo = `${tag}-${label}@example.com`;
+      const failTo = `${tag}-${label}-fail@example.com`;
+      const a = await mkOwner(okTo);
+      const b = await mkOwner(failTo);
+      await setup(a);
+      await setup(b);
+      return { a, b, okTo, failTo };
+    };
+    const stampOf = async (wid, col) => (await sql.query(`SELECT ${col} AS v FROM workspaces WHERE id = $1`, [wid])).rows[0]?.v;
+
+    console.log('\n[10] plan ending: one email; a failed one is retried');
+    const pe = await pair('planend', (o) => sql`UPDATE workspaces SET cancel_at_period_end = TRUE, subscription_status = 'active',
+      subscription_period_end = NOW() + INTERVAL '1 day' WHERE id = ${o.wid}`);
+    await twice(planEndingCron, '/api/cron/plan-ending');
+    assert(sentTo.get(pe.okTo) === 1 && !!(await stampOf(pe.a.wid, 'plan_ending_reminder_sent_at')), `one plan-ending email, stamped (got ${sentTo.get(pe.okTo) || 0})`);
+    assert(sentTo.get(pe.failTo) >= 1 && (await stampOf(pe.b.wid, 'plan_ending_reminder_sent_at')) == null, 'failed email: claim handed back');
+
+    console.log('\n[11] setup nudge: one email; a failed one is retried');
+    const sn = await pair('setup', (o) => sql`UPDATE workspaces SET subscription_status = 'active', onboarded_at = NOW() - INTERVAL '3 days' WHERE id = ${o.wid}`);
+    await twice(setupNudgeCron, '/api/cron/setup-nudge');
+    assert(sentTo.get(sn.okTo) === 1 && !!(await stampOf(sn.a.wid, 'setup_nudge_sent_at')), `one setup nudge, stamped (got ${sentTo.get(sn.okTo) || 0})`);
+    assert(sentTo.get(sn.failTo) >= 1 && (await stampOf(sn.b.wid, 'setup_nudge_sent_at')) == null, 'failed email: claim handed back');
+
+    console.log('\n[12] trial reminder: one email; a failed one is retried');
+    const tr = await pair('trial', (o) => sql`UPDATE workspaces SET subscription_status = 'trialing', trial_ends_at = NOW() + INTERVAL '20 hours' WHERE id = ${o.wid}`);
+    await twice(trialCron, '/api/cron/trial-reminders');
+    assert(sentTo.get(tr.okTo) === 1 && !!(await stampOf(tr.a.wid, 'trial_reminder_1d_sent_at')), `one trial reminder, stamped (got ${sentTo.get(tr.okTo) || 0})`);
+    assert(sentTo.get(tr.failTo) >= 1 && (await stampOf(tr.b.wid, 'trial_reminder_1d_sent_at')) == null, 'failed email: claim handed back');
+
+    console.log('\n[13] re-engagement: one email; a failed one is retried');
+    const re = await pair('reengage', async (o) => {
+      await sql`UPDATE users SET last_active_at = NOW() - INTERVAL '15 days', notification_prefs = '{"accountability": "false"}'::jsonb
+        WHERE id = (SELECT owner_id FROM workspaces WHERE id = ${o.wid})`;
+      await sql`INSERT INTO invoices (workspace_id, number, client_name, items, status) VALUES (${o.wid}, 'CL-RE', 'Sam', '[{"quantity":1,"rate":50}]'::jsonb, 'sent')`;
+    });
+    await twice(reengageCron, '/api/cron/owner-reengage');
+    const reStamp = async (o) => (await sql`SELECT u.dormant_nudge_sent_at AS v FROM users u JOIN workspaces w ON w.owner_id = u.id WHERE w.id = ${o.wid}`).rows[0]?.v;
+    assert(sentTo.get(re.okTo) === 1 && !!(await reStamp(re.a)), `one re-engagement email, stamped (got ${sentTo.get(re.okTo) || 0})`);
+    assert(sentTo.get(re.failTo) >= 1 && (await reStamp(re.b)) == null, 'failed email: claim handed back');
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

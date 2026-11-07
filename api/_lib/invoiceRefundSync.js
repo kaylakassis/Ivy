@@ -22,7 +22,17 @@
 import { sql } from './db.js';
 import { notifyOwnerSafe } from './push.js';
 import { restoreGiftCardCreditForInvoice } from './giftCards.js';
-import { findPaymentRow, applyRefundToPayment } from './invoiceLedger.js';
+import { findPaymentRow, applyRefundToPayment, reverseRefundOnPayment } from './invoiceLedger.js';
+
+const fmt = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Refund ids Ivy noted on the invoice's activity before the ledger existed.
+async function legacyRefundNoted({ workspaceId, row, refundId }) {
+  if (!refundId || (row.refund_ids || []).includes(refundId)) return false;
+  const inv = (await sql`SELECT activity FROM invoices WHERE id = ${row.invoice_id} AND workspace_id = ${workspaceId}`).rows[0];
+  return (inv?.activity || []).some((a) => a?.kind === 'refund'
+    && (a.stripeRefundId === refundId || (Array.isArray(a.refundIds) && a.refundIds.includes(refundId))));
+}
 
 async function restoreGiftIfFullyRefunded({ workspaceId, invoice, label }) {
   if (!invoice || invoice.status !== 'refunded' || invoice.prev_status === 'refunded') return 0;
@@ -71,10 +81,7 @@ export async function applyProviderRefundEvent({ workspaceId, provider, paymentI
   // A refund Ivy made before the ledger existed is noted only on the
   // invoice's activity log; its late webhook must not count it again.
   if (refundId) {
-    const inv = (await sql`SELECT activity FROM invoices WHERE id = ${row.invoice_id} AND workspace_id = ${workspaceId}`).rows[0];
-    const seen = (inv?.activity || []).some((a) => a?.kind === 'refund'
-      && (a.stripeRefundId === refundId || (Array.isArray(a.refundIds) && a.refundIds.includes(refundId))));
-    if (seen && !(row.refund_ids || []).includes(refundId)) {
+    if (await legacyRefundNoted({ workspaceId, row, refundId })) {
       // Remember it on the row so the next delivery stops here too.
       await sql`
         UPDATE invoice_payments SET refund_ids = array_append(refund_ids, ${refundId}::text), updated_at = NOW()
@@ -89,6 +96,49 @@ export async function applyProviderRefundEvent({ workspaceId, provider, paymentI
     activityText: ` (${label}${reason ? ` · ${reason}` : ''})`,
   });
   if (!(delta > 0) || !invoice) return { result: 'already', invoice: null };
-  await restoreGiftIfFullyRefunded({ workspaceId, invoice, label });
+  const giftRestoredCents = await restoreGiftIfFullyRefunded({ workspaceId, invoice, label });
+  // The client hears about it like a Stripe dashboard refund: once, from
+  // the write that counted it (a refund made in Ivy already emailed, and
+  // its notice here counts nothing).
+  const { notifyInvoiceRefunded } = await import('./invoiceNotify.js');
+  await notifyInvoiceRefunded({
+    workspaceId, invoiceId: invoice.id, amount: delta,
+    method: provider === 'paypal' ? 'paypal' : 'card', giftRestoredCents,
+  }).catch(() => {});
   return { result: 'applied', invoice };
+}
+
+// A Square / PayPal refund the provider later reports as failed: take it
+// back off the payment and the invoice, and tell the owner plainly. Once
+// per refund id. Returns { result: 'not-found' | 'not-recorded' | 'already'
+// | 'reversed', invoice }.
+export async function applyProviderRefundFailure({ workspaceId, provider, paymentId, refundId, amountCents, label }) {
+  if (!paymentId || !refundId) return { result: 'not-found', invoice: null };
+  const row = await findPaymentRow({ workspaceId, provider, providerPaymentId: paymentId });
+  if (!row) return { result: 'not-found', invoice: null };
+  if ((row.refund_ids || []).includes(`failed:${refundId}`)) return { result: 'already', invoice: null };
+  // Counted before the ledger existed (noted only on the invoice): put it
+  // on the row first so it is taken back like any other.
+  if (await legacyRefundNoted({ workspaceId, row, refundId })) {
+    await sql`
+      UPDATE invoice_payments SET refund_ids = array_append(refund_ids, ${refundId}::text), updated_at = NOW()
+       WHERE id = ${row.id} AND workspace_id = ${workspaceId} AND NOT (${refundId}::text = ANY(refund_ids))
+    `;
+  }
+  const amount = Math.round(Number(amountCents || 0)) / 100;
+  const { back, invoice } = await reverseRefundOnPayment({
+    workspaceId, paymentRowId: row.id, refundId, amount,
+    activityText: ` failed at ${label}. The money was not returned.`,
+  });
+  if (!(back > 0) || !invoice) return { result: 'not-recorded', invoice: null };
+  notifyOwnerSafe({
+    workspaceId, type: 'payments',
+    payload: {
+      title: 'Refund failed',
+      body: `The ${fmt(back)} refund to ${invoice.client_name || 'your client'} failed at ${label}. The money was not returned.`,
+      url: `/finance?invoice=${invoice.id}`,
+      tag: `refund-failed-${refundId}`,
+    },
+  });
+  return { result: 'reversed', invoice };
 }

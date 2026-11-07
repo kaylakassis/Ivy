@@ -84,7 +84,7 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
     const partialActivity = [
       ...(inv.activity || []),
       { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: parsed.paymentId || null,
-        text: `Partial PayPal payment · $${st.thisPayment.toFixed(2)} · $${paidAmountDollars.toFixed(2)} of $${st.due.toFixed(2)} paid` },
+        text: `Partial PayPal payment · $${st.thisPayment.toFixed(2)} · $${st.netPaid.toFixed(2)} of $${st.due.toFixed(2)} paid` },
     ];
     // Record the running total + capture id but leave the invoice open.
     // Guarded on the total we read so two captures never overwrite each other.

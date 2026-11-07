@@ -153,19 +153,26 @@ function trialPushPayload(stage) {
   return map[stage] || null;
 }
 
-export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
+// Returns { ok, sent, reason }: ok=false only when the email was not
+// accepted by the mail provider (callers that claimed the send first hand
+// the claim back then). `retryable: true` (the cron that will retry) also
+// holds the push back until the email goes, so a retry never pushes twice.
+// Callers that ignore the result see the same behavior as before. Never
+// throws.
+export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt, retryable = false }) {
   try {
     const o = await loadOwner(workspaceId);
-    if (!o?.email) return;
+    if (!o?.email) return { ok: true, sent: false, reason: 'no-owner-email' };
     const rendered = renderTrialReminder({
       stage, trialEndsAt,
       firstName: firstName(o.name), businessName: o.biz_name,
     });
-    if (!rendered) return;
-    await sendEmailToUser({
+    if (!rendered) return { ok: true, sent: false, reason: 'nothing-to-send' };
+    const mail = await sendEmailToUser({
       userId: o.owner_id, type: 'billing',
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
+    if (retryable && mail?.ok === false) return mail;
     // Push + bell alongside the email (mirrors subscription-dunning's billing
     // push, type 'payments' so it rides the owner's payments opt-out). Deep-links
     // to billing so one tap goes straight to picking a plan.
@@ -176,9 +183,11 @@ export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
         payload: { ...push, url: '/account?tab=billing', tag: `trial-reminder-${stage}` },
       });
     }
+    return mail || { ok: true, sent: false };
   } catch (err) {
     console.error('[subscriptionNotify.trialReminder] failed:', err.message);
     reportError(err, { extra: { workspaceId, stage } });
+    return { ok: false, sent: false, reason: err.message };
   }
 }
 
@@ -189,10 +198,16 @@ export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
 // stopped logging in. Leads with what's concretely waiting for them (upcoming
 // sessions + money to collect) so the pull is "pick up where you left off,"
 // not "we miss you." Email (type 'reports', respects opt-out) + push/feed.
-export async function notifyDormantOwner({ workspaceId }) {
+// Returns { ok, sent, reason }: ok=false only when the email was not
+// accepted by the mail provider (callers that claimed the send first hand
+// the claim back then). `retryable: true` (the cron that will retry) also
+// holds the push back until the email goes, so a retry never pushes twice.
+// Callers that ignore the result see the same behavior as before. Never
+// throws.
+export async function notifyDormantOwner({ workspaceId, retryable = false }) {
   try {
     const o = await loadOwner(workspaceId);
-    if (!o?.email) return;
+    if (!o?.email) return { ok: true, sent: false, reason: 'no-owner-email' };
     const tz = await workspaceTimeZone(workspaceId);
     const [upRes, invRes] = await Promise.all([
       sql`SELECT COUNT(*)::int AS n FROM bookings
@@ -210,7 +225,7 @@ export async function notifyDormantOwner({ workspaceId }) {
     if (upcoming > 0) bits.push(`<strong>${upcoming}</strong> session${upcoming === 1 ? '' : 's'} coming up this week`);
     if (unpaidN > 0) bits.push(`<strong>${unpaidN}</strong> unpaid invoice${unpaidN === 1 ? '' : 's'}${owed > 0 ? ` ($${Math.round(owed).toLocaleString()} to collect)` : ''}`);
     // Only worth reaching out if there's something concrete to return to.
-    if (bits.length === 0) return;
+    if (bits.length === 0) return { ok: true, sent: false, reason: 'nothing-waiting' };
     const waiting = bits.length === 2 ? `${bits[0]} and ${bits[1]}` : bits[0];
 
     const html = emailShell({
@@ -222,10 +237,11 @@ export async function notifyDormantOwner({ workspaceId }) {
       ctaUrl: `${appUrl()}/dashboard`,
       footer: `You're getting this because your ${PLAN_NAME} account has been quiet. Manage email preferences from Account → Notifications.`,
     });
-    await sendEmailToUser({
+    const mail = await sendEmailToUser({
       userId: o.owner_id, type: 'reports',
       to: o.email, subject: `A few things are waiting for you at ${o.biz_name || 'your business'}`, html,
     });
+    if (retryable && mail?.ok === false) return mail;
     // Push + bell, so it lands even without an open tab.
     notifyOwnerSafe({
       workspaceId, type: 'engagement', // owner nudge: muted by the Daily nudges push switch
@@ -238,9 +254,11 @@ export async function notifyDormantOwner({ workspaceId }) {
         tag: 'owner-reengage',
       },
     });
+    return mail || { ok: true, sent: false };
   } catch (err) {
     console.error('[subscriptionNotify.dormantOwner] failed:', err.message);
     reportError(err, { extra: { workspaceId } });
+    return { ok: false, sent: false, reason: err.message };
   }
 }
 
@@ -595,12 +613,19 @@ export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, sourc
   return { subject: `Your Ivy plan ends on ${endDate}`, html, preheader };
 }
 
-export async function notifyPlanEnding({ workspaceId, endsAt, source }) {
+// Returns { ok, sent, reason }: ok=false only when the email was not
+// accepted by the mail provider (callers that claimed the send first hand
+// the claim back then). `retryable: true` (the cron that will retry) also
+// holds the push back until the email goes, so a retry never pushes twice.
+// Callers that ignore the result see the same behavior as before. Never
+// throws.
+export async function notifyPlanEnding({ workspaceId, endsAt, source, retryable = false }) {
   try {
     const o = await loadOwner(workspaceId);
-    if (!o?.email) return;
+    if (!o?.email) return { ok: true, sent: false, reason: 'no-owner-email' };
     const rendered = renderPlanEnding({ endsAt, source, firstName: firstName(o.name), businessName: o.biz_name });
-    await sendEmailToUser({ userId: o.owner_id, type: 'billing', to: o.email, subject: rendered.subject, html: rendered.html });
+    const mail = await sendEmailToUser({ userId: o.owner_id, type: 'billing', to: o.email, subject: rendered.subject, html: rendered.html });
+    if (retryable && mail?.ok === false) return mail;
     await notifyOwnerSafe({
       workspaceId, type: 'payments',
       payload: {
@@ -609,9 +634,11 @@ export async function notifyPlanEnding({ workspaceId, endsAt, source }) {
         url: '/account?tab=billing', tag: `plan-ending-${workspaceId}`,
       },
     });
+    return mail || { ok: true, sent: false };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[subscriptionNotify.planEnding] failed:', err.message);
+    return { ok: false, sent: false, reason: err.message };
   }
 }
 

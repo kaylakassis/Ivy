@@ -157,7 +157,7 @@ export async function applyRefundToPayment({
                    CASE WHEN ${cum}::numeric IS NOT NULL THEN GREATEST(p.refunded_amount, ${cum}::numeric)
                         ELSE p.refunded_amount + COALESCE(${plus}::numeric, 0) END) AS after_amt
         FROM p
-       WHERE (${refundId}::text IS NULL OR NOT (${refundId}::text = ANY(p.refund_ids)))
+       WHERE (${refundId}::text IS NULL OR NOT (${refundId}::text = ANY(p.refund_ids) OR ('failed:' || ${refundId}::text) = ANY(p.refund_ids)))
          AND (${before}::numeric IS NULL OR p.refunded_amount = ${before}::numeric)
     ), upd_p AS (
       UPDATE invoice_payments ip SET
@@ -192,6 +192,58 @@ export async function applyRefundToPayment({
   `;
   const row = r.rows[0] || {};
   return { delta: round2(row.delta || 0), invoice: row.invoice || null };
+}
+
+// A refund the provider later reports as failed (Square FAILED /
+// REJECTED): take it back off the payment and the invoice in one
+// statement. Only a refund this row counted (its id is in refund_ids)
+// moves money back; either way the id is kept as 'failed:<id>' so a late
+// "completed" for it is never counted. A refunded invoice that no longer
+// has everything back is 'paid' again. Returns { back, invoice } (invoice:
+// { id, number, client_name, status, prev_status } or null).
+export async function reverseRefundOnPayment({ workspaceId, paymentRowId, refundId, amount, activityText }) {
+  const amt = round2(amount);
+  const ts = new Date().toISOString();
+  const r = await sql`
+    WITH p AS (
+      SELECT id, invoice_id, refunded_amount, refund_ids
+        FROM invoice_payments
+       WHERE id = ${paymentRowId} AND workspace_id = ${workspaceId}
+       FOR UPDATE
+    ), calc AS (
+      SELECT p.id, p.invoice_id,
+             CASE WHEN ${refundId}::text = ANY(p.refund_ids) THEN LEAST(p.refunded_amount, ${amt}::numeric) ELSE 0 END AS back
+        FROM p
+       WHERE NOT (('failed:' || ${refundId}::text) = ANY(p.refund_ids))
+    ), upd_p AS (
+      UPDATE invoice_payments ip SET
+        refunded_amount = ip.refunded_amount - calc.back,
+        refund_ids      = array_append(array_remove(ip.refund_ids, ${refundId}::text), 'failed:' || ${refundId}::text),
+        updated_at      = NOW()
+      FROM calc
+      WHERE ip.id = calc.id
+      RETURNING ip.invoice_id, calc.back
+    ), upd_i AS (
+      UPDATE invoices i SET
+        refunded_amount = GREATEST(0, COALESCE(prev.refunded_amount, 0) - upd_p.back),
+        status          = CASE
+                            WHEN prev.status = 'refunded'
+                             AND GREATEST(0, COALESCE(prev.refunded_amount, 0) - upd_p.back) < COALESCE(prev.paid_amount, prev.total) - 0.005
+                            THEN 'paid'
+                            ELSE prev.status
+                          END,
+        activity        = COALESCE(i.activity, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+                            'ts', ${ts}::text, 'kind', 'refund-failed', 'stripeRefundId', ${refundId}::text,
+                            'text', 'Refund of $' || to_char(upd_p.back, 'FM999999990.00') || ${activityText}::text)),
+        updated_at      = NOW()
+      FROM upd_p, invoices prev
+      WHERE i.id = upd_p.invoice_id AND prev.id = i.id AND i.workspace_id = ${workspaceId} AND upd_p.back > 0
+      RETURNING i.id, i.number, i.client_name, i.status, prev.status AS prev_status
+    )
+    SELECT (SELECT back FROM upd_p) AS back, (SELECT row_to_json(upd_i) FROM upd_i) AS invoice
+  `;
+  const row = r.rows[0] || {};
+  return { back: round2(row.back || 0), invoice: row.invoice || null };
 }
 
 // Split a refund across payments, newest first, each up to what it has

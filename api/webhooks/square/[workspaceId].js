@@ -11,7 +11,7 @@ import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
 import { invoicePaymentState } from '../../_lib/invoicePayments.js';
-import { applyProviderRefundEvent } from '../../_lib/invoiceRefundSync.js';
+import { applyProviderRefundEvent, applyProviderRefundFailure } from '../../_lib/invoiceRefundSync.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
@@ -73,6 +73,14 @@ export default async function handler(req, res) {
       // Dashboard-initiated refunds + completion-state for our own
       // refund.create calls (Square refunds settle async).
       await applyRefundToInvoice({ workspaceId, parsed });
+    } else if (parsed.type === 'refund.updated' && ['failed', 'rejected', 'canceled', 'cancelled'].includes(parsed.status)) {
+      // A refund (made in Ivy, so already counted) that Square could not
+      // complete: the money did not go back, so take it off the invoice
+      // and tell the owner.
+      await applyProviderRefundFailure({
+        workspaceId, provider: 'square', paymentId: parsed.paymentId || null, refundId: parsed.refundId || null,
+        amountCents: parsed.amountCents, label: 'Square',
+      });
     }
     return ok(res, { handled: true });
   } catch (err) {
@@ -134,7 +142,7 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
     const partialActivity = [
       ...(inv.activity || []),
       { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: parsed.paymentId || null,
-        text: `Partial Square payment · $${st.thisPayment.toFixed(2)} · $${paidAmountDollars.toFixed(2)} of $${st.due.toFixed(2)} paid` },
+        text: `Partial Square payment · $${st.thisPayment.toFixed(2)} · $${st.netPaid.toFixed(2)} of $${st.due.toFixed(2)} paid` },
     ];
     // The same statement writes this payment's ledger row (invoiceLedger.js).
     const part = await sql`

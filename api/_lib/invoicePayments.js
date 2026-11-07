@@ -15,25 +15,31 @@ function fmtMoney(n) {
 }
 
 // Where a payment leaves an invoice. paid_amount on a still-open invoice
-// is the running total of part payments so far (the pay link already
-// charges only what is left), so a new payment ADDS to it, and the
-// invoice is settled once that running total covers what is due after
-// any gift card. `seen` = this payment id is already in the running total
-// (the paired Checkout + PaymentIntent events, a webhook retry, the PayPal
-// return page racing its webhook) and must not be added again.
-// Shared by the Stripe, Square and PayPal apply paths.
+// is the running total of part payments so far (gross: one ledger row per
+// payment adds up to it), so a new payment ADDS to it. What the client has
+// actually paid is that minus anything refunded since (a part payment the
+// owner gave back no longer counts), and the invoice is settled once that
+// NET amount covers what is due after any gift card; the pay link charges
+// only what is left of it. `seen` = this payment id is already in the
+// running total (the paired Checkout + PaymentIntent events, a webhook
+// retry, the PayPal return page racing its webhook) and must not be added
+// again. Shared by the Stripe, Square and PayPal apply paths.
 export function invoicePaymentState(inv, { paymentId = null, amountCents = null } = {}) {
+  const r2 = (n) => Math.round(n * 100) / 100;
   const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
-  const giftCredit = Number(inv.gift_card_credit_cents || 0) / 100;
-  const due = Math.max(0, Math.round((totals.total - giftCredit) * 100) / 100);
+  const giftCredit = Math.max(0, Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0)) / 100;
+  const due = Math.max(0, r2(totals.total - giftCredit));
   const open = ['draft', 'sent', 'overdue'].includes(inv.status);
-  const prior = open ? Math.max(0, Math.round(Number(inv.paid_amount || 0) * 100) / 100) : 0;
+  const prior = open ? Math.max(0, r2(Number(inv.paid_amount || 0))) : 0;
+  const refundedPrior = open ? Math.min(prior, Math.max(0, r2(Number(inv.refunded_amount || 0)))) : 0;
+  const netPrior = r2(prior - refundedPrior);
   const seen = !!paymentId && prior > 0 && (
     inv.stripe_payment_intent === paymentId
     || (inv.activity || []).some((a) => a?.kind === 'partial-payment' && a.paymentId === paymentId));
   const thisPayment = amountCents != null ? Math.round(Number(amountCents)) / 100 : null;
-  const paidTotal = thisPayment == null ? Math.max(due, prior) : Math.round((prior + thisPayment) * 100) / 100;
-  return { totals, due, prior, seen, thisPayment, paidTotal, underpaid: thisPayment != null && paidTotal < due - 0.01 };
+  const paidTotal = thisPayment == null ? r2(prior + Math.max(0, due - netPrior)) : r2(prior + thisPayment);
+  const netPaid = r2(paidTotal - refundedPrior);
+  return { totals, due, prior, refundedPrior, netPrior, seen, thisPayment, paidTotal, netPaid, underpaid: thisPayment != null && netPaid < due - 0.01 };
 }
 
 // A DIFFERENT payment landed on an invoice that is already settled (two
@@ -115,7 +121,7 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
     const partialActivity = [
       ...(inv.activity || []),
       { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: paymentIntent || null,
-        text: `Partial card payment · ${fmtMoney(st.thisPayment)} · ${fmtMoney(paidAmount)} of ${fmtMoney(dueAfterCredit)} paid` },
+        text: `Partial card payment · ${fmtMoney(st.thisPayment)} · ${fmtMoney(st.netPaid)} of ${fmtMoney(dueAfterCredit)} paid` },
     ];
     // Guarded on the running total we read, so a second payment landing at
     // the same moment re-reads and adds on top instead of overwriting. The

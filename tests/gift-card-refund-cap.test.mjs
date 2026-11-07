@@ -8,6 +8,9 @@
 //       moment; what is not being refunded still can
 //   [3] the processor refuses: nothing is refunded and the balance is whole
 //   [4] the owner screen says how much can be refunded, in plain words
+//   [5] a hold left behind by a refund that never finished (a crash between
+//       the hold and the processor call) expires after 15 minutes: the next
+//       read of the card's balance puts it back; a fresh hold stays
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/gift-card-refund-cap.test.mjs
 import fs from 'node:fs';
@@ -17,7 +20,7 @@ process.env.APP_URL ||= 'https://www.joinivy.ai';
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 import { signSession } from '../api/_lib/auth.js';
-import { redeemAtomic } from '../api/_lib/giftCards.js';
+import { redeemAtomic, findActiveByCode, generateCode, normalizeCode, hashCode } from '../api/_lib/giftCards.js';
 import giftCardRefund from '../api/gift-cards/refund.js';
 import giftCardList from '../api/gift-cards/index.js';
 
@@ -117,6 +120,26 @@ async function run() {
   const src = fs.readFileSync(new URL('../src/features/finance/GiftCards.jsx', import.meta.url), 'utf8');
   assert(/You can refund up to \$\{fmtMoney\(refundLeftCents\)\}, what's left on the card\./.test(src), 'refund row says "You can refund up to $X, what\'s left on the card."');
   assert(/refundableCents/.test(src), 'the screen uses the server\'s refundable amount');
+
+  console.log('\n[5] a stuck refund hold expires');
+  const raw = generateCode();
+  const stuck = (await sql`INSERT INTO gift_cards (workspace_id, code_hash, code_last4, original_amount_cents, balance_cents, refund_hold_cents, refund_hold_at, status, stripe_payment_intent)
+    VALUES (${wid}, ${hashCode(normalizeCode(raw))}, 'STCK', 10000, 4000, 6000, NOW() - INTERVAL '20 minutes', 'active', ${`pi_gccap_stuck_${STAMP}`}) RETURNING id`).rows[0];
+  const found = await findActiveByCode(wid, raw);
+  c = await cardRow(stuck.id);
+  assert(Number(found?.balance_cents) === 10000 && Number(c.balance_cents) === 10000 && Number(c.refund_hold_cents) === 0 && c.refund_hold_at == null,
+    `the 20-minute-old hold is released on the next balance read (${found?.balance_cents} / ${c.balance_cents})`);
+  const fresh = (await sql`INSERT INTO gift_cards (workspace_id, code_hash, code_last4, original_amount_cents, balance_cents, refund_hold_cents, refund_hold_at, status, stripe_payment_intent)
+    VALUES (${wid}, ${`gccap-fresh-${STAMP}`}, 'FRSH', 10000, 4000, 6000, NOW() - INTERVAL '5 minutes', 'active', ${`pi_gccap_fresh_${STAMP}`}) RETURNING id`).rows[0];
+  r = await call(giftCardList, req({ method: 'GET', cookie }));
+  c = await cardRow(fresh.id);
+  assert(Number(c.balance_cents) === 4000 && Number(c.refund_hold_cents) === 6000 && r.body.cards.find((x) => x.id === fresh.id)?.refundableCents === 4000,
+    'a 5-minute-old hold (refund maybe still going through) stays');
+  await sql`UPDATE gift_cards SET refund_hold_at = NOW() - INTERVAL '16 minutes' WHERE id = ${fresh.id}`;
+  r = await call(giftCardList, req({ method: 'GET', cookie }));
+  c = await cardRow(fresh.id);
+  assert(Number(c.balance_cents) === 10000 && Number(c.refund_hold_cents) === 0 && r.body.cards.find((x) => x.id === fresh.id)?.refundableCents === 10000,
+    'once older than 15 minutes, the owner list read releases it too');
 }
 
 run()

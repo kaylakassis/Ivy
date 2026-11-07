@@ -68,6 +68,9 @@ async function handler(req, res) {
     const shardFilter = shardClause({ shard, shards }, 'w.id');
 
     let scanned = 0, sent = 0, emptied = false;
+    // Rows whose email failed this run: handed back for the next run, not
+    // picked up again by this one.
+    const failedIds = new Set();
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {
         // eslint-disable-next-line no-await-in-loop
@@ -96,10 +99,11 @@ async function handler(req, res) {
               AND (w.partner_last_sent_at IS NULL
                    OR w.partner_last_sent_at < NOW() - INTERVAL '20 hours')
               AND ${HAS_MISSING_ITEM}
+              AND NOT (w.id = ANY($2::uuid[]))
               ${shardFilter}
             ORDER BY w.onboarded_at ASC
             LIMIT $1`,
-          [BATCH_SIZE],
+          [BATCH_SIZE, [...failedIds]],
         );
         if (rows.length === 0) { emptied = true; break; }
         scanned += rows.length;
@@ -114,7 +118,6 @@ async function handler(req, res) {
             [r.workspace_id],
           );
           if (upd.rows.length === 0) continue;
-          sent++;
 
           const fn = escapeHtml((r.name || '').split(/\s+/)[0] || 'there');
           const html = emailShell({
@@ -128,8 +131,19 @@ async function handler(req, res) {
             footer: 'Manage email preferences from Account → Notifications.',
           });
           // eslint-disable-next-line no-await-in-loop
-          await sendEmailToUser({ userId: r.owner_id, type: 'reports', to: r.email, subject: "One step left to start taking bookings", html })
-            .catch((e) => console.error('[setup-nudge] email failed:', r.workspace_id, e?.message));
+          const mail = await sendEmailToUser({ userId: r.owner_id, type: 'reports', to: r.email, subject: "One step left to start taking bookings", html })
+            .catch((e) => ({ ok: false, reason: e?.message }));
+          if (mail?.ok === false) {
+            // Not accepted by the mail provider: hand the claim back so the
+            // next run retries (still at most one email), and hold the push
+            // for that run too.
+            console.error('[setup-nudge] email failed:', r.workspace_id, mail.reason);
+            failedIds.add(r.workspace_id);
+            // eslint-disable-next-line no-await-in-loop
+            await sql`UPDATE workspaces SET setup_nudge_sent_at = NULL WHERE id = ${r.workspace_id}`.catch(() => {});
+            continue;
+          }
+          sent++;
           // eslint-disable-next-line no-await-in-loop
           await notifyOwnerSafe({
             workspaceId: r.workspace_id, type: 'engagement', // owner nudge: muted by the Daily nudges push switch

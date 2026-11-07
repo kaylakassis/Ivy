@@ -33,7 +33,7 @@ import { refundThroughProvider } from './refunds.js';
 import { syncRefundToPurchases } from './checkoutFulfillment.js';
 import { revokeProgramPurchaseForRefund, isUuid } from './programs.js';
 import { recordWorkspaceAudit } from './audit.js';
-import { giftCardRefundableCents } from './giftCards.js';
+import { giftCardRefundableCents, releaseStaleGiftCardHolds } from './giftCards.js';
 
 export const REFUNDABLE_KINDS = new Set(['program', 'gift_card', 'package']);
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
@@ -61,6 +61,7 @@ async function loadPurchase({ kind, id, workspaceId }) {
       paymentIntent: e.source === 'purchase' ? (e.stripe_payment_intent || null) : null, label: e.program_title };
   }
   if (kind === 'gift_card') {
+    await releaseStaleGiftCardHolds({ workspaceId, cardId: id }).catch(() => {});
     const r = await sql`SELECT * FROM gift_cards WHERE id = ${id} AND workspace_id = ${workspaceId} LIMIT 1`;
     const c = r.rows[0];
     if (!c) return null;
@@ -123,6 +124,7 @@ export async function refundPurchase({ workspaceId, kind, id, amountCents: amoun
       UPDATE gift_cards SET
         balance_cents     = balance_cents - ${amountCents},
         refund_hold_cents = refund_hold_cents + ${amountCents},
+        refund_hold_at    = NOW(),
         updated_at        = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
         AND status <> 'voided'
@@ -152,6 +154,7 @@ export async function refundPurchase({ workspaceId, kind, id, amountCents: amoun
         UPDATE gift_cards SET
           balance_cents     = balance_cents + ${amountCents},
           refund_hold_cents = refund_hold_cents - ${amountCents},
+          refund_hold_at    = CASE WHEN refund_hold_cents - ${amountCents} <= 0 THEN NULL ELSE refund_hold_at END,
           updated_at        = NOW()
         WHERE id = ${id} AND workspace_id = ${workspaceId} AND refund_hold_cents >= ${amountCents}
       `.catch((e) => console.error('[purchase refund] gift card hold release failed:', e.message));

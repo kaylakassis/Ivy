@@ -769,7 +769,9 @@ export async function chargeInvoiceAutopay({ workspaceId, invoiceId, retry = fal
   try { creds = await loadStripeCreds(workspaceId); } catch { return skip('provider_changed'); }
   if ((creds.stripeAccount || null) !== (ag.stripe_account || null) || stripeLivemode(creds) !== !!ag.livemode) return skip('stripe_changed');
   if (String(inv.currency || 'USD').toUpperCase() !== String(ag.currency || '').toUpperCase()) return skip('currency_changed');
-  if (Number(inv.paid_amount || 0) > 0) return skip('partly_paid');
+  // Part-paid (net of refunds: a part payment the owner gave back no
+  // longer counts) is left to the client.
+  if (Number(inv.paid_amount || 0) - Number(inv.refunded_amount || 0) > 0.005) return skip('partly_paid');
   const due0 = balanceDueCents(inv);
   if (due0 <= 0) return skip('nothing_due');
   if (due0 > Number(ag.max_amount_cents)) return skip('over_approved_amount');
@@ -793,7 +795,7 @@ export async function chargeInvoiceAutopay({ workspaceId, invoiceId, retry = fal
       AND status IN ('draft', 'sent', 'overdue')
       AND archived_at IS NULL
       AND payment_processing_at IS NULL
-      AND COALESCE(paid_amount, 0) = 0
+      AND COALESCE(paid_amount, 0) - COALESCE(refunded_amount, 0) <= 0.005
       AND autopay_attempts < ${AUTOPAY_MAX_ATTEMPTS}
       AND (
         (${!retry} AND (autopay_status IS NULL OR autopay_status = 'skipped') AND autopay_attempts = 0)
