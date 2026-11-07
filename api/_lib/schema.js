@@ -5288,7 +5288,13 @@ ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refund_hold_at TIMESTAMPTZ;
 -- Callers still choose which statuses count (normally 'paid').
 CREATE OR REPLACE FUNCTION invoice_net_revenue(i invoices, include_gift boolean DEFAULT TRUE)
 RETURNS numeric LANGUAGE sql STABLE AS $fn$
-  SELECT GREATEST(0, CASE WHEN include_gift THEN x.money + x.gift ELSE x.money END)
+  -- Capped at the invoice total: tax a payment processor added on top
+  -- (Stripe Tax) is owed to the tax authority, not the business's income,
+  -- and an accidental second payment is owed back to the client. Only
+  -- when a total is recorded: invoices from before the total column (it
+  -- defaults to 0) keep counting what was collected.
+  SELECT CASE WHEN COALESCE(i.total, 0) > 0 THEN LEAST(y.v, i.total) ELSE y.v END
+    FROM (SELECT GREATEST(0, CASE WHEN include_gift THEN x.money + x.gift ELSE x.money END) AS v
     FROM (
       SELECT
         CASE WHEN l.n > 0 THEN l.money
@@ -5312,6 +5318,7 @@ RETURNS numeric LANGUAGE sql STABLE AS $fn$
          WHERE p.invoice_id = i.id AND p.workspace_id = i.workspace_id
       ) l
     ) x
+    ) y
 $fn$;
 -- Platform revenue per business (admin): invoice revenue now comes from
 -- invoice_net_revenue (cash only; gift cards count when sold, below).
