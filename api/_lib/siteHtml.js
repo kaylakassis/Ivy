@@ -591,7 +591,21 @@ function renderJsonLd({ businessName, description, image, url, sections }) {
   }
   // Strip undefined entries for cleanliness.
   for (const k of Object.keys(ld)) if (ld[k] === undefined) delete ld[k];
-  return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
+  // JSON.stringify leaves `<` alone, so an owner string holding
+  // "</script>" would close this tag and the rest would be parsed as page
+  // markup. \u003c is the same character to a JSON parser.
+  return `<script type="application/ld+json">${jsonForScript(ld)}</script>`;
+}
+
+// JSON for an inline <script> data block: escape the characters that can
+// end the element or confuse an HTML parser. Exported for tests.
+export function jsonForScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 // ----- Sticky CTA + exit-intent popup --------------------------
@@ -717,16 +731,19 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host, ord
 
   // Splice into the SPA shell.
   let shell = loadShell();
+  // Owner text goes in through FUNCTION replacements: a string replacement
+  // would read "$&", "$`", "$'" or "$$" in a headline or price as
+  // String.replace patterns and paste parts of the shell into the page.
   // 1. Replace <title>...
   shell = shell.replace(/<title>[\s\S]*?<\/title>/i, '');
   // 2. Remove the existing app-level <meta name="description">.
   shell = shell.replace(/<meta\s+name="description"[^>]*>/i, '');
   // 3. Insert head extras before </head>.
-  shell = shell.replace(/<\/head>/i, `${headExtras}\n</head>`);
+  shell = shell.replace(/<\/head>/i, () => `${headExtras}\n</head>`);
   // 4. Inject body content into <div id="root">...</div>.
   shell = shell.replace(
     /<div\s+id="root"[^>]*>[\s\S]*?<\/div>/i,
-    `<div id="root">${bodyContent}</div>`,
+    () => `<div id="root">${bodyContent}</div>`,
   );
 
   return shell;

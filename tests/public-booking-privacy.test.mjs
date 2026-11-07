@@ -11,6 +11,7 @@
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 import slugHandler from '../api/calendar/public/[slug].js';
+import bizHandler from '../api/businesses/[slug]/index.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -90,6 +91,24 @@ async function run() {
   for (const secret of ['secretroom', 'private note', '9 Hidden Ln', 'Quinn', cl]) {
     assert(!raw.includes(secret), `value "${String(secret).slice(0, 12)}" not in the payload`);
   }
+
+  console.log('\n[1b] a virtual service never publishes the owner\'s own meeting link');
+  const zoom = 'https://zoom.us/j/9998887776?pwd=ownerSecret';
+  const vsvc = (await sql`INSERT INTO services (workspace_id, name, duration_minutes, capacity, price, location_type, location_label)
+    VALUES (${wsId}, 'Zoom Coaching', 60, 1, 90, 'virtual', ${zoom}) RETURNING id`).rows[0].id;
+  const psvc = (await sql`INSERT INTO services (workspace_id, name, duration_minutes, capacity, price, location_type, location_label)
+    VALUES (${wsId}, 'Studio Session', 60, 1, 90, 'in_person', '12 Studio Rd') RETURNING id`).rows[0].id;
+  await sql`UPDATE calendar_settings SET discoverable = TRUE WHERE workspace_id = ${wsId}`;
+  r = await call({ query: { slug: SLUG } });
+  const pubSvcs = r.body?.calendar?.services || [];
+  assert(!JSON.stringify(r.body).includes('ownerSecret'), 'booking page payload has no meeting link');
+  assert(pubSvcs.find((x) => x.id === vsvc)?.locationType === 'virtual', 'virtual service still listed as online');
+  assert(pubSvcs.find((x) => x.id === psvc)?.locationLabel === '12 Studio Rd', 'in-person address still shown');
+  const br = mockRes();
+  await bizHandler(req({ query: { slug: SLUG } }), br);
+  assert(br.statusCode === 200, `business profile 200 (${br.statusCode})`);
+  assert(!JSON.stringify(br.body).includes('ownerSecret'), 'business profile has no meeting link');
+  assert((br.body?.services || []).find((x) => x.id === psvc)?.locationLabel === '12 Studio Rd', 'business profile keeps the in-person address');
 
   console.log('\n[2] only current rows');
   const ids = bookings.map((b) => b.id);

@@ -72,9 +72,10 @@ export async function notifyLeadInstantReply({ workspaceId, toEmail, leadName })
     const custom = (cfg?.lead_instant_reply_message || '').trim();
     const bodyText = custom
       ? renderMessage(custom, { firstName, businessName: business })
-      : `Thanks for reaching out${firstName ? `, ${firstName}` : ''}! Your message came through and ${escapeHtml(business)} will personally get back to you shortly.\n\nIf you'd like, you can grab a time on the calendar right now using the button below - otherwise, sit tight and we'll be in touch.`;
+      : `Thanks for reaching out${firstName ? `, ${firstName}` : ''}! Your message came through and ${business} will personally get back to you shortly.\n\nIf you'd like, you can grab a time on the calendar right now using the button below - otherwise, sit tight and we'll be in touch.`;
 
-    // Render plain text into safe paragraphs (newlines → breaks).
+    // Render plain text into safe paragraphs (newlines → breaks). bodyText
+    // is RAW text (both branches): it is escaped here, exactly once.
     const bodyHtml = bodyText
       .split(/\n{2,}/)
       .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`)

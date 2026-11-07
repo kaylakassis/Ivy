@@ -13,7 +13,7 @@
 // whatever the per-section renderer outputs - keeps the renderers focused.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveSiteLink } from '../../lib/siteLinks.js';
-import { videoEmbedUrl, VIDEO_HOSTS_LABEL } from '../../lib/videoEmbed.js';
+import { videoEmbedUrl, VIDEO_HOSTS_LABEL, instagramEmbedUrl } from '../../lib/videoEmbed.js';
 import { safeHref } from '../../lib/safeHref.js';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // These modules only load when a customer site is rendered or edited, so
@@ -1130,8 +1130,7 @@ function Instagram({ data }) {
   // link, we fall back to a "View on Instagram" CTA card since IG
   // doesn't allow embedding profile feeds without their JS SDK.
   const url = String(data.url || '').trim();
-  const isPost = /\/(p|reel)\//.test(url);
-  const embed = isPost ? `${url.replace(/\/$/, '')}/embed` : null;
+  const embed = instagramEmbedUrl(url);
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
       <div style={{ ...container, maxWidth: 560, textAlign: 'center' }}>

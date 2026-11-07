@@ -210,8 +210,19 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   return res.json();
 }
 
+// Markup → readable text (plain-text part, inbox preheader). Entities are
+// decoded in ONE pass so "&amp;lt;" becomes "&lt;", never "<"; callers
+// that put the result back into HTML escape it again.
+const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+function decodeEntities(s) {
+  return s.replace(/&(#\d{1,7}|#x[0-9a-f]{1,6}|[a-z]+);/gi, (m, e) => {
+    if (e[0] !== '#') return NAMED_ENTITIES[e.toLowerCase()] ?? m;
+    const n = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : Number(e.slice(1));
+    return Number.isInteger(n) && n > 0 && n <= 0x10FFFF ? String.fromCodePoint(n) : m;
+  });
+}
 function stripHtml(s = '') {
-  return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  return decodeEntities(s.replace(/<[^>]*>/g, '')).replace(/\s+/g, ' ').trim();
 }
 
 // Append a small "Unsubscribe · Manage preferences" line just before
@@ -463,7 +474,9 @@ function sanitizeColor(c) {
 function sanitizeUrl(u) {
   if (!u || typeof u !== 'string') return null;
   const v = u.trim();
-  return /^https:\/\//.test(v) ? v : null;
+  // Interpolated raw into src="": no quotes, brackets or spaces, so an
+  // owner (or Ivy) supplied logo URL cannot add attributes or markup.
+  return /^https:\/\/[^\s"'<>`]+$/.test(v) ? v : null;
 }
 function escapeText(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
