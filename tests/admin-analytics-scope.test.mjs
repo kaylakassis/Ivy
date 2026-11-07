@@ -31,6 +31,10 @@ async function owner(tag, { userType = 'regular', comp = false, compInvite = fal
 
 async function main() {
   await ensureSchemaApplied();
+  // The window opens at the database's clock right now, before this run
+  // creates anyone. (It used to open a second before the process started,
+  // which caught accounts the previous suite created in its last second.)
+  const windowStart = (await sql`SELECT NOW() AS t`).rows[0].t;
   // Clean slate for the cached rollups so the live queries run.
   await sql`DELETE FROM admin_analytics_cache WHERE key IN ('totals', 'platformImpact')`;
   const real = await owner('real');
@@ -43,7 +47,7 @@ async function main() {
   const tester = await owner('tester', { tester: true });
 
   // Window starts at this run's own start so rows from an earlier run never leak in.
-  const from = new Date(S - 1000).toISOString();
+  const from = new Date(windowStart).toISOString();
   const to = new Date(Date.now() + 60_000).toISOString();
   const run = async () => { const res = mockRes(); await analytics(adminReq({ query: { from, to } }), res); return res; };
 
