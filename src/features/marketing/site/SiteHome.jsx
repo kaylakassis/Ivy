@@ -3,7 +3,7 @@
 // from Chrome.jsx; page-specific CSS + interactivity live here.
 import { useEffect, useRef, useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
-import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, IVY_PRICE_ANNUAL, TRIAL_DAYS, ANNUAL_SAVINGS_PCT } from '../../../lib/pricing.js';
+import { TOOL_STACK, STACK_TOTAL, STACK_PRICES_AS_OF, MONTHLY_STACK_SAVINGS, IVY_PRICE, IVY_PRICE_ANNUAL, TRIAL_DAYS, ANNUAL_SAVINGS_PCT } from '../../../lib/pricing.js';
 import { SITE_ORIGIN, OG_IMAGE } from '../../../lib/pageMeta.js';
 import ProductVideo, { playProductVideo } from './ProductVideo.jsx';
 import { SignupCta } from './Chrome.jsx';
@@ -452,8 +452,8 @@ export default function SiteHome() {
       <div className="stats">
         <div className="container stats-inner">
           <div className="stat"><div className="num lime" data-start="0" data-end="8.99" data-decimals="2" data-prefix="$" data-final="$8.99">$8.99</div><div className="lbl">per week, everything included</div></div>
-          <div className="stat"><div className="num" data-start="0" data-end="99" data-prefix="$" data-final="$99">$99</div><div className="lbl">average monthly savings</div></div>
-          <div className="stat"><div className="num" data-start="0" data-end="8" data-suffix=" tools" data-final="8 tools">8 tools</div><div className="lbl">replaced with one login</div></div>
+          <div className="stat"><div className="num" data-start="0" data-end={MONTHLY_STACK_SAVINGS} data-prefix="$" data-final={'$' + MONTHLY_STACK_SAVINGS}>{'$' + MONTHLY_STACK_SAVINGS}</div><div className="lbl">a month less than a typical tool stack</div></div>
+          <div className="stat"><div className="num" data-start="0" data-end={TOOL_STACK.length} data-suffix=" tools" data-final={TOOL_STACK.length + ' tools'}>{TOOL_STACK.length} tools</div><div className="lbl">replaced with one login</div></div>
           <div className="stat"><div className="num" data-start="0" data-end="14" data-suffix=" days" data-final="14 days">14 days</div><div className="lbl">free trial, $0 today</div></div>
         </div>
       </div>
@@ -528,6 +528,7 @@ export default function SiteHome() {
             <span className="old">{'$' + STACK_TOTAL}+/mo for a typical stack</span>
             <span className="new">$8.99<small>/week · everything included</small></span>
           </div>
+          <p className="stack-note" style={{ marginTop: 14, fontSize: 12.5, color: 'var(--muted, #8a9a93)' }}>Entry-level list prices on monthly billing, as of {STACK_PRICES_AS_OF}.</p>
         </div>
       </section>
 

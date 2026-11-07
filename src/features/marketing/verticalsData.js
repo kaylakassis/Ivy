@@ -120,7 +120,7 @@ export const VERTICALS = {
   },
   'videographers': {
     icon: 'Image', angle: 'videographers',
-    homeLine: 'Contracts, deliverables, project timelines - without 4 tools.',
+    homeLine: 'Contracts, deliverables, project timelines - without juggling separate tools.',
     headline: 'From inquiry to final cut, one workspace.',
     sub: 'Manage shoots, contracts, deposits, and revisions inside Ivy. Clients see one branded portal - not five email threads.',
     bullets: [
@@ -262,7 +262,7 @@ export const VERTICALS = {
       { title: 'Birth package bundle', body: 'Three prenatals + birth-on-call + two postpartums. One price; Ivy tracks what\'s used.' },
       { title: 'On-call blocks', body: 'Block out on-call date ranges on your calendar so new bookings respect them.' },
       { title: 'Everything on one record', body: 'Keep every client’s key info, documents, and history on one record you can reference fast.' },
-      { title: 'Postpartum follow-up', body: 'Auto-schedule the postpartum visits within X weeks of due date.' },
+      { title: 'Postpartum follow-up', body: 'Auto-schedule the postpartum visits in the weeks after the due date.' },
     ],
     use: [
       'Build the birth-support package,',
@@ -463,7 +463,7 @@ export const VERTICALS = {
     sub: 'Onboarding brief, brand-voice library per client, recurring retainers with delivery cadence, and invoicing on auto-pilot.',
     bullets: [
       { title: 'Brand-voice library', body: 'Per-client voice notes + sample copy. Surface them when you draft.' },
-      { title: 'Recurring retainers', body: 'Monthly retainer = X pieces. Track delivery against the contracted scope.' },
+      { title: 'Recurring retainers', body: 'A monthly retainer covers a set number of pieces. Track delivery against the contracted scope.' },
       { title: 'Project-based work', body: 'Sales page, email sequence, white paper - bill flat-rate; deliver via signed file.' },
       { title: 'Async revisions', body: 'Client requests revisions inside the project record. No emails lost.' },
     ],

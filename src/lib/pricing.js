@@ -9,7 +9,7 @@
 
 // Typical replaceable monthly spend across the SaaS stack a solo
 // business otherwise has to assemble. Numbers are publicly listed
-// entry-tier prices (May 2026), kept conservative so we never
+// entry-tier prices on monthly billing (checked November 2026), kept conservative so we never
 // over-promise. Any savings figure we quote is this total minus what Ivy
 // costs over the SAME period (IVY_PRICE_MONTHLY_EQUIV) - never minus the
 // weekly price, which would compare a month against a week and flatter the
@@ -17,14 +17,17 @@
 export const TOOL_STACK = [
   // `label` is what the site shows (Kayla: never name other products on
   // the site); `source` is only our record of where each price comes from.
-  { label: 'Client management app', source: 'HoneyBook', monthly: 39, replaces: 'clients + invoices + contracts' },
+  { label: 'Client management app', source: 'HoneyBook', monthly: 36, replaces: 'clients + invoices + contracts' },
   { label: 'Scheduling app', source: 'Calendly', monthly: 12, replaces: 'booking pages + reminders' },
-  { label: 'Advanced scheduling app', source: 'Acuity Scheduling', monthly: 16, replaces: 'advanced scheduling + intake forms' },
+  { label: 'Advanced scheduling app', source: 'Acuity Scheduling', monthly: 20, replaces: 'advanced scheduling + intake forms' },
   { label: 'Bookkeeping app', source: 'QuickBooks Self-Employed', monthly: 20, replaces: 'invoices + expenses + taxes' },
   { label: 'Email marketing app', source: 'Mailchimp', monthly: 13, replaces: 'newsletter + email blasts' },
   { label: 'Website builder', source: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
   { label: 'E-signature app', source: 'DocuSign', monthly: 15, replaces: 'legally-binding e-signatures' },
 ];
+
+// Shown on the site as "list prices as of" this date.
+export const STACK_PRICES_AS_OF = 'November 2026';
 
 export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 

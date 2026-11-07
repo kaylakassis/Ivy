@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
 import { siteUrl } from '../../../lib/pageMeta.js';
-import { MONTHLY_STACK_SAVINGS, TOOL_STACK, STACK_TOTAL } from '../../../lib/pricing.js';
+import { MONTHLY_STACK_SAVINGS, TOOL_STACK, STACK_TOTAL, STACK_PRICES_AS_OF } from '../../../lib/pricing.js';
 import { SignupCta } from './Chrome.jsx';
 
 const JSON_LD = {
@@ -105,14 +105,18 @@ export default function SitePricing() {
   });
 
   // ROI calculator, same conservative math as the prototype's calc():
-  // $75/hr rate, 60% of admin automated, 8% no-show rate recovered,
+  // starting example: $75/hr, 60% of admin handed over, 8% no-shows;
   // tool savings = the stack total minus what Ivy costs over the same month.
   const [clients, setClients] = useState(40);
   const [hours, setHours] = useState(8);
+  // The visitor sets their own rate, no-show rate and how much admin they'd
+  // hand over; the defaults are only a starting example.
+  const [rate, setRate] = useState(75);
+  const [share, setShare] = useState(60);
+  const [noShowPct, setNoShowPct] = useState(8);
   const tools = MONTHLY_STACK_SAVINGS;
-  const adminBack = Math.round(hours * 4.33 * 0.6);
-  const noShows = Math.max(1, Math.round(clients * 0.08));
-  const rate = 75;
+  const adminBack = Math.round(hours * 4.33 * (share / 100));
+  const noShows = Math.round(clients * (noShowPct / 100));
   const total = tools + adminBack * rate + noShows * rate;
   const totalLabel = '$' + total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '/mo';
 
@@ -171,19 +175,25 @@ export default function SitePricing() {
         <div className="container">
           <span className="eyebrow">ROI calculator</span>
           <h2>See what Ivy puts back in your pocket.</h2>
-          <p className="section-sub">Move the two sliders. Numbers update live. No signup needed.</p>
+          <p className="section-sub">Move the sliders to match your business. Numbers update live. No signup needed.</p>
           <div className="calc">
             <label>Clients you serve per month <output>{clients} clients</output></label>
             <input type="range" min="5" max="200" value={clients} onChange={(e) => setClients(+e.target.value)} />
             <label>Hours a week you spend on admin (billing, scheduling, follow-ups) <output>{hours} hrs/wk</output></label>
             <input type="range" min="1" max="30" value={hours} onChange={(e) => setHours(+e.target.value)} />
+            <label>Your hourly rate <output>${rate}/hr</output></label>
+            <input type="range" min="20" max="300" step="5" value={rate} onChange={(e) => setRate(+e.target.value)} />
+            <label>How much of that admin you'd hand to Ivy (your guess) <output>{share}%</output></label>
+            <input type="range" min="0" max="90" step="5" value={share} onChange={(e) => setShare(+e.target.value)} />
+            <label>Clients who miss or cancel late (your estimate) <output>{noShowPct}%</output></label>
+            <input type="range" min="0" max="30" value={noShowPct} onChange={(e) => setNoShowPct(+e.target.value)} />
             <div className="calc-grid">
-              <div className="calc-cell"><div className="k">Tool savings</div><div className="v">+${MONTHLY_STACK_SAVINGS}/month on average</div><div className="d">replacing the separate tools most solos run in parallel</div></div>
+              <div className="calc-cell"><div className="k">Tool savings</div><div className="v">+${MONTHLY_STACK_SAVINGS}/month</div><div className="d">compared with a typical stack of separate tools</div></div>
               <div className="calc-cell"><div className="k">Admin hours back</div><div className="v">{adminBack} hrs/mo</div><div className="d">billing + reminders, automated</div></div>
               <div className="calc-cell"><div className="k">No-shows prevented</div><div className="v">{noShows}/mo</div><div className="d">card on file + auto reminders</div></div>
             </div>
             <div className="calc-total"><span className="k">Total monthly upside</span><span className="v">{totalLabel}</span></div>
-            <p className="fine">Ivy is $8.99/week, and you start with a 14-day free trial ($0 today). <b>These figures are an example, not a guarantee.</b> The calculator assumes a $75/hr billable rate, Ivy handling about 60% of your admin time, an 8% no-show rate that reminders and card-on-file recover, and about ${MONTHLY_STACK_SAVINGS}/mo in replaced tool subscriptions. Your results depend on your business, your rates and how you use Ivy, and may be lower or higher.</p>
+            <p className="fine">Ivy is $8.99/week, and you start with a 14-day free trial ($0 today). <b>These figures are an example, not a guarantee.</b> They use the numbers you set above, assume reminders and card on file recover the missed bookings you entered, and add about ${MONTHLY_STACK_SAVINGS}/mo in replaced tool subscriptions. Your results depend on your business, your rates and how you use Ivy, and may be lower or higher.</p>
           </div>
         </div>
       </section>
@@ -199,6 +209,7 @@ export default function SitePricing() {
             ))}
             <div className="rowm total"><span className="t">Total replaced</span><span className="p">${STACK_TOTAL}+/mo for a typical stack → $8.99/week</span></div>
           </div>
+          <p style={{ marginTop: 12, fontSize: 12.5, color: 'var(--muted, #8a9a93)' }}>Entry-level list prices on monthly billing, as of {STACK_PRICES_AS_OF}.</p>
           <div className="trust-grid">
             <div className="trust-card"><h4>Stripe-verified partner</h4><p>Your money goes straight to your Stripe - we never touch it.</p></div>
             <div className="trust-card"><h4>Cancel anytime</h4><p>No contracts, no notice period. Cancel from account page.</p></div>
