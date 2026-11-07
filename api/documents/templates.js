@@ -15,6 +15,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { serializeDoc } from '../_lib/documents.js';
 import { listTemplatesPublic, findTemplate } from '../_lib/documentTemplates.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -38,7 +39,7 @@ export default async function handler(req, res) {
         INSERT INTO documents (workspace_id, name, kind, content_html, fields, is_template)
         VALUES (
           ${workspaceId}, ${name}, 'written',
-          ${tpl.body}, ${JSON.stringify(tpl.fields)}::jsonb, FALSE
+          ${sanitizeDocHtml(tpl.body)}, ${JSON.stringify(tpl.fields)}::jsonb, FALSE
         )
         RETURNING *
       `;

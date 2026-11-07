@@ -13,6 +13,7 @@ import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } fr
 import { blobPathnameForWorkspace } from '../_lib/blobScope.js';
 import { fetchAndInspectPdf, PdfRejectedError } from '../_lib/pdfInspect.js';
 import { enforce } from '../_lib/rate-limit.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -66,7 +67,8 @@ export default async function handler(req, res) {
         push('name', v);
       }
       if ('contentHtml' in body) {
-        push('content_html', body.contentHtml ? String(body.contentHtml).slice(0, 200000) : null);
+        // Saved through the same allowlist the editor and signing page use.
+        push('content_html', body.contentHtml ? sanitizeDocHtml(String(body.contentHtml).slice(0, 200000)) : null);
       }
       // A new PDF: check it server side before the document points at it.
       // Must be a file this workspace uploaded (ws/<id>/ prefix on the

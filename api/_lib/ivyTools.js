@@ -36,6 +36,7 @@ import { blockState, BLOCKED_MESSAGE } from './moderation.js';
 import { sendClientInvite, inviteNewClientsEnabled } from './clientNotify.js';
 import { validEmail } from './auth.js';
 import { paidMethodLabel } from './finance.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 import {
   parseAvailabilityChanges, applyAvailabilityChanges, diffAvailability, describeChange,
   scheduleByDay, fmtWindows, DAY_NAMES,
@@ -2932,7 +2933,7 @@ async function create_document_from_template({ workspaceId, args }) {
       recipient_client_id, recipient_email, recipient_name, is_template
     ) VALUES (
       ${workspaceId}, ${t.name + ' - ' + cl.rows[0].name}, ${t.kind || 'written'},
-      ${t.content_html || null}, ${t.file_url || null},
+      ${sanitizeDocHtml(t.content_html) || null}, ${t.file_url || null},
       ${JSON.stringify(t.fields || [])}::jsonb, 'draft',
       ${cl.rows[0].id}, ${cl.rows[0].email}, ${cl.rows[0].name}, FALSE
     )

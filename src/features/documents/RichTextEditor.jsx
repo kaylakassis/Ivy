@@ -20,6 +20,7 @@
 // the planned escape hatch).
 import React, { useRef, useEffect, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import { sanitizeDocHtml } from '../../lib/docHtml.js';
 
 const TOOLBAR_BTN = {
   width: 32, height: 30, borderRadius: 7,
@@ -49,14 +50,16 @@ export default function RichTextEditor({
   useEffect(() => {
     if (!ref.current) return;
     if ((value || '') !== lastHtml.current) {
-      ref.current.innerHTML = value || '';
+      // Never put stored HTML into the page as-is: only the allowlisted
+      // formatting reaches the editable area (src/lib/docHtml.js).
+      ref.current.innerHTML = sanitizeDocHtml(value || '');
       lastHtml.current = value || '';
     }
   }, [value]);
 
   const emit = useCallback(() => {
     if (!ref.current) return;
-    const html = normalizeHtml(ref.current.innerHTML || '');
+    const html = sanitizeDocHtml(normalizeHtml(ref.current.innerHTML || ''));
     // Keep `lastHtml` in sync with what we ship out, not the raw DOM -
     // otherwise the next `value` round-trip from the parent looks like
     // a foreign value and the prop-sync effect rewrites the DOM, which

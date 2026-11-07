@@ -11,6 +11,7 @@ import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 
 import { FIELD_META } from './fieldTypes.js';
+import { sanitizeDocHtml } from '../../lib/docHtml.js';
 
 export default function DocumentPreview({
   name, body, fields, businessName,
@@ -235,8 +236,5 @@ function FieldControl({ type, options }) {
 // owner sees is exactly what the signer will get. Whitelist headings,
 // paragraph, line break, strong/em, lists. Strip everything else.
 function sanitize(html) {
-  if (typeof html !== 'string') return '';
-  return html
-    .replace(/<\/?(?!\/?(?:h[1-3]|p|br|strong|em|ul|ol|li)\b)[^>]+>/gi, '')
-    .replace(/<(\/?)(h[1-3]|p|br|strong|em|ul|ol|li)\b[^>]*>/gi, '<$1$2>');
+  return typeof html === 'string' ? sanitizeDocHtml(html) : '';
 }

@@ -25,6 +25,7 @@ import { sendClientSms } from './sms.js';
 import { createDraftInvoice } from './finance.js';
 import { appUrl } from './tokens.js';
 import { sendDocumentForSigning } from './documents.js';
+import { sanitizeDocHtml } from '../../src/lib/docHtml.js';
 
 const VALID_TRIGGERS = new Set(['lead_created', 'client_created', 'client_inactive', 'booking_completed']);
 const VALID_ACTIONS  = new Set([
@@ -483,7 +484,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
         ${workflow.workspace_id},
         ${renderTokens(t.name, tokens) + ' - ' + (client?.name || '')},
         ${t.kind || 'written'},
-        ${t.content_html || null},
+        ${sanitizeDocHtml(t.content_html) || null},
         ${t.file_url || null},
         ${JSON.stringify(t.fields || [])}::jsonb,
         'draft',
