@@ -48,6 +48,7 @@ const HIDE_PREFIXES = [
   // the logged-in app shells (dashboard, /me) where switching is the point.
   '/pricing', '/blog', '/about', '/security', '/integrations', '/mobile',
   '/for/', '/vs/',
+  '/tools',
 ];
 
 export default function ViewToggle() {

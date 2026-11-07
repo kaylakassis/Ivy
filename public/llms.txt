@@ -85,6 +85,15 @@ Ivy is made for solo service businesses: massage therapists, coaches, hair styli
 - [Ivy vs Practice](https://www.joinivy.ai/vs/practice)
 - [Ivy vs Paperbell](https://www.joinivy.ai/vs/paperbell)
 
+## Free tools
+
+Free tools for solo service businesses. They run in the browser, need no signup, and send nothing anywhere. Index: https://www.joinivy.ai/tools
+
+- [Cancellation policy generator](https://www.joinivy.ai/tools/cancellation-policy-generator): writes a plain-language cancellation and no-show policy from a notice window, fees, deposit and tone; copy or download it.
+- [Booking deposit calculator](https://www.joinivy.ai/tools/deposit-calculator): from the owner's own price, weekly bookings and no-show estimate, shows what missed bookings cost and what a deposit would keep, with the math.
+- [Client intake form templates](https://www.joinivy.ai/tools/intake-form-templates): ready-to-copy intake questions for massage therapists, hair stylists, personal trainers, coaches, photographers, tutors, estheticians and cleaners.
+- [No-show cost calculator](https://www.joinivy.ai/blog/no-show-cost-calculator)
+
 ## Blog
 
 Practical guides for solopreneurs: reduce no-shows, get paid faster, keep clients, get reviews, handle taxes, and run your one-person business with less busywork. Index: https://www.joinivy.ai/blog
