@@ -28,6 +28,7 @@ import { IvyProvider } from '../../features/ivy/state.jsx';
 import TutorialOverlay from '../TutorialOverlay.jsx';
 import { TutorialProvider } from '../../lib/tutorialState.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
+import { consumePartnerRef } from '../../lib/partnerRef.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { syncPushOnLaunch } from '../../lib/push.js';
@@ -198,6 +199,9 @@ function AppShellInner() {
 
   // Close the drawer on route change so nav-tap-to-page just works.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+
+  // Opened from an accountability-partner link (?ptr=...): count it once.
+  useEffect(() => { consumePartnerRef(location.search); }, [location.search]);
   // Keep the drawer mounted for its 140ms exit so it slides out instead
   // of vanishing (useExitAnimation flags it with .is-closing meanwhile).
   const drawerExit = useExitAnimation(viewport.isMobile && !native && drawerOpen);

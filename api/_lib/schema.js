@@ -5095,4 +5095,63 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_away_sent_at TIMESTAMPTZ
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS partner_checked_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_message_threads_unread_biz ON message_threads(workspace_id) WHERE unread_biz > 0;
 CREATE INDEX IF NOT EXISTS idx_bookings_deposit_review ON bookings(workspace_id) WHERE deposit_refund_request_status = 'pending';
+-- Accountability partner tracking for the admin view (1.0.6). Counts only:
+-- no message text, no client names. partner_events: one row per partner
+-- message sent (kind, push devices reached, emailed), per "Not today",
+-- per turn off / on (source: settings = after the warning, ivy = through
+-- Ivy's approval card, other = a route without the warning), and per
+-- "Keep it on" on the warning. opened_at: the owner used the app within
+-- 24h after a send (any visit). clicked_at: the owner opened the app from
+-- that message's own link (push, bell or email).
+CREATE TABLE IF NOT EXISTS partner_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  event TEXT NOT NULL,
+  kind TEXT,
+  source TEXT,
+  push_devices INT,
+  emailed BOOLEAN,
+  item_count INT,
+  opened_at TIMESTAMPTZ,
+  clicked_at TIMESTAMPTZ,
+  click_channel TEXT,
+  ref TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_partner_events_event_time ON partner_events(event, created_at);
+CREATE INDEX IF NOT EXISTS idx_partner_events_unopened
+  ON partner_events(user_id, created_at) WHERE event = 'sent' AND opened_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_partner_events_ref ON partner_events(ref) WHERE ref IS NOT NULL;
+-- One row per item a partner message named. cleared_at: the first check
+-- that found none of the named things still waiting; settled: no more
+-- checks (cleared, or 48 hours passed).
+CREATE TABLE IF NOT EXISTS partner_mentions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES partner_events(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  signal_key TEXT NOT NULL,
+  item_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  mentioned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  checked_at TIMESTAMPTZ,
+  cleared_at TIMESTAMPTZ,
+  settled BOOLEAN NOT NULL DEFAULT FALSE
+);
+CREATE INDEX IF NOT EXISTS idx_partner_mentions_open ON partner_mentions(checked_at NULLS FIRST) WHERE settled = FALSE;
+CREATE INDEX IF NOT EXISTS idx_partner_mentions_time ON partner_mentions(mentioned_at);
+-- Turn-offs from the settings screen before tracking began (the 1.0.6
+-- screen always shows the warning first), from the workspace audit log.
+-- Skips any turn-off already tracked (the full migration path can re-run
+-- this statement; tracked rows have no ref).
+INSERT INTO partner_events (workspace_id, user_id, event, source, ref, created_at)
+SELECT ae.workspace_id, w.owner_id, 'turned_off', 'settings', 'audit:' || ae.id::text, ae.created_at
+  FROM audit_events ae
+  JOIN workspaces w ON w.id = ae.workspace_id
+ WHERE ae.action = 'accountability_partner.off'
+   AND ae.created_at >= '2026-11-01'
+   AND NOT EXISTS (
+     SELECT 1 FROM partner_events pe
+      WHERE pe.workspace_id = ae.workspace_id AND pe.event = 'turned_off' AND pe.ref IS NULL
+        AND pe.created_at BETWEEN ae.created_at - INTERVAL '2 minutes' AND ae.created_at + INTERVAL '2 minutes')
+ON CONFLICT (ref) WHERE ref IS NOT NULL DO NOTHING;
 `;

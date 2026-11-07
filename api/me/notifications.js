@@ -23,6 +23,7 @@ import { EMAIL_NOTIFY_TYPES, EMAIL_NOTIFY_LABELS, UNLISTED_EMAIL_TYPES } from '.
 const LISTED_EMAIL_TYPES = EMAIL_NOTIFY_TYPES.filter((t) => !UNLISTED_EMAIL_TYPES.includes(t));
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { setMarketingConsent } from '../_lib/emailConsent.js';
+import { recordPartnerToggle } from '../_lib/accountability.js';
 
 function resolve(stored) {
   const push = {};
@@ -86,6 +87,10 @@ export default async function handler(req, res) {
         UPDATE users SET notification_prefs = ${JSON.stringify(next)}::jsonb
         WHERE id = ${user.id}
       `;
+      // The partner's switch changed here (no warning on this route):
+      // counted for the admin view.
+      const wasOn = (r.rows[0]?.notification_prefs || {}).accountability !== false;
+      await recordPartnerToggle(user.id, wasOn, next.accountability !== false, 'other');
       // Muting the marketing category (an older app's "Reviews &
       // announcements" switch) also withdraws Ivy marketing consent.
       if (incomingEmail && 'marketing' in incomingEmail && !incomingEmail.marketing) {

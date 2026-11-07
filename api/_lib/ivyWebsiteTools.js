@@ -14,11 +14,15 @@
 // taps Approve, is what runs. Nothing goes public unless the owner approves
 // publish_website.
 import { sql } from './db.js';
-import { SECTION_TYPES, STARTER_PACKS, FONT_PAIRS, mkSection, LIBRARY_SECTIONS, LEGACY_CODE_TYPES } from '../../src/features/website/sections.js';
+import { SECTION_TYPES, STARTER_PACKS, FONT_PAIRS, mkSection, LIBRARY_SECTIONS, LEGACY_CODE_TYPES, ANIMATIONS } from '../../src/features/website/sections.js';
 import { videoEmbedUrl, VIDEO_HOSTS_LABEL } from '../../src/lib/videoEmbed.js';
 import { normalizeDay } from '../../src/features/website/hoursText.js';
 import { normalizeInstagram, normalizeSocialUrl, normalizeSocialPlatform, SOCIAL_PLATFORM_IDS } from '../../src/features/website/socialLinks.js';
 import { TEMPLATES } from '../../src/features/website/templates.js';
+import {
+  BG_SWATCHES, HEADLINE_SWATCHES, SPACING_OPTIONS, TEXT_ALIGN_OPTIONS, ANIMATION_DELAY, ANIMATION_DURATION,
+  normalizeAnimate, storedAnimate, colorWords, describeSectionStyle, styleSentence, safeBackground, safeHeadlineGradient,
+} from '../../src/features/website/sectionStyle.js';
 import {
   moveSectionToPage, copySectionToPage, moveSectionWithinPage, cloneSection, findSectionPage, uniquePageSlug,
 } from '../../src/features/website/pageTransforms.js';
@@ -66,7 +70,7 @@ export const WEBSITE_TOOLS = [
   },
   {
     name: 'edit_website_section',
-    description: "Change sections on the website draft, same as the editor: update (text/fields in `data`, layout `variant`, or one entry of a list with `item_number` + `item`, e.g. step 2 of a Process section), add (`type`), remove, hide, show, move (reorder on its page), duplicate, move_to_page / copy_to_page (to `target_page`, or to a new page named `new_page_title`; buttons that pointed at a moved section are re-pointed). Ids and each section's current lists (steps, items, members, tiers...) come from get_website. Links: '' = the default, '#book' = booking page, '#<page-slug>' = a page, or a full https address.",
+    description: "Change sections on the website draft, same as the editor: update (text/fields in `data`, layout `variant`, how it looks with `style`, or one entry of a list with `item_number` + `item`, e.g. step 2 of a Process section), add (`type`, optional `style`), remove, hide, show, move (reorder on its page), duplicate, move_to_page / copy_to_page (to `target_page`, or to a new page named `new_page_title`; buttons that pointed at a moved section are re-pointed). Ids, each section's current lists (steps, items, members, tiers...) and its current look (`style`, in words) come from get_website. Links: '' = the default, '#book' = booking page, '#<page-slug>' = a page, or a full https address.",
     input_schema: {
       type: 'object',
       properties: {
@@ -83,6 +87,22 @@ export const WEBSITE_TOOLS = [
         position:       { description: "Zero-based index, or 'top' / 'bottom' (default bottom)." },
         target_page:    { type: 'string', description: 'Slug of the page to move/copy to.' },
         new_page_title: { type: 'string', description: 'Move/copy to a new page with this title.' },
+        style: {
+          type: 'object',
+          description: "How the section looks, the editor's Section style panel. Send only what changes. No custom code or CSS.",
+          properties: {
+            background:             { type: 'string', description: `One of: ${BG_SWATCHES.map((x) => x.id).join(', ')} ('template' = back to the template color), or a color code like #A8C5A0.` },
+            spacing:                { type: 'string', enum: SPACING_OPTIONS.map((x) => x.id), description: 'Space above and below.' },
+            text_align:             { type: 'string', enum: TEXT_ALIGN_OPTIONS.map((x) => x.id) },
+            show_on_computers:      { type: 'boolean' },
+            show_on_phones:         { type: 'boolean' },
+            headline_effect:        { type: 'string', enum: HEADLINE_SWATCHES.map((x) => x.id), description: 'Headline color effect.' },
+            photo_moves_slower:     { type: 'boolean', description: 'Background photo moves slower than the page (parallax).' },
+            animation:              { type: 'string', enum: ['none', ...Object.keys(ANIMATIONS)], description: 'How it appears when scrolled into view (none = just appears).' },
+            animation_wait_seconds: { type: 'number', description: `Wait before the animation starts, ${ANIMATION_DELAY.min / 1000} to ${ANIMATION_DELAY.max / 1000}.` },
+            animation_seconds:      { type: 'number', description: `How long the animation takes, ${ANIMATION_DURATION.min / 1000} to ${ANIMATION_DURATION.max / 1000}.` },
+          },
+        },
       },
       required: ['action'],
     },
@@ -215,6 +235,8 @@ function sectionSummary(s) {
   if (Array.isArray(d.items)) out.items = d.items.length;
   if (Array.isArray(d.images)) out.images = d.images.length;
   if (OWNER_ONLY_TYPES.has(s.type)) { out.legacyCode = true; return out; }
+  // How it looks, in plain words ("what color is my hero?").
+  out.style = describeSectionStyle(s);
   // Every list the section has (steps, items, members, tiers, rows, days,
   // logos, posts, photos), numbered the way a visitor counts them, so Ivy
   // can change "step 2" without guessing. Text is clipped.
@@ -465,6 +487,146 @@ function describeFieldChanges(section, keys) {
   }).join(', ') + (keys.length > 6 ? ` and ${keys.length - 6} more` : '');
 }
 
+// ── section style (the editor's "Section style" panel) ────────────────
+// Ivy sets exactly what the editor's StyleControls and AnimationPicker can
+// set, with the same allowed values (src/features/website/sectionStyle.js):
+// a named swatch or one plain colour code, three spacings, booleans, the
+// animation list and the slider ranges. Anything else is refused, never
+// passed through, so no CSS or code can reach the site this way.
+const STYLE_KEYS = ['background', 'spacing', 'text_align', 'show_on_computers', 'show_on_phones',
+  'headline_effect', 'photo_moves_slower', 'animation', 'animation_wait_seconds', 'animation_seconds'];
+const normKey = (v) => String(v ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+const BG_CLEAR = new Set(['template', 'default', 'none', 'clear', 'reset', 'template_color', 'use_the_template_color', 'plain']);
+const swatchFor = (list, raw) => {
+  const k = normKey(raw);
+  return list.find((x) => x.id === k || normKey(x.label) === k) || null;
+};
+
+function parseBackground(raw) {
+  const bad = () => new Error(`background must be one of: ${BG_SWATCHES.map((x) => x.id).join(', ')} ('template' goes back to the template color), or one color code like #A8C5A0. Custom code or CSS is not allowed`);
+  if (typeof raw !== 'string' || raw.length > 40) throw bad();
+  const v = raw.trim();
+  if (BG_CLEAR.has(normKey(v))) return { stored: undefined, label: 'the template color' };
+  const sw = swatchFor(BG_SWATCHES, v);
+  if (sw) return sw.v ? { stored: sw.v, label: sw.label, chip: sw.v } : { stored: undefined, label: 'the template color' };
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v);
+  if (!m) throw bad();
+  const hex = `#${m[1].length === 3 ? m[1].split('').map((c) => c + c).join('') : m[1]}`.toLowerCase();
+  const same = BG_SWATCHES.find((x) => x.v.toLowerCase() === hex);
+  if (same) return { stored: same.v, label: same.label, chip: same.v };
+  return { stored: hex, label: `a custom color (${colorWords(hex)})`, chip: hex, custom: true };
+}
+
+function parseBool(key, v) {
+  if (typeof v === 'boolean') return v;
+  if (v === 'true' || v === 'false') return v === 'true';
+  throw new Error(`${key} must be true or false`);
+}
+
+function parseSeconds(key, v, range) {
+  const n = typeof v === 'number' ? v : (typeof v === 'string' && /^\s*\d{1,3}(\.\d{1,3})?\s*$/.test(v) ? Number(v) : NaN);
+  if (!Number.isFinite(n)) throw new Error(`${key} must be a number of seconds`);
+  const ms = Math.round((n * 1000) / range.step) * range.step;
+  if (ms < range.min || ms > range.max) throw new Error(`${key} must be between ${range.min / 1000} and ${range.max / 1000} seconds`);
+  return ms;
+}
+const secsWords = (ms) => `${Math.round(ms / 10) / 100} s`;
+
+// Applies `input` to the section's style / animate in place. Returns
+// { parts: [plain words], swatches: [{ label, color }] }. Throws a plain
+// message for a value the editor does not offer.
+function applyStyleChange(section, input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('style must be an object');
+  const unknown = Object.keys(input).filter((k) => !STYLE_KEYS.includes(k));
+  if (unknown.length) {
+    throw new Error(`${unknown.slice(0, 3).map((k) => `"${String(k).slice(0, 30)}"`).join(', ')} is not a style setting. Style settings: ${STYLE_KEYS.join(', ')}. Custom code or CSS is not available`);
+  }
+  const cur = section.style && typeof section.style === 'object' && !Array.isArray(section.style) ? section.style : {};
+  const next = { ...cur };
+  const parts = [];
+  const swatches = [];
+  const set = (k, v) => { if (v === undefined) delete next[k]; else next[k] = v; };
+
+  if ('background' in input) {
+    const b = parseBackground(input.background);
+    if ((cur.background || undefined) !== b.stored) {
+      set('background', b.stored);
+      parts.push(b.stored ? `background to ${b.label}` : 'background back to the template color');
+      if (b.chip) swatches.push({ label: b.custom ? 'Custom color' : b.label, color: b.chip });
+    }
+  }
+  if ('spacing' in input) {
+    const o = SPACING_OPTIONS.find((x) => x.id === normKey(input.spacing) || normKey(x.label) === normKey(input.spacing));
+    if (!o) throw new Error(`spacing must be one of: ${SPACING_OPTIONS.map((x) => x.id).join(', ')}`);
+    const now = cur.padding && cur.padding !== 'normal' ? cur.padding : undefined;
+    if (now !== o.stored) { set('padding', o.stored); parts.push(`space above and below to ${o.label}`); }
+  }
+  if ('text_align' in input) {
+    const o = TEXT_ALIGN_OPTIONS.find((x) => x.id === normKey(input.text_align));
+    if (!o) throw new Error(`text_align must be one of: ${TEXT_ALIGN_OPTIONS.map((x) => x.id).join(', ')}`);
+    if ((cur.textAlign || undefined) !== o.stored) { set('textAlign', o.stored); parts.push(o.stored ? `text alignment to ${o.label}` : 'text alignment back to the default'); }
+  }
+  for (const [key, field, words] of [['show_on_computers', 'hideOnDesktop', 'computers'], ['show_on_phones', 'hideOnMobile', 'phones']]) {
+    if (!(key in input)) continue;
+    const show = parseBool(key, input[key]);
+    if (!!cur[field] === !show) continue;
+    set(field, show ? undefined : true);
+    parts.push(show ? `show it on ${words}` : `hide it on ${words}`);
+  }
+  if (next.hideOnDesktop && next.hideOnMobile && !(cur.hideOnDesktop && cur.hideOnMobile)) {
+    parts.push('(visitors will not see it on any device)');
+  }
+  if ('headline_effect' in input) {
+    const sw = swatchFor(HEADLINE_SWATCHES, input.headline_effect) || (BG_CLEAR.has(normKey(input.headline_effect)) ? HEADLINE_SWATCHES[0] : null);
+    if (!sw) throw new Error(`headline_effect must be one of: ${HEADLINE_SWATCHES.map((x) => x.id).join(', ')}`);
+    const stored = sw.v || undefined;
+    if ((cur.headlineGradient || undefined) !== stored) {
+      set('headlineGradient', stored);
+      parts.push(stored ? `headline color effect to ${sw.label}` : 'headline color effect off (plain)');
+      if (stored) swatches.push({ label: sw.label, color: stored });
+    }
+  }
+  if ('photo_moves_slower' in input) {
+    const on = parseBool('photo_moves_slower', input.photo_moves_slower);
+    if (!!cur.parallax !== on) { set('parallax', on ? true : undefined); parts.push(`photo moves slower than the page: ${on ? 'on' : 'off'}`); }
+  }
+  section.style = next;
+
+  // Animation (stored on `animate`, beside style), same shape the editor's
+  // AnimationPicker writes.
+  const hasAnim = ['animation', 'animation_wait_seconds', 'animation_seconds'].some((k) => k in input);
+  if (hasAnim) {
+    const before = normalizeAnimate(section.animate);
+    let type = before?.type || null;
+    if ('animation' in input) {
+      const k = normKey(input.animation);
+      if (k === 'none' || k === 'just_appears' || k === 'off') type = null;
+      else {
+        const id = Object.keys(ANIMATIONS).find((x) => x === k || normKey(ANIMATIONS[x].label) === k);
+        if (!id) throw new Error(`animation must be one of: none, ${Object.keys(ANIMATIONS).join(', ')}`);
+        type = id;
+      }
+    }
+    const timing = 'animation_wait_seconds' in input || 'animation_seconds' in input;
+    if (!type && timing) throw new Error('This section has no animation. Pick one with animation first, then the timing');
+    if (!type) {
+      if (before || section.animate) { section.animate = null; parts.push('no animation (it just appears)'); }
+    } else {
+      const delayMs = 'animation_wait_seconds' in input ? parseSeconds('animation_wait_seconds', input.animation_wait_seconds, ANIMATION_DELAY) : (before?.delayMs ?? ANIMATION_DELAY.dflt);
+      const durationMs = 'animation_seconds' in input ? parseSeconds('animation_seconds', input.animation_seconds, ANIMATION_DURATION) : (before?.durationMs ?? ANIMATION_DURATION.dflt);
+      if (!before || before.type !== type || before.delayMs !== delayMs || before.durationMs !== durationMs) {
+        section.animate = storedAnimate({ type, delayMs, durationMs });
+        const t = `waits ${secsWords(delayMs)}, takes ${secsWords(durationMs)}`;
+        parts.push(before?.type === type ? `animation timing: ${t}` : `appears with "${ANIMATIONS[type].label}" when scrolled into view (${t})`);
+      }
+    }
+  }
+  // Belt and braces: what was stored must be something the renderers apply.
+  if (section.style.background && !safeBackground(section.style.background)) throw new Error('That background is not allowed');
+  if (section.style.headlineGradient && !safeHeadlineGradient(section.style.headlineGradient)) throw new Error('That headline effect is not allowed');
+  return { parts, swatches };
+}
+
 // ── plans ─────────────────────────────────────────────────────────────
 // Each plan validates against the draft (throwing a plain-English Error for
 // a call that cannot work), and returns:
@@ -494,10 +656,12 @@ function planSectionEdit(row, workspaceId, a) {
     if (a.variant && (SECTION_TYPES[type].variants || []).some((v) => v.id === a.variant)) s.variant = a.variant;
     if (a.data && typeof a.data === 'object') mergeData(s, a.data);
     finishSection(s, {});
+    const look = a.style != null ? applyStyleChange(s, a.style) : { parts: [], swatches: [] };
     page.sections.splice(indexFor(pos, page.sections.length), 0, s);
     const where = `${pageName(page)} (${posWords(pos)})`;
     return {
-      summary: `Add a ${sectionName(s)} section to ${where}`,
+      summary: `Add a ${sectionName(s)} section to ${where}${look.parts.length ? `, with ${look.parts.join('; ')}` : ''}`,
+      swatches: look.swatches,
       done: `Website draft: added a ${sectionName(s)} section to ${where}`,
       apply: save(pages, { added: sectionSummary(s), page: slug }),
     };
@@ -527,17 +691,30 @@ function planSectionEdit(row, workspaceId, a) {
     }
     if (a.data && typeof a.data === 'object' && !Array.isArray(a.data)) {
       const keys = mergeData(s, a.data);
-      if (!keys.length && !parts.length && a.item == null && a.remove_item !== true) {
+      if (!keys.length && !parts.length && a.item == null && a.remove_item !== true && (a.style == null || Object.keys(a.data).length)) {
         const fields = Object.keys(SECTION_TYPES[s.type]?.default?.('') || {});
-        throw new Error(`None of those fields exist on a ${s.type} section. Fields: ${fields.join(', ')}`);
+        throw new Error(`None of those fields exist on a ${s.type} section. Fields: ${fields.join(', ')}. For how it looks (background, spacing, animation...) use style`);
       }
       if (keys.length) parts.push(describeFieldChanges(s, keys));
     }
     if (a.item != null || a.remove_item === true || a.item_number != null) parts.push(editListItem(s, a));
-    if (!parts.length) throw new Error('Nothing to change: pass data, variant, or item / item_number');
+    const look = a.style != null ? applyStyleChange(s, a.style) : { parts: [], swatches: [] };
+    if (a.style != null && !look.parts.length && !parts.length) {
+      throw new Error(`The ${name} section already looks like that. Now: ${styleSentence(s)}`);
+    }
+    if (!parts.length && !look.parts.length) throw new Error('Nothing to change: pass data, variant, style, or item / item_number');
     finishSection(s, prevData);
+    if (!parts.length) {
+      return {
+        summary: `Change how the ${name} section on ${on} looks: ${look.parts.join('; ')}`,
+        swatches: look.swatches,
+        done: `Website draft: changed how the ${name} section on ${on} looks`,
+        apply: save(pages),
+      };
+    }
     return {
-      summary: `Change the ${name} section on ${on}: ${parts.join('; ')}`,
+      summary: `Change the ${name} section on ${on}: ${parts.join('; ')}${look.parts.length ? `; and how it looks: ${look.parts.join('; ')}` : ''}`,
+      swatches: look.swatches,
       done: `Website draft: changed the ${name} section on ${on}`,
       apply: save(pages),
     };
@@ -898,6 +1075,20 @@ export async function describeWebsiteAction(name, a, ctx) {
   if (!WEBSITE_SENSITIVE.includes(name)) return null;
   const plan = await planWebsite(name, a, ctx);
   return plan?.summary || null;
+}
+
+// Colour chips for the approval card ({ label, color } per chosen swatch or
+// custom colour), so the owner sees the colour instead of a code. Only
+// values that pass the renderers' own checks are returned.
+export async function websiteCardSwatches(name, a, ctx) {
+  if (name !== 'edit_website_section' || !a || a.style == null) return [];
+  try {
+    const plan = await planWebsite(name, a, ctx);
+    return (plan?.swatches || [])
+      .filter((x) => safeBackground(x.color) || safeHeadlineGradient(x.color))
+      .slice(0, 4)
+      .map((x) => ({ label: String(x.label).slice(0, 40), color: x.color }));
+  } catch { return []; }
 }
 
 // A website call that cannot work is refused before a card is shown.

@@ -19,7 +19,7 @@ import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './c
 import { invalidateOwnerWorkspace } from './clientPortal.js';
 import { validateAvailability, availabilityFromPreset, validateBookingRules, validateBusinessBasics, AVAILABILITY_PRESETS } from './settingsValidation.js';
 import { sendEmail, emailShell } from './email.js';
-import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction, refuseWebsiteAction } from './ivyWebsiteTools.js';
+import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction, refuseWebsiteAction, websiteCardSwatches } from './ivyWebsiteTools.js';
 import { OWNER_TOOLS, OWNER_HANDLERS, OWNER_SENSITIVE, OWNER_READ_ONLY, describeOwnerAction, refuseOwnerAction } from './ivyOwnerTools.js';
 import {
   APP_TOOLS, APP_HANDLERS, APP_SENSITIVE, APP_READ_ONLY, APP_WRITE_TOOLS, appCallIsRead, appToolNeedsApproval,
@@ -1425,6 +1425,8 @@ async function holdForApproval(name, a, ctx) {
   } catch {
     summary = `Run ${name}`;
   }
+  // Colour chips for a website style change (never a bare colour code).
+  const swatches = await websiteCardSwatches(name, a, ctx).catch(() => []);
   let pendingId = null;
   if (ctx?.workspaceId) {
     const r = await sql`
@@ -1438,6 +1440,7 @@ async function holdForApproval(name, a, ctx) {
     needs_confirmation: true,
     pending_id: pendingId,
     action: name,
+    ...(swatches.length ? { swatches } : {}),
     summary,
     instruction:
       'Nothing has happened yet. Tell the owner in plain English exactly what this will do (the summary above) and ask them to tap Approve on the card under your reply. ' +

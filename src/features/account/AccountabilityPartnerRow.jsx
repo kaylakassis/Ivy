@@ -154,7 +154,11 @@ export default function AccountabilityPartnerRow() {
 
       {asking && (
         <TurnOffDialog busy={busy}
-          onKeep={() => setAsking(false)}
+          onKeep={() => {
+            setAsking(false);
+            // Counted for the admin view: the warning kept the partner on.
+            api.post('/me/accountability', { action: 'warning_kept' }).catch(() => {});
+          }}
           onTurnOff={async () => { const okd = await save({ enabled: false }); if (okd) setAsking(false); }}/>
       )}
     </div>

@@ -5,6 +5,7 @@
 import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES, ANIMATIONS, isLegacyCodeType } from './sections.js';
+import { BG_SWATCHES, HEADLINE_SWATCHES } from './sectionStyle.js';
 import { EDITORS, LegacyCodePanel, NoSettingsEditor } from './sectionEditors.jsx';
 import { EditorContext, FieldBlock, ImageInput, GalleryPhotos, Hint, inputS } from './editorKit.jsx';
 
@@ -199,22 +200,8 @@ function AnimationPicker({ animate, onChange }) {
 // Per-section style overrides - background, spacing, text alignment,
 // which devices show it, headline color effect. Colors are picked from
 // swatches or a color picker; nothing is typed.
-const BG_SWATCHES = [
-  { v: '', label: 'Use the template color' },
-  { v: '#FFFFFF', label: 'White' },
-  { v: '#0D0E0C', label: 'Near black' },
-  { v: '#F5F1EA', label: 'Warm cream' },
-  { v: '#5B7C5F', label: 'Sage green' },
-  { v: 'linear-gradient(135deg,#E5572B,#F2D2BC)', label: 'Sunset blend' },
-  { v: 'linear-gradient(180deg,#15201A,#1F2B23)', label: 'Deep forest blend' },
-];
-const HEADLINE_SWATCHES = [
-  { v: '', label: 'Plain (template color)' },
-  { v: 'linear-gradient(90deg,#F472B6,#A78BFA)', label: 'Pink to violet' },
-  { v: 'linear-gradient(90deg,#FB923C,#F43F5E)', label: 'Orange to rose' },
-  { v: 'linear-gradient(90deg,#2DD4BF,#3B82F6)', label: 'Teal to blue' },
-  { v: 'linear-gradient(90deg,#FACC15,#EAB308)', label: 'Gold' },
-];
+// The swatch lists live in sectionStyle.js so Ivy offers exactly the same
+// choices (api/_lib/ivyWebsiteTools.js).
 const isHex = (v) => /^#[0-9a-f]{6}$/i.test(String(v || ''));
 
 function StyleControls({ style, updateStyle, mobile }) {

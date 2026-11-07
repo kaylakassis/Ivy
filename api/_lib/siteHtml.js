@@ -26,7 +26,8 @@ import path from 'node:path';
 // Both modules are pure JS (no JSX/React imports), so they're safe to
 // pull into a Vercel function bundle.
 import { TEMPLATES } from '../../src/features/website/templates.js';
-import { FONT_PAIRS } from '../../src/features/website/sections.js';
+import { FONT_PAIRS, PADDING_DENSITIES } from '../../src/features/website/sections.js';
+import { safeBackground, safeHeadlineGradient, safePadding, safeTextAlign } from '../../src/features/website/sectionStyle.js';
 import { sectionAnchors, resolveSiteLink } from '../../src/lib/siteLinks.js';
 import { videoEmbedUrl } from '../../src/lib/videoEmbed.js';
 
@@ -486,22 +487,34 @@ function renderSection(section, handle, index = 0) {
   const fn = RENDERERS[section.type];
   if (!fn) return '';
   const inner = fn(section, handle);
-  const style = section.style || {};
+  const style = section.style && typeof section.style === 'object' ? section.style : {};
   const hideMobile  = !!style.hideOnMobile;
   const hideDesktop = !!style.hideOnDesktop;
-  const grad        = style.headlineGradient ? styleVal(style.headlineGradient) : '';
+  // Same rules as the React renderer: only values the editor offers
+  // (src/features/website/sectionStyle.js) are applied, never raw CSS.
+  const grad        = safeHeadlineGradient(style.headlineGradient);
+  const bg          = safeBackground(style.background);
+  const pad         = safePadding(style.padding);
+  const align       = safeTextAlign(style.textAlign);
+  const parallax    = !!style.parallax;
   // Anchors are keyed by the ORIGINAL id; the rendered id is the safe one.
   const anchor = LINK_CTX.anchors[section.id] || '';
   const sid = safeSectionId(section.id, index);
-  if (!hideMobile && !hideDesktop && !grad) {
+  if (!hideMobile && !hideDesktop && !grad && !bg && !pad && !align && !parallax) {
     return anchor ? `<div id="${esc(anchor)}" class="ivy-anchor" data-section-id="${esc(sid)}">${inner}</div>` : inner;
   }
   const css = [
     hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${sid}"] { display: none !important; } }` : '',
     hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${sid}"] { display: none !important; } }` : '',
     grad ? `[data-section-id="${sid}"] h1, [data-section-id="${sid}"] h2 { background: ${grad}; -webkit-background-clip: text; background-clip: text; color: transparent; }` : '',
+    parallax ? `[data-section-id="${sid}"] section { background-attachment: fixed !important; }` : '',
   ].filter(Boolean).join(' ');
-  return `<style>${css}</style><div${anchor ? ` id="${esc(anchor)}" class="ivy-anchor"` : ''} data-section-id="${esc(sid)}">${inner}</div>`;
+  const inline = [
+    bg ? `background:${bg}` : '',
+    pad ? `padding:${PADDING_DENSITIES[pad]}` : '',
+    align ? `text-align:${align}` : '',
+  ].filter(Boolean).join(';');
+  return `${css ? `<style>${css}</style>` : ''}<div${anchor ? ` id="${esc(anchor)}" class="ivy-anchor"` : ''} data-section-id="${esc(sid)}"${inline ? ` style="${attr(inline)}"` : ''}>${inner}</div>`;
 }
 
 // ----- Inline styles for the static (pre-hydration) markup --------

@@ -294,6 +294,14 @@ export async function requireUser(req, res) {
        WHERE id = ${row.id}
          AND (last_active_at IS NULL OR last_active_at < NOW() - INTERVAL '10 minutes')
     `).catch(() => { /* never block auth on the stamp */ });
+    // Admin view of the accountability partner: a partner message sent in
+    // the last 24 hours counts as followed by a visit. Same throttle as
+    // the stamp above, so at most one cheap indexed write per 10 minutes.
+    sql`
+      UPDATE partner_events SET opened_at = NOW()
+       WHERE user_id = ${row.id} AND event = 'sent' AND opened_at IS NULL
+         AND created_at > NOW() - INTERVAL '24 hours'
+    `.catch(() => { /* tracking only */ });
   }
   return row;
 }

@@ -1,6 +1,7 @@
 // /admin - operator console for super-admins.
 // Sub-tabs:
 //   Overview   → analytics counters + churn (configurable date range)
+//   Accountability partner → reach, sends, did it help, turn-offs (counts only)
 //   Users      → search/filter/list every user, manage type, reset password,
 //                send reset link, create new user with a chosen type
 //   Affiliates → CRUD affiliate rows + per-affiliate use & revenue stats
@@ -19,10 +20,12 @@ import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { US_STATE_NAME } from '../../lib/locations.js';
 import { CATEGORIES } from '../../lib/categories.js';
 import UserProfileSheet, { relTime, fmtDateTime } from './UserProfileSheet.jsx';
+import AccountabilityPartnerTab from './AccountabilityPartnerTab.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
   { id: 'readiness',  label: 'Readiness',  icon: 'Check' },
+  { id: 'partner',    label: 'Accountability partner', icon: 'Bell' },
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'referrals',  label: 'Referrals',  icon: 'Users' },
@@ -130,6 +133,7 @@ export default function AdminPage() {
 
       {tab === 'overview'   && <Overview/>}
       {tab === 'readiness'  && <ReadinessTab/>}
+      {tab === 'partner'    && <AccountabilityPartnerTab/>}
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'referrals' && <ReferralsTab/>}
