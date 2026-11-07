@@ -21,6 +21,7 @@ const SHARED = ['src/features/marketing/site/Chrome.jsx', 'src/lib/pageMeta.js']
 const SITE = (f) => `src/features/marketing/site/${f}`;
 const MKT = (f) => `src/features/marketing/${f}`;
 const LEGAL = (f) => `src/features/legal/${f}`;
+const TOOL = (f) => `src/features/marketing/tools/${f}`;
 
 // `sources` are the repo files whose git history dates the page.
 const STATIC_PAGES = [
@@ -33,6 +34,11 @@ const STATIC_PAGES = [
   { path: '/security',     priority: '0.6', sources: [MKT('SecurityPage.jsx')] },
   { path: '/mobile',       priority: '0.6', sources: [MKT('MobilePage.jsx')] },
   { path: '/integrations', priority: '0.6', sources: [MKT('IntegrationsPage.jsx')] },
+  // Free tools (src/features/marketing/tools/toolsData.js lists them).
+  { path: '/tools',                                 priority: '0.7', sources: [TOOL('ToolsHub.jsx'), TOOL('toolsData.js'), TOOL('toolsUi.jsx')] },
+  { path: '/tools/cancellation-policy-generator',   priority: '0.7', sources: [TOOL('CancellationPolicyTool.jsx'), TOOL('policyGenerator.js'), TOOL('toolsUi.jsx')] },
+  { path: '/tools/deposit-calculator',              priority: '0.7', sources: [TOOL('DepositCalculatorTool.jsx'), TOOL('depositMath.js'), TOOL('toolsUi.jsx')] },
+  { path: '/tools/intake-form-templates',           priority: '0.7', sources: [TOOL('IntakeTemplatesTool.jsx'), TOOL('intakeTemplates.js'), TOOL('toolsUi.jsx')] },
   { path: '/privacy',      priority: '0.3', sources: [LEGAL('PrivacyPage.jsx'), LEGAL('LegalPage.jsx')] },
   { path: '/terms',        priority: '0.3', sources: [LEGAL('TermsPage.jsx'), LEGAL('LegalPage.jsx')] },
   { path: '/do-not-sell',  priority: '0.3', sources: [LEGAL('DoNotSellPage.jsx'), LEGAL('LegalPage.jsx')] },

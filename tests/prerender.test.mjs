@@ -21,6 +21,9 @@ import { pathToFileURL } from 'node:url';
 import { startDistServer } from '../scripts/_lib/serve-dist.mjs';
 import { ROOT, SITE_ORIGIN, marketingRoutes, blogPosts, sitemapEntries } from '../scripts/_lib/marketing-routes.mjs';
 import { VERTICALS } from '../src/features/marketing/verticalsData.js';
+import { TOOL_PAGES } from '../src/features/marketing/tools/toolsData.js';
+import { generatePolicy } from '../src/features/marketing/tools/policyGenerator.js';
+import { INTAKE_TEMPLATES } from '../src/features/marketing/tools/intakeTemplates.js';
 
 const DIST = path.join(ROOT, 'dist');
 
@@ -59,6 +62,7 @@ const EXPECTED_H1 = {
   '/do-not-sell': 'Do Not Sell or Share My Personal Information',
 };
 for (const [slug, v] of Object.entries(VERTICALS)) EXPECTED_H1[`/for/${slug}`] = v.headline;
+for (const t of TOOL_PAGES) EXPECTED_H1[t.path] = t.h1;
 
 const vercelConfig = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8'));
 const middleware = await import(pathToFileURL(path.join(ROOT, 'middleware.js')).href);
@@ -117,6 +121,9 @@ try {
     if (p.startsWith('/for/')) {
       check(lds.some((ld) => ld.includes('"BreadcrumbList"')), `${p}: BreadcrumbList missing`);
     }
+    if (p.startsWith('/tools')) {
+      check(lds.some((ld) => ld.includes('"BreadcrumbList"')), `${p}: BreadcrumbList missing`);
+    }
     if (p === '/') {
       check(lds.some((ld) => ld.includes('"Organization"') && ld.includes('"SoftwareApplication"')), '/: Organization + SoftwareApplication graph missing');
     }
@@ -132,6 +139,25 @@ try {
     }
     check(/<script type="module" crossorigin(?:="")? src="\/assets\/[^"]+\.js"><\/script>/.test(body), `${p}: module script missing (React would not boot)`);
     check(body.includes('id="prerender-freeze"'), `${p}: animation freeze style missing`);
+  }
+
+  // Free tools: every page is pre-rendered, and crawlers get the useful
+  // default content (the default policy, every intake template), not an
+  // empty form.
+  for (const t of TOOL_PAGES) check(routes.some((r) => r.path === t.path), `${t.path}: not in marketingRoutes()`);
+  {
+    const policyPage = text((await get('/tools/cancellation-policy-generator')).body);
+    for (const line of generatePolicy({}).split('\n').filter((l) => l.length > 40)) {
+      check(policyPage.includes(line.replace(/\s+/g, ' ').trim()), `/tools/cancellation-policy-generator: default policy line missing from raw HTML: "${line.slice(0, 60)}"`);
+    }
+    const intakePage = text((await get('/tools/intake-form-templates')).body);
+    for (const tpl of INTAKE_TEMPLATES) {
+      check(intakePage.includes(tpl.title) && intakePage.includes(tpl.sections[1].questions[0]), `/tools/intake-form-templates: ${tpl.slug} template missing from raw HTML`);
+    }
+    const depositPage = text((await get('/tools/deposit-calculator')).body);
+    check(/Lost to no-shows/.test(depositPage) && /Suggested deposit/.test(depositPage), '/tools/deposit-calculator: default results missing from raw HTML');
+    const unknownTool = await get('/tools/not-a-real-tool');
+    check(unknownTool.status === 200 && unknownTool.body === fs.readFileSync(path.join(DIST, 'index.html'), 'utf8'), '/tools/<unknown> must fall through to the SPA shell');
   }
 
   // The header CSP in vercel.json must allow the same inline script.

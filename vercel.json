@@ -286,6 +286,16 @@
       "destination": "/prerender/for/:slug.html"
     },
     {
+      "source": "/tools",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/prerender/tools.html"
+    },
+    {
+      "source": "/tools/:slug",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/prerender/tools/:slug.html"
+    },
+    {
       "source": "/((?!api/|assets/|fonts/).*)",
       "destination": "/index.html"
     }
