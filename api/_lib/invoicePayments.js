@@ -36,6 +36,42 @@ export function invoicePaymentState(inv, { paymentId = null, amountCents = null 
   return { totals, due, prior, seen, thisPayment, paidTotal, underpaid: thisPayment != null && paidTotal < due - 0.01 };
 }
 
+// A DIFFERENT payment landed on an invoice that is already settled (two
+// checkouts both paid, or the client paid after the owner marked it paid
+// by hand). The money really moved, so it must not vanish silently: note
+// it on the invoice and tell the owner so they can refund it. Once per
+// payment id (the paired Checkout + PaymentIntent events carry the same id).
+async function flagExtraPayment({ inv, paymentIntent, amountCents, method }) {
+  if (!paymentIntent || method === 'gift_card') return false;
+  if (inv.stripe_payment_intent === paymentIntent || inv.autopay_payment_intent === paymentIntent) return false;
+  if ((inv.activity || []).some((a) => a?.paymentId === paymentIntent)) return false;
+  const amount = amountCents != null ? Math.round(Number(amountCents)) / 100 : null;
+  if (amount != null && !(amount > 0)) return false;
+  const entry = {
+    ts: new Date().toISOString(), kind: 'duplicate-payment', paymentId: paymentIntent,
+    text: `A second payment${amount != null ? ` of ${fmtMoney(amount)}` : ''} came in after this invoice was already paid. Refund it from your payment dashboard if it was a mistake.`,
+  };
+  const upd = await sql`
+    UPDATE invoices SET
+      activity   = COALESCE(activity, '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb,
+      updated_at = NOW()
+    WHERE id = ${inv.id} AND workspace_id = ${inv.workspace_id}
+      AND NOT (COALESCE(activity, '[]'::jsonb) @> ${JSON.stringify([{ paymentId: paymentIntent }])}::jsonb)
+    RETURNING id
+  `;
+  if (upd.rows.length === 0) return false;
+  notifyOwnerSafe({
+    workspaceId: inv.workspace_id, type: 'payments',
+    payload: {
+      title: 'Invoice paid twice',
+      body: `${inv.client_name || 'A client'} · ${inv.number}: another ${amount != null ? fmtMoney(amount) + ' ' : ''}payment came in after it was already paid. Refund it from your payment dashboard if it was a mistake.`,
+      url: `/finance?invoice=${inv.id}`,
+      tag: `invoice-paid-twice-${inv.id}`,
+    },
+  });
+  return true;
+}
+
 // Idempotent. Marks the invoice paid (status, paid fields, activity) and,
 // only when it actually transitions, fires the owner push + client receipt
 // - matching the webhook so whichever path wins first is the one that
@@ -44,8 +80,11 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   const { rows } = await sql`SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`;
   const inv = rows[0];
   if (!inv) return 'invoice-not-found';
-  if (inv.status === 'paid' || inv.status === 'refunded') return 'already-paid';
-  const retry = () => markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method, sessionId, _attempt: _attempt + 1 });
+  if (inv.status === 'paid' || inv.status === 'refunded') {
+    await flagExtraPayment({ inv, paymentIntent, amountCents, method });
+    return 'already-paid';
+  }
+  const retry =() => markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method, sessionId, _attempt: _attempt + 1 });
 
   // A gift card applied on the public pay page already covers part of the
   // total, so a card payment only has to cover the remainder (and a

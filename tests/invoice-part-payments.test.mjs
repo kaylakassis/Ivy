@@ -283,6 +283,26 @@ async function run() {
   row = await invRow(inv10.id);
   assert(r.statusCode === 400 && row.status === 'paid' && Number(card10.balance_cents) === 4000, `a paid checkout settles the invoice and the card keeps its balance (${r.statusCode} ${row.status} ${card10.balance_cents})`);
 
+  console.log('\n[9] a second payment on an already-paid invoice is flagged to the owner, once');
+  const inv11 = await mkInvoice(S, `PP-S6-${STAMP}`, 40);
+  await fire('checkout.session.completed', {
+    id: `cs_pp_d_${STAMP}`, mode: 'payment', payment_status: 'paid', status: 'complete',
+    payment_intent: `pi_pp_dupA_${STAMP}`, amount_total: 4000, payment_method_types: ['card'],
+    metadata: { invoice_id: inv11.id, workspace_id: S.wid },
+  }, acct);
+  const dupB = { id: `pi_pp_dupB_${STAMP}`, amount: 4000, amount_received: 4000, payment_method_types: ['card'], metadata: { invoice_id: inv11.id, workspace_id: S.wid } };
+  r = await fire('payment_intent.succeeded', dupB, acct);
+  await fire('payment_intent.succeeded', dupB, acct);
+  await fire('payment_intent.succeeded', { ...dupB, id: `pi_pp_dupA_${STAMP}` }, acct);
+  await new Promise((ok) => setTimeout(ok, 400));
+  row = await invRow(inv11.id);
+  const dups = (row.activity || []).filter((a) => a.kind === 'duplicate-payment');
+  assert(r.statusCode === 200 && dups.length === 1 && dups[0].paymentId === dupB.id,
+    `the extra $40 payment is on the invoice for the owner to refund, once (${dups.length})`);
+  assert(row.status === 'paid' && Number(row.paid_amount) === 40 && row.stripe_payment_intent === `pi_pp_dupA_${STAMP}`, 'the invoice itself is unchanged');
+  const note = await sql`SELECT title, body FROM notifications WHERE workspace_id = ${S.wid} AND title ILIKE '%twice%'`.catch(() => ({ rows: [] }));
+  assert(note.rows.length >= 1, `the owner is told (${note.rows.length})`);
+
   for (const m of made) {
     await sql`DELETE FROM gift_cards WHERE workspace_id = ${m.wid}`;
     await sql`DELETE FROM invoices WHERE workspace_id = ${m.wid}`;
