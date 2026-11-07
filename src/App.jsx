@@ -104,7 +104,6 @@ const SiteFeatures    = lazyRoute(() => import('./features/marketing/site/SiteFe
 const SecurityPage    = lazyRoute(() => import('./features/marketing/SecurityPage.jsx'));
 const MobilePage      = lazyRoute(() => import('./features/marketing/MobilePage.jsx'));
 const IntegrationsPage = lazyRoute(() => import('./features/marketing/IntegrationsPage.jsx'));
-const ToolsPage       = lazyRoute(() => import('./features/marketing/tools/ToolsPage.jsx'));
 
 // Pre-rendered path → the chunk its route needs. "/" is MarketingHome,
 // which RootRouter imports eagerly, so it needs no preload.
@@ -117,8 +116,7 @@ const PRERENDERED_ROUTES = {
 export function preloadRoute(pathname) {
   const p = String(pathname || '/').replace(/\/+$/, '') || '/';
   const C = PRERENDERED_ROUTES[p]
-    || (p.startsWith('/for/') ? VerticalPage : null)
-    || (p === '/tools' || p.startsWith('/tools/') ? ToolsPage : null);
+    || (p.startsWith('/for/') ? VerticalPage : null);
   return C ? C.preload() : Promise.resolve();
 }
 
@@ -364,8 +362,6 @@ export default function App() {
         <Route path="/security"    element={<WebOnly><SecurityPage /></WebOnly>} />
         <Route path="/mobile"      element={<WebOnly><MobilePage /></WebOnly>} />
         <Route path="/integrations" element={<WebOnly><IntegrationsPage /></WebOnly>} />
-        <Route path="/tools"       element={<WebOnly><ToolsPage /></WebOnly>} />
-        <Route path="/tools/:slug" element={<WebOnly><ToolsPage /></WebOnly>} />
 
         {/* First-run wizard for new owners. Auth-gated but no AppShell so it
             can't get caught in RoleRouter's "redirect un-onboarded users to

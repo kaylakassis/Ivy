@@ -194,6 +194,18 @@
       "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/features",
       "permanent": true
+    },
+    {
+      "source": "/tools",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/features",
+      "permanent": true
+    },
+    {
+      "source": "/tools/:slug",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/features",
+      "permanent": true
     }
   ],
   "rewrites": [
@@ -284,16 +296,6 @@
       "source": "/for/:slug",
       "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/for/:slug.html"
-    },
-    {
-      "source": "/tools",
-      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
-      "destination": "/prerender/tools.html"
-    },
-    {
-      "source": "/tools/:slug",
-      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
-      "destination": "/prerender/tools/:slug.html"
     },
     {
       "source": "/((?!api/|assets/|fonts/).*)",

@@ -185,6 +185,54 @@ export async function updateCancellationPolicy({ workspaceId, userId, body }) {
   return { createdVersion, before, after, changed };
 }
 
+// What "Help me write it" (and Ivy's draft) start from: the business name
+// and category from setup, and whether the business sells packages (and
+// when a package session counts as used), so the generated words match
+// how Ivy applies the policy (src/features/finance/policyGenerator.js).
+export async function policyWriterContext(workspaceId) {
+  const [cs, pk] = await Promise.all([
+    sql`SELECT cs.biz_name, cs.category, cs.package_use_on, w.name AS workspace_name
+          FROM workspaces w LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
+         WHERE w.id = ${workspaceId} LIMIT 1`,
+    sql`SELECT EXISTS (SELECT 1 FROM packages WHERE workspace_id = ${workspaceId} AND active = TRUE) AS any`,
+  ]);
+  const r = cs.rows[0] || {};
+  return {
+    businessName: String(r.biz_name || r.workspace_name || '').slice(0, 80),
+    businessCategory: r.category || null,
+    packages: { any: !!pk.rows[0]?.any, useOn: r.package_use_on === 'completion' ? 'completion' : 'booking' },
+  };
+}
+
+// Everything policyOptionsFromIvy needs, read in one place for Ivy.
+export async function policyWriterInputs(workspaceId) {
+  const [ctx, settings, svc, fs] = await Promise.all([
+    policyWriterContext(workspaceId),
+    getPolicySettings(workspaceId),
+    sql`SELECT name, deposit_type, deposit_amount, cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount
+          FROM services WHERE workspace_id = ${workspaceId} AND visibility <> 'only_me'
+         ORDER BY display_order, created_at LIMIT 200`,
+    sql`SELECT payment_provider, stripe_connect_user_id, stripe_secret_encrypted
+          FROM finance_settings WHERE workspace_id = ${workspaceId} LIMIT 1`,
+  ]);
+  const f = fs.rows[0] || {};
+  return {
+    businessName: ctx.businessName,
+    category: ctx.businessCategory,
+    packages: ctx.packages,
+    settings,
+    cardPayments: (f.payment_provider || 'stripe') === 'stripe' && !!(f.stripe_connect_user_id || f.stripe_secret_encrypted),
+    services: svc.rows.map((s) => ({
+      name: s.name,
+      depositType: s.deposit_type || 'none',
+      depositAmount: Number(s.deposit_amount || 0),
+      lateCancelFee: Number(s.cancellation_fee_amount || 0),
+      windowHours: Number.isInteger(s.cancellation_window_hours) ? s.cancellation_window_hours : 24,
+      noShowFee: Number(s.no_show_fee_amount || 0),
+    })),
+  };
+}
+
 // "Please accept the policy" link for a booking the business made itself.
 // loadPolicyRequest checks everything a send needs (shared with Ivy's
 // approval card); sendPolicyAcceptanceRequest records the single-use link

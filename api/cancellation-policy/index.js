@@ -1,7 +1,10 @@
 // /api/cancellation-policy  (owner only)
 //   GET → { policy (current version or null), versions: [...], settings,
 //           services: [{ id, name, deposit..., lateCancelFee, windowHours, noShowFee }],
-//           cardPayments: bool }
+//           cardPayments: bool,
+//           businessName, businessCategory, packages: { any, useOn } }
+//         The last three only pre-fill "Help me write it" (see
+//         src/features/finance/policyGenerator.js policyOptionsFromIvy).
 //   PUT → body { text?, requireAcceptance?, showOnBookingPage?, showInSiteFooter?,
 //                refundDepositOutsideWindow? }
 //         Saving new text adds a version (old ones are kept). The switch
@@ -16,20 +19,23 @@ import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { serializeService } from '../_lib/calendar.js';
 import {
   getCurrentPolicy, listPolicyVersions, getPolicySettings, updateCancellationPolicy, MAX_POLICY_CHARS,
+  policyWriterContext,
 } from '../_lib/cancellationPolicy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 async function loadState(workspaceId) {
-  const [policy, versions, settings, svc, fs] = await Promise.all([
+  const [policy, versions, settings, svc, fs, biz] = await Promise.all([
     getCurrentPolicy(workspaceId),
     listPolicyVersions(workspaceId),
     getPolicySettings(workspaceId),
     sql`SELECT * FROM services WHERE workspace_id = ${workspaceId} AND visibility <> 'only_me' ORDER BY display_order, created_at LIMIT 200`,
     sql`SELECT payment_provider, stripe_connect_user_id, stripe_secret_encrypted, currency
           FROM finance_settings WHERE workspace_id = ${workspaceId} LIMIT 1`,
+    policyWriterContext(workspaceId),
   ]);
   const f = fs.rows[0] || {};
   return {
+    ...biz,
     policy,
     versions: versions.map((v) => ({ id: v.id, version: v.version, createdAt: v.createdAt, text: v.text })),
     settings,

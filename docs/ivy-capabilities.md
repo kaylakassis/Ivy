@@ -22,7 +22,7 @@ When you add a screen or an owner action, add a row here. Then either give Ivy a
   - A completed call is "done". Website and parity tools word the done line from what the plan actually did.
   - A failed call is "failed", with the reason.
 - **Compact schemas.** Tool schemas are sent with every request. Group related operations under one tool with an `action` enum, and keep descriptions short.
-  - A grouped tool with a read action (`reminder_settings` get, `cancellation_policy` get, `autopay` status, `client_invite_settings` get, `accountability_partner` get) runs that read straight away; every other action is held for approval (`appToolNeedsApproval` in `api/_lib/ivyAppTools.js`).
+  - A grouped tool with a read action (`reminder_settings` get, `cancellation_policy` get and draft, `autopay` status, `client_invite_settings` get, `accountability_partner` get) runs that read straight away; every other action is held for approval (`appToolNeedsApproval` in `api/_lib/ivyAppTools.js`).
 - **Same code as the button.** A tool calls the server function the app's own screen calls (for example `decideDepositRefund`, `sendDocumentForSigning`, `requestAutopay`). Ivy never has a second copy of money, signing or email logic.
 
 ## Website (full editor parity)
@@ -83,6 +83,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Services: deposits, add-ons, custom fields, per-service hours, reminders, intake forms, photo | Not yet |
 | Booking reminder settings (clients, your own, one client) | `reminder_settings` get / update (approval: "Clients get reminders 1 day and 1 hour before (was 1 day, 8 hours, 1 hour)") |
 | Cancellation policy: wording, switches (require acceptance, booking page, footer, deposit refundable) | `cancellation_policy` get / set_text / set_switches (approval) |
+| Cancellation policy: write it from plain choices ("Help me write it" on the card) | `cancellation_policy` draft (reads, saves nothing) and set_text with `options` (approval; the card shows every word). Same writer and starting point as the app (`src/features/finance/policyGenerator.js`, `policyOptionsFromIvy`); choices that would not match Ivy's real fees, windows or refund switch come back as `check_with_owner` and on the card |
 | Policy acceptance records; send the policy for a client to accept | `list_policy_acceptances` (read, no IP addresses), `send_policy_for_acceptance` (approval) |
 | Staff list | `list_staff` |
 | Add staff, invite a helper login, helper permissions, revoke | Owner only: grants another person access to business and client data |
@@ -207,4 +208,5 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/website-editors.test.mjs`: every section type has a plain-language editor (set equality with `sections.js`), the library and Ivy's catalog exclude code types, the server and Ivy refuse new code sections while existing ones still save and render, per-type field validation, and "step 2" list edits.
 - `tests/client-merge.test.mjs`: duplicate detection precision, "Not the same person", the merge moving every client reference (the list of tables is read from the database catalog), opt-outs, cards and autopay, exactly-once, workspace isolation, and the Ivy approval flow for `merge_clients` and `dismiss_duplicate`.
 - `tests/accountability-partner.test.mjs`: the partner's list (each signal, first names only, workspace isolation), the cron (quiet hours, one a day, away check-ins then stop, the switch, testers and helpers and no-plan owners skipped), the settings endpoint, snooze, and `accountability_partner` held before approval.
-- `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy, documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.
+- `tests/policy-generator.test.mjs`: the policy writer (every option combination, Ivy's real deposit, fee and package rules), the starting point from a business's settings, and the "Help me write it" panel.
+- `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy (including draft and set_text from options), documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.

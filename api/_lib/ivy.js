@@ -980,7 +980,10 @@ MORE OF THE APP (all approval-gated):
   programs and codes).
   Also: reminder_settings (client and owner reminders, one client's own),
   use_package_session, list_deposit_reviews + review_deposit_refund (refund
-  or keep a deposit), cancellation_policy (get, set_text, set_switches),
+  or keep a deposit), cancellation_policy (get, set_text, set_switches;
+  draft writes a policy from plain choices such as "a firm 48-hour policy
+  with a $25 late fee" with the app's own writer and saves nothing; to save
+  it, set_text with the same options; mention any check_with_owner notes),
   list_policy_acceptances, send_policy_for_acceptance,
   send_document_from_template, void_document, resend_document, autopay
   (status reads; request only ASKS the client, who approves it themselves;

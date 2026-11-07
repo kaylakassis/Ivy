@@ -275,6 +275,41 @@ async function run() {
     await settle();
     assert((await reqs()) === 1 && mailTo(`jordan-${S}@example.com`).some((e) => /cancellation policy/.test(e.subject || '')), 'link recorded and emailed');
     await refused('send_policy_for_acceptance', { booking_id: bk.id }, /just sent this/, 'a second send within minutes is refused');
+
+    // Writing a policy from plain choices: the same writer as the app's
+    // "Help me write it", starting from the business's real settings.
+    await sql`UPDATE services SET cancellation_fee_amount = 25, cancellation_window_hours = 48 WHERE id = ${A.svc} AND workspace_id = ${ws}`;
+    const choices = { tone: 'firm', notice_hours: 48, late: 'fee', late_fee: 25 };
+    const n0 = await pending();
+    const v0 = await versions();
+    const d = await executeIvyTool('cancellation_policy', { action: 'draft', options: choices }, ctx);
+    assert(!d.needs_confirmation && (await pending()) === n0 && (await versions()) === v0, 'draft reads straight away and saves nothing');
+    assert(typeof d.draft === 'string' && d.draft.startsWith('Studio a: cancellation policy') && d.draft.includes("48 hours' notice")
+      && d.draft.includes('For a late cancellation, I charge a fee of $25.') && d.draft.includes('By booking, you confirm you have read and agree to this policy.'),
+    'draft uses the choices and the business name');
+    assert(!d.check_with_owner, `matching choices raise nothing to check (${JSON.stringify(d.check_with_owner)})`);
+    assert(ledgerEntry('cancellation_policy', { action: 'draft' }, d) === null, 'a draft is not in the ledger');
+    const off = await executeIvyTool('cancellation_policy', { action: 'draft', options: { late_fee: 30, notice_hours: 24 } }, ctx);
+    assert(off.check_with_owner?.some((c) => /charge a late cancellation fee of \$25, not \$30/.test(c))
+      && off.check_with_owner.some((c) => /window of 48 hours, not 24 hours/.test(c)), `choices that differ from the services are flagged: ${JSON.stringify(off.check_with_owner)}`);
+    await refused('cancellation_policy', { action: 'draft', options: { tone: 'loud' } }, /options\.tone must be gentle, standard or firm/, 'unknown tone refused');
+    await refused('cancellation_policy', { action: 'draft', options: { late: 'none', late_fee: 20 } }, /late_fee must be used only with late: fee/, 'a fee with no charge refused');
+    await refused('cancellation_policy', { action: 'set_text', options: { notice_hours: 1 } }, /notice_hours must be a whole number/, 'bad window refused before a card');
+
+    const held = await executeIvyTool('cancellation_policy', { action: 'set_text', options: choices }, ctx);
+    assert(held.needs_confirmation === true && (await pending()) === n0 + 1 && (await versions()) === v0, 'set_text from options is held, nothing saved');
+    assert(held.summary.startsWith('Replace your cancellation policy (version 1) with version 2, written from your choices:') && held.summary.includes(d.draft),
+      'the card shows every word that will be saved');
+    const prow = await one(sql`SELECT id, session_id, tool, args, summary FROM ivy_pending_actions WHERE id = ${held.pending_id}`);
+    const ran = await executePendingAction({ row: prow, workspaceId: ws, userId: A.userId });
+    const saved = await one(sql`SELECT version, body FROM cancellation_policy_versions WHERE workspace_id = ${ws} ORDER BY version DESC LIMIT 1`);
+    assert(saved.version === 2 && saved.body === d.draft, 'approval saves exactly the drafted text as a new version');
+    assert(/^Done\. Saved your cancellation policy as version 2/.test(ran.text), `done message: ${ran.text}`);
+    await refused('cancellation_policy', { action: 'set_text', options: choices }, /already your policy wording/, 'same drafted text refused');
+    const bd = await executeIvyTool('cancellation_policy', { action: 'draft', options: { late: 'fee' } }, B.ctx);
+    assert(bd.draft.startsWith('Studio b: cancellation policy') && !bd.draft.includes('$25') && bd.draft.includes('the fee shown when you book')
+      && bd.check_with_owner?.some((c) => /None of your services has a late cancellation fee/.test(c)), 'another business drafts from its own settings only');
+    await sql`UPDATE services SET cancellation_fee_amount = 0, cancellation_window_hours = 24 WHERE id = ${A.svc} AND workspace_id = ${ws}`;
   }
 
   console.log('[6] documents');

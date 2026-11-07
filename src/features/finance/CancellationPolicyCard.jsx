@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import CancellationPolicyHelper from './CancellationPolicyHelper.jsx';
 
 const STARTER = `Please give at least 24 hours notice if you need to cancel or move your appointment.
 
@@ -66,6 +67,7 @@ export default function CancellationPolicyCard() {
   const [msg, setMsg] = useState(null);
   const [showVersions, setShowVersions] = useState(false);
   const [open, setOpen] = useState(false);
+  const [helper, setHelper] = useState(false);
 
   const load = () => api.get('/cancellation-policy').then((s) => {
     setState(s);
@@ -118,7 +120,13 @@ export default function CancellationPolicyCard() {
 
       {open && (
         <div style={{ marginTop: 14 }}>
-          <label htmlFor="cpolicy-text" style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 6 }}>Your policy, in your words</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <label htmlFor="cpolicy-text" style={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0 }}>Your policy, in your words</label>
+            <button type="button" className="btn btn-outline" onClick={() => setHelper(true)}
+              style={{ fontSize: 12.5, padding: '6px 10px', gap: 6 }} data-testid="policy-help-write">
+              <Icons.Edit size={13} sw={1.8}/> Help me write it
+            </button>
+          </div>
           <textarea id="cpolicy-text" value={draft} onChange={(e) => setDraft(e.target.value.slice(0, maxChars))}
             rows={7} maxLength={maxChars} className="input"
             placeholder="For example: Please give at least 24 hours notice to cancel or move your appointment…"
@@ -160,6 +168,16 @@ export default function CancellationPolicyCard() {
               checked={settings.refundDepositOutsideWindow} disabled={busy}
               onChange={(v) => save({ refundDepositOutsideWindow: v })}/>
           </div>
+
+          {helper && (
+            <CancellationPolicyHelper state={state} current={draft}
+              onClose={() => setHelper(false)}
+              onUse={(text) => {
+                setDraft(text.slice(0, maxChars));
+                setHelper(false);
+                setMsg({ kind: 'ok', text: 'Your new wording is in the box. Read it over and change anything, then save.' });
+              }}/>
+          )}
 
           {msg && (
             <div role="status" style={{ marginTop: 10, fontSize: 13, color: msg.kind === 'error' ? 'var(--danger)' : 'var(--ok)' }}>{msg.text}</div>

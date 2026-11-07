@@ -1,13 +1,21 @@
-// Cancellation policy generator (/tools/cancellation-policy-generator).
-// Pure: options in, plain text out. Runs only in the visitor's browser;
-// nothing they pick is sent anywhere. Unit tests: tests/tools-generators.test.mjs.
+// Cancellation policy writer: the "Help me write it" panel on the
+// Cancellation policy card (CancellationPolicyHelper.jsx) and Ivy's
+// cancellation_policy draft / set_text actions (api/_lib/ivyAppTools.js).
+// Pure: options in, plain text out. No network, no storage.
+// Unit tests: tests/policy-generator.test.mjs.
 //
-// The wording follows how Ivy's own cancellation policy works
+// The wording follows how Ivy really applies the policy
 // (api/_lib/bookingFees.js, api/_lib/cancellationPolicy.js):
-//   - cancel in time: no fee, and a deposit is refunded
+//   - cancel in time: no fee; a deposit is refunded (the owner approves
+//     each refund) unless the owner made deposits non-refundable
 //   - cancel late or no-show: the deposit is kept and counts toward any fee
-//   - package sessions: a late cancel or no-show uses the session instead
-//     of a fee, never both
+//   - fees are charged to the card on file; without card payments they
+//     become an invoice
+//   - package sessions used when booked: a late cancel (when there is a
+//     late fee) or a no-show uses the session instead of a fee, never both;
+//     used when completed: a cancel always gives the session back and the
+//     normal fees apply
+//   - the business cancels: never a fee, the session goes back
 //   - inside the window clients contact the business to move a booking
 // Copy rules: plain words, no dashes used as punctuation, no statistics.
 
@@ -30,6 +38,10 @@ export const NOTICE_OPTIONS = [
   { value: 72, label: '72 hours' },
   { value: 168, label: '7 days' },
 ];
+// Any whole number of hours in this range is accepted too, so a policy can
+// match a service's own cancellation window (for example 36 hours).
+export const MIN_NOTICE_HOURS = 2;
+export const MAX_NOTICE_HOURS = 720;
 
 export const FEE_ACTIONS = [
   { value: 'deposit', label: 'Keep the deposit', needsDeposit: true },
@@ -37,6 +49,8 @@ export const FEE_ACTIONS = [
   { value: 'percent', label: 'Charge a % of the price' },
   { value: 'none', label: 'No charge' },
 ];
+// Ivy charges fixed dollar fees, so the app offers only these.
+export const APP_FEE_ACTIONS = FEE_ACTIONS.filter((a) => a.value !== 'percent');
 
 export const RESCHEDULE_OPTIONS = [
   { value: 'free', label: 'Free with notice, any time' },
@@ -54,12 +68,15 @@ export const VOICES = [
   { value: 'we', label: 'We (my business)' },
 ];
 
+export const PACKAGE_USE = ['booking', 'completion'];
+
 export const DEFAULT_POLICY_OPTIONS = Object.freeze({
   businessName: '',
   businessType: 'massage',
   voice: 'i',
   noticeHours: 24,
   takesDeposit: true,
+  depositRefundable: true,
   lateAction: 'deposit',
   lateAmount: '',
   noShowAction: 'deposit',
@@ -67,8 +84,10 @@ export const DEFAULT_POLICY_OPTIONS = Object.freeze({
   reschedule: 'free',
   runningLate: true,
   packages: false,
+  packageUse: 'booking',
   emergencies: true,
   graceFirst: false,
+  cardFees: true,
   tone: 'standard',
 });
 
@@ -86,11 +105,20 @@ function money(n) {
   return Number.isInteger(n) ? `$${n.toLocaleString('en-US')}` : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function noticeText(hours) {
-  return hours === 168 ? '7 days' : `${hours} hours`;
+export function noticeLabel(hours) {
+  const h = Number(hours);
+  if (h % 24 === 0 && h >= 96) return `${h / 24} days`;
+  return `${h} hours`;
 }
 
-// Options from the form (or anywhere) made safe and complete.
+export function cleanNoticeHours(v, fallback = 24) {
+  const n = Number(v);
+  if (NOTICE_OPTIONS.some((o) => o.value === n)) return n;
+  if (Number.isInteger(n) && n >= MIN_NOTICE_HOURS && n <= MAX_NOTICE_HOURS) return n;
+  return fallback;
+}
+
+// Options from the panel, Ivy or anywhere, made safe and complete.
 export function normalizePolicyOptions(input = {}) {
   const o = { ...DEFAULT_POLICY_OPTIONS, ...(input || {}) };
   const out = {
@@ -98,8 +126,9 @@ export function normalizePolicyOptions(input = {}) {
     businessName: String(o.businessName || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80),
     businessType: pick(BUSINESS_TYPES, o.businessType, 'other'),
     voice: pick(VOICES, o.voice, 'i'),
-    noticeHours: pick(NOTICE_OPTIONS, Number(o.noticeHours), 24),
+    noticeHours: cleanNoticeHours(o.noticeHours),
     takesDeposit: !!o.takesDeposit,
+    depositRefundable: o.depositRefundable !== false,
     lateAction: pick(FEE_ACTIONS, o.lateAction, 'none'),
     lateAmount: o.lateAmount,
     noShowAction: pick(FEE_ACTIONS, o.noShowAction, 'none'),
@@ -107,8 +136,10 @@ export function normalizePolicyOptions(input = {}) {
     reschedule: pick(RESCHEDULE_OPTIONS, o.reschedule, 'free'),
     runningLate: !!o.runningLate,
     packages: !!o.packages,
+    packageUse: PACKAGE_USE.includes(o.packageUse) ? o.packageUse : 'booking',
     emergencies: !!o.emergencies,
     graceFirst: !!o.graceFirst,
+    cardFees: o.cardFees !== false,
     tone: pick(TONES, o.tone, 'standard'),
   };
   // "Keep the deposit" only makes sense when there is one.
@@ -136,7 +167,11 @@ function feeSentence({ action, amount, what, takesDeposit, noun, p, tone }) {
   }
   if (action === 'flat') {
     const amt = cleanAmount(amount);
-    return `For ${what}, ${charge} a fee${amt ? ` of ${money(amt)}` : ''}.${depositCounts}`;
+    // No single amount (it differs by service): point at the fee the
+    // client sees and agrees to when they book.
+    return amt
+      ? `For ${what}, ${charge} a fee of ${money(amt)}.${depositCounts}`
+      : `For ${what}, ${charge} the fee shown when you book.${depositCounts}`;
   }
   if (action === 'percent') {
     const pct = cleanAmount(amount, { max: 100 });
@@ -159,7 +194,7 @@ export function generatePolicy(input) {
   const type = BUSINESS_TYPES.find((t) => t.value === o.businessType);
   const noun = type.noun;
   const p = pronouns(o.voice);
-  const notice = `${noticeText(o.noticeHours)}' notice`;
+  const notice = `${noticeLabel(o.noticeHours)}' notice`;
   const tone = o.tone;
   // What "letting it go" means for this policy: a refund when the only
   // consequence is the deposit, otherwise waiving the fee.
@@ -185,9 +220,11 @@ export function generatePolicy(input) {
 
   section('Cancelling or rescheduling', [
     `Please give at least ${notice} if you need to cancel or reschedule.`,
-    o.takesDeposit
-      ? `With ${notice} or more, there is no charge. Your deposit is refunded, or carried over to your new time if you reschedule.`
-      : `With ${notice} or more, there is no charge.`,
+    !o.takesDeposit
+      ? `With ${notice} or more, there is no charge.`
+      : o.depositRefundable
+        ? `With ${notice} or more, there is no charge. Your deposit is refunded, or carried over to your new time if you reschedule.`
+        : `With ${notice} or more, there is no fee. Deposits are not refundable, but if you reschedule in time, your deposit moves to your new time.`,
     o.reschedule === 'once'
       ? `You can move each booking once for free with at least ${notice}. After that, a change counts as a cancellation.`
       : `You can reschedule for free as often as you need, as long as you give at least ${notice}.`,
@@ -210,7 +247,9 @@ export function generatePolicy(input) {
 
   if (charges(o.lateAction) || charges(o.noShowAction)) {
     section('How fees are paid', [
-      'Any fee is charged to the card on file for your booking. If there is no card on file, you will receive an invoice for it.',
+      o.cardFees
+        ? 'Any fee is charged to the card on file for your booking. If there is no card on file, you will receive an invoice for it.'
+        : 'If a fee applies, you will receive an invoice for it.',
       'You will never be charged more than the fee in the policy you agreed to when you booked.',
     ]);
   }
@@ -224,10 +263,25 @@ export function generatePolicy(input) {
   }
 
   if (o.packages) {
-    section('Packages and prepaid sessions', [
-      'If you booked with a session from a package, a late cancellation or a no-show uses that session instead of a fee. You are never charged a fee and a session for the same booking.',
-      `With ${notice} or more, the session goes back into your package.`,
-    ]);
+    const pkg = 'If you booked with a session from a package';
+    if (o.packageUse === 'completion') {
+      section('Packages and prepaid sessions', [
+        `${pkg}, the session counts as used once your ${noun} takes place.`,
+        'If you cancel, the session goes back into your package. The rules above for late cancellations still apply.',
+        charges(o.noShowAction)
+          ? 'A no-show uses the session, and the no-show fee above also applies.'
+          : 'A no-show uses the session.',
+      ]);
+    } else {
+      section('Packages and prepaid sessions', [
+        charges(o.lateAction)
+          ? `${pkg}, a late cancellation or a no-show uses that session instead of a fee. You are never charged a fee and a session for the same booking.`
+          : `${pkg}, a no-show uses that session instead of a fee. You are never charged a fee and a session for the same booking.`,
+        charges(o.lateAction)
+          ? `With ${notice} or more, the session goes back into your package.`
+          : 'If you cancel, the session goes back into your package.',
+      ]);
+    }
   }
 
   const kindness = [];
@@ -259,6 +313,7 @@ export function generatePolicy(input) {
   section(`If ${p.i} need to cancel`, [
     `If ${p.i} ever have to cancel or move your ${noun}, ${p.ill} tell you as soon as possible and you will never be charged a fee.`,
     o.takesDeposit ? 'Any deposit is refunded or carried over to your new time, whichever you prefer.' : null,
+    o.packages ? 'If you booked with a package session, the session goes back into your package.' : null,
   ]);
 
   lines.push('');
@@ -269,4 +324,83 @@ export function generatePolicy(input) {
       : 'Thank you for understanding. Questions? Just ask before you book.');
 
   return lines.join('\n');
+}
+
+// ── Starting point from what Ivy already knows ──────────────────────────
+// Business category (calendar_settings.category, the onboarding "What do
+// you do?" answer) to the closest wording type. Service names refine it
+// when the category is broad.
+const CATEGORY_TYPES = {
+  Wellness: 'massage', Beauty: 'hair', Fitness: 'training', Home: 'cleaning',
+  Creative: 'photography', Education: 'tutoring', Professional: 'coaching',
+};
+const NAME_HINTS = [
+  [/massage|bodywork|reflexology/i, 'massage'],
+  [/facial|esthetic|skin|brow|lash|wax/i, 'esthetics'],
+  [/hair|cut|color|colour|blowout|braid|barber/i, 'hair'],
+  [/training|workout|pilates|yoga|fitness/i, 'training'],
+  [/coach/i, 'coaching'],
+  [/photo|shoot|portrait/i, 'photography'],
+  [/tutor|lesson|class/i, 'tutoring'],
+  [/clean/i, 'cleaning'],
+];
+export function businessTypeFor({ category, serviceNames = [] } = {}) {
+  const names = (Array.isArray(serviceNames) ? serviceNames : []).map((n) => String(n || '')).join(' ');
+  const byName = names ? (NAME_HINTS.find(([re]) => re.test(names)) || [])[1] : null;
+  const byCategory = CATEGORY_TYPES[String(category || '')] || null;
+  if (byCategory === 'hair' && byName === 'esthetics') return 'esthetics';
+  return byCategory || byName || 'other';
+}
+
+function mostCommon(values) {
+  const counts = new Map();
+  for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+  let best = null, n = 0;
+  for (const [v, c] of counts) if (c > n) { best = v; n = c; }
+  return best;
+}
+
+function feeChoice(amounts, takesDeposit) {
+  const fees = amounts.filter((a) => Number(a) > 0).map(Number);
+  if (!fees.length) return { action: takesDeposit ? 'deposit' : 'none', amount: '' };
+  const same = fees.every((a) => a === fees[0]);
+  return { action: 'flat', amount: same ? String(fees[0]) : '' };
+}
+
+// The panel's and Ivy's starting options, from the business's real
+// settings, so the words match how Ivy will behave:
+//   services: [{ name, depositType, depositAmount, lateCancelFee, windowHours, noShowFee }]
+//   settings: { refundDepositOutsideWindow }
+//   packages: { any, useOn }   cardPayments: bool
+// Returns { options, notes } where notes says what came from where.
+export function policyOptionsFromIvy({ businessName = '', category = null, services = [], settings = {}, packages = {}, cardPayments = true } = {}) {
+  const list = Array.isArray(services) ? services : [];
+  const hasDeposit = (s) => s.depositType && s.depositType !== 'none' && (s.depositType === 'full' || Number(s.depositAmount) > 0);
+  const takesDeposit = list.some(hasDeposit);
+  const withRules = list.filter((s) => Number(s.lateCancelFee) > 0 || Number(s.noShowFee) > 0 || hasDeposit(s));
+  const windows = (withRules.length ? withRules : list)
+    .map((s) => Number(s.windowHours)).filter((h) => Number.isInteger(h) && h >= MIN_NOTICE_HOURS && h <= MAX_NOTICE_HOURS);
+  const noticeHours = cleanNoticeHours(mostCommon(windows), 24);
+  const late = feeChoice(list.map((s) => s.lateCancelFee), takesDeposit);
+  const noShow = feeChoice(list.map((s) => s.noShowFee), takesDeposit);
+  const options = normalizePolicyOptions({
+    ...DEFAULT_POLICY_OPTIONS,
+    businessName,
+    businessType: businessTypeFor({ category, serviceNames: list.map((s) => s.name) }),
+    noticeHours,
+    takesDeposit,
+    depositRefundable: settings?.refundDepositOutsideWindow !== false,
+    lateAction: late.action, lateAmount: late.amount,
+    noShowAction: noShow.action, noShowAmount: noShow.amount,
+    packages: !!packages?.any,
+    packageUse: packages?.useOn === 'completion' ? 'completion' : 'booking',
+    cardFees: cardPayments !== false,
+  });
+  const notes = {
+    fromServices: list.length > 0,
+    mixedWindows: new Set(windows).size > 1,
+    mixedLateFees: late.action === 'flat' && !late.amount,
+    mixedNoShowFees: noShow.action === 'flat' && !noShow.amount,
+  };
+  return { options, notes };
 }

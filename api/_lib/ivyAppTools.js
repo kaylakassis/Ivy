@@ -30,8 +30,12 @@ import { applyPackageSession, packageBlockCode, packageErrorMessage } from './pa
 import { listDepositReviews, decideDepositRefund } from './bookingFees.js';
 import {
   getCurrentPolicy, getPolicySettings, normalizePolicyText, cleanPolicySettingsPatch, updateCancellationPolicy,
-  listAcceptances, loadPolicyRequest, sendPolicyAcceptanceRequest, MAX_POLICY_CHARS,
+  listAcceptances, loadPolicyRequest, sendPolicyAcceptanceRequest, MAX_POLICY_CHARS, policyWriterInputs,
 } from './cancellationPolicy.js';
+import {
+  generatePolicy, normalizePolicyOptions, policyOptionsFromIvy, cleanAmount, cleanNoticeHours, noticeLabel,
+  BUSINESS_TYPES, TONES, MIN_NOTICE_HOURS, MAX_NOTICE_HOURS,
+} from '../../src/features/finance/policyGenerator.js';
 import {
   fetchOwnedDoc, fieldProblemsForSend, sendDocumentForSigning, prepareTemplateSend, sendTemplateToClients,
   voidDocument, resendTarget, resendDocument, MAX_TEMPLATE_RECIPIENTS,
@@ -93,12 +97,13 @@ export const APP_TOOLS = [
   },
   {
     name: 'cancellation_policy',
-    description: 'Cancellation policy. get: wording, version, switches, per-service fees. set_text: new wording (plain text; fee amounts come from each service). set_switches: change any of the booleans.',
+    description: "Cancellation policy. get: wording, version, switches, per-service fees. draft: write a policy from options with the app's own writer (saves nothing). set_text: save wording, from text or from options. set_switches: change any of the booleans.",
     input_schema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['get', 'set_text', 'set_switches'] },
+        action: { type: 'string', enum: ['get', 'draft', 'set_text', 'set_switches'] },
         text: { type: 'string' },
+        options: { type: 'object', description: 'draft/set_text choices, all optional (unset ones come from the business settings): voice i|we, notice_hours, deposit, deposit_refundable, late and no_show deposit|fee|none with late_fee and no_show_fee in dollars, reschedule free|once, tone gentle|standard|firm, business_type, emergencies, first_forgiven, running_late, packages.' },
         require_acceptance: { type: 'boolean', description: 'Clients must accept it when they book.' },
         show_on_booking_page: { type: 'boolean' },
         show_in_site_footer: { type: 'boolean' },
@@ -216,7 +221,8 @@ export const APP_TOOLS = [
 
 // Tools that only read; tools with a read action; everything else writes.
 export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients'];
-const READ_ACTION = { reminder_settings: 'get', cancellation_policy: 'get', autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get' };
+// A tool's read action(s): they run straight away, never held.
+const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get' };
 export const APP_MIXED = new Set(Object.keys(READ_ACTION));
 // Always held for approval (by name). send_document is an older tool whose
 // plan now lives here.
@@ -229,7 +235,7 @@ export const APP_WRITE_TOOLS = new Set([...APP_SENSITIVE, ...APP_MIXED]);
 
 export function appCallIsRead(name, args) {
   if (APP_READ_ONLY.includes(name)) return true;
-  if (APP_MIXED.has(name)) return String(args?.action || '') === READ_ACTION[name];
+  if (APP_MIXED.has(name)) return [].concat(READ_ACTION[name]).includes(String(args?.action || ''));
   return false;
 }
 // A mixed tool is held unless it is its read action (an unknown action is
@@ -535,20 +541,29 @@ const SWITCH_WORDS = {
 
 async function planPolicy(ws, a, ctx) {
   if (a.action === 'set_text') {
-    if (typeof a.text !== 'string' || !a.text.trim()) throw new Error('text is required (plain text)');
-    if (a.text.length > MAX_POLICY_CHARS * 2) throw new Error(`Keep your policy under ${MAX_POLICY_CHARS} characters.`);
-    const norm = normalizePolicyText(a.text);
+    // Written from choices (the same writer as the app's "Help me write
+    // it"): the card shows every word that will be saved, and approval
+    // rebuilds the same text from the same choices.
+    const drafted = (a.text === undefined || a.text === null || a.text === '') && a.options !== undefined
+      ? await draftPolicy(ws, a.options) : null;
+    const rawText = drafted ? drafted.text : a.text;
+    if (typeof rawText !== 'string' || !rawText.trim()) throw new Error('text (plain text) or options is required');
+    if (rawText.length > MAX_POLICY_CHARS * 2) throw new Error(`Keep your policy under ${MAX_POLICY_CHARS} characters.`);
+    const norm = normalizePolicyText(rawText);
     if (norm.error) throw new Error(norm.error);
     const [cur, settings] = await Promise.all([getCurrentPolicy(ws), getPolicySettings(ws)]);
     if (cur && cur.text === norm.text) throw new Error('That is already your policy wording');
     const where = settings.showOnBookingPage ? 'Clients see the new wording on your booking page from now on' : 'It is not shown on your booking page (that switch is off)';
+    const quoted = drafted ? `\n\n${norm.text}\n\n` : `"${clip(norm.text, 300)}". `;
+    const lead = drafted ? 'written from your choices' : '';
+    const check = drafted && drafted.check.length ? `\nCheck first: ${drafted.check.join(' ')}` : '';
     return {
-      summary: cur
-        ? `Replace your cancellation policy (version ${cur.version}) with version ${cur.version + 1}: "${clip(norm.text, 300)}". ${where}; acceptances already recorded keep the version each client agreed to.`
-        : `Save your cancellation policy: "${clip(norm.text, 300)}". ${where}.`,
+      summary: (cur
+        ? `Replace your cancellation policy (version ${cur.version}) with version ${cur.version + 1}${lead ? `, ${lead}` : ''}: ${quoted}${where}; acceptances already recorded keep the version each client agreed to.`
+        : `Save your cancellation policy${lead ? `, ${lead}` : ''}: ${quoted}${where}.`) + check,
       done: `Saved your cancellation policy as version ${cur ? cur.version + 1 : 1}`,
       apply: async () => {
-        const out = await updateCancellationPolicy({ workspaceId: ws, userId: ctx?.userId || null, body: { text: a.text } });
+        const out = await updateCancellationPolicy({ workspaceId: ws, userId: ctx?.userId || null, body: { text: rawText } });
         if (out.error) throw new Error(out.error);
         if (out.createdVersion) {
           await audit(ctx, 'cancellation_policy.update', { kind: 'cancellation_policy', id: out.createdVersion.id },
@@ -585,10 +600,106 @@ async function planPolicy(ws, a, ctx) {
       },
     };
   }
-  throw new Error('action must be get, set_text or set_switches');
+  throw new Error('action must be get, draft, set_text or set_switches');
 }
 
-async function readPolicy(ws) {
+// ── writing a policy from plain choices ───────────────────────────────
+// Ivy's side of "Help me write it": the same writer and the same starting
+// point as the app (policyOptionsFromIvy), with the owner's choices on top.
+// Unknown or out-of-range choices are refused, never guessed.
+const FEE_WORDS = { deposit: 'deposit', fee: 'flat', none: 'none' };
+const BOOL_OPTS = {
+  deposit: 'takesDeposit', deposit_refundable: 'depositRefundable', emergencies: 'emergencies',
+  first_forgiven: 'graceFirst', running_late: 'runningLate', packages: 'packages',
+};
+const dollars = (n) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`);
+function choicesFromArgs(raw) {
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) throw new Error('options must be an object');
+  const o = {};
+  const bad = (k, want) => { throw new Error(`options.${k} must be ${want}`); };
+  for (const [k, key] of Object.entries(BOOL_OPTS)) {
+    if (raw[k] === undefined) continue;
+    if (typeof raw[k] !== 'boolean') bad(k, 'true or false');
+    o[key] = raw[k];
+  }
+  if (raw.voice !== undefined) { if (!['i', 'we'].includes(raw.voice)) bad('voice', 'i or we'); o.voice = raw.voice; }
+  if (raw.tone !== undefined) { if (!TONES.some((t) => t.value === raw.tone)) bad('tone', 'gentle, standard or firm'); o.tone = raw.tone; }
+  if (raw.reschedule !== undefined) { if (!['free', 'once'].includes(raw.reschedule)) bad('reschedule', 'free or once'); o.reschedule = raw.reschedule; }
+  if (raw.business_type !== undefined) {
+    if (!BUSINESS_TYPES.some((t) => t.value === raw.business_type)) bad('business_type', BUSINESS_TYPES.map((t) => t.value).join(', '));
+    o.businessType = raw.business_type;
+  }
+  if (raw.notice_hours !== undefined) {
+    const h = Number(raw.notice_hours);
+    if (cleanNoticeHours(h, null) === null) bad('notice_hours', `a whole number of hours from ${MIN_NOTICE_HOURS} to ${MAX_NOTICE_HOURS}`);
+    o.noticeHours = h;
+  }
+  for (const [k, fee, actionKey, amountKey] of [['late', 'late_fee', 'lateAction', 'lateAmount'], ['no_show', 'no_show_fee', 'noShowAction', 'noShowAmount']]) {
+    if (raw[k] !== undefined) {
+      if (!FEE_WORDS[raw[k]]) bad(k, 'deposit, fee or none');
+      o[actionKey] = FEE_WORDS[raw[k]];
+    }
+    if (raw[fee] !== undefined && raw[fee] !== null && raw[fee] !== '') {
+      const amt = cleanAmount(raw[fee], { max: 10000 });
+      if (amt === null || Number(String(raw[fee]).replace(/[$,\s]/g, '')) > 10000) bad(fee, 'an amount in dollars, more than 0 and up to 10000');
+      o[amountKey] = String(amt);
+      if (o[actionKey] === undefined) o[actionKey] = 'flat';
+      if (o[actionKey] !== 'flat') bad(fee, `used only with ${k}: fee`);
+    }
+  }
+  return o;
+}
+
+// The words, plus anything that would not match how Ivy really behaves
+// (fees, windows and refunds come from each service and the switches).
+async function draftPolicy(ws, rawOptions) {
+  const choices = choicesFromArgs(rawOptions);
+  const inputs = await policyWriterInputs(ws);
+  const base = policyOptionsFromIvy(inputs).options;
+  const merged = { ...base, ...choices };
+  // A fee chosen without an amount keeps the services' own amount (if
+  // they agree) or points at the fee shown when booking.
+  if (choices.lateAction === 'flat' && choices.lateAmount === undefined) merged.lateAmount = base.lateAction === 'flat' ? base.lateAmount : '';
+  if (choices.noShowAction === 'flat' && choices.noShowAmount === undefined) merged.noShowAmount = base.noShowAction === 'flat' ? base.noShowAmount : '';
+  const o = normalizePolicyOptions(merged);
+  const svc = inputs.services;
+  const check = [];
+  const feeCheck = (action, amount, key, what) => {
+    if (action !== 'flat') return;
+    const fees = [...new Set(svc.map((s) => Number(s[key])).filter((n) => n > 0))];
+    const amt = cleanAmount(amount);
+    if (!fees.length) check.push(`None of your services has a ${what} yet, so Ivy will not charge one. Set it on each service in Finance, Services.`);
+    else if (amt !== null && !fees.every((f) => f === amt)) check.push(`Your services charge a ${what} of ${fees.map(dollars).join(' or ')}, not ${dollars(amt)}. Ivy charges the amount set on each service.`);
+  };
+  feeCheck(o.lateAction, o.lateAmount, 'lateCancelFee', 'late cancellation fee');
+  feeCheck(o.noShowAction, o.noShowAmount, 'noShowFee', 'no-show fee');
+  const windows = [...new Set(svc.filter((s) => Number(s.lateCancelFee) > 0).map((s) => Number(s.windowHours)))];
+  if (windows.length && !windows.includes(o.noticeHours)) {
+    check.push(`Your services use a cancellation window of ${windows.map((h) => noticeLabel(h)).join(' or ')}, not ${noticeLabel(o.noticeHours)}.`);
+  }
+  if (o.takesDeposit && o.depositRefundable !== (inputs.settings?.refundDepositOutsideWindow !== false)) {
+    check.push(o.depositRefundable
+      ? 'Your switch says deposits are not refundable when clients cancel in time.'
+      : 'Your switch says deposits are refundable when clients cancel in time.');
+  }
+  if (o.takesDeposit && !svc.some((s) => s.depositType && s.depositType !== 'none')) {
+    check.push('None of your services takes a deposit yet.');
+  }
+  return { text: generatePolicy(o), options: o, check };
+}
+
+async function readPolicyDraft(ws, args) {
+  const d = await draftPolicy(ws, args?.options);
+  return {
+    draft: d.text,
+    ...(d.check.length ? { check_with_owner: d.check } : {}),
+    note: 'Nothing is saved. Show the owner the draft; to save it, call set_text with the same options (they approve the card). They can also paste it in Finance, Services, Cancellation policy, or use Help me write it there.',
+  };
+}
+
+async function readPolicy(ws, args) {
+  if (args?.action === 'draft') return readPolicyDraft(ws, args);
   const [policy, settings, svc] = await Promise.all([
     getCurrentPolicy(ws), getPolicySettings(ws),
     sql`SELECT name, deposit_type, deposit_amount, cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount
