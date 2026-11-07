@@ -95,12 +95,23 @@ export default async function handler(req, res) {
       const list = Array.isArray(user.totp_backup_codes_hashed) ? user.totp_backup_codes_hashed : [];
       const idx = list.findIndex((c) => c && c.hash === wanted && !c.used_at);
       if (idx >= 0) {
-        list[idx] = { ...list[idx], used_at: new Date().toISOString() };
-        await sql`UPDATE users SET totp_backup_codes_hashed = ${JSON.stringify(list)}::jsonb, updated_at = NOW() WHERE id = ${userId}`
-          .catch((e) => console.warn('[totp/challenge] backup consume write failed:', e.message));
-        passed = true;
-        usedBackup = true;
-        via = 'backup';
+        // Burn it in ONE conditional write: only the request that flips
+        // this entry's used_at from null wins. Two sign-ins sending the
+        // same code at once used to both pass (each read the list before
+        // either wrote), and a failed write still let the code through.
+        const won = await sql`
+          UPDATE users
+             SET totp_backup_codes_hashed = jsonb_set(totp_backup_codes_hashed, ARRAY[${String(idx)}, 'used_at'], to_jsonb(${new Date().toISOString()}::text)),
+                 updated_at = NOW()
+           WHERE id = ${userId}
+             AND totp_backup_codes_hashed -> ${idx}::int ->> 'hash' = ${wanted}
+             AND (totp_backup_codes_hashed -> ${idx}::int ->> 'used_at') IS NULL
+          RETURNING id`;
+        if (won.rows.length > 0) {
+          passed = true;
+          usedBackup = true;
+          via = 'backup';
+        }
       }
     }
 

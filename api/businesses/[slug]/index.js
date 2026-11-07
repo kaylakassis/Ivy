@@ -30,6 +30,11 @@ async function maybeUser(req) {
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
+  // The answer carries the signed-in caller's own review eligibility and
+  // client id, and the CDN keys its cache on the URL alone. A shared cache
+  // would hand one client's answer to the next person who opens the card,
+  // so this endpoint is never cached (vercel.json caches only /reviews).
+  res.setHeader('Cache-Control', 'private, no-store');
   try {
     // Public - bypasses requireUser, so bootstrap the schema here on
     // cold-start so columns like websites.visibility / services.visibility

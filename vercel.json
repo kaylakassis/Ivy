@@ -364,7 +364,7 @@
       ]
     },
     {
-      "source": "/api/businesses/(.*)",
+      "source": "/api/businesses/:slug/reviews",
       "headers": [
         {
           "key": "Cache-Control",

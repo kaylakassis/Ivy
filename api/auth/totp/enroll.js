@@ -26,7 +26,7 @@ import {
   generateBackupCodes, hashBackupCode,
 } from '../../_lib/totp.js';
 import { recordAudit } from '../../_lib/audit.js';
-import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { badRequest, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -35,6 +35,13 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     if (refuseImpersonated(req, res)) return;
+    // Same rule as email codes: only an account whose email is confirmed
+    // can turn on 2-step. Signup does not prove the inbox, so without this
+    // someone could register another person's address, add their own app,
+    // and keep the real owner out even after she resets the password.
+    if (!user.email_verified_at) {
+      return badRequest(res, 'Confirm your email address first, using the link we emailed you. Then come back and turn this on.');
+    }
 
     // Generate fresh secret + backup codes. The secret is what the
     // authenticator app stores; backup codes are emergency-only

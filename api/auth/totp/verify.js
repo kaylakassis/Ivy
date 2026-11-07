@@ -31,6 +31,10 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     if (refuseImpersonated(req, res)) return;
+    // Only a confirmed email can switch 2-step on (see totp/enroll.js).
+    if (!user.email_verified_at) {
+      return badRequest(res, 'Confirm your email address first, using the link we emailed you. Then come back and turn this on.');
+    }
 
     // 5 attempts / minute / user. A brute-force from a different IP
     // hits this same cap because we key on user, not IP. 1M codes
