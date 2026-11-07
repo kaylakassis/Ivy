@@ -31,7 +31,7 @@ export function SiteNav({ active }) {
     <>
       <nav className="site-nav">
         <div className="container nav-inner">
-          <a href="/" className="logo"><img className="logo-mark" src="/icon-512.png" alt=""/>Ivy</a>
+          <a href="/" className="logo"><img className="logo-mark" src="/icon-512.png" alt="" width="28" height="28"/>Ivy</a>
           <div className="nav-links">
             {NAV.map(([to, label]) => (
               <a key={to} href={to} className={active === to ? 'active' : undefined}>{label}</a>
@@ -59,7 +59,7 @@ export function SiteFooter() {
     <footer className="site-foot">
       <div className="container foot-inner">
         <div className="foot-brand">
-          <a href="/" className="logo"><img className="logo-mark" src="/icon-512.png" alt=""/>Ivy</a>
+          <a href="/" className="logo"><img className="logo-mark" src="/icon-512.png" alt="" width="28" height="28"/>Ivy</a>
           <p>The all-in-one business platform for solopreneurs, with an AI assistant that does your busywork.</p>
           <AppStoreBadge height={40} className="foot-badge"/>
         </div>

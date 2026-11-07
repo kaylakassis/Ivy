@@ -6,7 +6,6 @@ import { setNativeAuthToken, clearNativeAuthToken } from './nativeAuth.js';
 import { clearMeCache, forgetLanding } from './landing.js';
 import { clearDeviceCache, clearSiteHistory } from './deviceCache.js';
 import { logOutIap } from './iap.js';
-import { detachPushForSignOut } from './push.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
 const Ctx = createContext(null);
@@ -167,7 +166,10 @@ export function AuthProvider({ children }) {
     // this phone or browser would keep getting this account's pushes (and
     // their own registration would be refused as "token in use"). Never
     // throws and never waits more than a few seconds.
-    await detachPushForSignOut().catch(() => {});
+    // push.js is imported here on demand so the main bundle, which every
+    // marketing visitor downloads, does not carry it; the signed-in shells
+    // already loaded it, so this resolves at once.
+    await import('./push.js').then((m) => m.detachPushForSignOut()).catch(() => {});
     // Always clear local auth state even if the network call fails, so the
     // user is never stuck "logged in" with no feedback when offline / on a 5xx.
     try { await api.post('/auth/logout'); }
