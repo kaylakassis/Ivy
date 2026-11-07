@@ -5199,4 +5199,163 @@ UPDATE bookings
 UPDATE bookings
    SET video_room_url = regexp_replace(btrim(video_room_url), '^http://', 'https://', 'i')
  WHERE video_room_url ~* '^[[:space:]]*http://';
+
+-- Per-payment ledger for invoices (1.0.6 money review). paid_amount on an
+-- invoice is a running total of every payment; this keeps each payment as
+-- its own row so a refund goes back to the payment that took the money,
+-- one provider refund per payment, and a refund made in a payment
+-- dashboard against ANY of an invoice's payments finds its row.
+-- provider_payment_id is the Stripe payment intent, Square payment id or
+-- PayPal capture id (NULL for money the owner recorded by hand); unique per
+-- provider within a business, so a webhook retry never adds a second row.
+-- refunded_amount never passes amount. refund_ids are the provider refund
+-- ids already counted, so a refund the app made and the webhook that
+-- reports it count once. backfilled = made from the invoice's own totals
+-- for an invoice paid before this table existed.
+CREATE TABLE IF NOT EXISTS invoice_payments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('stripe', 'square', 'paypal', 'gift_card', 'manual')),
+  provider_payment_id TEXT,
+  amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  currency TEXT,
+  refunded_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  refund_ids TEXT[] NOT NULL DEFAULT '{}',
+  backfilled BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT invoice_payments_refund_range CHECK (refunded_amount >= 0 AND refunded_amount <= amount)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_payments_provider_id
+  ON invoice_payments (workspace_id, provider, provider_payment_id) WHERE provider_payment_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_payments_backfill
+  ON invoice_payments (invoice_id) WHERE backfilled;
+CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice
+  ON invoice_payments (workspace_id, invoice_id, created_at DESC);
+-- One in-app refund per invoice at a time (a lease, so a crashed request
+-- frees it after a couple of minutes).
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refund_started_at TIMESTAMPTZ;
+-- Backfill: one marked row per paid or part-paid invoice that has none,
+-- from what the invoice knows (the latest payment id and paid_amount).
+-- The provider is read the same way the refund path always has (PayPal by
+-- paid_method; Stripe ids start pi_ / ch_; another id is Square; no id is
+-- money recorded by hand, or a gift card that covered it all).
+INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency, refunded_amount, backfilled, created_at)
+SELECT i.workspace_id, i.id,
+       CASE
+         WHEN i.stripe_payment_intent IS NULL THEN CASE WHEN i.paid_method = 'gift_card' THEN 'gift_card' ELSE 'manual' END
+         WHEN i.paid_method = 'paypal' THEN 'paypal'
+         WHEN i.stripe_payment_intent ~ '^(pi_|ch_)' THEN 'stripe'
+         WHEN fs.payment_provider = 'square' OR i.paid_method = 'card' THEN 'square'
+         WHEN fs.payment_provider = 'paypal' THEN 'paypal'
+         ELSE 'stripe'
+       END,
+       i.stripe_payment_intent,
+       i.paid_amount,
+       i.currency,
+       LEAST(GREATEST(COALESCE(i.refunded_amount, 0), 0), i.paid_amount),
+       TRUE,
+       COALESCE(i.paid_at, i.sent_at, i.created_at)
+  FROM invoices i
+  LEFT JOIN finance_settings fs ON fs.workspace_id = i.workspace_id
+ WHERE i.paid_amount > 0
+   AND i.status IN ('paid', 'refunded', 'sent', 'overdue', 'draft', 'voided')
+   AND NOT EXISTS (SELECT 1 FROM invoice_payments p WHERE p.invoice_id = i.id)
+ON CONFLICT DO NOTHING;
+-- Gift card refunds (1.0.6 money review): a refund gives back at most
+-- what is left on the card, and while the processor refund is in flight
+-- that amount is held off the balance so it cannot also be spent. The
+-- refund sync (charge.refunded, or the in-app refund right after the
+-- processor call) takes the refunded cents out of the hold instead of the
+-- balance; a failed processor refund puts the hold back on the balance.
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refund_hold_cents INT NOT NULL DEFAULT 0;
+-- When the hold was placed. A hold older than 15 minutes belongs to a
+-- refund that never finished (the request died between the hold and the
+-- processor call) and is put back on the balance at the next read.
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refund_hold_at TIMESTAMPTZ;
+-- Revenue kept from one invoice, net of refunds: the ONE rule every
+-- revenue figure uses (finance totals, dashboard, Ivy, goals, weekly recap,
+-- client metrics, POS, tax / accounting exports, admin), so they cannot
+-- drift. Money comes from the payment ledger (each payment minus what was
+-- refunded from it), so a part payment refunded on an open invoice and the
+-- full payment that followed count as what was really kept (total minus
+-- every refund ever used to undercount that). Invoices with no ledger rows
+-- fall back to paid_amount (or the total less any gift card, for old rows
+-- with none) minus refunded. A gift card redemption counts as revenue for
+-- the business (include_gift, the default); the platform view passes FALSE
+-- because it counts the gift card when it is sold. Never below zero.
+-- Callers still choose which statuses count (normally 'paid').
+CREATE OR REPLACE FUNCTION invoice_net_revenue(i invoices, include_gift boolean DEFAULT TRUE)
+RETURNS numeric LANGUAGE sql STABLE AS $fn$
+  SELECT GREATEST(0, CASE WHEN include_gift THEN x.money + x.gift ELSE x.money END)
+    FROM (
+      SELECT
+        CASE WHEN l.n > 0 THEN l.money
+             WHEN i.paid_method = 'gift_card' THEN 0
+             ELSE COALESCE(i.paid_amount,
+                           CASE WHEN i.status IN ('paid', 'refunded')
+                                THEN GREATEST(COALESCE(i.total, 0) - COALESCE(i.gift_card_credit_cents, 0) / 100.0, 0)
+                                ELSE 0 END)
+                  - COALESCE(i.refunded_amount, 0)
+        END AS money,
+        CASE WHEN l.gn > 0 THEN l.gift
+             WHEN l.n = 0 AND i.paid_method = 'gift_card' THEN COALESCE(i.paid_amount, 0) - COALESCE(i.refunded_amount, 0)
+             ELSE GREATEST(COALESCE(i.gift_card_credit_cents, 0) - COALESCE(i.gift_card_credit_restored_cents, 0), 0) / 100.0
+        END AS gift
+      FROM (
+        SELECT COUNT(*) AS n,
+               COUNT(*) FILTER (WHERE p.provider = 'gift_card') AS gn,
+               COALESCE(SUM(p.amount - p.refunded_amount) FILTER (WHERE p.provider <> 'gift_card'), 0) AS money,
+               COALESCE(SUM(p.amount - p.refunded_amount) FILTER (WHERE p.provider = 'gift_card'), 0) AS gift
+          FROM invoice_payments p
+         WHERE p.invoice_id = i.id AND p.workspace_id = i.workspace_id
+      ) l
+    ) x
+$fn$;
+-- Platform revenue per business (admin): invoice revenue now comes from
+-- invoice_net_revenue (cash only; gift cards count when sold, below).
+CREATE OR REPLACE VIEW workspace_revenue AS
+  SELECT w.id AS workspace_id,
+         COALESCE(inv.amt, 0)::numeric(14,2) AS invoices,
+         COALESCE(ord.amt, 0)::numeric(14,2) AS store_orders,
+         COALESCE(prog.amt, 0)::numeric(14,2) AS programs,
+         COALESCE(pkg.amt, 0)::numeric(14,2) AS packages,
+         COALESCE(gc.amt, 0)::numeric(14,2) AS gift_cards,
+         COALESCE(bk.amt, 0)::numeric(14,2) AS booking_payments,
+         (COALESCE(inv.amt, 0) + COALESCE(ord.amt, 0) + COALESCE(prog.amt, 0)
+          + COALESCE(pkg.amt, 0) + COALESCE(gc.amt, 0) + COALESCE(bk.amt, 0))::numeric(14,2) AS total,
+         COALESCE(inv.currencies, 0) AS invoice_currencies
+    FROM workspaces w
+    LEFT JOIN (
+      SELECT i.workspace_id,
+             SUM(invoice_net_revenue(i, FALSE)) AS amt,
+             COUNT(DISTINCT i.currency)::int AS currencies
+        FROM invoices i WHERE i.status = 'paid' GROUP BY i.workspace_id
+    ) inv ON inv.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(total) AS amt FROM orders WHERE status = 'paid' GROUP BY workspace_id
+    ) ord ON ord.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(GREATEST(price_cents - COALESCE(refunded_cents, 0), 0)) / 100.0 AS amt
+        FROM program_enrollments WHERE source = 'purchase' GROUP BY workspace_id
+    ) prog ON prog.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(GREATEST(price - COALESCE(refunded_cents, 0) / 100.0, 0)) AS amt
+        FROM client_packages
+       WHERE (stripe_payment_intent IS NOT NULL OR stripe_session_id IS NOT NULL)
+         AND bundle_session_id IS NULL AND program_enrollment_id IS NULL
+       GROUP BY workspace_id
+    ) pkg ON pkg.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(GREATEST(original_amount_cents - COALESCE(refunded_cents, 0), 0)) / 100.0 AS amt
+        FROM gift_cards WHERE stripe_payment_intent IS NOT NULL GROUP BY workspace_id
+    ) gc ON gc.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id,
+             SUM(CASE WHEN deposit_paid_at IS NOT NULL THEN deposit_paid ELSE 0 END
+               + CASE WHEN tip_charged_at IS NOT NULL THEN tip_amount ELSE 0 END
+               + CASE WHEN fee_charged_at IS NOT NULL THEN fee_charged_amount ELSE 0 END) AS amt
+        FROM bookings GROUP BY workspace_id
+    ) bk ON bk.workspace_id = w.id;
 `;

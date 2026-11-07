@@ -8,6 +8,16 @@ import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 import dunningHandler from '../api/cron/subscription-dunning.js';
 
+// The mail provider accepts every send (a failed send now hands the
+// dunning claim back, so the run must actually deliver to stamp).
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  if (String(url).includes('resend')) {
+    return new Response(JSON.stringify({ id: `stub-${Date.now()}` }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  return realFetch(url, init);
+};
+
 let pass = 0, fail = 0;
 function assert(cond, label) {
   if (cond) { pass++; console.log('  ✓', label); }

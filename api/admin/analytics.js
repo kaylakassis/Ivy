@@ -150,12 +150,12 @@ export default async function handler(req, res) {
                   AND EXISTS (SELECT 1 FROM admin_real_clients c WHERE c.user_id = u.id)`,
       cachedTotals
         ? { rows: [{ total: cachedTotals.revenueAllTime }] }
-        : sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-              FROM admin_real_invoices WHERE status = 'paid'`,
+        : sql`SELECT COALESCE(SUM(invoice_net_revenue(i)), 0)::numeric AS total
+              FROM admin_real_invoices a JOIN invoices i ON i.id = a.id WHERE a.status = 'paid'`,
       sql.query(
-        `SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-          FROM admin_real_invoices
-          WHERE status = 'paid' AND paid_at >= $1 AND paid_at < $2`,
+        `SELECT COALESCE(SUM(invoice_net_revenue(i)), 0)::numeric AS total
+          FROM admin_real_invoices a JOIN invoices i ON i.id = a.id
+          WHERE a.status = 'paid' AND a.paid_at >= $1 AND a.paid_at < $2`,
         [fromIso, toIso],
       ),
       // Churn in the window: count of workspaces that flipped to
@@ -221,10 +221,10 @@ export default async function handler(req, res) {
            SELECT COUNT(*)::int AS n FROM admin_real_workspaces WHERE subscription_status = 'active'
          ),
          rev AS (
-           SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-             FROM admin_real_invoices
-            WHERE status = 'paid'
-              AND paid_at >= NOW() - ($1::int || ' days')::interval
+           SELECT COALESCE(SUM(invoice_net_revenue(i)), 0)::numeric AS total
+             FROM admin_real_invoices a JOIN invoices i ON i.id = a.id
+            WHERE a.status = 'paid'
+              AND a.paid_at >= NOW() - ($1::int || ' days')::interval
          )
          SELECT
            (SELECT n FROM active) AS active_count,

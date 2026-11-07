@@ -159,7 +159,20 @@ export function useInvoices({ tab = 'all' } = {}) {
   }, [refreshSummary, setInvoices]);
 
   const refund = useCallback(async (id, { amount, reason } = {}) => {
-    const r = await api.post('/invoices/refund', { id, amount, reason });
+    let r;
+    try {
+      r = await api.post('/invoices/refund', { id, amount, reason });
+    } catch (e) {
+      // Part of the refund went through before a later payment's refund
+      // failed: the error says what happened; show the invoice as it now
+      // stands so the screen never claims more (or less) than was refunded.
+      const now = e?.details?.details?.invoice;
+      if (now?.id === id) {
+        setInvoices((xs) => xs.map((i) => i.id === id ? now : i));
+        await refreshSummary().catch(() => {});
+      }
+      throw e;
+    }
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r;

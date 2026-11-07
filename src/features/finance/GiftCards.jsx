@@ -46,7 +46,7 @@ export default function GiftCards() {
     try {
       const amountCents = refundAmount === '' ? null : Math.round(Number(refundAmount) * 100);
       const r = await api.post('/gift-cards/refund', { id: c.id, amountCents, reason: refundReason || null });
-      setNotice(`Refunded ${fmtMoney(r.refund.amountCents)} on the card ending ${c.codeLast4}${r.refund.fullyRefunded ? '; the card is now void.' : '.'}`);
+      setNotice(`Refunded ${fmtMoney(r.refund.amountCents)} on the card ending ${c.codeLast4}${r.refund.fullyRefunded || r.refund.cardVoided ? '; the card is now void.' : '.'}`);
       setRefundId(null);
       await load();
     } catch (e) {
@@ -78,7 +78,7 @@ export default function GiftCards() {
       }}>
         <Icons.Gift size={14} stroke="var(--accent)"/>
         <span style={{ flex: 1, minWidth: 240 }}>
-          Gift cards are sold from your public booking page once card payments are connected in Finance. Recipients get the code by email immediately after payment and apply it when they book or when they pay one of your invoices. A refund you issue here (or from your payment dashboard) voids the card, or trims its balance for a partial amount.
+          Gift cards are sold from your public booking page once card payments are connected in Finance. Recipients get the code by email immediately after payment and apply it when they book or when they pay one of your invoices. A refund you issue here gives back what is left on the card, then voids it; a partial amount trims its balance instead.
         </span>
       </div>
       {notice && <div style={{ fontSize: 12.5, color: 'var(--ok)', padding: '0 4px' }}>{notice}</div>}
@@ -113,7 +113,11 @@ export default function GiftCards() {
           </div>
           {cards.map((c, i) => {
             const meta = STATUS_META[c.status] || STATUS_META.active;
-            const refundLeftCents = Math.max(0, c.originalAmountCents - Number(c.refundedCents || 0));
+            // What a refund can give back: what is left on the card (the
+            // server works it out; older servers only sent the totals).
+            const refundLeftCents = c.refundableCents != null
+              ? Number(c.refundableCents)
+              : Math.max(0, Math.min(Number(c.balanceCents || 0), c.originalAmountCents - Number(c.refundedCents || 0)));
             const refundable = c.paidOnline && c.status !== 'voided' && refundLeftCents > 0;
             const confirming = refundId === c.id;
             return (
@@ -152,7 +156,7 @@ export default function GiftCards() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 20px 12px', fontSize: 12 }}>
                   {confirming ? (
                     <>
-                      <span style={{ color: 'var(--muted)' }}>Refund up to {fmtMoney(refundLeftCents)} to the buyer{c.senderName ? ` (${c.senderName})` : ''}. A full refund voids the card.</span>
+                      <span style={{ color: 'var(--muted)' }}>{`You can refund up to ${fmtMoney(refundLeftCents)}, what's left on the card.`} It goes back to the buyer{c.senderName ? ` (${c.senderName})` : ''}, and refunding all of it voids the card.</span>
                       <input type="number" min="0.01" step="0.01" max={(refundLeftCents / 100).toFixed(2)} value={refundAmount}
                         onChange={(e) => setRefundAmount(e.target.value)} placeholder={(refundLeftCents / 100).toFixed(2)}
                         aria-label="Refund amount" style={{ width: 100, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 12 }}/>
@@ -165,7 +169,7 @@ export default function GiftCards() {
                       </select>
                       <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setRefundId(null)} style={{ fontSize: 12, padding: '4px 10px' }}>Cancel</button>
                       <button type="button" className="btn btn-primary" disabled={busy} onClick={() => submitRefund(c)} style={{ fontSize: 12, padding: '4px 12px', background: 'var(--danger)' }}>
-                        {busy ? 'Refunding…' : (refundAmount && Math.round(Number(refundAmount) * 100) < refundLeftCents ? 'Refund partial' : 'Refund full amount')}
+                        {busy ? 'Refunding…' : (refundAmount && Math.round(Number(refundAmount) * 100) < refundLeftCents ? 'Refund partial' : `Refund ${fmtMoney(refundLeftCents)}`)}
                       </button>
                       {actionErr && <span style={{ color: 'var(--danger)' }}>{actionErr}</span>}
                     </>

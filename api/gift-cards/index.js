@@ -3,7 +3,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeGiftCard } from '../_lib/giftCards.js';
+import { serializeGiftCard, releaseStaleGiftCardHolds } from '../_lib/giftCards.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -14,6 +14,8 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
+    // A refund hold left by a refund that never finished goes back first.
+    await releaseStaleGiftCardHolds({ workspaceId }).catch(() => {});
     const r = await sql`
       SELECT * FROM gift_cards
        WHERE workspace_id = ${workspaceId}
@@ -29,7 +31,7 @@ export default async function handler(req, res) {
         -- Money that came off cards at bookings. Refunds also lower the
         -- balance (and void the card), so they are taken out here or a
         -- refunded card would read as "redeemed".
-        COALESCE(SUM(GREATEST(0, original_amount_cents - balance_cents - refunded_cents)), 0)::bigint AS redeemed_cents,
+        COALESCE(SUM(GREATEST(0, original_amount_cents - balance_cents - refund_hold_cents - refunded_cents)), 0)::bigint AS redeemed_cents,
         COALESCE(SUM(refunded_cents), 0)::bigint AS refunded_cents
       FROM gift_cards
       WHERE workspace_id = ${workspaceId}

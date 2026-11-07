@@ -1959,16 +1959,26 @@ async function mark_invoice_paid({ workspaceId, args }) {
   // Only an unpaid invoice can be marked paid: never a void one (restore it
   // first) or a refunded one (that would count refunded money as income).
   // paid_amount and the activity line match the owner's Mark paid button.
+  // The same statement writes the ledger row for the money received by
+  // hand (what this adds on top of any part payments; invoiceLedger.js).
   const r = await sql`
-    UPDATE invoices SET
-      status = 'paid', paid_at = NOW(), paid_method = ${method},
-      paid_amount = GREATEST(total - gift_card_credit_cents / 100.0, 0),
-      activity = activity || jsonb_build_array(jsonb_build_object(
-        'ts', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
-        'kind', 'paid', 'text', ${`Marked paid by ${method} (via Ivy)`}::text)),
-      view_token_hash = NULL, updated_at = NOW()
-    WHERE id = ${id} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
-    RETURNING id, number, status
+    WITH upd AS (
+      UPDATE invoices i SET
+        status = 'paid', paid_at = NOW(), paid_method = ${method},
+        paid_amount = GREATEST(i.total - i.gift_card_credit_cents / 100.0, 0),
+        activity = i.activity || jsonb_build_array(jsonb_build_object(
+          'ts', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'),
+          'kind', 'paid', 'text', ${`Marked paid by ${method} (via Ivy)`}::text)),
+        view_token_hash = NULL, updated_at = NOW()
+      FROM invoices prev
+      WHERE prev.id = i.id AND i.id = ${id} AND i.workspace_id = ${workspaceId} AND i.status IN ('draft', 'sent', 'overdue')
+      RETURNING i.id, i.number, i.status, i.workspace_id, i.currency, i.paid_amount, COALESCE(prev.paid_amount, 0) AS prior_paid
+    ), led AS (
+      INSERT INTO invoice_payments (workspace_id, invoice_id, provider, amount, currency)
+      SELECT workspace_id, id, 'manual', paid_amount - prior_paid, currency FROM upd
+       WHERE paid_amount - prior_paid > 0
+    )
+    SELECT id, number, status FROM upd
   `;
   // Runs only after the owner tapped Approve, and the invoice may have been
   // paid, voided or refunded since the card was shown: the UPDATE above
@@ -2330,7 +2340,7 @@ async function get_dashboard_summary({ workspaceId }) {
   const [revenue, clients, bookings, invoices, ltv] = await Promise.all([
     // Revenue this month (sum of paid invoice totals). `total` is the
     // trigger-maintained canonical computeTotals value (clamped + taxed).
-    sql`SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS total
+    sql`SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
         FROM invoices
         WHERE workspace_id = ${workspaceId}
           AND status = 'paid'
@@ -2398,8 +2408,8 @@ async function get_pl_summary({ workspaceId }) {
   // Ivy already quotes). Expenses = expenses.amount. Profit = revenue - expenses.
   const [rev, exp] = await Promise.all([
     sql`SELECT
-          COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
-          COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
+          COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
+          COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
                                         AND paid_at <  date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS last_month
         FROM invoices
         WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL`,

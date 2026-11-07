@@ -115,9 +115,12 @@ export default async function handler(req, res) {
         : totalCents;
       // Partial payments already recorded and a gift card the client
       // applied both reduce what this link collects - charging the full
-      // recomputed total again over-collected.
-      const alreadyPaidCents = Math.round(Number(inv.paid_amount || 0) * 100);
-      const giftCreditCents  = Math.max(0, Number(inv.gift_card_credit_cents || 0));
+      // recomputed total again over-collected. A part payment the owner
+      // refunded no longer counts (net of refunds), or the link would ask
+      // for less than is owed.
+      const grossPaidCents = Math.round(Number(inv.paid_amount || 0) * 100);
+      const alreadyPaidCents = grossPaidCents - Math.min(grossPaidCents, Math.max(0, Math.round(Number(inv.refunded_amount || 0) * 100)));
+      const giftCreditCents  = Math.max(0, Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0));
       if (alreadyPaidCents > 0 || giftCreditCents > 0) {
         amountCents = Math.max(0, amountCents - alreadyPaidCents - giftCreditCents);
         if (amountCents === 0) return badRequest(res, 'Nothing left to pay on this invoice.');

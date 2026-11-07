@@ -90,6 +90,9 @@ async function run() {
     await todayHandler({ method: 'GET', headers: { cookie }, query: {} }, after);
     assert(after.body?.cashCount === before.body?.cashCount + 1 && Math.abs(after.body?.cashTotal - before.body?.cashTotal - 25) < 0.001,
       `the $25 cash sale is in today's drawer (${before.body?.cashTotal} -> ${after.body?.cashTotal})`);
+    const cashLedger = (await sql`SELECT provider, amount FROM invoice_payments WHERE invoice_id = ${r.body?.invoice?.id}`).rows;
+    assert(cashLedger.length === 1 && cashLedger[0].provider === 'manual' && Number(cashLedger[0].amount) === 25,
+      `the cash sale is one $25 row on the payment ledger (${JSON.stringify(cashLedger)})`);
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

@@ -20,7 +20,7 @@
 import { sql } from '../_lib/db.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
 import { reportError } from '../_lib/monitoring.js';
-import { notifyOwnerSafe } from '../_lib/push.js';
+import { notifyOwner } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
@@ -52,6 +52,9 @@ async function handler(req, res) {
     const shardFilter = shardClause({ shard, shards }, 'w.id');
 
     let eveningScanned = 0, eveningSent = 0, eveningEmptied = false;
+    // Owners whose push could not be delivered this run: handed back for
+    // the next run, not picked up again by this one.
+    const failedIds = new Set();
 
     // The morning briefing beat (~8am push of buildBriefing's top item) was
     // retired in 1.0.6: the accountability partner (api/cron/accountability-
@@ -69,7 +72,7 @@ async function handler(req, res) {
       while (Date.now() < deadline) {
         // eslint-disable-next-line no-await-in-loop
         const { rows } = await sql.query(
-          `SELECT w.id, w.owner_id, w.streak_days
+          `SELECT w.id, w.owner_id, w.streak_days, w.streak_push_last_sent_at
              FROM workspaces w
              JOIN users u ON u.id = w.owner_id
              LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
@@ -92,14 +95,16 @@ async function handler(req, res) {
               AND (w.partner_last_sent_day IS NULL
                    OR w.partner_last_sent_day < (NOW() AT TIME ZONE COALESCE(z.name, 'UTC'))::date)
               AND EXISTS (SELECT 1 FROM push_subscriptions ps WHERE ps.user_id = w.owner_id)
+              AND NOT (w.id = ANY($3::uuid[]))
               ${shardFilter}
             ORDER BY w.id
             LIMIT ${BATCH_SIZE}`,
-          [EVENING_HOUR, String(REPEAT_AFTER_HOURS)],
+          [EVENING_HOUR, String(REPEAT_AFTER_HOURS), [...failedIds]],
         );
         if (rows.length === 0) { eveningEmptied = true; break; }
         eveningScanned += rows.length;
         for (const r of rows) {
+          let claimed = false;
           try {
             // eslint-disable-next-line no-await-in-loop
             const claim = await sql`
@@ -109,8 +114,10 @@ async function handler(req, res) {
                       OR streak_push_last_sent_at < NOW() - (${String(REPEAT_AFTER_HOURS)} || ' hours')::interval)
               RETURNING id`;
             if (claim.rows.length === 0) continue;
+            claimed = true;
+            // Awaited: a push that could not be sent hands the claim back.
             // eslint-disable-next-line no-await-in-loop
-            await notifyOwnerSafe({
+            const pushed = await notifyOwner({
               workspaceId: r.id, type: 'engagement',
               payload: {
                 title: 'Keep your streak alive',
@@ -119,8 +126,14 @@ async function handler(req, res) {
                 tag: 'streak-risk',
               },
             });
+            if (pushed?.ok === false) throw new Error(`streak push not sent: ${pushed.reason || 'push error'}`);
             eveningSent++;
           } catch (err) {
+            if (claimed) {
+              failedIds.add(r.id);
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE workspaces SET streak_push_last_sent_at = ${r.streak_push_last_sent_at || null} WHERE id = ${r.id}`.catch(() => {});
+            }
             console.warn('[daily-return/evening] failed for', r.id, err.message);
             reportError(err, { extra: { workspaceId: r.id, beat: 'evening' } });
           }

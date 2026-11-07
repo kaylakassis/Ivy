@@ -160,7 +160,7 @@ export async function celebrateRevenueMonthMilestone(workspaceId) {
     if (!workspaceId) return;
     const { rows } = await sql`
       SELECT COALESCE(MAX(m), 0)::numeric AS best FROM (
-        SELECT SUM(total - COALESCE(refunded_amount, 0)) AS m
+        SELECT SUM(invoice_net_revenue(invoices)) AS m
           FROM invoices
          WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL
          GROUP BY date_trunc('month', paid_at)

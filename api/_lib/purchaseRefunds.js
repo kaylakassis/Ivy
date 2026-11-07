@@ -33,6 +33,7 @@ import { refundThroughProvider } from './refunds.js';
 import { syncRefundToPurchases } from './checkoutFulfillment.js';
 import { revokeProgramPurchaseForRefund, isUuid } from './programs.js';
 import { recordWorkspaceAudit } from './audit.js';
+import { giftCardRefundableCents, releaseStaleGiftCardHolds } from './giftCards.js';
 
 export const REFUNDABLE_KINDS = new Set(['program', 'gift_card', 'package']);
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
@@ -60,10 +61,14 @@ async function loadPurchase({ kind, id, workspaceId }) {
       paymentIntent: e.source === 'purchase' ? (e.stripe_payment_intent || null) : null, label: e.program_title };
   }
   if (kind === 'gift_card') {
+    await releaseStaleGiftCardHolds({ workspaceId, cardId: id }).catch(() => {});
     const r = await sql`SELECT * FROM gift_cards WHERE id = ${id} AND workspace_id = ${workspaceId} LIMIT 1`;
     const c = r.rows[0];
     if (!c) return null;
+    // A gift card refund gives back at most what is left on the card: the
+    // money already spent at bookings or on invoices stays spent.
     return { row: c, basisCents: Number(c.original_amount_cents || 0), refundedCents: Number(c.refunded_cents || 0),
+      capCents: giftCardRefundableCents(c),
       paymentIntent: c.stripe_payment_intent || null, label: `gift card ending ${c.code_last4}` };
   }
   if (kind === 'package') {
@@ -90,22 +95,72 @@ export async function refundPurchase({ workspaceId, kind, id, amountCents: amoun
   if (!purchase.paymentIntent) {
     throw new Error('This purchase was not paid online through Ivy, so there is nothing to refund here.');
   }
-  const remaining = Math.max(0, purchase.basisCents - purchase.refundedCents);
-  if (remaining <= 0) throw new Error('This purchase has already been fully refunded');
+  const isCard = kind === 'gift_card';
+  const remaining = isCard
+    ? Math.max(0, Math.min(purchase.basisCents - purchase.refundedCents, purchase.capCents))
+    : Math.max(0, purchase.basisCents - purchase.refundedCents);
+  if (remaining <= 0) {
+    throw new Error(isCard && purchase.refundedCents < purchase.basisCents
+      ? 'There is nothing left on the card to refund. What was on it has been spent or refunded already.'
+      : 'This purchase has already been fully refunded');
+  }
 
   let amountCents = amountIn == null || amountIn === '' ? remaining : Math.round(Number(amountIn));
   if (!Number.isFinite(amountCents) || amountCents <= 0) throw new Error('amount must be a positive number');
-  if (amountCents > remaining) throw new Error(`Cannot refund more than remaining (${fmtMoney(remaining)})`);
+  if (amountCents > remaining) {
+    throw new Error(isCard
+      ? `You can refund up to ${fmtMoney(remaining)}, what's left on the card.`
+      : `Cannot refund more than remaining (${fmtMoney(remaining)})`);
+  }
   const reason = reasonIn && VALID_REASONS.has(reasonIn) ? reasonIn : null;
+
+  // Gift card: hold the amount off the balance BEFORE the money moves, so
+  // it cannot also be spent while the processor refund is in flight (the
+  // client paying with the card at the same moment). One refund at a time
+  // per card; the sync below takes the refund out of the hold, a failed
+  // processor call puts it back.
+  if (isCard) {
+    const hold = await sql`
+      UPDATE gift_cards SET
+        balance_cents     = balance_cents - ${amountCents},
+        refund_hold_cents = refund_hold_cents + ${amountCents},
+        refund_hold_at    = NOW(),
+        updated_at        = NOW()
+      WHERE id = ${id} AND workspace_id = ${workspaceId}
+        AND status <> 'voided'
+        AND refund_hold_cents = 0
+        AND refunded_cents = ${purchase.refundedCents}
+        AND balance_cents >= ${amountCents}
+      RETURNING id
+    `;
+    if (hold.rows.length === 0) {
+      throw new Error('The card changed a moment ago (it was just used, or another refund is going through). Check its balance and try again.');
+    }
+  }
 
   // Same key for the same (purchase, cumulative-so-far): a racing or
   // retried request reuses it, and the provider hands back the original
   // refund instead of moving money twice.
   const idempotencyKey = `refund-${kind}-${id}-${purchase.refundedCents}`;
-  const providerRefund = await refundThroughProvider({
-    workspaceId, paymentIntent: purchase.paymentIntent, paidMethod: 'card',
-    amountCents, reason, idempotencyKey,
-  });
+  let providerRefund;
+  try {
+    providerRefund = await refundThroughProvider({
+      workspaceId, paymentIntent: purchase.paymentIntent, paidMethod: 'card',
+      amountCents, reason, idempotencyKey,
+    });
+  } catch (err) {
+    if (isCard) {
+      await sql`
+        UPDATE gift_cards SET
+          balance_cents     = balance_cents + ${amountCents},
+          refund_hold_cents = refund_hold_cents - ${amountCents},
+          refund_hold_at    = CASE WHEN refund_hold_cents - ${amountCents} <= 0 THEN NULL ELSE refund_hold_at END,
+          updated_at        = NOW()
+        WHERE id = ${id} AND workspace_id = ${workspaceId} AND refund_hold_cents >= ${amountCents}
+      `.catch((e) => console.error('[purchase refund] gift card hold release failed:', e.message));
+    }
+    throw err;
+  }
 
   // Apply the state change through the exact code the webhook runs, with
   // the cumulative amount the provider will later echo back.
@@ -113,6 +168,7 @@ export async function refundPurchase({ workspaceId, kind, id, amountCents: amoun
   const charge = { payment_intent: purchase.paymentIntent, amount: purchase.basisCents, amount_refunded: cumulative, metadata: {} };
   let deduped = false;
   let fullyRefunded = cumulative >= purchase.basisCents;
+  let cardVoided = false;
   if (kind === 'program') {
     const result = await revokeProgramPurchaseForRefund({ workspaceId, charge });
     deduped = result === 'already-recorded' || result === 'already-cancelled';
@@ -121,6 +177,7 @@ export async function refundPurchase({ workspaceId, kind, id, amountCents: amoun
     const synced = await syncRefundToPurchases({ workspaceId, charge });
     deduped = !!synced.ignored;
     if (!deduped && typeof synced.fully === 'boolean') fullyRefunded = synced.fully;
+    cardVoided = !!synced.voided;
   }
 
   if (!deduped && audit?.req) {
@@ -136,7 +193,7 @@ export async function refundPurchase({ workspaceId, kind, id, amountCents: amoun
   }
 
   return {
-    refund: { amountCents, fullyRefunded, providerRefundId: providerRefund?.id || null, ...(deduped ? { deduped: true } : {}) },
+    refund: { amountCents, fullyRefunded, providerRefundId: providerRefund?.id || null, ...(isCard ? { cardVoided } : {}), ...(deduped ? { deduped: true } : {}) },
     label: purchase.label,
   };
 }

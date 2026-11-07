@@ -9,6 +9,16 @@ import { sql } from '../api/_lib/db.js';
 import handler from '../api/cron/plan-ending.js';
 import { renderPlanEnding, renderSubscriptionCancelled } from '../api/_lib/subscriptionNotify.js';
 
+// The mail provider accepts every send (a send that fails now hands the
+// cron's claim back for the next run, so these runs must deliver to stamp).
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  if (String(url).includes('resend')) {
+    return new Response(JSON.stringify({ id: `stub-${Date.now()}` }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  return realFetch(url, init);
+};
+
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
 const S = Date.now();

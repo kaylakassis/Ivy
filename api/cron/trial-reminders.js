@@ -73,6 +73,9 @@ const STAGES = [
 // the next batch), sharing the run's `deadline` with the other stages.
 async function drainStage({ stage, stampCol, window, shardFilter, deadline }) {
   let scanned = 0, sent = 0;
+  // Rows whose email failed this run: handed back for the next run, not
+  // picked up again by this one.
+  const failedIds = new Set();
   while (Date.now() < deadline) {
     // eslint-disable-next-line no-await-in-loop
     const { rows } = await sql.query(
@@ -84,10 +87,11 @@ async function drainStage({ stage, stampCol, window, shardFilter, deadline }) {
           AND w.${stampCol} IS NULL
           AND u.email IS NOT NULL
           AND COALESCE(u.user_type, 'regular') <> 'sponsored'
+          AND NOT (w.id = ANY($2::uuid[]))
           ${shardFilter}
         ORDER BY w.trial_ends_at ASC
         LIMIT $1`,
-      [BATCH_SIZE],
+      [BATCH_SIZE, [...failedIds]],
     );
     if (rows.length === 0) break;
     scanned += rows.length;
@@ -102,10 +106,19 @@ async function drainStage({ stage, stampCol, window, shardFilter, deadline }) {
         [r.workspace_id],
       );
       if (upd.rows.length === 0) continue;
-      sent++;
       // eslint-disable-next-line no-await-in-loop
-      await notifyTrialReminder({ workspaceId: r.workspace_id, stage, trialEndsAt: r.trial_ends_at })
-        .catch((e) => console.error(`[trial-reminders] ${stage} email failed:`, r.workspace_id, e?.message));
+      const mail = await notifyTrialReminder({ workspaceId: r.workspace_id, stage, trialEndsAt: r.trial_ends_at, retryable: true })
+        .catch((e) => ({ ok: false, reason: e?.message }));
+      if (mail?.ok === false) {
+        // Not accepted by the mail provider: hand the claim back so the
+        // next run retries (still at most one email).
+        console.error(`[trial-reminders] ${stage} email failed:`, r.workspace_id, mail.reason);
+        failedIds.add(r.workspace_id);
+        // eslint-disable-next-line no-await-in-loop
+        await sql.query(`UPDATE workspaces SET ${stampCol} = NULL WHERE id = $1`, [r.workspace_id]).catch(() => {});
+      } else {
+        sent++;
+      }
       if (Date.now() >= deadline) break;
     }
   }

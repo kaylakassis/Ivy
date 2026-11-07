@@ -765,8 +765,10 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
   const chargedCents  = Math.max(0, Math.round(Number(charge.amount || 0)));
   const fully = chargedCents > 0 && refundedCents >= chargedCents;
 
-  // Gift card: take the newly refunded cents off the balance; a full
-  // refund voids the card outright so findActiveByCode never matches it.
+  // Gift card: take the newly refunded cents off the balance (or out of
+  // the hold an in-app refund put on it while the processor call was in
+  // flight, so they are not taken twice); a full refund, or one that
+  // leaves nothing on the card, voids it so findActiveByCode never matches.
   const card = (await sql`
     SELECT id, balance_cents, refunded_cents, status, code_last4, original_amount_cents, sender_email, sender_name
       FROM gift_cards
@@ -777,25 +779,28 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
     const already = Number(card.refunded_cents || 0);
     if (refundedCents <= already) return { ignored: 'refund already recorded' };
     const delta = refundedCents - already;
-    // Every RHS reference to balance_cents is the pre-update value, so the
-    // status flip and the new balance agree.
+    // Every RHS reference to balance_cents / refund_hold_cents is the
+    // pre-update value, so the status flip and the new balance agree.
     const upd = await sql`
       UPDATE gift_cards SET
-        balance_cents  = CASE WHEN ${fully} THEN 0 ELSE GREATEST(0, balance_cents - ${delta}) END,
-        refunded_cents = ${refundedCents},
-        status         = CASE WHEN ${fully} OR balance_cents - ${delta} <= 0 THEN 'voided' ELSE status END,
-        updated_at     = NOW()
+        balance_cents     = CASE WHEN ${fully} THEN 0 ELSE GREATEST(0, balance_cents - GREATEST(0, ${delta} - refund_hold_cents)) END,
+        refund_hold_cents = GREATEST(0, refund_hold_cents - ${delta}),
+        refund_hold_at    = CASE WHEN refund_hold_cents - ${delta} <= 0 THEN NULL ELSE refund_hold_at END,
+        refunded_cents    = ${refundedCents},
+        status            = CASE WHEN ${fully} OR balance_cents - GREATEST(0, ${delta} - refund_hold_cents) <= 0 THEN 'voided' ELSE status END,
+        updated_at        = NOW()
       WHERE id = ${card.id} AND workspace_id = ${workspaceId}
         AND refunded_cents = ${already}
       RETURNING balance_cents, status
     `;
     if (upd.rows.length === 0) return { ignored: 'refund already recorded' };
     const left = Number(upd.rows[0].balance_cents);
+    const voided = upd.rows[0].status === 'voided';
     notifyOwnerSafe({
       workspaceId, type: 'payments',
       payload: {
         title: fully ? 'Gift card refunded' : 'Gift card partly refunded',
-        body: `Card …${card.code_last4}: ${fmtMoney(delta / 100)} refunded${fully ? '; the card is now void.' : `; ${fmtMoney(left / 100)} left on it.`}`,
+        body: `Card …${card.code_last4}: ${fmtMoney(delta / 100)} refunded${fully || voided ? '; the card is now void.' : `; ${fmtMoney(left / 100)} left on it.`}`,
         url: '/finance?section=giftcards',
         tag: `gc-refund-${card.id}`,
       },
@@ -806,11 +811,11 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
     if (card.sender_email) {
       await notifyPurchaseRefunded({
         workspaceId, kind: 'gift_card', label: `gift card ending ${card.code_last4}`,
-        amountCents: delta, remainingCents: Math.max(0, Number(card.original_amount_cents || 0) - refundedCents), fully,
+        amountCents: delta, remainingCents: Math.max(0, Number(card.original_amount_cents || 0) - refundedCents), fully, voided,
         to: card.sender_email, name: card.sender_name,
       });
     }
-    return { applied: 'gift-card-refund-synced', fully, balanceCents: left };
+    return { applied: 'gift-card-refund-synced', fully, voided, balanceCents: left };
   }
 
   // Package: a full refund cancels the bundle. A partial refund is left

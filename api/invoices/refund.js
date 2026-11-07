@@ -1,18 +1,18 @@
 // POST /api/invoices/refund   body: { id, amount?, reason? }
 //
-// Refunds a paid invoice. Two paths:
-//   • Card-paid invoices (stripe_payment_intent set): hits Stripe's
-//     /refunds endpoint with the workspace's secret key. Partial
-//     amounts allowed (omit `amount` for a full refund of what's left).
-//   • Manually-marked-paid invoices: records the refund on our side
-//     only - the owner handles the actual money outside the app.
-//     Useful for cash / check / external Venmo refunds.
+// Refunds a paid (or part-paid) invoice (omit `amount` for everything
+// left). The amount is split across the invoice's payments newest first
+// (invoice_payments), one refund per payment through the processor that
+// took it (Stripe / Square / PayPal, in the invoice's currency); money the
+// owner recorded by hand (cash, check, Venmo) is only recorded as given
+// back, and a gift card that paid gets its credit back.
 //
 // State changes:
 //   refunded_amount += amount; refunded_at = NOW(); status = 'refunded'
-//   when refunded_amount reaches the invoice total, otherwise stays
-//   'paid' (so partial refunds are visible without dropping the
-//   "this client paid me" signal).
+//   when everything paid is back, otherwise stays 'paid' (so partial
+//   refunds are visible without dropping the "this client paid me"
+//   signal). If a later processor refund fails, a 400 says exactly what
+//   went back and what did not (details: refunded, notRefunded, invoice).
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
@@ -43,7 +43,13 @@ export default async function handler(req, res) {
       });
       return ok(res, result);
     } catch (e) {
-      return badRequest(res, e.message || 'Refund failed');
+      // A refund split across payments where a later one failed: the
+      // message says what went back and what did not; details carry the
+      // numbers and the invoice as it now stands.
+      const details = e.partial
+        ? { refunded: e.partial.refunded, notRefunded: e.partial.notRefunded, requested: e.partial.requested, invoice: e.partial.invoice, parts: e.partial.parts }
+        : undefined;
+      return badRequest(res, e.message || 'Refund failed', details);
     }
   } catch (err) {
     return serverError(res, err);

@@ -100,12 +100,12 @@ export default async function handler(req, res) {
              AND status = 'sent'
              AND due_date IS NOT NULL
              AND due_date < (NOW() AT TIME ZONE ${tz})::date`,
-      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
+      sql`SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
            FROM invoices WHERE workspace_id = ${wsId} AND status = 'paid'`,
-      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
+      sql`SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
            FROM invoices WHERE workspace_id = ${wsId} AND status = 'paid'
              AND paid_at >= NOW() - INTERVAL '30 days'`,
-      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
+      sql`SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
            FROM invoices WHERE workspace_id = ${wsId} AND status = 'paid'
              AND paid_at >= NOW() - INTERVAL '90 days'`,
       sql`SELECT COUNT(*)::int AS n FROM documents

@@ -238,10 +238,10 @@ export async function buildWeekStats({ workspaceId, from, to }) {
     `, zero),
     // Money collected: invoices marked paid in the window by any method
     // (card checkout, the manual Mark paid button, a confirmed claim).
-    // paid_amount is the snapshot written at payment time; older rows
-    // fall back to the invoice total.
+    // What was kept, net of refunds (invoice_net_revenue, the rule every
+    // revenue figure uses).
     safeQ(sql`
-      SELECT COALESCE(SUM(GREATEST(COALESCE(paid_amount, total) - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS total
+      SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
         FROM invoices
        WHERE workspace_id = ${workspaceId}
          AND status = 'paid'

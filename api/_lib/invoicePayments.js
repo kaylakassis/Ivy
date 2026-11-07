@@ -15,25 +15,31 @@ function fmtMoney(n) {
 }
 
 // Where a payment leaves an invoice. paid_amount on a still-open invoice
-// is the running total of part payments so far (the pay link already
-// charges only what is left), so a new payment ADDS to it, and the
-// invoice is settled once that running total covers what is due after
-// any gift card. `seen` = this payment id is already in the running total
-// (the paired Checkout + PaymentIntent events, a webhook retry, the PayPal
-// return page racing its webhook) and must not be added again.
-// Shared by the Stripe, Square and PayPal apply paths.
+// is the running total of part payments so far (gross: one ledger row per
+// payment adds up to it), so a new payment ADDS to it. What the client has
+// actually paid is that minus anything refunded since (a part payment the
+// owner gave back no longer counts), and the invoice is settled once that
+// NET amount covers what is due after any gift card; the pay link charges
+// only what is left of it. `seen` = this payment id is already in the
+// running total (the paired Checkout + PaymentIntent events, a webhook
+// retry, the PayPal return page racing its webhook) and must not be added
+// again. Shared by the Stripe, Square and PayPal apply paths.
 export function invoicePaymentState(inv, { paymentId = null, amountCents = null } = {}) {
+  const r2 = (n) => Math.round(n * 100) / 100;
   const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
-  const giftCredit = Number(inv.gift_card_credit_cents || 0) / 100;
-  const due = Math.max(0, Math.round((totals.total - giftCredit) * 100) / 100);
+  const giftCredit = Math.max(0, Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0)) / 100;
+  const due = Math.max(0, r2(totals.total - giftCredit));
   const open = ['draft', 'sent', 'overdue'].includes(inv.status);
-  const prior = open ? Math.max(0, Math.round(Number(inv.paid_amount || 0) * 100) / 100) : 0;
+  const prior = open ? Math.max(0, r2(Number(inv.paid_amount || 0))) : 0;
+  const refundedPrior = open ? Math.min(prior, Math.max(0, r2(Number(inv.refunded_amount || 0)))) : 0;
+  const netPrior = r2(prior - refundedPrior);
   const seen = !!paymentId && prior > 0 && (
     inv.stripe_payment_intent === paymentId
     || (inv.activity || []).some((a) => a?.kind === 'partial-payment' && a.paymentId === paymentId));
   const thisPayment = amountCents != null ? Math.round(Number(amountCents)) / 100 : null;
-  const paidTotal = thisPayment == null ? Math.max(due, prior) : Math.round((prior + thisPayment) * 100) / 100;
-  return { totals, due, prior, seen, thisPayment, paidTotal, underpaid: thisPayment != null && paidTotal < due - 0.01 };
+  const paidTotal = thisPayment == null ? r2(prior + Math.max(0, due - netPrior)) : r2(prior + thisPayment);
+  const netPaid = r2(paidTotal - refundedPrior);
+  return { totals, due, prior, refundedPrior, netPrior, seen, thisPayment, paidTotal, netPaid, underpaid: thisPayment != null && netPaid < due - 0.01 };
 }
 
 // A DIFFERENT payment landed on an invoice that is already settled (two
@@ -115,23 +121,32 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
     const partialActivity = [
       ...(inv.activity || []),
       { ts: new Date().toISOString(), kind: 'partial-payment', paymentId: paymentIntent || null,
-        text: `Partial card payment · ${fmtMoney(st.thisPayment)} · ${fmtMoney(paidAmount)} of ${fmtMoney(dueAfterCredit)} paid` },
+        text: `Partial card payment · ${fmtMoney(st.thisPayment)} · ${fmtMoney(st.netPaid)} of ${fmtMoney(dueAfterCredit)} paid` },
     ];
     // Guarded on the running total we read, so a second payment landing at
-    // the same moment re-reads and adds on top instead of overwriting.
+    // the same moment re-reads and adds on top instead of overwriting. The
+    // same statement writes this payment's ledger row (invoiceLedger.js).
     const part = await sql`
-      UPDATE invoices SET
-        paid_amount           = ${paidAmount},
-        paid_method           = ${method},
-        stripe_payment_intent = ${paymentIntent || null},
-        stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
-        payment_processing_at = NULL,
-        payment_processing_method = NULL,
-        activity              = ${JSON.stringify(partialActivity)}::jsonb,
-        updated_at            = NOW()
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
-        AND COALESCE(paid_amount, 0) = ${st.prior}
-      RETURNING id
+      WITH upd AS (
+        UPDATE invoices SET
+          paid_amount           = ${paidAmount},
+          paid_method           = ${method},
+          stripe_payment_intent = ${paymentIntent || null},
+          stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
+          payment_processing_at = NULL,
+          payment_processing_method = NULL,
+          activity              = ${JSON.stringify(partialActivity)}::jsonb,
+          updated_at            = NOW()
+        WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
+          AND COALESCE(paid_amount, 0) = ${st.prior}
+        RETURNING id, workspace_id, currency
+      ), led AS (
+        INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+        SELECT workspace_id, id, 'stripe', ${paymentIntent || null}, ${st.thisPayment}::numeric, currency FROM upd
+         WHERE ${st.thisPayment}::numeric > 0
+        ON CONFLICT DO NOTHING
+      )
+      SELECT id FROM upd
     `;
     if (part.rows.length === 0 && _attempt < 3) return retry();
     return 'partial-payment';
@@ -143,22 +158,37 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
       text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(giftOnly || st.prior === 0 ? paidAmount : st.thisPayment)}${!giftOnly && st.prior > 0 ? ` · ${fmtMoney(paidAmount)} in total` : ''}` },
   ];
 
+  // This payment's ledger row, written by the same statement: what it adds
+  // to the running total (a gift card that settles the rest after a part
+  // payment adds nothing to paid_amount, so it has no row; the credit has
+  // its own column).
+  const ledgerAmount = keepPrior ? 0 : Math.round((paidAmount - st.prior) * 100) / 100;
+  const ledgerProvider = giftOnly ? 'gift_card' : 'stripe';
+  const ledgerPaymentId = giftOnly ? `gift-card-${invoiceId}` : (paymentIntent || null);
   const upd = await sql`
-    UPDATE invoices SET
-      status                = 'paid',
-      paid_at               = NOW(),
-      paid_amount           = ${paidAmount},
-      paid_method           = ${paidMethod},
-      stripe_payment_intent = ${paidIntent},
-      stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
-      payment_processing_at = NULL,
-      payment_processing_method = NULL,
-      view_token_hash       = NULL,
-      activity              = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at            = NOW()
-    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
-      AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
-    RETURNING id
+    WITH upd AS (
+      UPDATE invoices SET
+        status                = 'paid',
+        paid_at               = NOW(),
+        paid_amount           = ${paidAmount},
+        paid_method           = ${paidMethod},
+        stripe_payment_intent = ${paidIntent},
+        stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
+        payment_processing_at = NULL,
+        payment_processing_method = NULL,
+        view_token_hash       = NULL,
+        activity              = ${JSON.stringify(newActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+        AND COALESCE(paid_amount, 0) = COALESCE(${inv.paid_amount}::numeric, 0)
+      RETURNING id, workspace_id, currency
+    ), led AS (
+      INSERT INTO invoice_payments (workspace_id, invoice_id, provider, provider_payment_id, amount, currency)
+      SELECT workspace_id, id, ${ledgerProvider}, ${ledgerPaymentId}, ${ledgerAmount}::numeric, currency FROM upd
+       WHERE ${ledgerAmount}::numeric > 0
+      ON CONFLICT DO NOTHING
+    )
+    SELECT id FROM upd
   `;
   if (upd.rows.length === 0) {
     // Lost a race: the webhook / another confirm already settled it, or a

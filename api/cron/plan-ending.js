@@ -19,6 +19,9 @@ async function handler(req, res) {
     const { shard, shards } = shardFromReq(req);
     const shardFilter = shardClause({ shard, shards }, 'w.id');
     let scanned = 0, sent = 0, emptied = true;
+    // Rows whose email failed this run: handed back for the next run, not
+    // picked up again by this one (so a mail outage cannot spin the loop).
+    const failedIds = new Set();
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {
         const { rows } = await sql.query(
@@ -31,10 +34,11 @@ async function handler(req, res) {
               AND w.subscription_period_end <= NOW() + INTERVAL '2 days'
               AND w.plan_ending_reminder_sent_at IS NULL
               AND u.email IS NOT NULL
+              AND NOT (w.id = ANY($2::uuid[]))
               ${shardFilter}
             ORDER BY w.subscription_period_end ASC
             LIMIT $1`,
-          [BATCH_SIZE],
+          [BATCH_SIZE, [...failedIds]],
         );
         if (rows.length === 0) break;
         scanned += rows.length;
@@ -45,8 +49,15 @@ async function handler(req, res) {
             [r.workspace_id],
           );
           if (upd.rows.length === 0) continue;
-          sent++;
-            await notifyPlanEnding({ workspaceId: r.workspace_id, endsAt: r.subscription_period_end, source: r.subscription_source });
+          // Claimed above (never twice); an email the provider did not
+          // accept hands the claim back so the next run retries it.
+          const mail = await notifyPlanEnding({ workspaceId: r.workspace_id, endsAt: r.subscription_period_end, source: r.subscription_source, retryable: true });
+          if (mail?.ok === false) {
+            failedIds.add(r.workspace_id);
+            await sql`UPDATE workspaces SET plan_ending_reminder_sent_at = NULL WHERE id = ${r.workspace_id}`.catch(() => {});
+          } else {
+            sent++;
+          }
           if (Date.now() >= deadline) { emptied = false; break; }
         }
       }

@@ -42,7 +42,8 @@ export default async function handler(req, res) {
       // show up.
       sql.query(
         `SELECT id, number, client_name, paid_at, issue_date,
-                items, tax_rate, discount, refunded_amount
+                items, tax_rate, discount, refunded_amount,
+                invoice_net_revenue(invoices) AS kept
          FROM invoices
          WHERE workspace_id = $1
            AND status IN ('paid', 'refunded')
@@ -75,8 +76,12 @@ export default async function handler(req, res) {
       const taxable  = Math.max(0, subtotal - Number(r.discount || 0));
       const tax      = taxable * (Number(r.tax_rate || 0) / 100);
       const total    = Math.round((taxable + tax) * 100) / 100;
-      const refunded = Math.round(Number(r.refunded_amount || 0) * 100) / 100;
-      const net      = Math.round((total - refunded) * 100) / 100;
+      // Net is what was kept (invoice_net_revenue, the rule every revenue
+      // figure uses); "refunded" is what refunds took off this invoice's
+      // income, so gross - refunded = net (a part payment refunded before
+      // the invoice was paid in full takes nothing off).
+      const net      = Math.round(Number(r.kept || 0) * 100) / 100;
+      const refunded = Math.max(0, Math.round((total - net) * 100) / 100);
       grossIncome += total;
       refunds     += refunded;
       const dateISO = r.paid_at instanceof Date

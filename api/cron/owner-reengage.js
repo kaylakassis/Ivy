@@ -38,6 +38,9 @@ async function handler(req, res) {
     const shardFilter = shardClause({ shard, shards }, 'w.id');
 
     let scanned = 0, sent = 0, emptied = false;
+    // Rows whose email failed this run: handed back for the next run, not
+    // picked up again by this one.
+    const failedIds = new Set();
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {
         // Stamp-then-send means a row processed in one batch has its
@@ -59,10 +62,11 @@ async function handler(req, res) {
               -- 7-day check-ins instead (api/cron/accountability-partner.js),
               -- then nothing until they return; no third "away" email here.
               AND u.notification_prefs->>'accountability' = 'false'
+              AND NOT (w.id = ANY($3::uuid[]))
               ${shardFilter}
             ORDER BY u.last_active_at ASC
             LIMIT $2`,
-          [DORMANT_DAYS, BATCH_SIZE],
+          [DORMANT_DAYS, BATCH_SIZE, [...failedIds]],
         );
         if (rows.length === 0) { emptied = true; break; }
         scanned += rows.length;
@@ -77,12 +81,21 @@ async function handler(req, res) {
             [r.user_id],
           );
           if (upd.rows.length === 0) continue;
-          sent++;
           // Awaited (not fire-and-forget) so the drain loop doesn't spawn
           // thousands of concurrent sends; notifyDormantOwner never throws.
           // eslint-disable-next-line no-await-in-loop
-          await notifyDormantOwner({ workspaceId: r.workspace_id })
-            .catch((e) => console.error('[owner-reengage] notify failed:', r.workspace_id, e?.message));
+          const mail = await notifyDormantOwner({ workspaceId: r.workspace_id, retryable: true })
+            .catch((e) => ({ ok: false, reason: e?.message }));
+          if (mail?.ok === false) {
+            // Not accepted by the mail provider: hand the claim back so the
+            // next run retries (still at most one email).
+            console.error('[owner-reengage] notify failed:', r.workspace_id, mail.reason);
+            failedIds.add(r.workspace_id);
+            // eslint-disable-next-line no-await-in-loop
+            await sql`UPDATE users SET dormant_nudge_sent_at = NULL WHERE id = ${r.user_id}`.catch(() => {});
+          } else {
+            sent++;
+          }
           if (Date.now() >= deadline) break;
         }
       }
