@@ -31,8 +31,12 @@
        is local but this request is not; on a slow or absent network the
        fallback stacks paint immediately and web fonts swap in on arrival.
        The preload is promoted to a stylesheet from src/main.jsx: an inline
-       onload handler would be blocked by the Content-Security-Policy. -->
-  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" />
+       onload handler would be blocked by the Content-Security-Policy.
+       This is the only Inter request: the weights cover every font-weight
+       the site and the app use (650 and 800 resolve to 700 as before), and
+       id="site-fonts" tells the marketing chrome (useSiteFonts in
+       site/Chrome.jsx) that the font is already on its way. -->
+  <link id="site-fonts" rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" />
   <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" /></noscript>
 </head>
 <body>

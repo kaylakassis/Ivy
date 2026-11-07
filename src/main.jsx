@@ -7,7 +7,7 @@ import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { registerServiceWorker } from './lib/pwa.js';
 import { initNativeStatusBar } from './lib/nativeStatusBar.js';
 import { isNative } from './lib/platform.js';
-import App, { preloadRoute } from './App.jsx';
+import App, { preloadRoute, warmApp } from './App.jsx';
 import './styles/fonts.css';
 import './styles/tokens.css';
 import './styles/global.css';
@@ -127,10 +127,15 @@ function mount() {
   initNativeStatusBar();
 }
 
+// Signed-in visitors and the phone app: fetch the app shell while the
+// session check runs (nothing waits on it).
+warmApp(window.location.pathname);
+
 // On a pre-rendered page the visitor is already reading the content, so
 // fetch the route's chunk first: React's first commit is then the page
-// itself rather than the route spinner (see src/lib/lazyRoute.js).
-if (!isNative() && document.documentElement.hasAttribute('data-prerendered')) {
+// itself rather than the route spinner (see src/lib/lazyRoute.js). The same
+// goes for sign-in and sign-up, which paint straight onto the empty shell.
+if (!isNative()) {
   preloadRoute(window.location.pathname).catch(() => {}).then(mount);
 } else {
   mount();

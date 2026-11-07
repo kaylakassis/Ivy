@@ -5,7 +5,11 @@
    .woff2 files into public/fonts/ under exactly these names and every page
    (website, app, iPhone app) picks them up - see docs/FONTS.md. Until the
    files exist, the stack falls through to Helvetica Neue on iPhone and Mac
-   (Neue Haas Grotesk's direct descendant), then Inter, then Arial. */
+   (Neue Haas Grotesk's direct descendant), then Inter, then Arial.
+
+   The build keeps each rule below only while its file is in public/fonts/
+   (licensedFonts in vite.config.js), so no page asks for a file that is
+   not there. Add the files and rebuild: nothing else changes. */
 @font-face { font-family: 'Neue Haas Grotesk Text'; font-weight: 400; font-style: normal; font-display: swap; src: url('/fonts/NeueHaasGroteskText-Regular.woff2') format('woff2'); }
 @font-face { font-family: 'Neue Haas Grotesk Text'; font-weight: 400; font-style: italic; font-display: swap; src: url('/fonts/NeueHaasGroteskText-Italic.woff2') format('woff2'); }
 @font-face { font-family: 'Neue Haas Grotesk Text'; font-weight: 500; font-style: normal; font-display: swap; src: url('/fonts/NeueHaasGroteskText-Medium.woff2') format('woff2'); }

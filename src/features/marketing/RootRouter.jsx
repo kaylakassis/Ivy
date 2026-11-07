@@ -13,7 +13,12 @@ import { useAuth } from '../../lib/auth.jsx';
 import { isNative } from '../../lib/platform.js';
 import { fetchMe, decideLanding, rememberLanding, rememberedLanding } from '../../lib/landing.js';
 import LaunchFrame from '../../components/LaunchFrame.jsx';
-import MarketingHome from './site/SiteHome.jsx';
+import { lazyRoute } from '../../lib/lazyRoute.js';
+
+// Its own chunk, so visitors to the other marketing pages do not download
+// the home page. main.jsx loads it before mounting on "/" (preloadRoute in
+// App.jsx), so the first render is the page, never a spinner.
+export const MarketingHome = lazyRoute(() => import('./site/SiteHome.jsx'));
 
 export default function RootRouter() {
   const { user, loading: authLoading } = useAuth();
