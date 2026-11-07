@@ -1,7 +1,7 @@
 // Deep links the API/emails/pushes emit must be honored by the page they
 // land on. The API side mints URLs like /messages?group=, /goals?task=,
 // /finance?filter=overdue, /account?tab=billing, /admin?tab=bugs,
-// /site/:handle?order=success, ?payment=error&msg= and the Stripe cancel
+// /site/:handle?order=success, ?payment=error&reason= and the Stripe cancel
 // returns; this suite checks (statically) that each target page reads
 // that param, that stale links were retargeted, and (functionally) that
 // the SSR site renderer emits the order banner without an inline script.
@@ -31,8 +31,8 @@ const reads = [
   ['src/features/admin/AdminPage.jsx',          /TABS\.some\(\(t\) => t\.id === want\)/, '/admin?tab= initialises the tab when it names a real one'],
   ['src/features/website/PublicSite.jsx',       /get\('order'\)/,                        '/site/:handle?order= shows a notice (React)'],
   ['api/site/[handle]/index.js',                /req\.query\.order/,                     '/site/:handle?order= shows a notice (SSR)'],
-  ['src/features/finance/PublicInvoice.jsx',    /get\('payment'\) === 'error'/,          'PublicInvoice shows ?payment=error&msg='],
-  ['src/features/calendar/PublicBooking.jsx',   /get\('payment'\) === 'error'/,          'PublicBooking shows ?payment=error&msg='],
+  ['src/features/finance/PublicInvoice.jsx',    /get\('payment'\) === 'error'/,          'PublicInvoice shows ?payment=error&reason='],
+  ['src/features/calendar/PublicBooking.jsx',   /get\('payment'\) === 'error'/,          'PublicBooking shows ?payment=error&reason='],
   ['src/features/calendar/PublicBooking.jsx',   /get\('giftcard'\) === 'cancel'/,        'PublicBooking shows ?giftcard=cancel'],
   ['src/features/calendar/PublicBooking.jsx',   /get\('package'\) === 'cancel'/,         'PublicBooking shows ?package=cancel'],
   ['src/features/programs/PublicProgram.jsx',   /get\('cancelled'\) === '1'/,            'PublicProgram shows ?cancelled=1'],

@@ -636,14 +636,16 @@ async function createBooking(req, res) {
       // other number does not cover the stored one. The submitted phone
       // still rides on the booking row (client_phone) for its reminders.
       // Every SET expression reads the pre-update row, so `phone` below
-      // is the stored value.
+      // is the stored value. A client who texted STOP (sms_stopped_at) is
+      // never opted back in by this public form: only their own START
+      // text or the client portal can do that.
       const newAddress = locationAddress || null;
       await sql`
         UPDATE clients SET
           last_seen_at   = NOW(),
           phone          = COALESCE(phone, ${clientPhone}),
           sms_consent_at = CASE
-            WHEN ${smsConsent}::boolean AND sms_consent_at IS NULL
+            WHEN ${smsConsent}::boolean AND sms_consent_at IS NULL AND sms_stopped_at IS NULL
                  AND (phone IS NULL OR phone = ${clientPhone}) THEN NOW()
             ELSE sms_consent_at END,
           address        = COALESCE(address, ${newAddress})

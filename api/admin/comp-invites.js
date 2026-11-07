@@ -20,9 +20,8 @@ import { sendEmail, emailShell } from '../_lib/email.js';
 import { appUrl } from '../_lib/tokens.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
+import { compUntilFor } from '../_lib/signupPerks.js';
 import { badRequest, created, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
-
-const PERMANENT = '9999-01-01T00:00:00Z';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -72,19 +71,25 @@ export default async function handler(req, res) {
       `;
       const inviteId = ins.rows[0].id;
 
-      // Existing live account with this email → comp their workspace now.
+      // Existing live account with this email → comp their workspace now,
+      // but only if that account has confirmed the address. An account
+      // that has not could be someone else who signed up with the
+      // invitee's email; the invite then waits and is claimed when the
+      // email is verified (api/_lib/signupPerks.js).
       let compedNow = false;
+      let awaitingEmailConfirmation = false;
       const existing = await sql`
-        SELECT u.id AS user_id, w.id AS workspace_id
+        SELECT u.id AS user_id, u.email_verified_at, w.id AS workspace_id
           FROM users u JOIN workspaces w ON w.owner_id = u.id
          WHERE LOWER(u.email) = ${email} AND u.deleted_at IS NULL
+         ORDER BY w.created_at ASC, w.id ASC
          LIMIT 1
       `;
-      if (existing.rows.length > 0) {
+      if (existing.rows.length > 0 && !existing.rows[0].email_verified_at) {
+        awaitingEmailConfirmation = true;
+      } else if (existing.rows.length > 0) {
         const wsId = existing.rows[0].workspace_id;
-        const until = months
-          ? new Date(Date.now() + months * 30 * 86400 * 1000).toISOString()
-          : PERMANENT;
+        const until = compUntilFor(months);
         await sql`UPDATE workspaces SET comp_until = ${until}, comp_note = ${note || 'Comp invite'} WHERE id = ${wsId}`;
         await sql`UPDATE comp_invites SET claimed_at = NOW(), claimed_workspace_id = ${wsId} WHERE id = ${inviteId}`;
         evictWorkspaceGateCache(wsId);
@@ -103,9 +108,11 @@ export default async function handler(req, res) {
             heading: 'Welcome to Ivy - on us',
             body: compedNow
               ? `<p>Your Ivy account now has ${durLabel} complimentary access. No card, no charges - just sign in and everything is unlocked.</p>`
-              : `<p>You've been invited to Ivy with ${durLabel} complimentary access. Create your account with this email address (${email}) and everything unlocks automatically - no card required.</p>`,
-            ctaText: compedNow ? 'Open Ivy' : 'Create your account',
-            ctaUrl: compedNow ? `${appUrl()}/signin` : `${appUrl()}/signup`,
+              : awaitingEmailConfirmation
+                ? `<p>You've been given ${durLabel} complimentary access to Ivy. Confirm your email address (${email}) from your Ivy account and everything unlocks automatically. No card required.</p>`
+                : `<p>You've been invited to Ivy with ${durLabel} complimentary access. Create your account with this email address (${email}) and confirm your email, and everything unlocks automatically. No card required.</p>`,
+            ctaText: compedNow || awaitingEmailConfirmation ? 'Open Ivy' : 'Create your account',
+            ctaUrl: compedNow || awaitingEmailConfirmation ? `${appUrl()}/signin` : `${appUrl()}/signup`,
             footer: 'Ivy - the all-in-one platform for solopreneurs.',
           }),
         });
@@ -115,7 +122,7 @@ export default async function handler(req, res) {
         console.warn('[comp-invites] invite email failed:', e.message);
       }
 
-      return created(res, { id: inviteId, email, compedNow, emailed });
+      return created(res, { id: inviteId, email, compedNow, awaitingEmailConfirmation, emailed });
     }
 
     if (req.method === 'DELETE') {

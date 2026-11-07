@@ -37,6 +37,7 @@ import {
   PackageChoice,
 } from './PublicBookingParts.jsx';
 import PolicyConsent, { usePolicyConsent, CardOnFilePrompt } from './PolicyConsent.jsx';
+import { paymentErrorMessage } from '../../lib/paymentErrors.js';
 import './publicBooking.css';
 
 const DAYS_FIRST_LOAD = 28;
@@ -127,8 +128,9 @@ export default function PublicBooking({ embedded = false }) {
     if (params.get('giftcard') === 'cancel')      { setPaymentNotice('cancelled');  params.delete('giftcard');   dirty = true; }
     if (params.get('package') === 'cancel')       { setPaymentNotice('cancelled');  params.delete('package');    dirty = true; }
     if (params.get('payment') === 'error') {
-      setPaymentError((params.get('msg') || 'Payment could not be completed.').slice(0, 160));
-      params.delete('payment'); params.delete('msg'); dirty = true;
+      // Fixed message picked by code; text in the URL is never shown.
+      setPaymentError(paymentErrorMessage(params.get('reason')));
+      params.delete('payment'); params.delete('reason'); params.delete('msg'); dirty = true;
     }
     if (!dirty) return;
     const qs = params.toString();
@@ -607,7 +609,7 @@ export default function PublicBooking({ embedded = false }) {
       )}
       {paymentError && step === 'pick' && (
         <Notice tone="danger" onDismiss={() => setPaymentError(null)}>
-          Payment didn't go through: {paymentError} You haven't been charged - try again or pick another way to pay.
+          {paymentError}
         </Notice>
       )}
       {paymentNotice && step === 'pick' && (

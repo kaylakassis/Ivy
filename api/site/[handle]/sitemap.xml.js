@@ -2,9 +2,8 @@
 // published site. Search engines fetch this to discover the page graph
 // and re-crawl efficiently after edits.
 
-import { sql } from '../../_lib/db.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
-import { loadWorkspaceAccess } from '../../_lib/businessAccess.js';
+import { loadCrawlableSite } from '../../_lib/publicSite.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -15,31 +14,25 @@ export default async function handler(req, res) {
   try {
     await ensureSchemaApplied();
     const { handle } = req.query;
-    if (!handle || typeof handle !== 'string') {
+    // Same rules as the pages (api/_lib/publicSite.js): an unpublished or
+    // private site, or one whose owner deleted their account, 404s here
+    // exactly as its pages do. (The deleted-account case used to keep
+    // listing every page URL forever.)
+    const site = await loadCrawlableSite(typeof handle === 'string' ? handle : '');
+    if (site.kind === 'not_found') {
       res.statusCode = 404;
+      res.setHeader('Cache-Control', 'no-store');
       return res.end('Not Found');
     }
-    const { rows } = await sql`
-      SELECT workspace_id, handle, COALESCE(published_pages, pages) AS pages, updated_at, published_at
-      FROM websites
-      WHERE handle = ${handle.toLowerCase()}
-        AND published_at IS NOT NULL
-        AND visibility != 'only_me'
-    `;
-    if (rows.length === 0) {
-      res.statusCode = 404;
-      return res.end('Not Found');
-    }
-    const r = rows[0];
     // Archived site: an empty (but valid) sitemap, so crawlers see
     // nothing to index. robots.txt disallows everything alongside.
-    const access = await loadWorkspaceAccess(r.workspace_id);
-    if (!access.active) {
+    if (site.kind === 'archived') {
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/xml; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>');
     }
+    const r = site.row;
     const host = req.headers['x-forwarded-host'] || req.headers.host || 'joinivy.ai';
     const base = `https://${host}/site/${r.handle}`;
     const pages = Array.isArray(r.pages) && r.pages.length > 0

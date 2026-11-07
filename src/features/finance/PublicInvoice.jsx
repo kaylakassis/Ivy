@@ -13,6 +13,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import InvoiceDocument, { printInvoice } from './InvoiceDocument.jsx';
 import { invoiceMoney, invoiceStatusLine } from '../../lib/invoiceRules.js';
+import { paymentErrorMessage } from '../../lib/paymentErrors.js';
 
 const MANUAL_LABELS = { zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', cash: 'Cash', check: 'Check', other: 'Other' };
 const manualLabel = (t) => MANUAL_LABELS[t] || 'Other';
@@ -46,9 +47,10 @@ export default function PublicInvoice() {
   const paidFlag      = params.get('paid') === '1';
   const cancelledFlag = params.get('cancelled') === '1';
   // PayPal return (api/finance/paypal-return.js) reports a failed capture
-  // as ?payment=error&msg=<reason>.
+  // as ?payment=error&reason=<code>. The message is picked from a fixed
+  // list by code; text in the URL (an old or crafted ?msg=) is never shown.
   const paymentErrorMsg = params.get('payment') === 'error'
-    ? (params.get('msg') || 'Payment could not be completed.').slice(0, 160)
+    ? paymentErrorMessage(params.get('reason'))
     : null;
   const [inv, setInv]         = useState(null);
   const [loading, setLoading] = useState(true);
@@ -503,7 +505,7 @@ export default function PublicInvoice() {
                 marginBottom: 12, padding: '6px 10px', borderRadius: 6,
                 background: 'rgba(155,44,44,0.08)', color: 'var(--danger)', fontSize: 12,
               }}>
-                Payment didn't go through: {paymentErrorMsg} You haven't been charged - try again or pay another way.
+                {paymentErrorMsg}
               </div>
             )}
             {payErr && (

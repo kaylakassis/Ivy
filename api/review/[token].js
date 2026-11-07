@@ -17,6 +17,14 @@ import { notifyOwnerSafe } from '../_lib/push.js';
 import { celebrateFirstReview, celebrateReviewMilestones } from '../_lib/milestones.js';
 import crypto from 'node:crypto';
 
+// A "Leave a review" link works for 60 days after it was sent. The send
+// time is bookings.review_requested_at (stamped in the same UPDATE that
+// stores the token, by the review-request cron and Ivy's
+// send_review_request). Links already out there follow the same rule, so
+// an old unused link simply stops working once it is past 60 days.
+export const REVIEW_LINK_TTL_DAYS = 60;
+export const REVIEW_LINK_EXPIRED_MESSAGE = 'This review link has expired. Thanks for thinking of us.';
+
 function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
@@ -28,7 +36,9 @@ async function resolve(token) {
     SELECT b.id AS booking_id, b.workspace_id, b.client_id, b.client_name,
            b.date, b.start_min, b.end_min, b.cancelled_at,
            s.name AS service_name,
-           cs.biz_name, cs.brand_logo_url, cs.brand_accent_color
+           cs.biz_name, cs.brand_logo_url, cs.brand_accent_color,
+           (COALESCE(b.review_requested_at, b.created_at)
+              < NOW() - make_interval(days => ${REVIEW_LINK_TTL_DAYS})) AS expired
       FROM bookings b
       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
@@ -50,6 +60,10 @@ export default async function handler(req, res) {
     const token = (req.query.token || '').toString();
     const row = await resolve(token);
     if (!row) return notFound(res, "This review link isn't active. It may have already been used or expired.");
+    // Past 60 days: a friendly 410 (GET and POST alike), never a review.
+    if (row.expired) {
+      return res.status(410).json({ error: REVIEW_LINK_EXPIRED_MESSAGE, code: 'review_link_expired' });
+    }
     if (row.cancelled_at) return notFound(res, 'That booking was cancelled.');
 
     if (req.method === 'GET') {

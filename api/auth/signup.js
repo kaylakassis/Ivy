@@ -220,33 +220,11 @@ export default async function handler(req, res) {
           RETURNING id
         `;
         const newWorkspaceId = wsIns.rows[0].id;
-        // Comp invite: if this email is on the admin allowlist, grant
-        // complimentary access immediately - the paywall never appears.
-        // Best-effort: a comp hiccup must never break signup.
-        try {
-          const inv = await sql`
-            SELECT id, note, comp_months FROM comp_invites
-             WHERE LOWER(email) = ${emailKey} AND claimed_at IS NULL
-             LIMIT 1
-          `;
-          if (inv.rows.length > 0) {
-            const months = inv.rows[0].comp_months;
-            const until = months
-              ? new Date(Date.now() + months * 30 * 86400 * 1000).toISOString()
-              : '9999-01-01T00:00:00Z';
-            await sql`
-              UPDATE workspaces SET comp_until = ${until}, comp_note = ${inv.rows[0].note || 'Comp invite'}
-               WHERE id = ${newWorkspaceId}
-            `;
-            await sql`
-              UPDATE comp_invites SET claimed_at = NOW(), claimed_workspace_id = ${newWorkspaceId}
-               WHERE id = ${inv.rows[0].id}
-            `;
-          }
-        } catch (compErr) {
-          // eslint-disable-next-line no-console
-          console.warn('[signup] comp-invite claim failed (continuing):', compErr.message);
-        }
+        // Comp invites and the waitlist discount are NOT granted here:
+        // they go to whoever owns the email address, so they wait until
+        // the address is verified (api/_lib/signupPerks.js, called from
+        // api/auth/verify-email.js). Granting them at sign-up let anyone
+        // who knew an invitee's address sign up as them and take it.
         // Seed a LIVE booking handle immediately so /book/<slug> works the
         // moment they sign up (the natural shareable "aha") — instead of
         // 404'ing until they manually type a handle deep in onboarding.
@@ -280,25 +258,6 @@ export default async function handler(req, res) {
         } catch (seedErr) {
           // eslint-disable-next-line no-console
           console.warn('[signup] booking-handle seed failed:', seedErr.message);
-        }
-        // Waitlist discount: if this owner's email is on the pre-launch
-        // waitlist, stamp the workspace eligible for the shared 20%/12mo
-        // coupon (applied later at checkout). This server-side email
-        // match IS the exclusivity — the discount can't be granted via a
-        // shareable code. Best-effort: never break signup over it.
-        try {
-          const wl = await sql`SELECT 1 FROM waitlist_signups WHERE LOWER(email) = ${emailKey} LIMIT 1`;
-          if (wl.rows.length > 0) {
-            await sql`UPDATE workspaces SET waitlist_discount_at = NOW() WHERE owner_id = ${user.id}`;
-            await sql`
-              UPDATE waitlist_signups
-                 SET status = 'converted', converted_user_id = ${user.id}, converted_at = NOW()
-               WHERE LOWER(email) = ${emailKey}
-            `;
-          }
-        } catch (wlErr) {
-          // eslint-disable-next-line no-console
-          console.warn('[signup] waitlist discount stamp failed:', wlErr.message);
         }
       }
       // Client signup used to claim every `clients` row with this email

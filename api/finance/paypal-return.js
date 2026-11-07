@@ -25,6 +25,16 @@ function safeNext(next) {
   return `${base}/`;
 }
 
+// A failed capture is reported to the page as a short code, never as
+// free text: the page maps the code to a fixed message
+// (src/lib/paymentErrors.js). Codes: declined | unavailable | failed.
+export function paymentErrorCode(err) {
+  const m = String(err?.message || '');
+  if (/INSTRUMENT_DECLINED|TRANSACTION_REFUSED|PAYER_CANNOT_PAY|PAYER_ACTION_REQUIRED|DECLINED/i.test(m)) return 'declined';
+  if (/not connected/i.test(m)) return 'unavailable';
+  return 'failed';
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   const q = req.query || {};
@@ -71,7 +81,9 @@ export default async function handler(req, res) {
     // eslint-disable-next-line no-console
     console.error('[paypal-return] capture failed:', err.message);
     dest.searchParams.set('payment', 'error');
-    dest.searchParams.set('msg', (err.message || 'Capture failed').slice(0, 160));
+    dest.searchParams.set('reason', paymentErrorCode(err));
+    // The next URL may carry an old ?msg= (or a crafted one): drop it.
+    dest.searchParams.delete('msg');
   }
   res.writeHead(302, { Location: dest.toString() });
   res.end();

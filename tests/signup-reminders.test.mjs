@@ -136,8 +136,9 @@ async function run() {
   const beta = await owner('beta', { user: { user_type: 'beta' } });
   const spons = await owner('spons', { user: { user_type: 'sponsored' } });
   const comped = await owner('comped', { ws: { comp_until: '9999-01-01T00:00:00Z' } });
-  // A comp invite on file but not yet applied to the workspace (the claim
-  // at sign-up is best-effort): still never reminded.
+  // A comp invite on file but not yet applied to the workspace: the invite
+  // is claimed only once the email is confirmed, so an unconfirmed invitee
+  // (like this one) has no comp_until yet. Still never reminded.
   const invited = await owner('invited');
   await sql`INSERT INTO comp_invites (email, note, comp_months) VALUES (${invited.email.toUpperCase()}, 'test', 3)`;
   const paying = await owner('paying', { ws: { subscription_status: 'active', subscription_period_end: new Date(Date.now() + 30 * 864e5).toISOString() } });

@@ -146,6 +146,18 @@ async function run() {
   } });
   row = (await sql`SELECT phone, sms_consent_at FROM clients WHERE id = ${bare}`).rows[0];
   assert(r.statusCode === 201 && row.phone === '+15555550177' && row.sms_consent_at !== null, 'empty phone + consent filled from the booking');
+
+  // A client who texted STOP is never opted back in by the public form,
+  // even with the same number and the box ticked.
+  const stopped = (await sql`INSERT INTO clients (workspace_id, name, email, phone, stage, sms_consent_at, sms_stopped_at)
+    VALUES (${wsId}, 'Sam Stopped', ${em('sam')}, '+15555550188', 'active', NULL, NOW() - INTERVAL '3 days') RETURNING id`).rows[0].id;
+  r = await call({ method: 'POST', query: { slug: SLUG }, body: {
+    serviceId: svc, date: day, startMin: 960, endMin: 1020, clientName: 'Sam Stopped', clientEmail: em('sam'),
+    clientPhone: '+15555550188', smsConsent: true,
+  } });
+  row = (await sql`SELECT sms_consent_at, sms_stopped_at FROM clients WHERE id = ${stopped}`).rows[0];
+  assert(r.statusCode === 201, `booking still goes through for a STOPped client (${r.statusCode})`);
+  assert(row.sms_consent_at === null && row.sms_stopped_at !== null, 'STOP stays in force: no SMS consent re-stamped by the public form');
 }
 
 async function cleanup() {

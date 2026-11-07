@@ -14,6 +14,8 @@ import adminList from '../api/admin/waitlist.js';
 import inviteHandler from '../api/admin/waitlist-invite.js';
 import redeemHandler from '../api/early-access/invite.js';
 import signupHandler from '../api/auth/signup.js';
+import verifyEmailHandler from '../api/auth/verify-email.js';
+import { createToken, KIND_VERIFY } from '../api/_lib/tokens.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -104,7 +106,14 @@ async function run() {
   await signupHandler(req({ body: signupBody, headers: { cookie: `ea_invite=${encodeURIComponent(inviteCookie)}` } }), r);
   assert(r.statusCode === 200 || r.statusCode === 201, `signup succeeds with the invite (${r.statusCode})`);
   row = (await sql`SELECT status FROM waitlist_signups WHERE LOWER(email) = ${email}`).rows[0];
-  assert(row.status === 'converted', 'row marked converted after signup');
+  assert(row.status !== 'converted', 'not converted (no discount) until the email is confirmed');
+  const newUserId = r.body?.user?.id;
+  const vtok = await createToken({ userId: newUserId, kind: KIND_VERIFY, ttlMinutes: 60 });
+  r = makeRes();
+  await verifyEmailHandler(req({ body: { token: vtok } }), r);
+  assert(r.statusCode === 200, `email confirmed (${r.statusCode})`);
+  row = (await sql`SELECT status FROM waitlist_signups WHERE LOWER(email) = ${email}`).rows[0];
+  assert(row.status === 'converted', 'row marked converted once the email is confirmed');
 
   console.log('\n[4] deleting the row revokes the invite; flipping to open removes the gate');
   const other = `wl2b-${S}@example.com`;

@@ -13,6 +13,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { findValidToken, consumeToken, KIND_VERIFY } from '../_lib/tokens.js';
 import { invalidateUserCache } from '../_lib/auth.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { claimSignupPerks } from '../_lib/signupPerks.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -47,6 +48,9 @@ export default async function handler(req, res) {
       // shouldn't happen but worth handling), we don't trust the stale
       // token and reject. The user can sign in and hit "Resend".
       if (user.email_verified_at) {
+        // Retry the perk claim (idempotent) in case the first click's
+        // claim hit a blip: the address is proven either way.
+        await claimSignupPerks(user.id);
         return ok(res, { user, alreadyVerified: true });
       }
       return unauthorized(res, 'This verification link is invalid or has expired');
@@ -61,6 +65,9 @@ export default async function handler(req, res) {
     // the "verify your email" banner to be gone.
     invalidateUserCache(valid.userId);
     await consumeToken(valid.tokenId);
+    // The address is now proven: grant what was waiting on it (a comp
+    // invite, the waitlist discount). Idempotent and never throws.
+    await claimSignupPerks(valid.userId);
 
     // Re-read so the response carries the freshly-set email_verified_at.
     const refreshed = await sql`

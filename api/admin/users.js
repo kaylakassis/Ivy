@@ -25,6 +25,7 @@ import { createToken, KIND_RESET, KIND_VERIFY, appUrl } from '../_lib/tokens.js'
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { isWorkspaceActive } from '../_lib/clientPortal.js';
+import { claimSignupPerks } from '../_lib/signupPerks.js';
 import { missingCountSql } from '../_lib/onboardingAnswers.js';
 
 const PAGE_SIZE = 50;
@@ -312,6 +313,11 @@ async function createUser(req, res) {
       VALUES (${user.id}, ${finalCode}, ${name})
     `;
   }
+
+  // An admin-created account is verified on creation, so whatever was
+  // waiting on this address (a comp invite, the waitlist discount) is
+  // granted now, exactly as email verification grants it. Never throws.
+  if (workspaceId) await claimSignupPerks(user.id);
 
   // Auto-claim any pre-existing clients rows tied to this email so the
   // signup-flow auto-link works for admin-created users too.

@@ -28,6 +28,7 @@ import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { assertPublicHttpsUrl } from '../_lib/safeUrl.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
+import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
 
 // SSRF guard for owner-configured form-webhook delivery. This endpoint is
 // PUBLIC (any visitor triggers it), so a delivery URL pointing at the cloud
@@ -71,6 +72,13 @@ export default async function handler(req, res) {
     `;
     if (found.rows.length === 0) return badRequest(res, 'Site not found');
     const site = found.rows[0];
+    // Archived business (subscription lapsed): no new leads, exactly like
+    // the booking-page contact form (api/calendar/public/contact.js). The
+    // site itself already shows the "no longer available" page; this
+    // stops a cached copy or a direct POST from still feeding the CRM,
+    // the owner's inbox and the auto-reply.
+    const access = await loadWorkspaceAccess(site.workspace_id);
+    if (!access.active) return archivedForbidden(res);
 
     // Record the submission first - that way even if the destination
     // fails the owner can still see the data on their next login.

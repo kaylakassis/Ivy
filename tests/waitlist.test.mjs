@@ -18,6 +18,8 @@ import { setLaunchMode, getLaunchMode, setGatePassword, attemptBypass } from '..
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../api/_lib/legal.js';
 import joinHandler from '../api/waitlist/join.js';
 import signupHandler from '../api/auth/signup.js';
+import verifyEmailHandler from '../api/auth/verify-email.js';
+import { createToken, KIND_VERIFY } from '../api/_lib/tokens.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -109,7 +111,14 @@ async function run() {
     headers: { cookie: `ea_pass=${bypass.cookieValue}` },
   }), makeRes());
   ws = (await sql`SELECT w.waitlist_discount_at FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE u.email = ${wlEmail}`).rows[0];
-  assert(ws && ws.waitlist_discount_at !== null, 'waitlisted signup IS discount-eligible (stamped)');
+  assert(ws && ws.waitlist_discount_at === null, 'not stamped at sign-up: the email is not confirmed yet');
+  const wlUserId = (await sql`SELECT id FROM users WHERE email = ${wlEmail}`).rows[0].id;
+  const vtok = await createToken({ userId: wlUserId, kind: KIND_VERIFY, ttlMinutes: 60 });
+  r = makeRes();
+  await verifyEmailHandler(req({ body: { token: vtok } }), r);
+  assert(r.statusCode === 200, 'email confirmed');
+  ws = (await sql`SELECT w.waitlist_discount_at FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE u.email = ${wlEmail}`).rows[0];
+  assert(ws && ws.waitlist_discount_at !== null, 'waitlisted signup IS discount-eligible once the email is confirmed (stamped)');
   const wlRow = (await sql`SELECT status, converted_user_id FROM waitlist_signups WHERE LOWER(email) = ${wlEmail}`).rows[0];
   assert(wlRow.status === 'converted' && wlRow.converted_user_id, 'waitlist row marked converted + linked to user');
 

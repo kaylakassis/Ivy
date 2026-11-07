@@ -68,8 +68,9 @@ export default async function handler(req, res) {
         name            = COALESCE(waitlist_signups.name,       EXCLUDED.name),
         phone           = COALESCE(waitlist_signups.phone,      EXCLUDED.phone),
         contact_consent = COALESCE(waitlist_signups.contact_consent, EXCLUDED.contact_consent),
-        consent_at      = COALESCE(waitlist_signups.consent_at, EXCLUDED.consent_at),
-        unsubscribed_at = NULL
+        consent_at      = COALESCE(waitlist_signups.consent_at, EXCLUDED.consent_at)
+        -- unsubscribed_at is deliberately left alone: this form is public,
+        -- so submitting it again must never undo an earlier unsubscribe.
       RETURNING id, created_at, (xmax = 0) AS is_new
     `;
     const isFirstTime = !!inserted.rows[0]?.is_new;

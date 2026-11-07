@@ -37,7 +37,7 @@ export default function ReviewPage() {
       .then(async (res) => {
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
-          throw Object.assign(new Error(j.error || `HTTP ${res.status}`), { status: res.status });
+          throw Object.assign(new Error(j.error || `HTTP ${res.status}`), { status: res.status, code: j.code });
         }
         return res.json();
       })
@@ -60,7 +60,7 @@ export default function ReviewPage() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${res.status}`);
+        throw Object.assign(new Error(j.error || `HTTP ${res.status}`), { status: res.status, code: j.code });
       }
       setSubmitted(true);
     } catch (err) {
@@ -72,6 +72,18 @@ export default function ReviewPage() {
 
   if (loading) {
     return <Wrap tweaks={tweaks}><div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div></Wrap>;
+  }
+  // Past 60 days since the email went out (server answers 410).
+  if (error && !submitted && error.code === 'review_link_expired') {
+    return (
+      <Wrap tweaks={tweaks}>
+        <div className="card" style={{ padding: 36 }}>
+          <EmptyNote icon="Heart"
+            title="This review link has expired."
+            hint="Thanks for thinking of us."/>
+        </div>
+      </Wrap>
+    );
   }
   if (error && !submitted) {
     return (

@@ -8,6 +8,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { userContext, ids } from '../_lib/clientPortal.js';
 import { missingRequiredAnswers } from '../_lib/onboardingAnswers.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { hasPendingCompInvite } from '../_lib/signupPerks.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -39,15 +40,23 @@ export default async function handler(req, res) {
       ? await loadMissingAnswers(ctx.owns.id)
       : [];
 
+    // An owner who has not confirmed their email yet, with a comp invite
+    // waiting on that address: the paywall shows "Confirm your email to
+    // unlock your free access" instead of the plans. Only ever checks the
+    // signed-in user's own address. Additive field.
+    const pendingCompInvite = ctx.owns?.id && !user.email_verified_at
+      ? await hasPendingCompInvite(user)
+      : false;
+
     if (!ctx.isClient) {
       // Owner-only - return context with empty summary.
-      return ok(res, { ...ctx, onboardingAnswersMissing, summary: emptySummary() });
+      return ok(res, { ...ctx, onboardingAnswersMissing, pendingCompInvite, summary: emptySummary() });
     }
 
     const myIds = ids(ctx.memberships);
     // Use ARRAY[$1...] style via sql.query so we can pass an array param.
     const summary = await loadSummary(myIds);
-    return ok(res, { ...ctx, onboardingAnswersMissing, summary });
+    return ok(res, { ...ctx, onboardingAnswersMissing, pendingCompInvite, summary });
   } catch (err) {
     return serverError(res, err);
   }

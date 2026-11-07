@@ -11,6 +11,8 @@ import { isWorkspaceActive } from '../api/_lib/clientPortal.js';
 import { ensureActiveWorkspace, evictWorkspaceGateCache } from '../api/_lib/workspaceGate.js';
 import compHandler from '../api/admin/comp-invites.js';
 import signupHandler from '../api/auth/signup.js';
+import verifyEmailHandler from '../api/auth/verify-email.js';
+import { createToken, KIND_VERIFY } from '../api/_lib/tokens.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -57,7 +59,7 @@ async function run() {
     assert(r.statusCode === 201, `invite created (got ${r.statusCode}: ${JSON.stringify(r.body)})`);
     assert(r.body.compedNow === false, 'not comped yet (no account)');
 
-    console.log('\n[2] signup with the invited email → workspace comped, paywall gone');
+    console.log('\n[2] signup with the invited email → comped only once the email is confirmed');
     r = mockRes();
     await signupHandler(req({ method: 'POST', body: {
       email: `comp-new-${STAMP}@example.com`, name: 'Comped User',
@@ -69,6 +71,14 @@ async function run() {
     cleanupUserIds.push(newUserId);
     const ws = (await sql`SELECT id FROM workspaces WHERE owner_id = ${newUserId}`).rows[0];
     let row = await wsRow(ws.id);
+    assert(!row.comp_until, 'not comped at sign-up (email not confirmed yet)');
+    const inv0 = (await sql`SELECT claimed_at FROM comp_invites WHERE LOWER(email) = ${`comp-new-${STAMP}@example.com`}`).rows[0];
+    assert(inv0 && inv0.claimed_at === null, 'invite still unclaimed before confirmation');
+    const vtok = await createToken({ userId: newUserId, kind: KIND_VERIFY, ttlMinutes: 60 });
+    r = mockRes();
+    await verifyEmailHandler(req({ method: 'POST', body: { token: vtok } }), r);
+    assert(r.statusCode === 200, `email confirmed (got ${r.statusCode})`);
+    row = await wsRow(ws.id);
     assert(!!row.comp_until && new Date(row.comp_until) > new Date(), `comp_until stamped (${row.comp_until})`);
     assert(row.subscription_status === 'incomplete', 'subscription state untouched (no fake Stripe status)');
     assert(isWorkspaceActive(row) === true, 'isWorkspaceActive = true → paywall never shows');

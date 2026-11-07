@@ -12,6 +12,7 @@
 
 import { sql } from './db.js';
 import { publicPolicy } from './cancellationPolicy.js';
+import { loadWorkspaceAccess } from './businessAccess.js';
 
 // Normalize a hostname for comparison: lowercase, strip trailing dot.
 // Returns the bare + www variants so we match a stored custom_domain
@@ -157,4 +158,33 @@ export async function loadPublicSite({ handle, slug, host }) {
     },
     nav,
   };
+}
+
+// For the crawler files (api/site/[handle]/sitemap.xml.js and robots.txt.js):
+// the SAME visibility rules as the pages themselves, so a crawler is never
+// pointed at a site whose pages 404 or show the archived card.
+//   { kind: 'not_found' }  - no published, visible site, or the owner's
+//                            account is deleted (the pages 404)
+//   { kind: 'archived' }   - subscription lapsed (the pages show the
+//                            archived, noindex card)
+//   { kind: 'ok', row }    - live; row has handle, pages, updated_at,
+//                            published_at
+export async function loadCrawlableSite(handle) {
+  if (!handle || typeof handle !== 'string') return { kind: 'not_found' };
+  const { rows } = await sql`
+    SELECT w2.workspace_id, w2.handle, COALESCE(w2.published_pages, w2.pages) AS pages,
+           w2.updated_at, w2.published_at
+      FROM websites w2
+      JOIN workspaces ws ON ws.id = w2.workspace_id
+      JOIN users u ON u.id = ws.owner_id AND u.deleted_at IS NULL
+     WHERE w2.handle = ${handle.toLowerCase()}
+       AND w2.published_at IS NOT NULL
+       AND w2.visibility != 'only_me'
+     ORDER BY w2.published_at DESC
+     LIMIT 1
+  `;
+  if (rows.length === 0) return { kind: 'not_found' };
+  const access = await loadWorkspaceAccess(rows[0].workspace_id);
+  if (!access.active) return { kind: 'archived' };
+  return { kind: 'ok', row: rows[0] };
 }

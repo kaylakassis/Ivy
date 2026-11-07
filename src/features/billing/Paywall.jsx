@@ -356,6 +356,14 @@ export default function Paywall({ ctx, onRefresh }) {
                 : canTrial      ? `Start your ${TRIAL_DAYS}-day free trial`
                 :                 'Subscribe to keep going';
 
+  // Free access is waiting on this address (a comp invite) but the email
+  // is not confirmed yet: no plans, no sell, just the one step that
+  // unlocks it. /api/me only sets pendingCompInvite for the signed-in
+  // owner's own unconfirmed address.
+  if (ctx?.pendingCompInvite && !ctx?.user?.emailVerifiedAt && !syncing) {
+    return <ConfirmEmailForFreeAccess email={ctx?.user?.email} onRefresh={onRefresh} onLogout={logout} busy={busy}/>;
+  }
+
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="paywall-title" style={{
       position: 'fixed', inset: 0, zIndex: 200,
@@ -835,6 +843,76 @@ function PrimingStep({ step, setStep, canTrial }) {
           Back
         </button>
       )}
+    </div>
+  );
+}
+
+// Gentle wall for an invitee whose email is not confirmed yet. The free
+// access is granted the moment they confirm (server side), so the only
+// actions are: resend the link, check again, or log out.
+export function ConfirmEmailForFreeAccess({ email, onRefresh, onLogout, busy }) {
+  const [state, setState] = useState(null); // 'sending' | 'sent' | 'checking' | null
+  const [msg, setMsg] = useState(null);
+  const resend = async () => {
+    setState('sending'); setMsg(null);
+    try {
+      const r = await api.post('/auth/resend-verification');
+      if (r?.alreadyVerified) {
+        setState('checking');
+        await onRefresh?.();
+        setState(null);
+        return;
+      }
+      setState('sent');
+      setMsg('Sent. Check your inbox (and your spam folder).');
+    } catch (e) {
+      setState(null);
+      setMsg(e?.message || 'We could not send the email right now. Please try again in a few minutes.');
+    }
+  };
+  const check = async () => {
+    setState('checking'); setMsg(null);
+    try {
+      const r = await onRefresh?.();
+      if (r && !r.subscription?.isActive) setMsg("We don't see your confirmation yet. Tap the link in the email, then try again.");
+    } catch { /* the wall stays; nothing to report */ }
+    setState(null);
+  };
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="paywall-confirm-title" style={{
+      position: 'fixed', inset: 0, zIndex: 200,
+      background: 'rgba(10, 12, 8, 0.62)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    }}>
+      <div className="card" style={{ width: '100%', maxWidth: 420, padding: '28px 26px', textAlign: 'center', boxShadow: '0 30px 70px rgba(0,0,0,0.32)' }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px',
+          background: 'var(--accent-soft)', color: 'var(--accent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}><Icons.Mail size={24}/></div>
+        <h2 id="paywall-confirm-title" style={{
+          margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500,
+          fontSize: 23, lineHeight: 1.2, letterSpacing: '-0.02em', color: 'var(--fg)',
+        }}>Confirm your email to unlock your free access</h2>
+        <p style={{ margin: '10px auto 0', maxWidth: 340, color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55 }}>
+          We sent a link to <strong>{email}</strong>. Tap it and your free access turns on. No card needed.
+        </p>
+        {msg && <p role="status" style={{ margin: '12px 0 0', fontSize: 13, color: 'var(--muted)' }}>{msg}</p>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
+          <button onClick={resend} disabled={!!state || !!busy} className="btn btn-primary"
+            style={{ justifyContent: 'center', padding: '12px 16px', fontSize: 15 }}>
+            {state === 'sending' ? 'Sending…' : 'Resend the email'}
+          </button>
+          <button onClick={check} disabled={!!state || !!busy} className="btn btn-outline"
+            style={{ justifyContent: 'center' }}>
+            {state === 'checking' ? 'Checking…' : "I've confirmed it"}
+          </button>
+          <button onClick={onLogout} disabled={!!busy} className="btn btn-ghost"
+            style={{ justifyContent: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
+            Log out
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

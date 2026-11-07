@@ -70,6 +70,25 @@ async function run() {
     assert(mail && !/&amp;amp;|&amp;#39;/.test(mail.html), 'no double-escaped entities in the html');
     assert(mail && mail.text.includes("Kayla's Hair & Nails will personally get back"), 'plain-text part reads naturally');
 
+    console.log('\n[3c] daily caps: 2 per person per business, counted per business');
+    const capFetch = globalThis.fetch;
+    globalThis.fetch = async (url, opts) => (String(url).includes('api.resend.com')
+      ? { ok: true, status: 200, json: async () => ({ id: 'em_cap' }), text: async () => '{}' }
+      : capFetch(url, opts));
+    try {
+      const who = `cap-${Date.now()}@example.com`;
+      const a = await notifyLeadInstantReply({ workspaceId, toEmail: who, leadName: 'Cap' });
+      const b = await notifyLeadInstantReply({ workspaceId, toEmail: who.toUpperCase(), leadName: 'Cap' });
+      const c3 = await notifyLeadInstantReply({ workspaceId, toEmail: who, leadName: 'Cap' });
+      assert(a.sent === true && b.sent === true, 'first two replies to a person go out');
+      assert(c3.sent === false && c3.reason === 'recipient-daily-cap', `third is skipped (${c3.reason})`);
+      const keys = (await sql`SELECT DISTINCT key FROM rate_limits WHERE key LIKE ${`lead-autoreply:ws:${workspaceId}%`}`).rows.map((x) => x.key);
+      assert(keys.every((k) => !k.includes('@')), 'the counter never stores the address itself');
+      await sql`DELETE FROM rate_limits WHERE key LIKE ${`lead-autoreply:ws:${workspaceId}%`}`;
+    } finally {
+      globalThis.fetch = capFetch;
+    }
+
     console.log('\n[4] disabled workspace → skipped before sending');
     await sql`UPDATE calendar_settings SET lead_instant_reply_enabled = FALSE WHERE workspace_id = ${workspaceId}`;
     r = await notifyLeadInstantReply({ workspaceId, toEmail: 'prospect@example.com', leadName: 'Pat' });

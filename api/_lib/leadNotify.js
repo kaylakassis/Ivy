@@ -15,6 +15,42 @@ import { sendEmailToClientByAddress, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
+import { countRecent, recordAttempt } from './rate-limit.js';
+import { createHash } from 'node:crypto';
+
+// Daily caps on automatic replies, on top of the callers' per-IP limits.
+// Per-IP limits don't stop someone spreading submissions over many IPs to
+// make a business's address send hundreds of emails (hurting its sender
+// reputation), or to flood one person's inbox using a business as the
+// relay. Over a cap the lead is still recorded and the owner still told;
+// only the auto-reply is skipped. Counted in rate_limits (rolling 24h,
+// same table as api/_lib/rate-limit.js); the recipient key holds a hash,
+// never the address.
+export const LEAD_REPLY_MAX_PER_BUSINESS_PER_DAY = 50;
+export const LEAD_REPLY_MAX_PER_RECIPIENT_PER_DAY = 2;
+const DAY_SECONDS = 24 * 60 * 60;
+
+function capKeys(workspaceId, email) {
+  const h = createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex').slice(0, 32);
+  return {
+    business: `lead-autoreply:ws:${workspaceId}`,
+    recipient: `lead-autoreply:ws:${workspaceId}:to:${h}`,
+  };
+}
+
+// Check both caps and, when under them, count this reply. Returns the
+// reason to skip, or null to go ahead.
+async function takeAutoReplySlot(workspaceId, email) {
+  const keys = capKeys(workspaceId, email);
+  const [biz, rcpt] = await Promise.all([
+    countRecent(keys.business, DAY_SECONDS),
+    countRecent(keys.recipient, DAY_SECONDS),
+  ]);
+  if (rcpt.count >= LEAD_REPLY_MAX_PER_RECIPIENT_PER_DAY) return 'recipient-daily-cap';
+  if (biz.count >= LEAD_REPLY_MAX_PER_BUSINESS_PER_DAY) return 'business-daily-cap';
+  await Promise.all([recordAttempt(keys.business), recordAttempt(keys.recipient)]);
+  return null;
+}
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -64,6 +100,8 @@ export async function notifyLeadInstantReply({ workspaceId, toEmail, leadName })
     if (cfg && cfg.lead_instant_reply_enabled === false) {
       return { sent: false, reason: 'disabled' };
     }
+    const capped = await takeAutoReplySlot(workspaceId, toEmail);
+    if (capped) return { sent: false, reason: capped };
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName || 'us';
     const firstName = (leadName || '').split(/\s+/)[0] || '';

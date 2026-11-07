@@ -10,6 +10,10 @@
 //      direct booking link answers with the archived marker (200,
 //      { archived: true }) rather than a live calendar - only deletion
 //      turns the link into a 404.
+//   5. Per-site sitemap.xml and robots.txt follow the pages exactly: a
+//      deleted owner's site 404s its sitemap and disallows all crawling
+//      (it used to list every page forever); a lapsed site has an empty
+//      sitemap + disallow; a living site is unaffected.
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/deleted-owner-visibility.test.mjs
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
@@ -18,6 +22,9 @@ import { signSession } from '../api/_lib/auth.js';
 import discoverHandler from '../api/me/discover.js';
 import publicSlugHandler from '../api/calendar/public/[slug].js';
 import productsHandler from '../api/site/[handle]/products.js';
+import siteHandler from '../api/site/[handle]/index.js';
+import sitemapHandler from '../api/site/[handle]/sitemap.xml.js';
+import robotsHandler from '../api/site/[handle]/robots.txt.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -113,6 +120,28 @@ async function run() {
   r = mockRes();
   await productsHandler(req({ query: { handle: alive.slug } }), r);
   assert(r.statusCode === 200, `products 200 for living owner (got ${r.statusCode})`);
+
+  console.log('\n[5] sitemap + robots follow the pages');
+  const page = async (h) => { const x = mockRes(); await siteHandler(req({ query: { handle: h } }), x); return x; };
+  const map = async (h) => { const x = mockRes(); await sitemapHandler(req({ query: { handle: h } }), x); return x; };
+  const bots = async (h) => { const x = mockRes(); await robotsHandler(req({ query: { handle: h } }), x); return x; };
+  assert((await page(doomed.slug)).statusCode === 404, 'deleted owner: site page 404s (baseline)');
+  r = await map(doomed.slug);
+  assert(r.statusCode === 404 && !/<loc>/.test(String(r.body)), `deleted owner: sitemap 404s with no URLs (got ${r.statusCode})`);
+  r = await bots(doomed.slug);
+  assert(/Disallow: \/\s*$/m.test(String(r.body)) && !/Sitemap:/.test(String(r.body)) && !/Allow: \//.test(String(r.body)), 'deleted owner: robots disallows all, no sitemap pointer');
+  r = await map(lapsed.slug);
+  assert(r.statusCode === 200 && !/<loc>/.test(String(r.body)), 'lapsed: sitemap empty');
+  r = await bots(lapsed.slug);
+  assert(/Disallow: \/\s*$/m.test(String(r.body)) && !/Sitemap:/.test(String(r.body)), 'lapsed: robots disallows all');
+  r = await map(`dov-nosuch-${STAMP}`);
+  assert(r.statusCode === 404, 'unknown handle: sitemap 404');
+  r = await bots(`dov-nosuch-${STAMP}`);
+  assert(/Disallow: \/\s*$/m.test(String(r.body)) && !/Sitemap:/.test(String(r.body)), 'unknown handle: robots disallows all');
+  r = await map(alive.slug);
+  assert(r.statusCode === 200 && String(r.body).includes(`/site/${alive.slug}</loc>`), 'living site: sitemap lists its pages');
+  r = await bots(alive.slug);
+  assert(/Allow: \//.test(String(r.body)) && String(r.body).includes(`/site/${alive.slug}/sitemap.xml`), 'living site: robots allows + points at the sitemap');
 }
 
 async function cleanup() {

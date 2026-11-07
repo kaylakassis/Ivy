@@ -30,10 +30,15 @@ export default async function handler(req, res) {
     // Idempotent on email - return OK whether the insert happened or
     // the row already existed. We don't leak "already subscribed" to
     // avoid being a subscription-checking oracle.
+    //
+    // A public form must never undo an unsubscribe: anyone can type any
+    // address here, so re-submitting used to clear unsubscribed_at and put
+    // someone who had opted out back on the list. A repeat submit is now a
+    // silent no-op (same success answer, so it reveals nothing).
     await sql`
       INSERT INTO newsletter_subscribers (email, source, ip, user_agent)
       VALUES (${email}, ${source}, ${ip}, ${ua})
-      ON CONFLICT (email) DO UPDATE SET unsubscribed_at = NULL
+      ON CONFLICT (email) DO NOTHING
     `;
 
     return ok(res, { ok: true });

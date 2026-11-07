@@ -3,9 +3,12 @@
 // this later via a future "robots.txt override" field; for v1 every
 // published site gets a wide-open allow.
 //
-// An archived site (owner's subscription lapsed) disallows everything
-// so crawlers drop it; the allow comes back on resubscribe.
-import { workspaceAccessByHandle } from '../../_lib/businessAccess.js';
+// A site whose pages are not served (unpublished, private, the owner's
+// account deleted, or archived because the subscription lapsed) disallows
+// everything and points at no sitemap, using the same rules as the pages
+// (loadCrawlableSite in api/_lib/publicSite.js). The allow comes back on
+// republish / resubscribe.
+import { loadCrawlableSite } from '../../_lib/publicSite.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -15,21 +18,21 @@ export default async function handler(req, res) {
   }
   const { handle } = req.query;
   const host = req.headers['x-forwarded-host'] || req.headers.host || 'joinivy.ai';
-  let archivedSite = false;
+  let live = true;
   try {
-    const access = await workspaceAccessByHandle(handle);
-    archivedSite = !!access.workspaceId && !access.active;
+    const site = await loadCrawlableSite(typeof handle === 'string' ? handle : '');
+    live = site.kind === 'ok';
   } catch { /* unknown state: keep the default allow */ }
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  if (archivedSite) {
+  if (!live) {
     res.setHeader('Cache-Control', 'no-store');
     return res.end('User-agent: *\nDisallow: /\n');
   }
   const body = `User-agent: *
 Allow: /
 
-Sitemap: https://${host}/site/${handle}/sitemap.xml
+Sitemap: https://${host}/site/${encodeURIComponent(String(handle).toLowerCase())}/sitemap.xml
 `;
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
   return res.end(body);
