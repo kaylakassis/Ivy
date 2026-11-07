@@ -26,9 +26,9 @@ export default async function handler(req, res) {
     const r = await sql`
       SELECT
         COUNT(*) FILTER (WHERE status = 'paid'                AND issue_date = (NOW() AT TIME ZONE ${tz})::date)::int AS paid_count,
-        COALESCE(SUM(paid_amount) FILTER (WHERE status = 'paid' AND issue_date = (NOW() AT TIME ZONE ${tz})::date), 0)::numeric AS paid_total,
+        COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE status = 'paid' AND issue_date = (NOW() AT TIME ZONE ${tz})::date), 0)::numeric AS paid_total,
         COUNT(*) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND issue_date = (NOW() AT TIME ZONE ${tz})::date)::int AS cash_count,
-        COALESCE(SUM(paid_amount) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND issue_date = (NOW() AT TIME ZONE ${tz})::date), 0)::numeric AS cash_total,
+        COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND issue_date = (NOW() AT TIME ZONE ${tz})::date), 0)::numeric AS cash_total,
         COUNT(*) FILTER (WHERE status IN ('sent','overdue') AND issue_date = (NOW() AT TIME ZONE ${tz})::date)::int AS open_count
       FROM invoices
       WHERE workspace_id = ${workspaceId}

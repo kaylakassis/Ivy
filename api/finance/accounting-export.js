@@ -96,7 +96,8 @@ export default async function handler(req, res) {
     if (type === 'invoices') {
       const inv = await sql.query(
         `SELECT id, number, client_name, client_email, paid_at, issue_date,
-                due_date, items, tax_rate, discount, notes, refunded_amount
+                due_date, items, tax_rate, discount, notes, refunded_amount,
+                invoice_net_revenue(invoices) AS kept
          FROM invoices
          WHERE workspace_id = $1
            AND status IN ('paid', 'refunded')
@@ -173,7 +174,10 @@ export default async function handler(req, res) {
         // Money given back is a line of its own, so a refunded invoice nets
         // to what was actually kept (a full refund nets to $0) instead of
         // importing as full income.
-        const refunded = Math.round(Number(row.refunded_amount || 0) * 100) / 100;
+        // What refunds took off this invoice's income (total minus what was
+        // kept: invoice_net_revenue, the rule every revenue figure uses).
+        const invTotal = Math.round((taxableBase * (1 + taxRate / 100)) * 100) / 100;
+        const refunded = Math.max(0, Math.round((invTotal - Number(row.kept || 0)) * 100) / 100);
         if (refunded > 0) {
           if (format === 'quickbooks') {
             lines.push(r(

@@ -21,7 +21,7 @@
 // webhooks.
 import { sql } from './db.js';
 import { notifyOwnerSafe } from './push.js';
-import { restoreGiftCardCreditForInvoice } from './giftCards.js';
+import { restoreGiftCardCreditForInvoice, retakeGiftCardCreditForInvoice } from './giftCards.js';
 import { findPaymentRow, applyRefundToPayment, reverseRefundOnPayment } from './invoiceLedger.js';
 
 const fmt = (n) => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -131,6 +131,28 @@ export async function applyProviderRefundFailure({ workspaceId, provider, paymen
     activityText: ` failed at ${label}. The money was not returned.`,
   });
   if (!(back > 0) || !invoice) return { result: 'not-recorded', invoice: null };
+  // The refund had made the invoice fully refunded and put its gift card
+  // credit back on the card; it is no longer refunded, so the credit comes
+  // back off (never below zero).
+  if (invoice.prev_status === 'refunded' && invoice.status !== 'refunded') {
+    const g = await retakeGiftCardCreditForInvoice({ workspaceId, invoiceId: invoice.id })
+      .catch((err) => { console.error(`[${label} refund failure] gift card credit not taken back:`, err.message); return null; });
+    if (g && g.shortCents > 0) {
+      notifyOwnerSafe({
+        workspaceId, type: 'payments',
+        payload: {
+          title: 'Gift card credit already spent',
+          body: `${invoice.client_name || 'Your client'} already spent ${fmt(g.shortCents / 100)} of the gift card credit that came back with the failed refund on ${invoice.number}. Only ${fmt(g.takenCents / 100)} could be taken back off the card.`,
+          url: `/finance?invoice=${invoice.id}`,
+          tag: `gift-retake-${invoice.id}`,
+        },
+      });
+    }
+  }
+  // The client was told "Refund issued"; tell them once it did not go
+  // through (this write is the only one that takes the refund back).
+  const { notifyInvoiceRefundFailed } = await import('./invoiceNotify.js');
+  await notifyInvoiceRefundFailed({ workspaceId, invoiceId: invoice.id, amount: back }).catch(() => {});
   notifyOwnerSafe({
     workspaceId, type: 'payments',
     payload: {

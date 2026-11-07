@@ -2295,7 +2295,7 @@ async function get_dashboard_summary({ workspaceId }) {
   const [revenue, clients, bookings, invoices, ltv] = await Promise.all([
     // Revenue this month (sum of paid invoice totals). `total` is the
     // trigger-maintained canonical computeTotals value (clamped + taxed).
-    sql`SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS total
+    sql`SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
         FROM invoices
         WHERE workspace_id = ${workspaceId}
           AND status = 'paid'
@@ -2363,8 +2363,8 @@ async function get_pl_summary({ workspaceId }) {
   // Ivy already quotes). Expenses = expenses.amount. Profit = revenue - expenses.
   const [rev, exp] = await Promise.all([
     sql`SELECT
-          COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
-          COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
+          COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
+          COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
                                         AND paid_at <  date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS last_month
         FROM invoices
         WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL`,

@@ -257,7 +257,7 @@ export async function workspaceContext(workspaceId) {
     { rows: r1 }, { rows: r2 }, { rows: r3 }, { rows: r4 }, { rows: r5 }, { rows: r6 },
   ] = await Promise.all([
     sql`
-      SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS revenue
+      SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS revenue
       FROM invoices
       WHERE workspace_id = ${workspaceId}
         AND status = 'paid'

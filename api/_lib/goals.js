@@ -123,7 +123,7 @@ export async function computeGoalCurrent(workspaceId, type) {
     // disagree with the dashboard by a few cents ("$0.04 off on another
     // tab"). One source of truth keeps every surface consistent.
     const { rows } = await sql`
-      SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
+      SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
       FROM invoices
       WHERE workspace_id = ${workspaceId}
         AND status = 'paid'

@@ -29,14 +29,15 @@ export default async function handler(req, res) {
     let rows;
     // Money owed on an open invoice is what is left after a gift card and
     // any part payment (net of refunds), the same math as invoiceMoney()
-    // in src/lib/invoiceRules.js. Revenue is total minus refunds on paid
-    // invoices (a refunded-in-full invoice nets to $0). Archiving hides an
+    // in src/lib/invoiceRules.js. Revenue is what was kept from paid
+    // invoices, net of refunds (invoice_net_revenue in schema.js, the rule
+    // every revenue figure uses; a refunded-in-full invoice nets to $0). Archiving hides an
     // invoice from the list; it never changes these totals. The status
     // counts are for the list tabs, so they leave archived ones out.
     try { ({ rows } = await sql`
       WITH inv AS (
         SELECT status, total, paid_at, archived_at,
-               GREATEST(total - COALESCE(refunded_amount, 0), 0) AS kept,
+               invoice_net_revenue(invoices) AS kept,
                GREATEST(total
                  - CASE WHEN paid_method = 'gift_card' THEN 0
                         ELSE GREATEST(gift_card_credit_cents - gift_card_credit_restored_cents, 0) / 100.0 END

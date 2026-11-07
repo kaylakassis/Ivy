@@ -122,6 +122,47 @@ export function renderInvoiceRefunded({ business, firstName, number, amount, rem
   return { subject: `Refund issued: invoice ${number} · ${amt}`, html };
 }
 
+// A refund the client was already told about ("Refund issued") that the
+// payment processor could not complete. Once per failed refund (the caller
+// only sends on the write that took the refund back). Never throws.
+export function renderInvoiceRefundFailed({ business, firstName, number, amount, branding }) {
+  const biz = escapeHtml(business || 'the business');
+  const amt = fmtMoney(amount);
+  const html = emailShell({
+    heading: 'Your refund did not go through',
+    branding,
+    body: `<p>Hi ${escapeHtml(firstName || 'there')},</p>
+      <p>Your refund of <strong>${amt}</strong> from ${biz} did not go through. ${biz} has been told and will be in touch.</p>
+      <p>This is about invoice <strong>${escapeHtml(number)}</strong>. You don't need to do anything right now.</p>`,
+    footer: `Questions? Reply to this email to reach ${biz}.`,
+  });
+  return { subject: `Your refund for invoice ${number} did not go through`, html };
+}
+
+export async function notifyInvoiceRefundFailed({ workspaceId, invoiceId, amount }) {
+  try {
+    const inv = (await sql`
+      SELECT id, number, client_id, client_name, client_email FROM invoices
+       WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
+    `).rows[0];
+    if (!inv?.client_email || !(Number(amount) > 0)) return { sent: false };
+    const branding = await fetchBranding(workspaceId);
+    const rendered = renderInvoiceRefundFailed({
+      business: branding.businessName, firstName: (inv.client_name || '').split(/\s+/)[0],
+      number: inv.number, amount: Number(amount), branding,
+    });
+    const r = await sendEmailToClient({
+      clientId: inv.client_id, type: 'receipts', to: inv.client_email,
+      subject: rendered.subject, html: rendered.html, replyTo: branding.replyTo,
+    });
+    return { sent: !!r?.sent };
+  } catch (err) {
+    console.error('[notifyInvoiceRefundFailed] failed:', err.message);
+    reportError(err, { extra: { invoiceId, workspaceId } });
+    return { sent: false };
+  }
+}
+
 export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, method = null, giftRestoredCents = 0 }) {
   try {
     const { rows } = await sql`

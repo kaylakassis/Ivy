@@ -82,10 +82,11 @@ function metricsFor({ packages, memberships, invoices, payments30d }) {
     dueDate = nextMembershipRenewal; dueDateKind = 'membership';
   }
 
-  // 30-day revenue: sum paid_amount from invoices paid in the last 30 days.
+  // 30-day revenue: what was kept (net of refunds) from invoices paid in
+  // the last 30 days (invoice_net_revenue, the rule every revenue figure uses).
   let revenue30dCents = 0;
   for (const p of payments30d) {
-    revenue30dCents += Math.round(Number(p.paid_amount || 0) * 100);
+    revenue30dCents += Math.round(Number(p.kept || 0) * 100);
   }
 
   return {
@@ -186,7 +187,7 @@ export default async function handler(req, res) {
     let payments30d = [];
     try {
       const r = await sql.query(
-        `SELECT id, client_id, paid_amount
+        `SELECT id, client_id, invoice_net_revenue(invoices) AS kept
          FROM invoices
          WHERE workspace_id = $1 AND client_id = ANY($2::uuid[])
            AND status = 'paid'

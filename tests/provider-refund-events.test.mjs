@@ -9,6 +9,11 @@
 //   [3] Square and PayPal dashboard refunds email the client like Stripe
 //       dashboard refunds do, once per refund; the provider's notice of a
 //       refund made in Ivy sends nothing more
+//   [1b] the client, already told "Refund issued", is told once that it did
+//       not go through
+//   [4] a failed refund that had given gift card credit back takes it back
+//       off the card; never below zero: what the client already spent is
+//       reported to the owner instead
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/provider-refund-events.test.mjs
 import crypto from 'node:crypto';
@@ -102,6 +107,8 @@ async function run() {
   await ensureSchemaApplied();
   const Q = await mkBiz('square', (wid) => sql`INSERT INTO finance_settings (workspace_id, payment_provider, square_merchant_id, square_credentials_encrypted)
     VALUES (${wid}, 'square', ${`SQM-PRE-${STAMP}`}, ${encrypt(JSON.stringify({ access_token: 'sq_tok' }))})`);
+  await sql`INSERT INTO calendar_settings (workspace_id, biz_name, slug) VALUES (${Q.wid}, 'Square Studio', ${`pre-sq-${STAMP}`})
+    ON CONFLICT (workspace_id) DO UPDATE SET biz_name = 'Square Studio'`;
 
   console.log('\n[1] a Square refund that fails later is taken back');
   const order = `ORD-PRE-${STAMP}`;
@@ -124,11 +131,15 @@ async function run() {
   let ps = await pushes(Q.wid, /failed at Square/);
   assert(ps.length === 1 && ps[0].body === 'The $100.00 refund to Robin Client failed at Square. The money was not returned.',
     `owner told plainly (${ps[0]?.body})`);
+  const failMails = () => emails.filter((e) => /did not go through/.test(`${e.subject} ${e.html}`) && toList(e).includes(Q.email));
+  let fm = failMails();
+  assert(fm.length === 1 && /Your refund of \$100\.00 from Square Studio did not go through\. Square Studio has been told and will be in touch\./.test(fm[0].html)
+    && !/[\u2013\u2014]/.test(fm[0].html.replace(/<!--[\s\S]*?-->/g, '')), `client told once, plainly (${(fm[0]?.html || '').match(/Your refund[^<]*/)?.[0]})`);
   await fireSquare(Q.wid, 'refund.updated', { refund: failed });
   await settle();
   row = await invRow(inv);
   ps = await pushes(Q.wid, /failed at Square/);
-  assert(num(row.refunded_amount) === 0 && ps.length === 1, 'the same failure again changes nothing and tells no one twice');
+  assert(num(row.refunded_amount) === 0 && ps.length === 1 && failMails().length === 1, 'the same failure again changes nothing and tells no one twice');
   await fireSquare(Q.wid, 'refund.updated', { refund: { ...failed, status: 'COMPLETED' } });
   row = await invRow(inv);
   assert(num(row.refunded_amount) === 0 && row.status === 'paid', 'a late "completed" for the failed refund is not counted');
@@ -137,6 +148,36 @@ async function run() {
   await fireSquare(Q.wid, 'refund.updated', { refund: { id: out2.refund.stripeRefundId, payment_id: p1.id, status: 'REJECTED', amount_money: { amount: 4000, currency: 'USD' } } });
   row = await invRow(inv);
   assert(num(row.refunded_amount) === 0, `a rejected refund is taken back too (${row.refunded_amount})`);
+
+  console.log('\n[4] a failed refund takes back the gift card credit it returned');
+  const giftCase = async (label, spendAfterRestore) => {
+    const card = (await sql`INSERT INTO gift_cards (workspace_id, code_hash, code_last4, original_amount_cents, balance_cents, status)
+      VALUES (${Q.wid}, ${`pre-gc-${label}-${STAMP}`}, 'GIFT', 2500, 0, 'depleted') RETURNING id`).rows[0].id;
+    const ord = `ORD-PRE-GC-${label}-${STAMP}`;
+    const gi = await mkInvoice(Q, `PRE-GC-${label}-${STAMP}`, 100, ord);
+    await sql`UPDATE invoices SET gift_card_credit_cents = 2500, gift_card_id = ${card} WHERE id = ${gi}`;
+    await sql`INSERT INTO gift_card_redemptions (gift_card_id, workspace_id, amount_cents, applied_to_kind, applied_to_id) VALUES (${card}, ${Q.wid}, 2500, 'invoice', ${gi})`;
+    const pay = { id: `SQP-PRE-GC-${label}-${STAMP}`, order_id: ord, status: 'COMPLETED', amount_money: { amount: 7500, currency: 'USD' } };
+    await fireSquare(Q.wid, 'payment.created', { payment: pay });
+    const o = await refundInvoice({ workspaceId: Q.wid, id: gi });
+    const after = (await sql`SELECT balance_cents FROM gift_cards WHERE id = ${card}`).rows[0];
+    if (spendAfterRestore) await sql`UPDATE gift_cards SET balance_cents = balance_cents - ${spendAfterRestore} WHERE id = ${card}`;
+    await fireSquare(Q.wid, 'refund.updated', { refund: { id: o.refund.stripeRefundId, payment_id: pay.id, status: 'FAILED', amount_money: { amount: 7500, currency: 'USD' } } });
+    await settle();
+    return { card, gi, o, after };
+  };
+  const g1 = await giftCase('one', 0);
+  let gc = (await sql`SELECT balance_cents, status FROM gift_cards WHERE id = ${g1.card}`).rows[0];
+  let gr = await invRow(g1.gi);
+  assert(g1.o.refund.giftRestoredCents === 2500 && Number(g1.after.balance_cents) === 2500, 'the full refund had put $25 back on the card');
+  assert(Number(gc.balance_cents) === 0 && gr.status === 'paid' && Number(gr.gift_card_credit_restored_cents) === 0,
+    `the failed refund takes the $25 back off the card (${gc.balance_cents}, ${gr.status}, restored ${gr.gift_card_credit_restored_cents})`);
+  const g2 = await giftCase('two', 1500);
+  gc = (await sql`SELECT balance_cents FROM gift_cards WHERE id = ${g2.card}`).rows[0];
+  gr = await invRow(g2.gi);
+  ps = await pushes(Q.wid, /already spent/);
+  assert(Number(gc.balance_cents) === 0, `never below zero: the $10 left is taken, balance $0 (${gc.balance_cents})`);
+  assert(ps.length === 1 && /\$15\.00/.test(ps[0].body), `owner told the client already spent $15 of it (${ps[0]?.body})`);
 
   console.log('\n[2] refused straight away: not recorded');
   squareStatus = 'FAILED';

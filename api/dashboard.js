@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     // the time of the slowest single one.
     const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows, fsRow] = await Promise.all([
       // Same revenue rule as Finance: paid only, minus refunds, never below 0.
-      sql`SELECT COALESCE(SUM(GREATEST(total - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS v FROM invoices
+      sql`SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS v FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid'
              AND paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}`,
       sql`SELECT COUNT(*)::int AS v FROM clients

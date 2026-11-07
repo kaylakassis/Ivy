@@ -10,7 +10,11 @@
 //   [4] the owner screen says how much can be refunded, in plain words
 //   [5] a hold left behind by a refund that never finished (a crash between
 //       the hold and the processor call) expires after 15 minutes: the next
-//       read of the card's balance puts it back; a fresh hold stays
+//       read of the card's balance asks the processor first and puts it
+//       back only when no refund happened; a fresh hold stays
+//   [6] the processor shows the refund DID happen: it is recorded (the hold
+//       becomes the refund, the balance is not given back)
+//   [7] the processor cannot be asked: the hold stays and the owner is told
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/gift-card-refund-cap.test.mjs
 import fs from 'node:fs';
@@ -31,9 +35,19 @@ const STAMP = Date.now();
 const refunds = [];
 let onRefund = null;
 let refuse = false;
+const lookups = [];
+const processorRefunds = new Map();
+const lookupDown = new Set();
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json' } });
 globalThis.fetch = async (url, init = {}) => {
   const u = String(url);
+  const listed = u.match(/api\.stripe\.com\/v1\/refunds\?payment_intent=([^&]+)/);
+  if (listed && (init.method || 'GET') === 'GET') {
+    const pi = decodeURIComponent(listed[1]);
+    lookups.push(pi);
+    if (lookupDown.has(pi)) return json({ error: { message: 'Stripe is unavailable' } }, 503);
+    return json({ object: 'list', has_more: false, data: (processorRefunds.get(pi) || []) });
+  }
   if (/api\.stripe\.com\/v1\/refunds/.test(u)) {
     const body = Object.fromEntries(new URLSearchParams(String(init.body || '')));
     if (onRefund) await onRefund(body);
@@ -140,12 +154,37 @@ async function run() {
   c = await cardRow(fresh.id);
   assert(Number(c.balance_cents) === 10000 && Number(c.refund_hold_cents) === 0 && r.body.cards.find((x) => x.id === fresh.id)?.refundableCents === 10000,
     'once older than 15 minutes, the owner list read releases it too');
+  assert(lookups.includes(`pi_gccap_stuck_${STAMP}`) && lookups.includes(`pi_gccap_fresh_${STAMP}`) && lookups.filter((x) => x === `pi_gccap_fresh_${STAMP}`).length === 1,
+    `the processor was asked before each release, and not for the fresh hold (${lookups.length} lookups)`);
+
+  console.log('\n[6] the refund did happen: recorded, not given back');
+  const done = (await sql`INSERT INTO gift_cards (workspace_id, code_hash, code_last4, original_amount_cents, balance_cents, refund_hold_cents, refund_hold_at, status, stripe_payment_intent, sender_email)
+    VALUES (${wid}, ${`gccap-done-${STAMP}`}, 'DONE', 10000, 4000, 6000, NOW() - INTERVAL '30 minutes', 'active', ${`pi_gccap_done_${STAMP}`}, ${`buyer-${STAMP}@example.com`}) RETURNING id`).rows[0];
+  processorRefunds.set(`pi_gccap_done_${STAMP}`, [{ id: 're_done', amount: 6000, status: 'succeeded' }]);
+  await call(giftCardList, req({ method: 'GET', cookie }));
+  c = await cardRow(done.id);
+  assert(Number(c.balance_cents) === 4000 && Number(c.refund_hold_cents) === 0 && Number(c.refunded_cents) === 6000,
+    `hold became the $60 refund; balance stays $40 (${c.balance_cents} / ${c.refunded_cents})`);
+
+  console.log('\n[7] the processor cannot be asked: hold kept, owner told');
+  const unk = (await sql`INSERT INTO gift_cards (workspace_id, code_hash, code_last4, original_amount_cents, balance_cents, refund_hold_cents, refund_hold_at, status, stripe_payment_intent)
+    VALUES (${wid}, ${`gccap-unk-${STAMP}`}, 'UNKN', 10000, 4000, 6000, NOW() - INTERVAL '30 minutes', 'active', ${`pi_gccap_unk_${STAMP}`}) RETURNING id`).rows[0];
+  lookupDown.add(`pi_gccap_unk_${STAMP}`);
+  await call(giftCardList, req({ method: 'GET', cookie }));
+  c = await cardRow(unk.id);
+  const told = (await sql`SELECT body FROM notifications WHERE workspace_id = ${wid} AND body LIKE '%UNKN%'`).rows;
+  assert(Number(c.balance_cents) === 4000 && Number(c.refund_hold_cents) === 6000, `hold kept (${c.balance_cents} / ${c.refund_hold_cents})`);
+  assert(told.length === 1 && /\$60\.00/.test(told[0].body), `owner told (${told[0]?.body})`);
+  const before = lookups.length;
+  await call(giftCardList, req({ method: 'GET', cookie }));
+  assert(lookups.length === before, 'not asked again on every read (checked again after 15 minutes)');
 }
 
 run()
   .catch((err) => { console.error('Fatal:', err.message, err.stack); fail++; })
   .finally(async () => {
     if (wid) {
+      await sql`DELETE FROM notifications WHERE workspace_id = ${wid}`.catch(() => {});
       await sql`DELETE FROM gift_card_redemptions WHERE workspace_id = ${wid}`.catch(() => {});
       await sql`DELETE FROM gift_cards WHERE workspace_id = ${wid}`.catch(() => {});
       await sql`DELETE FROM finance_settings WHERE workspace_id = ${wid}`.catch(() => {});

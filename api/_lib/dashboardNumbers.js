@@ -23,7 +23,7 @@ export async function keyNumbers(workspaceId, tz = 'UTC') {
                date_trunc('week', NOW() AT TIME ZONE ${tz}) AS w0,
                date_trunc('day', NOW() AT TIME ZONE ${tz}) AS d0
       ), inv AS (
-        SELECT (paid_at AT TIME ZONE ${tz}) AS p, GREATEST(total - COALESCE(refunded_amount, 0), 0) AS kept
+        SELECT (paid_at AT TIME ZONE ${tz}) AS p, invoice_net_revenue(invoices) AS kept
           FROM invoices
          WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL
            AND paid_at >= NOW() - INTERVAL '70 days'
