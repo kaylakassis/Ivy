@@ -893,8 +893,7 @@ READS (call freely whenever you need detail beyond the snapshot):
 
 ROUTINE WRITES (auto-execute when the user gives a clear directive - these
 create DRAFTS or internal records; nothing leaves the building):
-- add_client, update_client (only patch fields they actually mentioned),
-  mark_invoice_paid.
+- add_client, update_client (only patch fields they actually mentioned).
 - create_task, complete_task, create_project, create_service.
 - create_invoice, create_quote, create_recurring_invoice (DRAFTS - never send
   on their own; the owner sends separately via the gated send tools).
@@ -1014,7 +1013,9 @@ MORE OF THE APP (all approval-gated):
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,
   send_campaign, send_review_request, refund_invoice, reschedule_booking,
-  cancel_booking, void_invoice, delete_invoice, archive_invoices.
+  cancel_booking, void_invoice, delete_invoice, archive_invoices,
+  mark_invoice_paid (records a payment; the card shows the client, invoice
+  number, amount and payment method).
   ALSO gated (they reshape the public booking page, so treat them the same way):
   update_settings (name/slug/timezone/category/tagline/branding),
   adjust_availability (change part of the weekly hours, everything else stays),

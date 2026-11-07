@@ -35,6 +35,7 @@ import { IVY_DETAIL_PROPS, ivyDetailsToBody, clientDetailColumns, writeClientCol
 import { blockState, BLOCKED_MESSAGE } from './moderation.js';
 import { sendClientInvite, inviteNewClientsEnabled } from './clientNotify.js';
 import { validEmail } from './auth.js';
+import { paidMethodLabel } from './finance.js';
 import {
   parseAvailabilityChanges, applyAvailabilityChanges, diffAvailability, describeChange,
   scheduleByDay, fmtWindows, DAY_NAMES,
@@ -168,7 +169,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'mark_invoice_paid',
-    description: "Mark an invoice as paid manually (e.g., when the user took payment in cash or via wire). Use only when the user explicitly tells you a specific invoice has been paid.",
+    description: "Mark an invoice as paid manually (e.g., when the user took payment in cash or via wire). Use only when the user explicitly tells you a specific invoice has been paid. Approval-gated: the owner taps Approve on a card first.",
     input_schema: {
       type: 'object',
       properties: {
@@ -1008,6 +1009,9 @@ export const SENSITIVE_TOOLS = new Set([
   'import_clients_from_list',
   'send_message_to_client',
   'send_invoice',
+  // Recording a payment changes revenue, what the client owes and the paid
+  // status the client sees, so the owner approves it like a refund.
+  'mark_invoice_paid',
   'cancel_booking',
   'void_invoice',
   // Invoice clean-up: removing a draft for good, hiding settled invoices.
@@ -1201,6 +1205,8 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       return `Void ${await invoiceLabel(ctx, a.invoice_id)}. It stays on record marked Void, the client's link stops taking payment and nothing is owed${a.notify_client ? '. The client gets an email saying it was voided' : '. The client is not emailed'}`;
     case 'delete_invoice':
       return `Delete the draft ${await invoiceLabel(ctx, a.invoice_id)} for good`;
+    case 'mark_invoice_paid':
+      return describeMarkPaid(a, ctx);
     case 'archive_invoices': {
       const ids = Array.isArray(a.invoice_ids) ? a.invoice_ids.slice(0, 200) : [];
       const verb = a.unarchive ? 'Bring back' : 'Archive';
@@ -1338,6 +1344,37 @@ async function describeSensitiveAction(name, a, ctx = {}) {
   }
 }
 
+// mark_invoice_paid: the stored invoice the card describes, or { error } when
+// it cannot be marked paid (missing, another workspace, already paid,
+// refunded or void). The handler re-checks the same rule in its UPDATE, so
+// an invoice paid between the card and the tap is reported as not done.
+const MARK_PAID_METHODS = /^(cash|check|transfer|card|zelle|venmo|cashapp|other)$/;
+const markPaidMethod = (m) => (m && MARK_PAID_METHODS.test(String(m)) ? String(m) : 'other');
+async function unpaidInvoiceForMarkPaid(a, ctx) {
+  if (!a?.invoice_id || !ctx?.workspaceId) return { error: 'invoice_id is required. Nothing was changed.' };
+  const row = await lookupRow(() => sql`
+    SELECT number, client_name, client_id, status, total, gift_card_credit_cents
+      FROM invoices WHERE id = ${String(a.invoice_id)} AND workspace_id = ${ctx.workspaceId}`);
+  if (!row) return { error: 'Invoice not found. Nothing was changed.' };
+  if (!['draft', 'sent', 'overdue'].includes(row.status)) {
+    const why = row.status === 'voided' ? 'it is void (restore it first)' : row.status === 'refunded' ? 'it was refunded' : 'it is already paid';
+    return { error: `Invoice #${row.number} cannot be marked paid: ${why}. Nothing was changed.` };
+  }
+  return { row };
+}
+async function describeMarkPaid(a, ctx) {
+  const inv = await unpaidInvoiceForMarkPaid(a, ctx);
+  if (inv.error) return `Mark ${await invoiceLabel(ctx, a.invoice_id)} as paid`;
+  const row = inv.row;
+  const who = row.client_name || (row.client_id ? await clientLabel(ctx, row.client_id) : '(unknown client)');
+  const total = Number(row.total) || 0;
+  const credit = Number(row.gift_card_credit_cents || 0) / 100;
+  const received = Math.max(0, Math.round((total - credit) * 100) / 100);
+  const giftBit = credit > 0 ? ` (total $${total.toFixed(2)}, less $${credit.toFixed(2)} gift card credit)` : '';
+  return `Mark invoice #${row.number} for ${who} as paid: $${received.toFixed(2)}${giftBit} received by ${paidMethodLabel(markPaidMethod(a.method))}. `
+    + 'This records the payment in your books. No money moves and the client is not emailed.';
+}
+
 async function templateLabel(ctx, id) {
   if (!id || !ctx?.workspaceId) return '(unknown document)';
   const row = await lookupRow(() => sql`SELECT name FROM documents WHERE id = ${String(id)} AND workspace_id = ${ctx.workspaceId} AND is_template = TRUE`);
@@ -1469,6 +1506,10 @@ async function refuseBeforeApproval(name, a, ctx) {
   if (name === 'adjust_availability') {
     const p = parseAvailabilityChanges(a);
     if (p.error) return `${p.error}. Nothing was changed.`;
+  }
+  if (name === 'mark_invoice_paid') {
+    const inv = await unpaidInvoiceForMarkPaid(a, ctx);
+    if (inv.error) return inv.error;
   }
   if (name === 'create_booking') {
     try { await checkBookingArgs(ctx?.workspaceId, a); } catch (err) { return `${String(err?.message || err).replace(/\.$/, '')}. Nothing was changed.`; }
@@ -1911,8 +1952,7 @@ async function send_message_to_client({ workspaceId, args }) {
 
 async function mark_invoice_paid({ workspaceId, args }) {
   const id = args.invoice_id ? String(args.invoice_id) : null;
-  const method = args.method && /^(cash|check|transfer|card|zelle|venmo|cashapp|other)$/.test(String(args.method))
-    ? String(args.method) : 'other';
+  const method = markPaidMethod(args.method);
   if (!id) throw new Error('invoice_id is required');
 
   // Only an unpaid invoice can be marked paid: never a void one (restore it
@@ -1929,7 +1969,11 @@ async function mark_invoice_paid({ workspaceId, args }) {
     WHERE id = ${id} AND workspace_id = ${workspaceId} AND status IN ('draft', 'sent', 'overdue')
     RETURNING id, number, status
   `;
-  if (r.rows.length === 0) throw new Error('Invoice not found, or it is not unpaid (already paid, refunded or void)');
+  // Runs only after the owner tapped Approve, and the invoice may have been
+  // paid, voided or refunded since the card was shown: the UPDATE above
+  // re-checks it is unpaid and in this workspace, and anything else is
+  // reported as not done.
+  if (r.rows.length === 0) throw new Error('Invoice not found, or it is not unpaid (already paid, refunded or void). Nothing was changed');
   return { ok: true, invoice: r.rows[0], method };
 }
 

@@ -14,7 +14,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeService, DEFAULT_REMINDERS, ensureCalendarSettings } from '../_lib/calendar.js';
+import { serializeService, DEFAULT_REMINDERS, ensureCalendarSettings, cleanMeetingLink } from '../_lib/calendar.js';
 import {
   clientRemindersFrom, serviceFollowsDefault, sameSet, LEGACY_SERVICE_DEFAULT,
 } from '../_lib/reminderSettings.js';
@@ -125,9 +125,19 @@ export default async function handler(req, res) {
       }
       // Free-form venue/address text. 500-char cap matches the
       // location_address column on bookings.
-      const locationLabel = s?.locationLabel == null
+      // For a virtual service this is the meeting link clients get in every
+      // confirmation, so only an https link is accepted (cleanMeetingLink).
+      let locationLabel = s?.locationLabel == null
         ? null
         : String(s.locationLabel).trim().slice(0, 500) || null;
+      if (locationType === 'virtual') {
+        const link = cleanMeetingLink(s?.locationLabel);
+        if (link.error) return badRequest(res, `${link.error} for the meeting link of "${name}".`);
+        locationLabel = link.value;
+      }
+      // A link removed by the 1.0.6 clean-up stays on the service until the
+      // owner deals with it: a new link, a different location, or Dismiss.
+      const clearRemovedLink = locationType !== 'virtual' || !!locationLabel || s?.meetingLinkRemoved === null;
 
       // Visibility - three-state. Default 'public' so existing services
       // that don't send the field stay listed.
@@ -271,6 +281,7 @@ export default async function handler(req, res) {
         depositAmount,
         locationType,
         locationLabel,
+        clearRemovedLink,
         visibility,
         travelBufferMinutes,
         cancellationFeeAmount,
@@ -339,6 +350,7 @@ export default async function handler(req, res) {
             deposit_amount = ${s.depositAmount},
             location_type = ${s.locationType},
             location_label = ${s.locationLabel},
+            meeting_link_removed = CASE WHEN ${s.clearRemovedLink} THEN NULL ELSE meeting_link_removed END,
             visibility = ${s.visibility},
             travel_buffer_minutes = ${s.travelBufferMinutes},
             cancellation_fee_amount = ${s.cancellationFeeAmount},
@@ -351,7 +363,7 @@ export default async function handler(req, res) {
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
-        out.push(serializeService(u.rows[0], { reminderDefaultMinutes: bizMinutes }));
+        out.push(serializeService(u.rows[0], { reminderDefaultMinutes: bizMinutes, owner: true }));
       } else {
         // eslint-disable-next-line no-await-in-loop
         const i = await sql`
@@ -374,7 +386,7 @@ export default async function handler(req, res) {
           )
           RETURNING *
         `;
-        out.push(serializeService(i.rows[0], { reminderDefaultMinutes: bizMinutes }));
+        out.push(serializeService(i.rows[0], { reminderDefaultMinutes: bizMinutes, owner: true }));
       }
     }
 

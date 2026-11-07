@@ -96,16 +96,9 @@ export function uploadWorkspacesFor(access) {
   return access.role === 'owner' ? [access.program.workspace_id] : [access.ownerWorkspaceId];
 }
 
-// Only https links are stored for anything a person pastes.
-export function cleanHttpsUrl(v) {
-  const s = String(v || '').trim();
-  if (!s) return null;
-  try {
-    const u = new URL(s);
-    if (u.protocol !== 'https:' || u.username || u.password) return undefined;
-    return u.toString().slice(0, 1000);
-  } catch { return undefined; }
-}
+// Only https links are stored for anything a person pastes (shared with the
+// virtual service meeting link check in api/_lib/calendar.js).
+export { cleanHttpsUrl } from './siteLinkSafety.js';
 
 // Active members of a program (one row per client), with their login.
 export async function activeMembers(programId) {
