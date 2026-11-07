@@ -259,7 +259,7 @@ export function GoogleImport({ onDone }) {
         if (!st.connected) return;
         const [r, cal] = await Promise.all([
           api.get('/import/google-events?days=90'),
-          api.get('/calendar').catch(() => null),
+          api.get('/calendar?only=setup').catch(() => null),
         ]);
         if (!live) return;
         if (r && r.connected === false) { setStatus({ ...st, connected: false }); return; }

@@ -231,7 +231,7 @@ export default function OnboardingPage() {
     let live = true;
     Promise.all([
       api.get('/onboarding/state').catch(() => ({ state: null })),
-      api.get('/calendar').catch(() => ({ cal: null })),
+      api.get('/calendar?only=setup').catch(() => ({ cal: null })),
       api.get('/clients?limit=1').catch(() => ({ clients: [] })),
       api.get('/finance/stripe-status').catch(() => null),
       api.get('/website').catch(() => null),

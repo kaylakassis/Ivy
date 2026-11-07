@@ -5,13 +5,13 @@
 // in `inline` mode so we don't fork its 1300+ lines of editor UI.
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useCalendar } from '../calendar/state.js';
+import { useCalendar, SETUP_ONLY } from '../calendar/state.js';
 import ServicesDrawer from '../calendar/ServicesDrawer.jsx';
 import CancellationPolicyCard from './CancellationPolicyCard.jsx';
 import DepositReviews from '../calendar/DepositReviews.jsx';
 
 export default function FinanceServices() {
-  const { cal, saveServices, loading } = useCalendar();
+  const { cal, saveServices, loading } = useCalendar(SETUP_ONLY);
   // ?service=<id> (search palette hit, forwarded from /calendar) opens
   // that service's editor. Read once, then strip so a refresh doesn't
   // reopen it after the user closes the modal.

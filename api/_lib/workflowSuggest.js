@@ -198,6 +198,10 @@ async function detectBookingCompletedSuggestion(workspaceId) {
          AND b.no_show_at IS NULL
          AND b.client_id IS NOT NULL
          AND b.completion_log <> '{}'::jsonb
+         -- Marking complete stamps updated_at, so a completion inside the
+         -- window means updated_at is too: skips unpacking every old
+         -- completed booking on each dashboard load.
+         AND b.updated_at > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
          AND (e.value->>'completedAt') IS NOT NULL
        GROUP BY b.id, b.client_id
       HAVING MAX((e.value->>'completedAt')::timestamptz) > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
@@ -496,6 +500,7 @@ export async function explainWorkflowSuggestion(workspaceId, { dismissed = [] } 
          WHERE b.workspace_id = ${workspaceId}
            AND b.cancelled_at IS NULL AND b.no_show_at IS NULL
            AND b.client_id IS NOT NULL AND b.completion_log <> '{}'::jsonb
+           AND b.updated_at > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
            AND (e.value->>'completedAt') IS NOT NULL
          GROUP BY b.id, b.client_id, b.client_name
         HAVING MAX((e.value->>'completedAt')::timestamptz) > NOW() - (${LOOKBACK_DAYS} || ' days')::interval

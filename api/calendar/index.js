@@ -63,7 +63,12 @@ export default async function handler(req, res) {
       const from = isIsoDate(req.query.from) ? req.query.from : isoDay(dFrom);
       const to   = isIsoDate(req.query.to)   ? req.query.to   : isoDay(dTo);
 
-      const blocks = await safe(sql`
+      // ?only=setup: the settings and services alone. Screens that only
+      // need the service list (Services, Packages, Time, onboarding,
+      // import) used to download months of bookings with every visit.
+      const setupOnly = req.query.only === 'setup';
+
+      const blocks = setupOnly ? { rows: [] } : await safe(sql`
         SELECT * FROM calendar_blocks
         WHERE workspace_id = ${workspaceId}
           AND date >= ${from}::date AND date <= ${to}::date
@@ -72,7 +77,7 @@ export default async function handler(req, res) {
 
       // LEFT JOIN the booking's balance ("collect on the spot") invoice so
       // serializeBooking can show a unified deposit + balance payment status.
-      const bookings = await safe(sql`
+      const bookings = setupOnly ? { rows: [] } : await safe(sql`
         SELECT b.*, ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
         FROM bookings b
         LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
@@ -83,7 +88,7 @@ export default async function handler(req, res) {
       `, { rows: [] });
       // Program live sessions: read-only entries shaped like blocks so the
       // existing views show them (owner only; helpers see the plain schedule).
-      const sessions = req.helper ? { rows: [] } : await safe(sql`
+      const sessions = req.helper || setupOnly ? { rows: [] } : await safe(sql`
         SELECT e.id, e.program_id, e.title, e.starts_at, e.duration_min, p.title AS program_title
         FROM program_events e JOIN programs p ON p.id = e.program_id AND p.workspace_id = e.workspace_id
         WHERE e.workspace_id = ${workspaceId} AND e.cancelled_at IS NULL

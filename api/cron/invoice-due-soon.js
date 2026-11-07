@@ -71,6 +71,7 @@ async function handler(req, res) {
         scanned += rows.length;
         batches += 1;
         for (const r of rows) {
+          let claimed = false;
           try {
             if (reminderOwed(r) <= 0) {
               // eslint-disable-next-line no-await-in-loop
@@ -81,12 +82,17 @@ async function handler(req, res) {
             const hash = crypto.createHash('sha256').update(raw).digest('hex');
             // Status guard: an invoice voided or paid since the SELECT keeps
             // its state - never re-open a pay link on it or remind about it.
+            // Claim: the same UPDATE stamps the reminder, gated on it not
+            // being sent yet, so when two runs overlap (a cron event
+            // delivered twice, or a manual run) only one emails the client.
             // eslint-disable-next-line no-await-in-loop
             const minted = await sql`
-              UPDATE invoices SET view_token_hash = ${hash}
+              UPDATE invoices SET view_token_hash = ${hash}, due_soon_reminder_sent_at = NOW()
                WHERE id = ${r.id} AND status = 'sent' AND payment_processing_at IS NULL
+                 AND due_soon_reminder_sent_at IS NULL
                RETURNING id`;
             if (minted.rows.length === 0) continue;
+            claimed = true;
             const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
             // eslint-disable-next-line no-await-in-loop
             await notifyInvoiceDueSoon({
@@ -108,10 +114,13 @@ async function handler(req, res) {
                 },
               });
             }
-            // eslint-disable-next-line no-await-in-loop
-            await sql`UPDATE invoices SET due_soon_reminder_sent_at = NOW() WHERE id = ${r.id}`;
             pinged++;
           } catch (err) {
+            // A failure after the claim hands the row back for a later run.
+            if (claimed) {
+              // eslint-disable-next-line no-await-in-loop
+              await sql`UPDATE invoices SET due_soon_reminder_sent_at = NULL WHERE id = ${r.id}`.catch(() => {});
+            }
             console.warn('[invoice-due-soon] failed for invoice', r.id, err.message);
             reportError(err, { extra: { invoiceId: r.id, workspaceId: r.workspace_id } });
           }
