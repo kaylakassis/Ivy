@@ -21,6 +21,8 @@ import { withIdempotency } from '../_lib/idempotency.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { methodNotAllowed, serverError } from '../_lib/json.js';
+import { workspaceTimeZone } from '../_lib/calendar.js';
+import { todayISOInZone } from '../_lib/tz.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -116,7 +118,9 @@ export default async function handler(req, res) {
       const rawToken = cash ? null : generateRawToken(32);
       const tokenHash = rawToken ? crypto.createHash('sha256').update(rawToken).digest('hex') : null;
       const number = `INV-${await nextInvoiceNumber(workspaceId)}`;
-      const today = new Date().toISOString().slice(0, 10);
+      // The business's today, not the server's UTC date: an evening sale in
+      // the US used to be dated tomorrow and missed today's drawer total.
+      const today = todayISOInZone(await workspaceTimeZone(workspaceId));
       const activity = [{ ts: new Date().toISOString(), kind: cash ? 'paid' : 'pay-link',
         text: cash ? 'Paid in person (cash)' : 'In-person sale - pay link issued' }];
 
