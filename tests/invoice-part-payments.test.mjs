@@ -22,6 +22,8 @@
 //       instead of opening another
 //   [8] applying a gift card closes the full-amount checkout already open;
 //       if that checkout was paid, the card is not used
+//   [9] a second payment on an already-paid invoice is noted on the
+//       invoice and the owner is told, once
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/invoice-part-payments.test.mjs
 import crypto from 'node:crypto';
