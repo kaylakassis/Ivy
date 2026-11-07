@@ -266,7 +266,7 @@ export function SimpleFooter() {
         maxWidth: 1100, margin: '12px auto 0',
         fontSize: 11, color: 'var(--muted-2)', textAlign: 'center',
       }}>
-        © {new Date().getFullYear()} Ivy.
+        © {new Date().getFullYear()} Ivy AI LLC.
       </div>
     </footer>
   );

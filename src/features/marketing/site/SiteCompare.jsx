@@ -4,6 +4,8 @@ import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
 import { siteUrl } from '../../../lib/pageMeta.js';
 import { SignupCta } from './Chrome.jsx';
+import { TILES_CSS, LinkTile } from './LandingKit.jsx';
+import { COMPETITOR_LIST } from '../compareData.js';
 
 const PAGE_CSS = `
 .site-root h1{font-size:clamp(34px,4.4vw,52px);letter-spacing:-.025em;line-height:1.12;margin-bottom:18px}
@@ -49,7 +51,7 @@ export default function SiteCompare() {
   });
   return (
     <div className="site-root">
-      <style>{BASE_CSS + PAGE_CSS}</style>
+      <style>{BASE_CSS + PAGE_CSS + TILES_CSS}</style>
       <SiteNav active="/compare" />
 
       <header className="page-head">
@@ -153,6 +155,16 @@ export default function SiteCompare() {
             </table>
           </div>
           <p className="tbl-note">Based on publicly listed plans and features as of July 2026 - always verify current details on each vendor's site. "Partial" means the capability exists in a limited form or on higher tiers.</p>
+        </div>
+      </section>
+
+      <section className="center" style={{ paddingTop: 24 }}>
+        <div className="container">
+          <span className="eyebrow">Switching guides</span>
+          <h2>See Ivy next to the tool you use now.</h2>
+          <div className="lp-tiles" style={{ marginTop: 36, textAlign: 'left' }}>
+            {COMPETITOR_LIST.map((c) => <LinkTile key={c.slug} href={`/vs/${c.slug}`}>Ivy vs {c.name}</LinkTile>)}
+          </div>
         </div>
       </section>
 

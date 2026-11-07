@@ -54,6 +54,17 @@ export function SiteNav({ active }) {
   );
 }
 
+// Footer "Who it's for" column: the most-searched /for pages (slugs in
+// src/features/marketing/verticalsData.js, checked by
+// tests/vertical-pages.test.mjs). Kept here as a short list so the home
+// page chunk does not carry the whole verticals file.
+export const FOOTER_VERTICALS = [
+  ['massage-therapists', 'Massage therapists'], ['hair-stylists', 'Hair stylists'],
+  ['personal-trainers', 'Personal trainers'], ['coaches', 'Coaches'],
+  ['photographers', 'Photographers'], ['cleaners', 'Cleaners'],
+  ['tutors', 'Tutors'], ['estheticians', 'Estheticians'], ['consultants', 'Consultants'],
+];
+
 export function SiteFooter() {
   return (
     <footer className="site-foot">
@@ -65,12 +76,13 @@ export function SiteFooter() {
         </div>
         <div className="foot-cols">
           <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/compare">Compare</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
+          <div className="foot-col"><h5>Who it's for</h5>{FOOTER_VERTICALS.map(([slug, label]) => <a key={slug} href={`/for/${slug}`}>{label}</a>)}<a href="/features#who">All businesses</a></div>
           <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
           <div className="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><SignupCta>Get started</SignupCta><a href="/me">Client portal</a></div>
         </div>
       </div>
       <div className="container foot-bottom">
-        <span>© 2026 Ivy.</span>
+        <span>© {new Date().getFullYear()} Ivy AI LLC.</span>
         <span>joinivy.ai</span>
       </div>
     </footer>
@@ -138,11 +150,12 @@ export const BASE_CSS = `
 .site-root .foot-inner{display:flex;justify-content:space-between;gap:40px;flex-wrap:wrap}
 .site-root .foot-brand{max-width:280px}
 .site-root .foot-brand p{font-size:13.5px;color:var(--dim);margin-top:12px}
-.site-root .foot-cols{display:flex;gap:64px;flex-wrap:wrap}
+.site-root .foot-cols{display:flex;gap:56px;flex-wrap:wrap}
 .site-root .foot-col h5{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
 .site-root .foot-col a{display:block;font-size:14px;color:var(--muted);margin-bottom:9px}
 .site-root .foot-col a:hover{color:var(--lime)}
 .site-root .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;color:var(--dim);flex-wrap:wrap;gap:12px}
+@media(max-width:560px){.site-root .foot-cols{display:grid;grid-template-columns:1fr 1fr;gap:28px 24px;width:100%}}
 @media(max-width:900px){.site-root .nav-links{display:none}.site-root .nav-badge{display:none}.site-root .menu-btn{display:block}.site-root .sticky-cta{display:block}}
 `;
 

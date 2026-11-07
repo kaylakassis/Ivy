@@ -1,20 +1,21 @@
-// /for/:slug - vertical-specific landing pages. Same shell, different
-// copy + use cases per vertical. Major SEO win for queries like
-// "booking software for massage therapists" or "CRM for personal trainers".
+// /for/:slug - vertical-specific landing pages, one per profession, on the
+// marketing site's design system (site/Chrome.jsx + site/LandingKit.jsx):
+// same nav, footer, type scale, cards and buttons as the home page.
+// Major SEO win for queries like "booking software for massage therapists"
+// or "CRM for personal trainers".
 //
-// Adding a vertical: drop a row in VERTICALS below. Slug is the URL.
-// keep the angle phrase tight ("for massage therapists") - it should
-// drop into Google search verbatim.
+// All the words on the page come from verticalsData.js (headline, sub,
+// bullets, use) or are short section labels; keep the data's copy word for
+// word. Adding a vertical: drop a row in verticalsData.js.
 import React, { useMemo } from 'react';
-import { Link, useParams, Navigate } from 'react-router-dom';
+import { useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { useTweaks } from '../../lib/tweaks.js';
-import { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
-import { VERTICALS } from './verticalsData.js';
-import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { SiteNav, SiteFooter, StickyCta, useSiteFonts, BASE_CSS, SignupCta } from './site/Chrome.jsx';
+import {
+  LANDING_CSS, Hero, PricingStrip, FinalCta, VerticalTile, VerticalGroups, TRIAL_CTA,
+} from './site/LandingKit.jsx';
+import { VERTICALS, POPULAR_VERTICALS } from './verticalsData.js';
 import { usePageMeta, siteUrl, breadcrumbs } from '../../lib/pageMeta.js';
-
-const VERTICAL_LIST = Object.entries(VERTICALS);
 
 // Meta description from the page's own copy: headline + sub when that
 // fits a search snippet, otherwise the sub alone, otherwise the headline.
@@ -24,10 +25,15 @@ export function verticalDescription(v) {
   return v.sub.length <= 160 ? v.sub : v.headline;
 }
 
+// A setup step as shown: the data keeps the sentence's own commas so the
+// steps join back into it word for word; a step card drops the trailing one
+// (CSS capitalises the first letter).
+const stepText = (s) => s.replace(/,$/, '');
+
 export default function VerticalPage() {
   const { slug } = useParams();
   const v = VERTICALS[slug];
-  const [tweaks] = useTweaks();
+  useSiteFonts();
 
   const meta = useMemo(() => (v ? {
     title: `Ivy - ${capFirst(v.angle)} run their business in one place`,
@@ -40,108 +46,87 @@ export default function VerticalPage() {
   // Bad slug → bounce to the home page rather than 404; better UX,
   // and the visitor still lands on something useful.
   if (!v) return <Navigate to="/" replace/>;
-  const Icon = Icons[v.icon] || Icons.Check;
+
+  const steps = Array.isArray(v.use) ? v.use : [v.use];
+  const popular = POPULAR_VERTICALS.filter((s) => s !== slug).slice(0, 8);
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`} style={{ minHeight: '100vh', background: 'var(--page)' }}>
-      <SimpleNav/>
+    <div className="site-root">
+      <style>{BASE_CSS + LANDING_CSS}</style>
+      <SiteNav active="/features"/>
 
-      {/* Hero */}
-      <section style={{ maxWidth: 880, margin: '0 auto', padding: '64px 24px 32px' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '5px 12px', borderRadius: 99,
-          background: 'var(--accent-soft)', color: 'var(--accent)',
-          fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
-          textTransform: 'uppercase', marginBottom: 20,
-        }}>
-          <Icon size={12} sw={2}/> Ivy for {v.angle}
-        </div>
-        <h1 className="page-title" style={{
-          margin: 0, fontSize: 'clamp(30px, 5vw, 46px)',
-          lineHeight: 1.08, maxWidth: 720,
-        }}>
-          {v.headline}
-        </h1>
-        <p style={{
-          margin: '20px 0 0', maxWidth: 620,
-          fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
-        }}>
-          {v.sub}
-        </p>
-        <div style={{ display: 'flex', gap: 12, marginTop: 28, flexWrap: 'wrap' }}>
-          <Link to="/signup" className="btn btn-primary"
-            style={{ padding: '13px 22px', fontSize: 14.5, gap: 10 }}>
-            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={13} sw={2}/>
-          </Link>
-          <Link to="/" className="btn btn-outline"
-            style={{ padding: '13px 22px', fontSize: 14.5 }}>
-            See everything Ivy does
-          </Link>
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-          $0 today · Cancel anytime
+      <Hero
+        crumbs={[['Home', '/'], ["Who it's for", '/features#who']]}
+        eyebrow={`Ivy for ${v.angle}`}
+        title={v.headline}
+        sub={v.sub}
+        secondary={['/features', 'See everything Ivy does']}
+      />
+
+      <section className="alt">
+        <div className="container">
+          <div className="lp-head center">
+            <span className="eyebrow">What you get</span>
+            <h2>Made for {v.angle}.</h2>
+          </div>
+          <div className={`lp-grid n${v.bullets.length}`}>
+            {v.bullets.map((b) => (
+              <div className="lp-card" key={b.title}>
+                <span className="ic"><Icons.Check size={20} sw={2.2}/></span>
+                <div>
+                  <h3>{b.title}</h3>
+                  <p>{b.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Bullets */}
-      <section style={{ maxWidth: 880, margin: '0 auto', padding: '24px 24px 32px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14 }}>
-          {v.bullets.map((b, i) => (
-            <div key={i} className="card" style={{
-              padding: 22, display: 'flex', flexDirection: 'column', gap: 8,
-            }}>
-              <Icons.Check size={16} sw={2.4} stroke="var(--accent)"/>
-              <h3 style={{ margin: '4px 0 0', fontSize: 15.5, fontWeight: 600 }}>{b.title}</h3>
-              <p style={{ margin: 0, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>
-                {b.body}
-              </p>
-            </div>
-          ))}
+      <section>
+        <div className="container lp-setup">
+          <div className="head">
+            <span className="eyebrow">How to get started</span>
+            <h2>Get up in three minutes.</h2>
+            <p className="section-sub">Day-one setup, step by step.</p>
+          </div>
+          <ol className="lp-steps">
+            {steps.map((s, i) => (
+              <li className="lp-step" key={i}>
+                <span className="n" aria-hidden="true">{i + 1}</span>
+                <p>{stepText(s)}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="cta"><SignupCta className="btn btn-primary">{TRIAL_CTA}</SignupCta></div>
         </div>
       </section>
 
-      {/* "How to set up" - concrete first-day instructions */}
-      <section style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px' }}>
-        <div className="card" style={{
-          padding: 24,
-          background: 'color-mix(in srgb, var(--accent-soft) 40%, var(--surface))',
-          border: '1px solid var(--accent)',
-        }}>
-          <div className="metric-label" style={{ color: 'var(--accent)' }}>Day-one setup</div>
-          <h3 className="page-title" style={{ margin: '6px 0 10px', fontSize: 22 }}>
-            Get up in three minutes.
-          </h3>
-          <p style={{ margin: 0, fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>
-            {v.use}
-          </p>
+      <PricingStrip/>
+
+      <section>
+        <div className="container">
+          <div className="lp-head center" style={{ marginBottom: 40 }}>
+            <span className="eyebrow">Built for more</span>
+            <h2>Different business? Ivy fits.</h2>
+          </div>
+          <div className="lp-tiles cap6">
+            {popular.map((s) => <VerticalTile key={s} slug={s}/>)}
+          </div>
+          <details className="lp-more">
+            <summary>
+              <span className="more">See all businesses</span>
+              <span className="less">Show fewer</span>
+              <Icons.ArrowDown size={15} sw={2}/>
+            </summary>
+            <VerticalGroups current={slug}/>
+          </details>
         </div>
       </section>
 
-      {/* Cross-links to other verticals so visitors can find their actual fit */}
-      <section style={{ maxWidth: 880, margin: '0 auto', padding: '32px 24px 64px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 18 }}>
-          <div className="metric-label">Built for more</div>
-          <h2 className="page-title" style={{ margin: '8px 0 0', fontSize: 22 }}>
-            Different business? Ivy fits.
-          </h2>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {VERTICAL_LIST
-            .filter(([s]) => s !== slug)
-            .map(([s, other]) => {
-              const OtherIcon = Icons[other.icon] || Icons.Check;
-              return (
-                <Link key={s} to={`/for/${s}`} className="btn btn-outline"
-                  style={{ padding: '8px 14px', fontSize: 12.5 }}>
-                  <OtherIcon size={12} sw={1.7}/> For {other.angle}
-                </Link>
-              );
-            })}
-        </div>
-      </section>
-
-      <SimpleFooter/>
+      <FinalCta/>
+      <SiteFooter/>
+      <StickyCta/>
     </div>
   );
 }
