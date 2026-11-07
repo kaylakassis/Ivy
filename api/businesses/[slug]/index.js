@@ -16,6 +16,7 @@ import { readSession } from '../../_lib/auth.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { serializeReview } from '../../_lib/reviews.js';
+import { publicLocationLabel } from '../../_lib/calendar.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 // Non-throwing session reader. requireUser() 401s on missing session,
@@ -191,7 +192,7 @@ export default async function handler(req, res) {
         price:            Number(s.price || 0),
         photoUrl:         s.photo_url || null,
         locationType:     s.location_type || 'in_person',
-        locationLabel:    s.location_label || '',
+        locationLabel:    publicLocationLabel(s.location_type, s.location_label),
         capacity:         s.capacity || 1,
       })),
       reviews: {

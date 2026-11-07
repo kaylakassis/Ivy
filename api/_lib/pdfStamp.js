@@ -479,8 +479,14 @@ function decodeEntities(s) {
   return s
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
+    .replace(/&#(\d+);/g, (_, n) => codePoint(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => codePoint(parseInt(h, 16)));
+}
+
+// String.fromCodePoint throws above U+10FFFF, and the text comes from the
+// signer: a typed "&#99999999;" must not stop the signed copy being built.
+function codePoint(n) {
+  return Number.isInteger(n) && n >= 0 && n <= 0x10FFFF ? String.fromCodePoint(n) : '';
 }
 
 // Turn the editor's HTML into flat blocks. Same whitelist as the sign page.

@@ -34,11 +34,17 @@ export function isReservedDomain(host) {
   return reservedRoots().some((root) => h === root || h.endsWith(`.${root}`));
 }
 
-// True when another workspace already has this domain on its site.
+// True when another workspace already has this domain on its site. The
+// bare and www forms count as the same domain: a visitor on either one is
+// served whichever site holds either form (api/_lib/publicSite.js), and the
+// shared CNAME target means DNS cannot tell two Ivy sites apart.
 export async function domainHeldByOtherWorkspace(host, workspaceId) {
+  const h = String(host || '').toLowerCase().trim().replace(/\.+$/, '');
+  const bare = h.replace(/^www\./, '');
+  const variants = Array.from(new Set([h, bare, `www.${bare}`]));
   const { rows } = await sql`
     SELECT 1 FROM websites
-     WHERE lower(custom_domain) = ${String(host).toLowerCase()}
+     WHERE lower(custom_domain) = ANY(${variants})
        AND workspace_id <> ${workspaceId}
      LIMIT 1`;
   return rows.length > 0;

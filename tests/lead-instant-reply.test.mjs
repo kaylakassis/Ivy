@@ -38,17 +38,37 @@ async function run() {
     await sql`DELETE FROM users WHERE email = ${EMAIL}`;
     ownerId = (await sql`INSERT INTO users (email, password_hash, name) VALUES (${EMAIL}, 'x', 'Lead Owner') RETURNING id`).rows[0].id;
     workspaceId = (await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`).rows[0].id;
-    await sql`INSERT INTO calendar_settings (workspace_id, slug, lead_instant_reply_enabled)
-              VALUES (${workspaceId}, ${`lead-${Date.now()}`}, TRUE)
-              ON CONFLICT (workspace_id) DO UPDATE SET lead_instant_reply_enabled = TRUE`;
+    await sql`INSERT INTO calendar_settings (workspace_id, slug, lead_instant_reply_enabled, biz_name)
+              VALUES (${workspaceId}, ${`lead-${Date.now()}`}, TRUE, ${"Kayla's Hair & Nails"})
+              ON CONFLICT (workspace_id) DO UPDATE SET lead_instant_reply_enabled = TRUE, biz_name = EXCLUDED.biz_name`;
 
     console.log('\n[2] no recipient → not sent');
     let r = await notifyLeadInstantReply({ workspaceId, toEmail: '', leadName: 'X' });
     assert(r.sent === false && r.reason === 'no-recipient', 'missing email short-circuits');
 
     console.log('\n[3] enabled workspace → passes the gate and attempts a send');
-    r = await notifyLeadInstantReply({ workspaceId, toEmail: 'prospect@example.com', leadName: 'Pat Prospect' });
+    const realFetch = globalThis.fetch;
+    const sent = [];
+    globalThis.fetch = async (url, opts) => {
+      if (String(url).includes('api.resend.com')) {
+        sent.push(JSON.parse(opts.body));
+        return { ok: true, status: 200, json: async () => ({ id: 'em_test' }), text: async () => '{}' };
+      }
+      return realFetch(url, opts);
+    };
+    try {
+      r = await notifyLeadInstantReply({ workspaceId, toEmail: 'prospect@example.com', leadName: 'Pat Prospect' });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
     assert(r.reason !== 'disabled' && r.reason !== 'no-recipient', 'got past the toggle gate (attempted send)');
+
+    console.log("\n[3b] default reply shows the business name once-escaped (Kayla's Hair & Nails)");
+    const mail = sent[0];
+    assert(!!mail, 'reply email was sent');
+    assert(mail && mail.html.includes('Kayla&#39;s Hair &amp; Nails will personally get back'), 'name escaped exactly once in the body');
+    assert(mail && !/&amp;amp;|&amp;#39;/.test(mail.html), 'no double-escaped entities in the html');
+    assert(mail && mail.text.includes("Kayla's Hair & Nails will personally get back"), 'plain-text part reads naturally');
 
     console.log('\n[4] disabled workspace → skipped before sending');
     await sql`UPDATE calendar_settings SET lead_instant_reply_enabled = FALSE WHERE workspace_id = ${workspaceId}`;

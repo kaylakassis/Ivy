@@ -73,6 +73,11 @@ export async function loadPublicSite({ handle, slug, host }) {
         AND w2.domain_status = 'verified'
         AND w2.published_at IS NOT NULL
         AND w2.visibility != 'only_me'
+      -- Older rows may hold the bare and www forms on two different sites:
+      -- the one holding the exact host the visitor typed wins, never an
+      -- arbitrary row.
+      ORDER BY (lower(w2.custom_domain) = ${variants[0]}) DESC, w2.published_at ASC
+      LIMIT 1
     `);
   } else {
     return { kind: 'not_found' };

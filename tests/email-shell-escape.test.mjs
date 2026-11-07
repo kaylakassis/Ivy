@@ -1,6 +1,6 @@
 // emailShell escapes the heading, and callers pass it raw (no double escape).
 // Run: node --import ./tests/bootstrap.mjs ./tests/email-shell-escape.test.mjs
-import { emailShell } from '../api/_lib/email.js';
+import { emailShell, sendEmail } from '../api/_lib/email.js';
 import { renderInvoiceOverdue, renderInvoiceSent, renderAdminInviteSponsored } from '../api/_lib/emailRenderers.js';
 
 let pass = 0, fail = 0;
@@ -26,6 +26,26 @@ const sent = renderInvoiceSent({ clientName: 'Sam', number: 'X<1>', total: 10, b
 assert(h1(sent.html).includes('Invoice X&lt;1&gt;') && !/&amp;lt;/.test(sent.html), `sent heading (${h1(sent.html).trim()})`);
 const inv2 = renderAdminInviteSponsored({ firstName: "O'Neil<b>x", name: "O'Neil<b>x Smith" });
 assert(h1(inv2.html).includes("Hi O'Neil&lt;b&gt;x,") && !/<b>/.test(h1(inv2.html)), `admin invite greeting (${h1(inv2.html).trim()})`);
+
+console.log('\n[4] inbox preview + plain-text part show the words, not entities');
+const bodyHtml = '<p>Kayla&#39;s Hair &amp; Nails says 2 &lt; 3</p>';
+html = emailShell({ heading: 'Hi', body: bodyHtml });
+const pre = (html.match(/<div style="display:none;[^"]*">([\s\S]*?)<\/div>/) || [])[1] || '';
+assert(pre.includes('Kayla&#39;s Hair &amp; Nails says 2 &lt; 3'), `preheader escaped once (${pre})`);
+assert(!/&amp;(amp|#39|lt);/.test(pre), 'preheader has no double-escaped entities');
+const realFetch = globalThis.fetch;
+let mail = null;
+globalThis.fetch = async (url, opts) => { mail = JSON.parse(opts.body); return { ok: true, status: 200, json: async () => ({ id: 'em' }), text: async () => '{}' }; };
+try { await sendEmail({ to: 'kay@example.com', subject: 's', html }); } finally { globalThis.fetch = realFetch; }
+assert(mail && mail.text.includes("Kayla's Hair & Nails says 2 < 3"), `text part decoded (${mail && mail.text.slice(0, 80)})`);
+assert(mail && !/&amp;|&#39;|&lt;/.test(mail.text), 'text part carries no HTML entities');
+
+console.log('\n[5] a logo URL cannot break out of its src attribute');
+html = emailShell({ heading: 'Hi', body: '<p>x</p>', branding: { businessName: 'Glow', logoUrl: 'https://x.example/a.png" onerror="alert(1)' } });
+assert(!/onerror/.test(html), 'hostile logo URL dropped');
+assert(/>Glow</.test(html), 'falls back to the business name letterhead');
+html = emailShell({ heading: 'Hi', body: '<p>x</p>', branding: { businessName: 'Glow', logoUrl: 'https://x.example/logo.png?v=2' } });
+assert(html.includes('src="https://x.example/logo.png?v=2"'), 'normal https logo kept');
 
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

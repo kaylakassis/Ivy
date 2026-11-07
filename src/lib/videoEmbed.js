@@ -53,3 +53,22 @@ export function videoEmbedUrl(input) {
 export function isSupportedVideoLink(input) {
   return !!videoEmbedUrl(input);
 }
+
+// Instagram post / reel link → its embed page, or null. Only an https link
+// on instagram.com counts: the old "/p/ anywhere in the text" test put any
+// string (even a javascript: URL) straight into the frame's src.
+const IG_SHORTCODE = /^[A-Za-z0-9_-]{4,64}$/;
+export function instagramEmbedUrl(input) {
+  if (input == null) return null;
+  let raw = String(input).trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = `https://${raw}`;
+  let u;
+  try { u = new URL(raw); } catch { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  const host = u.hostname.toLowerCase().replace(/^www\.|^m\./, '');
+  if (host !== 'instagram.com') return null;
+  const parts = u.pathname.split('/').filter(Boolean);
+  const i = parts.findIndex((p) => p === 'p' || p === 'reel');
+  if (i < 0 || !IG_SHORTCODE.test(parts[i + 1] || '')) return null;
+  return `https://www.instagram.com/${parts[i]}/${parts[i + 1]}/embed`;
+}

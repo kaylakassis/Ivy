@@ -183,6 +183,15 @@ export function serializeService(row, opts = {}) {
   };
 }
 
+// What a public page (booking page, Discover profile) may show as a
+// service's location. For a virtual service location_label is the owner's
+// own meeting room link: booked clients get it in their confirmation, the
+// public never sees it (anyone holding it could walk into paid sessions).
+export function publicLocationLabel(locationType, label) {
+  if ((locationType || 'in_person') === 'virtual') return '';
+  return label || '';
+}
+
 // Compute the deposit owed for a booking against this service. Accepts
 // either a serialized service (camelCase) or a raw row (snake_case).
 // Always returns a non-negative 2dp number.

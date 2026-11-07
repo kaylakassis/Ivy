@@ -19,7 +19,7 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
   hasConflict, losesBookingRace, withinAvailability, depositFor, videoRoomUrlForService,
-  slotEpochMs,
+  slotEpochMs, publicLocationLabel,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail, requireUser } from '../../_lib/auth.js';
@@ -274,7 +274,11 @@ async function getCalendar(req, res) {
       calendar: {
         giftCardsAvailable,
         settings: serializeSettings(s),
-        services: services.rows.map(serializeService),
+        services: services.rows.map((r) => {
+          const out = serializeService(r);
+          out.locationLabel = publicLocationLabel(out.locationType, out.locationLabel);
+          return out;
+        }),
         blocks:   blocksOut,
         bookings: bookings.rows.map((r) => serializeBooking(r, { redactClient: true })),
         reviews:  reviewSummary,
