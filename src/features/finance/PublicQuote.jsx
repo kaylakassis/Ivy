@@ -7,6 +7,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
+import { fmtDateOnly } from '../../lib/dateOnly.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -158,8 +159,8 @@ export default function PublicQuote() {
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
           fontSize: 12.5, color: 'var(--muted)', marginBottom: 18 }}>
           <span>For: <b style={{ color: 'var(--fg-2)' }}>{quote.clientName}</b></span>
-          <span>Issued: {quote.issueDate ? new Date(quote.issueDate).toLocaleDateString() : '-'}</span>
-          {quote.expiryDate && <span>Valid through: {new Date(quote.expiryDate).toLocaleDateString()}</span>}
+          <span>Issued: {quote.issueDate ? fmtDateOnly(quote.issueDate) : '-'}</span>
+          {quote.expiryDate && <span>Valid through: {fmtDateOnly(quote.expiryDate)}</span>}
         </div>
 
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>

@@ -8,6 +8,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useInvoices } from './state.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
+import { fmtDateOnly } from '../../lib/dateOnly.js';
 import { useViewport } from '../../lib/viewport.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import CountUp from '../../components/motion/CountUp.jsx';
@@ -702,7 +703,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid, selec
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 11.5, color: invoice.status === 'overdue' ? 'var(--danger)' : 'var(--muted)' }}>
-            {invoice.dueDate ? `Due ${new Date(invoice.dueDate).toLocaleDateString()}` : 'No due date'}
+            {invoice.dueDate ? `Due ${fmtDateOnly(invoice.dueDate)}` : 'No due date'}
           </span>
           <span className="mono-num" style={{ marginLeft: 'auto', fontSize: 15, fontWeight: 700 }}>
             {fmtMoney(invoice.total, invoice.currency)}
@@ -741,10 +742,10 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid, selec
       </div>
       <div>{statusPill}</div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-        {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString() : '-'}
+        {invoice.issueDate ? fmtDateOnly(invoice.issueDate) : '-'}
       </div>
       <div style={{ fontSize: 12.5, color: invoice.status === 'overdue' ? 'var(--danger)' : 'var(--fg-2)' }}>
-        {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '-'}
+        {invoice.dueDate ? fmtDateOnly(invoice.dueDate) : '-'}
       </div>
       <div className="mono-num" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }}>
         {fmtMoney(invoice.total, invoice.currency)}

@@ -7,6 +7,7 @@ import SuccessToast from '../../components/SuccessToast.jsx';
 import { fireConfetti } from '../../lib/celebrate.js';
 import { useGoals } from './state.js';
 import { api } from '../../lib/api.js';
+import { localISODate } from '../../lib/dateOnly.js';
 
 const GOAL_TYPES = [
   { id: 'revenue',  label: 'Revenue ($)',     unit: '$',     hint: 'Tracks paid invoices this month.' },
@@ -45,7 +46,7 @@ export function GoalsAndTasks() {
     );
   }
   const openTasks = tasks.filter((t) => !t.done);
-  const overdueCount = openTasks.filter((t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10)).length;
+  const overdueCount = openTasks.filter((t) => t.dueDate && t.dueDate < localISODate()).length;
   const completedThisWeek = tasks.filter((t) => {
     if (!t.completedAt) return false;
     return (Date.now() - new Date(t.completedAt).getTime()) / 86400e3 < 7;
@@ -84,7 +85,7 @@ export default function Goals() {
   }
 
   const openTasks = tasks.filter((t) => !t.done);
-  const overdueCount = openTasks.filter((t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10)).length;
+  const overdueCount = openTasks.filter((t) => t.dueDate && t.dueDate < localISODate()).length;
   const completedThisWeek = tasks.filter((t) => {
     if (!t.completedAt) return false;
     const days = (Date.now() - new Date(t.completedAt).getTime()) / 86400e3;
@@ -228,7 +229,7 @@ function TaskRow({ task, highlight = false, onToggle, onUpdate, onRemove }) {
     else setDraft(task.title);
   };
 
-  const isOverdue = !task.done && task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
+  const isOverdue = !task.done && task.dueDate && task.dueDate < localISODate();
   const dueLabel = task.dueDate ? formatDue(task.dueDate, task.done) : '';
   const progress = Number(task.progress || 0);
   const isSmart = task.type && task.type !== 'generic';

@@ -154,7 +154,12 @@ function DirectMessages() {
 
       {/* Conversation */}
       {showConversation && (
+        // Keyed by thread: a fresh pane per conversation, so a half-typed
+        // draft or the SMS toggle never carries over to the next client,
+        // and a poll still in flight for the old thread can't paint its
+        // messages into the new one.
         <ConversationPane
+          key={selectedId || 'none'}
           threadId={selectedId}
           onMarkRead={(id) => updateThread(id, { unreadBiz: 0 })}
           onSetMode={setMode}

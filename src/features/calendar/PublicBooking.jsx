@@ -20,6 +20,7 @@ import { useParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { safeHref } from '../../lib/safeHref.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
 import { tzDisplay, browserTimeZone } from '../../lib/timezones.js';
@@ -726,7 +727,7 @@ export default function PublicBooking({ embedded = false }) {
               <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginBottom: 10, lineHeight: 1.5 }}>
                 Save this - it's also in the confirmation email. Open it at the start of your session.
               </div>
-              <a href={confirmedVideoUrl} target="_blank" rel="noopener noreferrer" className="pb-btn primary">
+              <a href={safeHref(confirmedVideoUrl)} target="_blank" rel="noopener noreferrer" className="pb-btn primary">
                 <Icons.Globe size={13}/> Join meeting
               </a>
               <div style={{

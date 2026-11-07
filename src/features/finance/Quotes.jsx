@@ -7,6 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { fmtDateOnly, localISODate } from '../../lib/dateOnly.js';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -127,10 +128,10 @@ export default function Quotes() {
                   <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
                 </span>
                 <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-                  {q.issueDate ? new Date(q.issueDate).toLocaleDateString() : '-'}
+                  {q.issueDate ? fmtDateOnly(q.issueDate) : '-'}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                  {q.expiryDate ? new Date(q.expiryDate).toLocaleDateString() : 'No expiry'}
+                  {q.expiryDate ? fmtDateOnly(q.expiryDate) : 'No expiry'}
                 </div>
                 <div className="mono-num" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }}>
                   {fmtMoney(q.total)}
@@ -165,7 +166,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
   const [taxRate, setTaxRate] = useState(quote?.taxRate ?? 0);
   const [discount, setDiscount] = useState(quote?.discount ?? 0);
   const [notes, setNotes] = useState(quote?.notes || '');
-  const [issueDate, setIssueDate] = useState(quote?.issueDate || new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState(quote?.issueDate || localISODate());
   const [expiryDate, setExpiryDate] = useState(quote?.expiryDate || '');
   const [err, setErr] = useState(null);
 

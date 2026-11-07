@@ -15,6 +15,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
+import { safeHref } from '../../lib/safeHref.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
@@ -393,7 +394,7 @@ function BookingSheet({ o, client, workspaceId, full, staff, onClose: onCloseNow
           {(where || o.videoRoomUrl) && (
             <Line icon="Globe" label="Where">
               {o.videoRoomUrl
-                ? <a href={o.videoRoomUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>Join the video call</a>
+                ? <a href={safeHref(o.videoRoomUrl)} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', wordBreak: 'break-all' }}>Join the video call</a>
                 : <div>{where}</div>}
             </Line>
           )}

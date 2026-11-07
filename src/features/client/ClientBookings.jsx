@@ -13,6 +13,7 @@ import { safeHref } from '../../lib/safeHref.js';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { localISODate } from '../../lib/dateOnly.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { slotsForDate } from '../calendar/utils.js';
 import {
@@ -665,7 +666,7 @@ function RescheduleDialog({ booking, onClose, onRescheduled }) {
       <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <span style={{ fontSize: 13, color: 'var(--fg-2)', fontWeight: 550 }}>Day</span>
         <input type="date" value={date} className="input"
-          min={new Date().toISOString().slice(0, 10)}
+          min={localISODate()}
           onChange={(e) => { setDate(e.target.value); setPick(null); }}
           style={{ padding: '10px 12px', fontSize: 15, maxWidth: 260 }}/>
       </label>

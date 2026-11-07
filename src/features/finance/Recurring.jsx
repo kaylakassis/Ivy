@@ -8,6 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { fmtDateOnly, localISODate } from '../../lib/dateOnly.js';
 import { useRecurring } from './recurringState.js';
 import { seriesAutopayLabel, fmtAmount, fmtDay, cardShort } from '../../lib/autopayRules.js';
 
@@ -145,7 +146,7 @@ function ScheduleRow({ schedule, first, onOpen, onRunNow, busy }) {
         {CADENCE_LABEL[schedule.cadence] || schedule.cadence}
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-        {schedule.nextRunAt ? new Date(schedule.nextRunAt).toLocaleDateString() : '-'}
+        {schedule.nextRunAt ? fmtDateOnly(schedule.nextRunAt) : '-'}
       </div>
       <div className="mono-num" style={{ fontSize: 13.5, fontWeight: 600 }}>
         {fmtMoney(schedule.total)}
@@ -315,7 +316,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
   const [notes, setNotes]     = useState(schedule?.notes || '');
   const [cadence, setCadence] = useState(schedule?.cadence || 'monthly');
   const [nextRunAt, setNextRunAt] = useState(
-    schedule?.nextRunAt || new Date().toISOString().slice(0, 10)
+    schedule?.nextRunAt || localISODate()
   );
   const [endDate, setEndDate] = useState(schedule?.endDate || '');
   const [autoSend, setAutoSend] = useState(schedule ? !!schedule.autoSend : true);
