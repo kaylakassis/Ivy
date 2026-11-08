@@ -5,6 +5,8 @@
 import { clearSnapshot } from './snapshot.js';
 import { clearOfflineQueue } from './offlineQueue.js';
 
-export async function clearOfflineData() {
-  await Promise.allSettled([clearSnapshot(), clearOfflineQueue()]);
+// keepWorkspace: the Account button (still signed in, so a fresh copy can
+// start right away); sign-out leaves it off.
+export async function clearOfflineData({ keepWorkspace = false } = {}) {
+  await Promise.allSettled([clearSnapshot({ keepWorkspace }), clearOfflineQueue()]);
 }

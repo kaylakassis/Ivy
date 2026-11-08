@@ -102,9 +102,9 @@ assert(snapshotSavedAt() === readSnapshot('threads').savedAt || snapshotSavedAt(
 console.log('\n[2] one workspace only; sign-out clears the phone');
 resetSnapshotForTests();
 await primeSnapshot(); // re-reads what [1] persisted for ws-a
-assert(readSnapshot('bookings')?.items.length === 2, 'a relaunch reads the saved copy back');
+assert(readSnapshot('bookings') === null && snapshotSavedAt() === null, 'a relaunch shows nothing until the signed-in workspace is confirmed');
 setSnapshotWorkspace('ws-a');
-assert(readSnapshot('bookings')?.items.length === 2, 'same workspace: the copy stays');
+assert(readSnapshot('bookings')?.items.length === 2, 'same workspace confirmed: the saved copy is read back');
 setSnapshotWorkspace('ws-b');
 assert(readSnapshot('bookings') === null && readSnapshot('clients') === null && readSnapshot('threads') === null, 'another workspace signs in: the copy is gone from memory');
 await new Promise((r) => setTimeout(r, 20));
@@ -129,6 +129,27 @@ await new Promise((r) => setTimeout(r, 10));
 assert(store._map.has(SNAPSHOT_KEY) && store._map.has(QUEUE_KEY), 'precondition: a copy and a queued change are on the device');
 await clearOfflineData();
 assert(!store._map.has(SNAPSHOT_KEY) && !store._map.has(QUEUE_KEY) && readSnapshot('clients') === null && listOfflineQueue().length === 0, 'clearOfflineData empties the device store and memory');
+// "Clear saved data on this phone" (still signed in): gone, and a fresh
+// copy starts at once for the same workspace.
+await fresh('ws-a');
+saveSnapshot('clients', [{ id: 'c1', name: 'Jane' }]);
+await flushSnapshotWrites();
+await clearOfflineData({ keepWorkspace: true });
+assert(!store._map.has(SNAPSHOT_KEY) && readSnapshot('clients') === null, 'the Account button empties the device store and memory');
+assert(saveSnapshot('clients', [{ id: 'c2', name: 'Kim' }]) && readSnapshot('clients')?.items[0].name === 'Kim', 'after the Account button, the next screen load saves a fresh copy');
+await flushSnapshotWrites();
+assert(JSON.parse(store._map.get(SNAPSHOT_KEY)).ws === 'ws-a', 'the fresh copy is stamped with the same workspace');
+await clearOfflineData();
+assert(!saveSnapshot('clients', [{ id: 'c3', name: 'Lee' }]) && readSnapshot('clients') === null, 'after sign-out nothing is saved until the next owner is confirmed');
+// Someone else's copy left on the phone is never read back.
+await fresh('ws-a');
+saveSnapshot('clients', [{ id: 'c1', name: 'Jane' }]);
+await flushSnapshotWrites();
+resetSnapshotForTests();
+await primeSnapshot();
+assert(readSnapshot('clients') === null, 'relaunch: the copy stays hidden before anyone is confirmed');
+setSnapshotWorkspace('ws-z');
+assert(readSnapshot('clients') === null && !store._map.has(SNAPSHOT_KEY), 'a different owner is confirmed: wiped without ever being shown');
 const authSrc = read('src/lib/auth.jsx');
 assert(authSrc.includes("import { clearOfflineData } from './offlineData.js'") && /finally\s*\{[\s\S]*?clearOfflineData\(\)/.test(authSrc), 'signOut in auth.jsx calls clearOfflineData (network or not)');
 assert(read('src/features/account/AccountPage.jsx').includes('<SavedOnPhoneCard/>') && read('src/components/offline/SavedOnPhoneCard.jsx').includes('Clear saved data on this phone'), 'Account has the "Clear saved data on this phone" card');
@@ -275,6 +296,5 @@ assert(fromCal.items.find((b) => b.id === 'b1').completed === true && fromCal.it
 const sheet = read('src/components/offline/OfflineBookingSheet.jsx');
 assert(sheet.includes("kind: 'complete'") && sheet.includes("kind: 'note'") && !sheet.includes('onCancelOccurrence') && !sheet.includes('rescheduleTo'), 'the offline sheet offers Complete and a private note, nothing else');
 assert(read('src/lib/native.js').includes('maps\\.apple\\.com'), 'maps.apple.com opens in the Maps app, not the in-app browser sheet');
-
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

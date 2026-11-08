@@ -13,7 +13,7 @@ export default function SavedOnPhoneCard() {
   const at = snapshotSavedAt();
   const clear = async () => {
     setBusy(true);
-    try { await clearOfflineData(); setDone(true); } finally { setBusy(false); }
+    try { await clearOfflineData({ keepWorkspace: true }); setDone(true); } finally { setBusy(false); }
   };
   return (
     <div className="card" style={{ padding: 22 }}>

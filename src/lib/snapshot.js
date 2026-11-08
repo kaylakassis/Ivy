@@ -32,6 +32,10 @@ let primePromise = null;
 let timer = null;
 let listeners = new Set();
 let pendingWs = null;
+// The workspace the signed-in owner was confirmed to own this session.
+// Nothing is read back until it matches the copy's stamp, so a copy left
+// by someone else on this phone is never shown, even for a moment.
+let confirmedWs = null;
 
 const str = (v, max) => (v == null ? null : String(v).slice(0, max) || null);
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
@@ -206,6 +210,7 @@ export function primeSnapshot() {
 export function isSnapshotPrimed() { return primed; }
 
 function applyWorkspace(ws) {
+  confirmedWs = ws;
   if (state.ws && state.ws !== ws) {
     // Another workspace's copy: never shown, wiped at once.
     state = { ws, sections: {} };
@@ -271,6 +276,7 @@ export function patchSnapshotBooking(id, patch) {
 
 // { items, savedAt } or null. Sync; null until primed or when nothing was saved.
 export function readSnapshot(section) {
+  if (!state.ws || state.ws !== confirmedWs) return null;
   const sec = state.sections[section];
   if (!sec || !Array.isArray(sec.items)) return null;
   return { items: sec.items, savedAt: sec.savedAt };
@@ -278,6 +284,7 @@ export function readSnapshot(section) {
 
 // The newest "saved at" across the sections a screen uses.
 export function snapshotSavedAt(sections = SECTIONS) {
+  if (!state.ws || state.ws !== confirmedWs) return null;
   let best = null;
   for (const s of sections) {
     const at = state.sections[s]?.savedAt;
@@ -293,8 +300,12 @@ export function subscribeSnapshot(fn) {
 
 // Everything gone: memory and the device store. Sign-out, "Clear saved
 // data on this phone", and a workspace change all land here.
-export async function clearSnapshot() {
-  state = { ws: null, sections: {} };
+// keepWorkspace (the Account button): the owner is still signed in, so the
+// next screen that loads starts a fresh copy for the same workspace.
+export async function clearSnapshot({ keepWorkspace = false } = {}) {
+  const ws = keepWorkspace ? confirmedWs : null;
+  state = { ws, sections: {} };
+  if (!keepWorkspace) confirmedWs = null;
   pendingWs = null;
   if (timer) { clearTimeout(timer); timer = null; }
   const store = getOfflineStorage();
@@ -305,7 +316,7 @@ export async function clearSnapshot() {
 // Tests only: forget the in-memory copy so the next prime reads the store.
 export function resetSnapshotForTests() {
   state = { ws: null, sections: {} };
-  primed = false; primePromise = null; pendingWs = null;
+  primed = false; primePromise = null; pendingWs = null; confirmedWs = null;
   if (timer) { clearTimeout(timer); timer = null; }
   listeners = new Set();
 }
