@@ -50,6 +50,7 @@ export default function Clients() {
   // copy saved on the phone.
   const offline = useOffline();
   const offlineSnapshot = useSnapshot('clients');
+  const offlineView = !!error && !clients.length && isNative() && (offline || error.offline);
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -237,13 +238,15 @@ export default function Clients() {
   const [linkedClient, setLinkedClient] = useState(null);
   const listedClient = clients.find((c) => c.id === openId) || null;
   useEffect(() => {
-    if (!openId || listedClient || linkedClient?.id === openId) return undefined;
+    // Offline view: the saved copy has the client; no fetch (it would fail
+    // and close the sheet).
+    if (!openId || listedClient || linkedClient?.id === openId || offlineView) return undefined;
     let live = true;
     api.get('/clients/' + openId)
       .then((r) => { if (live && r.client) setLinkedClient(r.client); })
       .catch(() => { if (live) setOpenId(null); });
     return () => { live = false; };
-  }, [openId, listedClient, linkedClient]);
+  }, [openId, listedClient, linkedClient, offlineView]);
   const openClient = listedClient || (linkedClient?.id === openId ? linkedClient : null);
   // Pickers that choose any client (merge, folder owner) get the full list
   // while they are open.
@@ -253,7 +256,7 @@ export default function Clients() {
   // live; the ones that were there on load get the list stagger instead.
   const freshIds = useFreshKeys(clients.map((c) => c.id), { ready: !loading });
 
-  if (error && !clients.length && isNative() && (offline || error.offline)) {
+  if (offlineView) {
     return <OfflineClients snapshot={offlineSnapshot} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)}/>;
   }
 

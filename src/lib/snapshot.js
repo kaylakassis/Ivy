@@ -97,7 +97,13 @@ function sanitize(section, items, opts = {}) {
   const list = Array.isArray(items) ? items : [];
   if (section === 'bookings') {
     const days = new Set([opts.today, opts.tomorrow].filter(Boolean));
-    return list.map(pickBooking).filter((b) => b && (!days.size || days.has(b.date)))
+    // The calendar payload has no phone; keep the one the dashboard saved.
+    const prev = new Map((state.sections.bookings?.items || []).map((b) => [b.id, b]));
+    return list.map((raw) => {
+      const b = pickBooking(raw);
+      if (b && !b.clientPhone && prev.get(b.id)?.clientPhone) b.clientPhone = prev.get(b.id).clientPhone;
+      return b;
+    }).filter((b) => b && (!days.size || days.has(b.date)))
       .sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.startMin || 0) - (b.startMin || 0))
       .slice(0, SNAPSHOT_LIMITS.bookings);
   }

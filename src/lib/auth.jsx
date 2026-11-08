@@ -4,7 +4,7 @@ import { api } from './api.js';
 import { isNative } from './platform.js';
 import { setNativeAuthToken, clearNativeAuthToken } from './nativeAuth.js';
 import { clearMeCache, forgetLanding } from './landing.js';
-import { clearDeviceCache, clearSiteHistory } from './deviceCache.js';
+import { clearDeviceCache, clearSiteHistory, readCache, writeCache } from './deviceCache.js';
 import { clearOfflineData } from './offlineData.js';
 import { logOutIap } from './iap.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
@@ -39,8 +39,21 @@ export function AuthProvider({ children }) {
         setImpersonating(r.impersonating || null);
         setTerms(r.terms || null); setPrivacy(r.privacy || null);
         stampSessionHint(!!r.user);
+        // iPhone app: the signed-in user as /auth/me describes them, for a
+        // launch with no signal (cleared with the rest of the device cache
+        // at sign-out).
+        if (r.user) writeCache('auth_user', r.user);
       })
-      .catch(() => { if (live) { setUser(null); stampSessionHint(false); } })
+      .catch((e) => {
+        if (!live) return;
+        // iPhone app with no signal: the session could not be checked, so
+        // keep the owner who was signed in on this phone (from the last
+        // /me the device kept) and open on the saved copy, instead of the
+        // welcome screen. The server still decides every request.
+        const cached = e?.status === 0 && isNative() ? (readCache('auth_user') || readCache('me')?.user || null) : null;
+        if (cached?.id) { setUser(cached); stampSessionHint(true); return; }
+        setUser(null); stampSessionHint(false);
+      })
       .finally(() => live && setLoading(false));
     return () => { live = false; };
   }, []);
@@ -210,13 +223,15 @@ export function AuthProvider({ children }) {
         else localStorage.removeItem('ivy_signed_in');
       } catch { /* private mode */ }
       return r.user;
-    } catch {
+    } catch (e) {
+      // No signal: not a sign-out. Keep whoever is signed in.
+      if (e?.status === 0) return user;
       setUser(null);
       setImpersonating(null);
       setTerms(null); setPrivacy(null);
       return null;
     }
-  }, []);
+  }, [user]);
 
   // Auto-detect email verification that happens OUTSIDE this tab - the
   // verify link usually opens in a new tab (or gets clicked on the
