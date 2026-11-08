@@ -1110,6 +1110,10 @@ html body.ivy-fill.keyboard-open.has-mobile-nav .app-root > .app-frame { padding
   box-shadow: 0 8px 24px rgba(0,0,0,0.25); font-size: 13px; text-align: center;
 }
 .offline-bar.is-back { border-color: var(--accent); color: var(--accent); }
+/* A sheet opened while the offline bar is up keeps its header (title and
+   close button) below the bar. --offline-bar-h is measured by
+   OfflineBanner.jsx. */
+body.has-offline-bar .motion-drawer { padding-top: calc(env(safe-area-inset-top, 0px) + var(--offline-bar-h, 52px)); }
 
 .get-app {
   position: sticky; top: 0; z-index: 940;

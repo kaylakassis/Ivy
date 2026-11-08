@@ -40,6 +40,11 @@ import { FLAGS } from '../../lib/featureFlags.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { checkPartnerRatingWin } from '../../lib/ratingPrompt.js';
 import { isNative } from '../../lib/platform.js';
+import { localISODate } from '../../lib/dateOnly.js';
+import { saveSnapshot } from '../../lib/snapshot.js';
+import { useOffline, useSnapshot } from '../../lib/useOffline.js';
+import { OFFLINE_MESSAGE } from '../../lib/offline.js';
+import OfflineTodayCard from '../../components/offline/OfflineTodayCard.jsx';
 
 // ── setup card ─────────────────────────────────────────────────────────
 // Dismissable via "Hide for now" for 7 days (re-shows after, or when a new
@@ -221,7 +226,7 @@ function summaryLine(data, setupFirst) {
   return parts.join(' ');
 }
 
-function HeroBand({ data, setupFirst = false }) {
+function HeroBand({ data, setupFirst = false, offline = false }) {
   const hour = new Date().getHours();
   const nav = useNavigate();
   const { user } = useAuth();
@@ -252,18 +257,24 @@ function HeroBand({ data, setupFirst = false }) {
           )}
         </div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 34 }}>{greet}.</h2>
-        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 620, minHeight: 20 }}>{summaryLine(data, setupFirst)}</p>
+        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 620, minHeight: 20 }}>
+          {offline ? 'Here is what Ivy saved on this phone.' : summaryLine(data, setupFirst)}
+        </p>
       </div>
-      <nav aria-label="Quick actions" className="dash-actions">
+      {/* Offline (iPhone app): these all need the server, so they wait, with
+          the reason said plainly instead of a spinner. */}
+      <nav aria-label="Quick actions" className="dash-actions" style={offline ? { opacity: 0.55 } : undefined}>
         {actions.map((a) => {
           const Icon = Icons[a.icon];
           return (
-            <button key={a.label} type="button" className={a.primary ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => nav(a.to)}>
+            <button key={a.label} type="button" className={a.primary ? 'btn btn-primary' : 'btn btn-outline'} onClick={() => nav(a.to)}
+              disabled={offline} title={offline ? OFFLINE_MESSAGE : undefined}>
               <Icon size={14}/>{a.label}
             </button>
           );
         })}
       </nav>
+      {offline && <div role="status" style={{ flexBasis: '100%', fontSize: 12.5, color: 'var(--muted)', marginTop: -6 }}>{OFFLINE_MESSAGE}</div>}
     </div>
   );
 }
@@ -308,8 +319,18 @@ export default function Dashboard() {
   const setup = useSetupStatus();
   const [setupHidden, setSetupHidden] = useState(() => isDismissed());
 
+  // iPhone app with no signal: today's card from the copy saved on the phone.
+  const offline = useOffline();
+  const offlineView = isNative() && offline;
+  const offlineSnapshot = useSnapshot('bookings');
+
   const loadDashboard = useCallback(async () => {
-    try { const r = await api.get('/dashboard'); setData(r); setLoadErr(null); writeCache('dashboard', r); }
+    try {
+      const r = await api.get('/dashboard'); setData(r); setLoadErr(null); writeCache('dashboard', r);
+      // iPhone app: today's and tomorrow's appointments for use without signal.
+      const today = localISODate();
+      saveSnapshot('bookings', [...(r.today || []), ...(r.tomorrow || [])], { today, tomorrow: localISODate(new Date(Date.now() + 86400e3)) });
+    }
     catch (e) {
       // A failed fetch must NOT masquerade as an empty business; keep
       // showing what we had and only surface the error when there is none.
@@ -357,6 +378,18 @@ export default function Dashboard() {
     <SetupCard status={setup} switchPrompt={!!data?.switchPrompt} offerSample={empty}
       onHide={() => { dismissForAWeek(); setSetupHidden(true); }} onChanged={loadDashboard}/>
   );
+
+  if (offlineView) {
+    return (
+      <div>
+        <HeroBand data={null} offline/>
+        <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <OfflineTodayCard snapshot={offlineSnapshot}/>
+          {data?.keyNumbers && <KeyNumbers k={data.keyNumbers} currency={currency} loading={false} businessType={businessType}/>}
+        </div>
+      </div>
+    );
+  }
 
   if (loadErr && !data && !loading) {
     return (

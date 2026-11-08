@@ -13,6 +13,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { haptic } from '../../lib/celebrate.js';
+import { saveSnapshot, saveThreadMessages } from '../../lib/snapshot.js';
 
 export function useThreads() {
   const [threads, setThreads] = useState([]);
@@ -22,13 +23,16 @@ export function useThreads() {
   const refresh = useCallback(async () => {
     const r = await api.get('/messages');
     setThreads(r.threads || []);
+    // A load that failed earlier (no signal) is over once one succeeds.
+    setError(null);
+    saveSnapshot('threads', r.threads || []);
     return r.threads;
   }, []);
 
   useEffect(() => {
     let live = true;
     api.get('/messages')
-      .then((r) => live && setThreads(r.threads || []))
+      .then((r) => { if (live) { setThreads(r.threads || []); saveSnapshot('threads', r.threads || []); } })
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
@@ -43,6 +47,7 @@ export function useThreads() {
     try {
       const r = await api.get('/messages');
       setThreads(r.threads || []);
+      setError(null);
     } catch { /* keep current state on transient failure */ }
   }, []);
   useIntervalWhenVisible(silentRefresh, 15000);
@@ -99,6 +104,8 @@ export function useThread(threadId) {
         if (!live) return;
         setThread(r.thread);
         setMessages(r.messages || []);
+        // iPhone app: the last 10 messages (text only) for offline reading.
+        saveThreadMessages(r.thread, r.messages || []);
       })
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));

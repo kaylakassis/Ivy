@@ -27,6 +27,9 @@ import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { isNative } from '../../lib/platform.js';
+import { useOffline, useSnapshot } from '../../lib/useOffline.js';
+import OfflineCalendar from '../../components/offline/OfflineCalendar.jsx';
 
 const VIEW_KEY = 'Ivy:calendar:view';
 
@@ -69,6 +72,9 @@ export default function Calendar() {
     decideRequest,
   } = useCalendar(dataWindow);
   usePullRefresh(refresh);
+  // iPhone app with no signal: the day view from the copy saved on the phone.
+  const offline = useOffline();
+  const offlineSnapshot = useSnapshot('bookings');
 
   // After a no-show / tip / fee charge (the drawer hits those endpoints
   // directly), merge the returned booking into state AND patch the open
@@ -221,6 +227,9 @@ export default function Calendar() {
         <Loader/>
       </div>
     );
+  }
+  if (error && isNative() && (offline || error.offline)) {
+    return <OfflineCalendar snapshot={offlineSnapshot}/>;
   }
   if (error) {
     return (

@@ -7,7 +7,9 @@ import React, { useEffect } from 'react';
 import { Icons } from './Icons.jsx';
 import { hapticSuccess } from '../lib/haptics.js';
 
-export default function SuccessToast({ text, icon = 'Check', duration = 3200, onDone }) {
+// tone 'neutral' (grey badge, text may wrap) is for notices that are not a
+// win, like "the server kept its version".
+export default function SuccessToast({ text, icon = 'Check', duration = 3200, onDone, tone = 'ok' }) {
   useEffect(() => {
     if (!text) return undefined;
     hapticSuccess(); // collapses with the action's own haptic (400ms debounce)
@@ -22,19 +24,22 @@ export default function SuccessToast({ text, icon = 'Check', duration = 3200, on
     <div role="status" aria-live="polite" style={{
       position: 'fixed', left: '50%', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 84px)',
       transform: 'translateX(-50%)', zIndex: 90, maxWidth: '90vw',
+      // A longer neutral notice gets a readable width instead of shrinking
+      // into a tall column (left: 50% leaves only half the screen to size in).
+      ...(tone === 'neutral' ? { width: 'min(90vw, 440px)' } : null),
       animation: 'toast-rise 0.24s cubic-bezier(0.2,0.8,0.3,1)',
     }}>
       <div className="card" style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px',
-        boxShadow: 'var(--shadow)', whiteSpace: 'nowrap',
+        boxShadow: 'var(--shadow)', whiteSpace: tone === 'neutral' ? 'normal' : 'nowrap',
       }}>
         <span style={{
-          width: 22, height: 22, borderRadius: 99, flexShrink: 0, background: 'var(--ok)', color: '#fff',
+          width: 22, height: 22, borderRadius: 99, flexShrink: 0, background: tone === 'neutral' ? 'var(--muted)' : 'var(--ok)', color: '#fff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <Icon size={13} sw={2.6}/>
         </span>
-        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{text}</span>
+        <span style={{ fontSize: 13.5, fontWeight: tone === 'neutral' ? 500 : 600, lineHeight: 1.4 }}>{text}</span>
       </div>
     </div>
   );

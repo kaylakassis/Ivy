@@ -28,7 +28,10 @@ export function TutorialProvider({ children }) {
         // Fail soft - never let a tutorial fetch crash the app shell.
         // An empty map means everything looks unseen which is the
         // worst-case behavior; better than blocking nav.
-        setTutorials({});
+        // No signal (status 0): stay "not ready" instead, so a tutorial
+        // never pops up over the copy saved on the phone; the (i) button
+        // still opens one by hand.
+        setTutorials(e?.status === 0 ? null : {});
       });
     return () => { live = false; };
   }, []);

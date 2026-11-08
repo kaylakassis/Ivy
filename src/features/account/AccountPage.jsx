@@ -11,6 +11,7 @@ import AccountabilityPartnerRow from './AccountabilityPartnerRow.jsx';
 import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason, iapIdentifyRefusal } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import SavedOnPhoneCard from '../../components/offline/SavedOnPhoneCard.jsx';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
@@ -170,6 +171,9 @@ export default function AccountPage() {
           </button>
         </div>
       </div>
+
+      {/* iPhone app: the copy kept on this phone for use without signal. */}
+      {isNative() && <SavedOnPhoneCard/>}
 
       <SecurityCard/>
 

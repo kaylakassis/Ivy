@@ -17,6 +17,25 @@ import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 const TWO_STEP_PROMPT_AFTER_DAYS = 3;
 
+// One appointment row of `today` / `tomorrow`. Owner-only screen, so the
+// private note and the client's phone ride along (1.0.6, additive).
+function todayItem(r) {
+  return {
+    id: r.id, startMin: r.start_min, endMin: r.end_min,
+    clientName: r.client_name, serviceName: r.service_name,
+    noShow: !!r.no_show_at,
+    completed: !!(r.completion_log && Object.keys(r.completion_log).length),
+    // 1.0.6 (additive): for the Message / Start / Complete buttons.
+    clientId: r.client_id || null, threadId: r.thread_id || null,
+    videoUrl: r.video_room_url || null, date: r.date,
+    // 1.0.6 (additive): what a mobile pro needs on the way to a client.
+    locationAddress: r.location_address || null,
+    clientPhone: r.client_phone || null,
+    notes: r.notes || null,
+    privateNotes: r.private_notes || null,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
@@ -48,15 +67,22 @@ export default async function handler(req, res) {
              AND date <  (date_trunc('month', NOW() AT TIME ZONE ${tz}) + INTERVAL '1 month')::date`,
       sql`SELECT COALESCE(SUM(amount), 0)::numeric AS v FROM expenses
            WHERE workspace_id = ${workspaceId} AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date`,
+      // Today and tomorrow (the iPhone app keeps both on the phone for
+      // offline use, src/lib/snapshot.js); `is_today` splits them below.
       sql`SELECT b.id, b.start_min, b.end_min, b.client_name, b.no_show_at, b.completion_log,
                  b.client_id, b.video_room_url, b.date::text AS date,
+                 b.location_address, b.notes, b.private_notes, c.phone AS client_phone,
+                 (b.date = (NOW() AT TIME ZONE ${tz})::date) AS is_today,
                  s.name AS service_name, t.id AS thread_id
             FROM bookings b
             LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+            LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
             LEFT JOIN message_threads t ON t.client_id = b.client_id AND t.workspace_id = b.workspace_id
-           WHERE b.workspace_id = ${workspaceId} AND b.date = (NOW() AT TIME ZONE ${tz})::date
+           WHERE b.workspace_id = ${workspaceId}
+             AND b.date >= (NOW() AT TIME ZONE ${tz})::date
+             AND b.date <= (NOW() AT TIME ZONE ${tz})::date + 1
              AND b.cancelled_at IS NULL
-           ORDER BY b.start_min ASC LIMIT 20`,
+           ORDER BY b.date ASC, b.start_min ASC LIMIT 40`,
       sql`SELECT number, client_name, paid_at FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL
            ORDER BY paid_at DESC LIMIT 6`,
@@ -242,15 +268,10 @@ export default async function handler(req, res) {
         revenue:  Number(rev.rows[0].v || 0),
         expenses: Number(exp.rows[0].v || 0),
       },
-      today: today.rows.map((r) => ({
-        id: r.id, startMin: r.start_min, endMin: r.end_min,
-        clientName: r.client_name, serviceName: r.service_name,
-        noShow: !!r.no_show_at,
-        completed: !!(r.completion_log && Object.keys(r.completion_log).length),
-        // 1.0.6 (additive): for the Message / Start / Complete buttons.
-        clientId: r.client_id || null, threadId: r.thread_id || null,
-        videoUrl: r.video_room_url || null, date: r.date,
-      })),
+      today: today.rows.filter((r) => r.is_today).map(todayItem),
+      // 1.0.6 (additive): tomorrow's appointments in the same shape, for the
+      // iPhone app's offline copy.
+      tomorrow: today.rows.filter((r) => !r.is_today).map(todayItem),
       tasks: (taskRows || []).slice(0, 6).map((t) => ({
         id: t.id, title: t.title, type: t.type,
         dueDate: t.due_date instanceof Date ? t.due_date.toISOString().slice(0, 10) : t.due_date,
