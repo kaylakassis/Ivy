@@ -44,6 +44,7 @@ import {
   publicPolicy, evaluateAcceptance, refusalBody, recordAcceptance, feeTerms, workspaceCurrency,
 } from '../../_lib/cancellationPolicy.js';
 import { cardOnFileCheckout } from '../../_lib/bookingFees.js';
+import { shopsForBookingPage, resolveShopReferral } from '../../_lib/shops.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -296,6 +297,9 @@ async function getCalendar(req, res) {
         // The owner's cancellation policy (1.0.5+ pages; older pages ignore
         // it). Always the latest version. null = none written yet.
         cancellationPolicy: await publicPolicy(s.workspace_id).catch(() => null),
+        // Published shop pages this business is listed on (1.0.6+ pages show
+        // "Part of {Shop}"; older pages ignore it).
+        shops: await shopsForBookingPage(s.workspace_id),
       },
     });
   } catch (err) {
@@ -697,6 +701,11 @@ async function createBooking(req, res) {
       catch (e) { console.error('[public booking] restoreCredit failed:', e.message); }
     };
 
+    // Booked from a shop page (body.shopSlug)? Only recorded when that shop
+    // is published and this business is an active member of it; the
+    // booking itself is this workspace's like any other.
+    const viaShop = body.shopSlug ? await resolveShopReferral(String(body.shopSlug).slice(0, 60), workspaceId) : null;
+
     let insert;
     try {
       insert = await sql`
@@ -704,7 +713,7 @@ async function createBooking(req, res) {
           workspace_id, service_id, client_id, client_name, client_email, client_phone,
           date, start_min, end_min, notes, deposit_required, location_address,
           video_room_url, custom_field_values, add_on_ids, booking_total,
-          gift_card_credit_cents, source, client_package_id, package_use_mode
+          gift_card_credit_cents, source, client_package_id, package_use_mode, shop_id
         )
         VALUES (
           ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
@@ -716,7 +725,8 @@ async function createBooking(req, res) {
           ${giftCardCreditCents},
           'client',
           ${pkgRow ? clientPackageId : null},
-          ${packageUseMode}
+          ${packageUseMode},
+          ${viaShop ? viaShop.id : null}
         )
         RETURNING *
       `;
@@ -890,6 +900,8 @@ async function createBooking(req, res) {
         depositRequired,
         calendar,
         clientPackageId: pkgRow ? clientPackageId : null,
+        // The shop page this booking came through, when it did (1.0.6).
+        viaShop: viaShop ? { slug: viaShop.slug, name: viaShop.name } : null,
       },
       depositCheckoutUrl,
       cardSetupUrl,

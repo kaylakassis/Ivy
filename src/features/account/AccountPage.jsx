@@ -876,6 +876,7 @@ const PUSH_LABELS = {
   support:   { label: 'Support',   hint: 'When Ivy Support replies to your conversation.' },
   engagement: { label: 'Streak and setup nudges', hint: 'An evening reminder to keep your streak going (never on a day your accountability partner already checked in), and setup tips.' },
   client_optouts: { label: 'Client email opt-outs', hint: 'When a client unsubscribes from your emails.' },
+  shops: { label: 'Shop pages', hint: 'Shop page invites, and when a business joins or leaves a shop page you run.' },
 };
 const EMAIL_LABELS = {
   bookings:  { label: 'Booking alerts',  hint: 'Booking, cancellation and reminder emails about your appointments. Choose when reminders come in Calendar > Reminders.' },
@@ -887,6 +888,7 @@ const EMAIL_LABELS = {
   reports:   { label: 'Weekly business recap', hint: 'Your weekly recap of bookings and revenue, plus setup reminders.' },
   client_optouts: { label: 'Client email opt-outs', hint: 'An email when a client unsubscribes from your emails, at most one per client per day. Only the client can turn their emails back on.' },
   signup_reminders: { label: 'Finish sign-up reminders', hint: 'Up to three short emails if you create an account but have not started your trial yet. They stop once you start.' },
+  shops: { label: 'Shop pages', hint: 'An email when a shop page invites you, and when a business joins or leaves a shop page you run.' },
 };
 
 function NotificationPrefs({ emailOnly = false }) {

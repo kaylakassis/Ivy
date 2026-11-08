@@ -22,6 +22,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { discoverShops } from '../_lib/shops.js';
 
 function num(v, { min, max } = {}) {
   if (v == null || v === '') return null;
@@ -229,7 +230,10 @@ export default async function handler(req, res) {
       coverPhotoUrl: r.cover_photo_url || null,
       siteHandle:   r.site_handle || null,
     }));
-    return ok(res, { businesses });
+    // Shop pages (1.0.6): published shops, narrowed by the same text search.
+    // Best-effort so the business list never waits on it.
+    const shops = await discoverShops({ q: q || null, limit: 24 }).catch(() => []);
+    return ok(res, { businesses, shops });
   } catch (err) {
     return serverError(res, err);
   }
