@@ -1644,7 +1644,7 @@ const DONE_TEXT = {
   create_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name || a.name)} (${r.workflow?.enabled ? 'on' : 'off'})`,
   create_suggested_workflow: (a, r) => `Created the automation ${qt(r.workflow?.name)}`,
   create_document_from_template: (a, r) => `Drafted the document ${qt(r.document?.name)} (not sent)`,
-  cancel_booking: (a, r) => `Cancelled ${r.booking?.client_name || 'the'} appointment on ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told the client' : ''}${r.deposit_review ? `. Their ${r.deposit_review} deposit is waiting in Deposits to review for your Refund or Keep` : ''}`,
+  cancel_booking: (a, r) => r.request_declined ? `Declined the booking request${r.booking?.client_name ? ` from ${r.booking.client_name}` : ''} for ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told them to pick another time' : ''}` : `Cancelled ${r.booking?.client_name || 'the'} appointment on ${fmtDay(r.booking?.date)}${r.client_notified ? ' and told the client' : ''}${r.deposit_review ? `. Their ${r.deposit_review} deposit is waiting in Deposits to review for your Refund or Keep` : ''}`,
   void_invoice: (a, r) => `Voided invoice${numBit(r.invoice?.number)}. It stays on record, its link no longer takes payment and nothing is owed${r.client_notified ? '. The client was emailed' : ''}`,
   delete_invoice: (a, r) => `Deleted the draft invoice${numBit(r.number)}`,
   archive_invoices: (a, r) => `${a.unarchive ? 'Brought back' : 'Archived'} ${Number(r.changed) || 0} invoice${Number(r.changed) === 1 ? '' : 's'}${a.unarchive ? '' : ' (hidden from the main list; revenue unchanged)'}${r.skipped?.length ? `. ${r.skipped.length} could not be changed: ${r.skipped[0].why}` : ''}`,
@@ -3014,6 +3014,24 @@ async function complete_task({ workspaceId, args }) {
 
 async function cancel_booking({ workspaceId, args, userId }) {
   if (!args?.booking_id) throw new Error('booking_id is required');
+  // 1.0.6: a booking request still waiting for an answer is declined, the
+  // same as the Calendar's cancel of a request: slot released, the client is
+  // told to pick another time, nothing to refund (nothing was charged).
+  {
+    const { isPendingRequest, declineBookingRequest } = await import('./bookingRequests.js');
+    const cur = await sql`
+      SELECT id, requested_at, request_decided_at, cancelled_at FROM bookings
+       WHERE id = ${args.booking_id} AND workspace_id = ${workspaceId}`;
+    if (cur.rows[0] && isPendingRequest(cur.rows[0])) {
+      const out = await declineBookingRequest({ workspaceId, bookingId: args.booking_id, userId: userId || null });
+      if (!out.ok) throw new Error('Booking not found or already cancelled');
+      const d = out.booking;
+      return {
+        booking: { id: d.id, date: d.date, start_min: d.start_min, client_name: d.client_name },
+        cancelled: true, request_declined: true, client_notified: !!d.client_email,
+      };
+    }
+  }
   // Same as the Calendar's cancel (DELETE /api/calendar/bookings/:id):
   // cancelled by the business, never a fee.
   const { rows } = await sql`
@@ -3021,7 +3039,7 @@ async function cancel_booking({ workspaceId, args, userId }) {
      WHERE id = ${args.booking_id}
        AND workspace_id = ${workspaceId}
        AND cancelled_at IS NULL
-     RETURNING id, date, start_min, client_name, client_package_id, no_show_at, completion_log, google_event_id
+     RETURNING id, date, start_min, end_min, service_id, client_name, client_package_id, no_show_at, completion_log, google_event_id
   `;
   if (rows.length === 0) throw new Error('Booking not found or already cancelled');
   const b = rows[0];
@@ -3058,6 +3076,16 @@ async function cancel_booking({ workspaceId, args, userId }) {
     const { syncOnBookingDeleted } = await import('./googleSync.js');
     syncOnBookingDeleted({ workspaceId, googleEventId: b.google_event_id });
   } catch { /* calendar sync is best effort */ }
+  // 1.0.6: offer the freed time to the waitlist, like every other cancel
+  // (only when the owner has the waitlist and "fill automatically" on).
+  try {
+    const { fillFromWaitlistOnCancel } = await import('./waitlist.js');
+    await fillFromWaitlistOnCancel({
+      workspaceId, serviceId: b.service_id, dateISO: b.date, startMin: b.start_min, endMin: b.end_min, sourceBookingId: b.id,
+    });
+  } catch (e) {
+    console.error('[ivy cancel] waitlist fill failed:', e.message);
+  }
   // notify:true is what the owner approved on the confirmation card
   // ("cancel and notify the client") - honor it. Best-effort: the
   // cancellation itself is already committed above.

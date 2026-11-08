@@ -21,6 +21,24 @@
 // Pending requests are NOT appointments yet: reminders, no-shows, fees,
 // revenue and Google Calendar all skip them through the SQL fragments below.
 //
+// iPhone 1.0.5 (old client code, new API). We chose to keep pending
+// requests OUT of every list an older app already reads, and to add new
+// fields instead of a new value in an old one:
+//   • GET /api/calendar returns requests in a new `requests` array; the old
+//     `bookings` array holds confirmed bookings only, so 1.0.5 never draws a
+//     request as a confirmed appointment (it simply does not show it). The
+//     owner still gets the push and email and answers from the web or 1.0.6.
+//   • GET /api/me/bookings adds a `requested` list; `upcoming`, `past` and
+//     `cancelled` are unchanged, so a 1.0.5 portal shows a request only once
+//     it is approved. Each item also gains `status` / `isRequest`.
+//   • The helper schedule and the reminder, fee and no-show paths skip a
+//     pending request.
+//   • A 1.0.5 services editor that sends no requireApproval keeps the
+//     service's setting (services PUT only changes it when sent).
+// Nothing an older app sends can create a request by accident: only a
+// service the owner switched to "Confirm bookings before they're final"
+// makes one.
+//
 // Everything here is a plain function (no req/res) so the public booking
 // route, the owner endpoints, Ivy's tools, the cron and the shop booking
 // flow all share one implementation.
