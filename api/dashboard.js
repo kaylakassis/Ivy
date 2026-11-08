@@ -60,7 +60,9 @@ export default async function handler(req, res) {
       sql`SELECT number, client_name, paid_at FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL
            ORDER BY paid_at DESC LIMIT 6`,
-      sql`SELECT client_name, created_at FROM bookings
+      sql`SELECT client_name, created_at,
+                  (requested_at IS NOT NULL AND request_decided_at IS NULL AND cancelled_at IS NULL) AS is_request
+             FROM bookings
            WHERE workspace_id = ${workspaceId}
            ORDER BY created_at DESC LIMIT 6`,
       listTasksWithProgress(workspaceId, 'false'),
@@ -89,7 +91,8 @@ export default async function handler(req, res) {
       })),
       ...recentBk.rows.map((r) => ({
         kind: 'booking', ts: r.created_at,
-        text: `New booking - ${r.client_name || 'client'}`,
+        // 1.0.6: a request waiting for the owner's answer is not a booking yet.
+        text: `${r.is_request ? 'Booking request' : 'New booking'} - ${r.client_name || 'client'}`,
       })),
     ].filter((a) => a.ts)
       .sort((a, b) => new Date(b.ts) - new Date(a.ts))
