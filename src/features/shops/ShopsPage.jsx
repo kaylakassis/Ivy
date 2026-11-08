@@ -273,7 +273,7 @@ function ShopEditor({ shopId, meta, onBack }) {
       <div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 4vw, 30px)', fontWeight: 500, letterSpacing: '-0.02em' }}>{shop.name}</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-          <a href={shop.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{publicOrigin().replace(/^https?:\/\//, '')}{shop.url}</a>
+          <a href={`${publicOrigin()}${shop.url}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{publicOrigin().replace(/^https?:\/\//, '')}{shop.url}</a>
           {' '}· {shop.status === 'published' ? 'Published' : 'Draft, only you can see it'} · {stats.pageViews} page view{stats.pageViews === 1 ? '' : 's'} · {stats.total} booking{stats.total === 1 ? '' : 's'} through the page ({stats.last30} in the last 30 days)
         </div>
       </div>
@@ -428,7 +428,7 @@ function DetailsForm({ shop, meta, teamHours, onSaved }) {
       <Err>{err}</Err><Ok>{ok}</Ok>
       <div style={row}>
         <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
-        <a className="btn btn-outline" href={shop.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Preview</a>
+        <a className="btn btn-outline" href={`${shop.url}?preview=1`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Preview</a>
       </div>
     </form>
   );
@@ -666,7 +666,7 @@ function SharePanel({ shop, onChange, onDeleted }) {
           <input className="input" readOnly value={url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 220 }} aria-label="Shop page link"/>
           <button type="button" className="btn btn-primary" onClick={() => copy(url, () => { setCopied(true); setTimeout(() => setCopied(false), 1600); })}><Icons.Copy size={14}/> {copied ? 'Copied' : 'Copy link'}</button>
           <button type="button" className="btn btn-outline" onClick={() => setQr(true)}>QR code</button>
-          <a className="btn btn-outline" href={shop.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Preview</a>
+          <a className="btn btn-outline" href={`${shop.url}?preview=1`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Preview</a>
         </div>
         <div style={hint}>Put it in the window, on receipts and on every pro's Instagram. It books any of you.</div>
       </div>
@@ -738,7 +738,7 @@ function MyListing({ entry, meta, onBack }) {
       <div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px, 4vw, 30px)', fontWeight: 500, letterSpacing: '-0.02em' }}>{shop.name}</div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>
-          {shop.addressLabel ? `${shop.addressLabel} · ` : ''}{shop.status === 'published' ? <a href={shop.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>See the page</a> : 'Not published yet'}
+          {shop.addressLabel ? `${shop.addressLabel} · ` : ''}{shop.status === 'published' ? <a href={`${publicOrigin()}${shop.url}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>See the page</a> : 'Not published yet'}
           {teamNames?.length ? ` · ${teamNames.length} on the page: ${teamNames.join(', ')}` : ''}
           {summary.length ? ` · ${summary.length} open days` : ''}
         </div>

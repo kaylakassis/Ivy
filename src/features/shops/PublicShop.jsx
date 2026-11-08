@@ -99,6 +99,8 @@ export function bookHref(shop, member, service = null, slot = null) {
 
 export default function PublicShop() {
   const { slug } = useParams();
+  // ?preview=1 from the owner's Shop screen: their own page, draft included.
+  const preview = (() => { try { return new URLSearchParams(window.location.search).get('preview') === '1'; } catch { return false; } })();
   const navigate = useNavigate();
   const [tweaks] = useTweaks();
   const [data, setData] = useState(null);
@@ -109,14 +111,15 @@ export default function PublicShop() {
   useEffect(() => {
     let live = true;
     setLoading(true); setErr(null);
-    api.get(`/shop/${encodeURIComponent(slug)}/data`)
+    api.get(`/shop/${encodeURIComponent(slug)}/data${preview ? '?preview=1' : ''}`)
       .then((r) => { if (live) { setData(r); setNow(new Date()); } })
       .catch((e) => live && setErr(e))
       .finally(() => live && setLoading(false));
-    // One page view per visit; the server throttles repeats.
-    api.post(`/shop/${encodeURIComponent(slug)}/pv`, {}).catch(() => {});
+    // One page view per visit; the server throttles repeats. The owner's
+    // own preview never counts.
+    if (!preview) api.post(`/shop/${encodeURIComponent(slug)}/pv`, {}).catch(() => {});
     return () => { live = false; };
-  }, [slug]);
+  }, [slug, preview]);
 
   // Keep "Next: today 3:30 pm" honest while the tab stays open.
   useEffect(() => {
@@ -167,6 +170,12 @@ export default function PublicShop() {
   return (
     <div className={`app-root dir-${tweaks.direction} pb-root sh-root`} style={brandVars}>
       <div className="pb-wrap">
+        {data.preview && (
+          <div className="sh-preview" role="status">
+            <span>{data.shop.status === 'published' ? 'Preview of your live page.' : 'Preview. Only you can see this until you publish.'}</span>
+            <Link to={`/shops?shop=${encodeURIComponent(data.shop.id)}`}>Back to Shop</Link>
+          </div>
+        )}
         <ShopBody data={data} now={now} navigate={navigate}/>
       </div>
     </div>

@@ -312,6 +312,8 @@ async function main() {
   // thread's system message, which every booking writes.)
   const cThread = await sql`SELECT m.text FROM messages m JOIN message_threads t ON t.id = m.thread_id WHERE t.workspace_id = ${C.ws} AND m.kind = 'booking' AND m.meta->>'bookingId' = ${String(wins[0].body.booking.id)} LIMIT 1`;
   assert(cThread.rows[0] && /Booked through Main Street Barbers/.test(cThread.rows[0].text), 'and so does the booking note in the client thread');
+  const cPush = await sql`SELECT body FROM notifications WHERE user_id = ${C.id} AND type = 'bookings' ORDER BY created_at ASC LIMIT 1`;
+  assert(cPush.rows[0] && /Booked through Main Street Barbers's page/.test(cPush.rows[0].body), 'and so does the pro\'s booking push (first-booking one included)');
   r = await call(shopById, { user: A, query: { id: shop.id } });
   assert(r.body.members.find((m) => m.businessName === 'Charlie Color').stats.total === 1 && r.body.stats.total === 2, 'owner stats count the shop bookings (counts only)');
 
@@ -394,6 +396,14 @@ async function main() {
   r = await call(publishH, { method: 'POST', user: A, query: { id: shop.id }, body: { status: 'draft' } });
   r = await call(shopDataH, { query: { slug: shop.slug } });
   assert(r.statusCode === 404, 'unpublished page → 404');
+  r = await call(shopDataH, { query: { slug: shop.slug, preview: '1' }, user: A });
+  assert(r.statusCode === 200 && r.body.preview === true && r.body.shop.status === 'draft' && r.body.members.length >= 1, 'the owner previews their own draft');
+  r = await call(shopDataH, { query: { slug: shop.slug, preview: '1' }, user: E });
+  assert(r.statusCode === 404, 'another business cannot preview it');
+  r = await call(shopDataH, { query: { slug: shop.slug, preview: '1' } });
+  assert(r.statusCode === 401, 'signed-out preview → 401');
+  r = await call(shopDataH, { query: { slug: shop.slug } });
+  assert(r.statusCode === 404 && !r.body?.preview, 'without preview the draft stays hidden, even to the owner\'s link');
   r = await call(shopHtmlH, { query: { slug: shop.slug }, headers: { host: 'www.joinivy.ai' } });
   assert(r.statusCode === 404, 'unpublished HTML → 404');
   r = await call(publishH, { method: 'POST', user: B, query: { id: shop.id }, body: { status: 'published' } });
@@ -427,6 +437,15 @@ async function main() {
   assert(inv.ok && inv.sent && inv.member.status === 'invited', 'approved invite goes out');
   const stillOff = await sql`SELECT status FROM shops WHERE id = ${shop.id}`;
   assert(stillOff.rows[0].status === 'published', 'planning unpublish without approval changed nothing');
+  plan = await planAppAction('shop', { action: 'update', shop_id: shop.id, match_team_hours: true }, { workspaceId: A.ws, userId: A.id });
+  assert(/opening hours to Mon 9:00 am to 5:00 pm/.test(plan.summary) && /when the team takes bookings/.test(plan.summary), 'Ivy hours card lists the new hours');
+  await sql`UPDATE shops SET hours = '{}'::jsonb WHERE id = ${shop.id}`;
+  await plan.apply();
+  const hrs = (await sql`SELECT hours FROM shops WHERE id = ${shop.id}`).rows[0].hours;
+  assert(hrs['3']?.length === 1 && hrs['3'][0].start === 540 && hrs['3'][0].end === 1020, 'approved: door hours now match the team');
+  threw = null;
+  try { await planAppAction('shop', { action: 'update', shop_id: shop.id, hours: { 1: [{ start: 900, end: 100 }] } }, { workspaceId: A.ws, userId: A.id }); } catch (e) { threw = e.message; }
+  assert(/start before an end/.test(threw || ''), 'bad hours refused before a card');
   plan = await planAppAction('shop', { action: 'create', name: 'Second Spot', slug: `second-${S}` }, { workspaceId: B.ws, userId: B.id });
   assert(/Create the shop page "Second Spot"/.test(plan.summary) && /draft/.test(plan.summary), 'create card');
   const made = await plan.apply();
@@ -470,6 +489,8 @@ async function main() {
   assert(r.body.calendar.shops.length === 0, 'a pro who left is no longer "part of" it');
   r = await call(discoverH, { user: E, query: { q: 'Main Street' } });
   assert(r.statusCode === 200 && Array.isArray(r.body.businesses) && r.body.shops.some((s) => s.slug === shop.slug && s.memberCount >= 1), 'Discover lists the shop (business list untouched)');
+  const card = r.body.shops.find((s) => s.slug === shop.slug);
+  assert(card.memberCount === card.team.length && card.team.every((t) => /^[A-Z?]$/.test(t.initial)) && !JSON.stringify(card).includes(B.ws), 'the card counts only pros really on the page and shows their initials, no ids');
   r = await call(discoverH, { user: E, query: { q: 'Fade' } });
   assert(r.body.shops.some((s) => s.slug === shop.slug), 'Discover finds a shop by a member\'s service');
   const { EMAIL_NOTIFY_TYPES, OWNER_ONLY_EMAIL_TYPES, EMAIL_NOTIFY_LABELS } = await import('../api/_lib/notificationPrefs.js');
@@ -482,6 +503,12 @@ async function main() {
   r = await call(listingH, { method: 'DELETE', user: B, query: { id: shop.id } });
   await wait(300);
   assert(mailsTo(A.email).length === before, 'owner who muted shop emails gets none');
+  // Deleting the shop page never touches a pro's bookings.
+  r = await call(shopById, { method: 'DELETE', user: A, query: { id: shop.id } });
+  const kept = await sql`SELECT shop_id FROM bookings WHERE workspace_id = ${C.ws} AND client_name LIKE 'Racer%' AND cancelled_at IS NULL`;
+  assert(r.statusCode === 200 && kept.rows.length === 1 && kept.rows[0].shop_id === null, 'deleting the shop page keeps every booking (the shop link is just cleared)');
+  r = await call(shopDataH, { query: { slug: shop.slug } });
+  assert(r.statusCode === 404, 'deleted page → 404');
   const text = fs.readFileSync(new URL('../api/_lib/shops.js', import.meta.url), 'utf8') + fs.readFileSync(new URL('../src/features/shops/PublicShop.jsx', import.meta.url), 'utf8') + fs.readFileSync(new URL('../src/features/shops/ShopsPage.jsx', import.meta.url), 'utf8');
   assert(!/[–—]/.test(text) && !/business OS/i.test(text), 'copy has no em/en dashes and never says "business OS"');
 

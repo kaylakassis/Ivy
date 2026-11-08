@@ -870,6 +870,22 @@ export function teamHoursUnion(members) {
   return out;
 }
 
+// "Mon 9:00 am to 5:00 pm; Tue ..." for an approval card. Closed days
+// are left out; an all-closed week says so.
+export function hoursLinesText(hours) {
+  const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const t = (m) => {
+    const h = Math.floor(m / 60) % 24, mm = m % 60;
+    return `${((h + 11) % 12) + 1}:${String(mm).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+  };
+  const parts = [];
+  for (const d of [1, 2, 3, 4, 5, 6, 0]) {
+    const list = (hours && hours[String(d)]) || [];
+    if (list.length) parts.push(`${names[d]} ${list.map((w) => `${t(w.start)} to ${t(w.end)}`).join(', ')}`);
+  }
+  return parts.length ? parts.join('; ') : 'closed every day';
+}
+
 // ── stats (counts only) ──────────────────────────────────────────────────
 
 // Owner view: bookings made through the shop page, per member, as counts.
@@ -911,15 +927,24 @@ export async function recordPageView(slug) {
 // Published shop + members whose plan is active. Returns null when there
 // is no such shop or its owner's plan lapsed (then the page goes dark
 // like an archived booking page).
-export async function loadPublicShop(slug) {
+// previewWorkspaceId: the signed-in owner previewing their own page, which
+// may still be a draft. Anyone else only ever gets a published page.
+export async function loadPublicShop(slug, { previewWorkspaceId = null } = {}) {
   const s = String(slug || '').toLowerCase().trim();
   if (!validShopSlug(s)) return null;
-  const { rows } = await sql`
-    SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, u.deleted_at AS owner_deleted_at
-      FROM shops s
-      JOIN workspaces w ON w.id = s.owner_workspace_id
-      JOIN users u ON u.id = w.owner_id
-     WHERE s.slug = ${s} AND s.status = 'published' LIMIT 1`;
+  const { rows } = previewWorkspaceId
+    ? await sql`
+      SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, u.deleted_at AS owner_deleted_at
+        FROM shops s
+        JOIN workspaces w ON w.id = s.owner_workspace_id
+        JOIN users u ON u.id = w.owner_id
+       WHERE s.slug = ${s} AND s.owner_workspace_id = ${previewWorkspaceId} LIMIT 1`
+    : await sql`
+      SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, u.deleted_at AS owner_deleted_at
+        FROM shops s
+        JOIN workspaces w ON w.id = s.owner_workspace_id
+        JOIN users u ON u.id = w.owner_id
+       WHERE s.slug = ${s} AND s.status = 'published' LIMIT 1`;
   const shop = rows[0];
   if (!shop || shop.owner_deleted_at) return null;
   if (!isWorkspaceActive(shop)) return { shop, archived: true, members: [] };
@@ -932,8 +957,8 @@ export async function loadPublicShop(slug) {
 // own public booking page exposes (settings subset, listed services,
 // blocks as "Busy", redacted bookings, reviews), so the page can compute
 // live availability for everyone without another request.
-export async function publicShopPayload(slug) {
-  const loaded = await loadPublicShop(slug);
+export async function publicShopPayload(slug, opts = {}) {
+  const loaded = await loadPublicShop(slug, opts);
   if (!loaded) return null;
   const { shop, archived, members } = loaded;
   if (archived) return { archived: true, shop: { name: shop.name, slug: shop.slug } };
@@ -1030,6 +1055,9 @@ export async function publicShopPayload(slug) {
     : null;
   return {
     archived: false,
+    // Owner preview of their own page (draft or published). Never set for
+    // the public.
+    ...(opts.previewWorkspaceId ? { preview: true } : {}),
     shop: { ...serializeShop(shop), settings },
     members: membersOut,
     rating: { count: totalReviews, avg: weighted == null ? null : Math.round(weighted * 100) / 100 },
@@ -1079,9 +1107,7 @@ export async function discoverShops({ q = null, limit = 24 } = {}) {
   const pattern = q ? `%${String(q).slice(0, 80).replace(/[%_]/g, (c) => '\\' + c)}%` : null;
   const { rows } = await sql.query(
     `SELECT s.id, s.slug, s.name, s.tagline, s.address_label, s.city, s.region, s.photos, s.lat, s.lng,
-            w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
-            (SELECT COUNT(*)::int FROM shop_members sm JOIN workspaces mw ON mw.id = sm.workspace_id
-              WHERE sm.shop_id = s.id AND sm.status = 'active') AS member_count
+            w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
        FROM shops s JOIN workspaces w ON w.id = s.owner_workspace_id JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
       WHERE s.status = 'published'
         AND ($1::text IS NULL OR s.name ILIKE $1 OR COALESCE(s.tagline, '') ILIKE $1 OR COALESCE(s.city, '') ILIKE $1
@@ -1090,12 +1116,36 @@ export async function discoverShops({ q = null, limit = 24 } = {}) {
       ORDER BY s.published_at DESC NULLS LAST LIMIT $2`,
     [pattern, Math.min(Math.max(1, Number(limit) || 24), 50)],
   );
-  return rows.filter(isWorkspaceActive).map((r) => ({
+  const live = rows.filter(isWorkspaceActive);
+  // Who is really on each page (active membership AND an active plan, the
+  // same rule as the page itself), for an honest count and the team's
+  // initials on the card. Names are already public on the page.
+  const team = {};
+  if (live.length) {
+    const { rows: mem } = await sql.query(
+      `SELECT sm.shop_id, sm.display_order, sm.featured, sm.role, cs.biz_name, cs.brand_logo_url, u.name AS pro_name,
+              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
+         FROM shop_members sm
+         JOIN workspaces w ON w.id = sm.workspace_id
+         JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
+         JOIN calendar_settings cs ON cs.workspace_id = sm.workspace_id AND cs.slug IS NOT NULL
+        WHERE sm.shop_id = ANY($1::uuid[]) AND sm.status = 'active'
+        ORDER BY (sm.role = 'owner') DESC, sm.featured DESC, sm.display_order ASC`,
+      [live.map((r) => r.id)],
+    );
+    for (const m of mem) if (isWorkspaceActive(m)) (team[m.shop_id] ||= []).push(m);
+  }
+  return live.map((r) => ({
     slug: r.slug, name: r.name, tagline: r.tagline || '', addressLabel: r.address_label || '',
     city: r.city || '', region: r.region || '', photoUrl: Array.isArray(r.photos) && r.photos[0] ? r.photos[0] : null,
-    memberCount: Number(r.member_count || 0), url: `/shop/${r.slug}`,
+    memberCount: (team[r.id] || []).length, url: `/shop/${r.slug}`,
     lat: r.lat == null ? null : Number(r.lat), lng: r.lng == null ? null : Number(r.lng),
-  }));
+    // Up to 4 faces for a card without a cover photo (1.0.6+ app).
+    team: (team[r.id] || []).slice(0, 4).map((m) => ({
+      initial: String(m.pro_name || m.biz_name || '?').trim()[0]?.toUpperCase() || '?',
+      photoUrl: m.brand_logo_url || null,
+    })),
+  })).filter((r) => r.memberCount > 0);
 }
 
 // Sitemap: every published shop whose owner is active.

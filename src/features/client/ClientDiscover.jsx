@@ -500,8 +500,15 @@ function ShopCard({ shop }) {
   return (
     <Link to={shop.url || `/shop/${shop.slug}`} className="card discover-card"
       style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0, textAlign: 'left', border: '1px solid var(--border)', color: 'inherit', textDecoration: 'none' }}>
-      <div style={{ aspectRatio: '4 / 3', background: cover, position: 'relative', display: 'flex', alignItems: 'flex-end', padding: 12 }}>
-        <div style={{ padding: '3px 8px', borderRadius: 99, background: 'rgba(15,15,15,0.78)', fontSize: 10.5, fontWeight: 700, color: '#fff' }}>
+      <div style={{ aspectRatio: shop.photoUrl ? '4 / 3' : '16 / 7', background: cover, position: 'relative', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8, padding: 12 }}>
+        {!shop.photoUrl && Array.isArray(shop.team) && shop.team.length > 0 && (
+          <div aria-hidden="true" style={{ display: 'flex' }}>
+            {shop.team.map((t, i) => (t.photoUrl
+              ? <img key={i} src={t.photoUrl} alt="" style={{ width: 38, height: 38, borderRadius: 99, objectFit: 'cover', marginLeft: i ? -8 : 0, border: '2px solid rgba(255,255,255,0.9)' }}/>
+              : <span key={i} style={{ width: 38, height: 38, borderRadius: 99, marginLeft: i ? -8 : 0, border: '2px solid rgba(255,255,255,0.9)', background: 'rgba(15,15,15,0.78)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 15 }}>{t.initial}</span>))}
+          </div>
+        )}
+        <div style={{ padding: '3px 8px', borderRadius: 99, background: 'rgba(15,15,15,0.78)', fontSize: 10.5, fontWeight: 700, color: '#fff', marginLeft: 'auto' }}>
           {shop.memberCount} {shop.memberCount === 1 ? 'pro' : 'pros'}
         </div>
       </div>

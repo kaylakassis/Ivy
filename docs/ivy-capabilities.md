@@ -208,7 +208,8 @@ Code: `api/_lib/ivyShopTools.js` (the `shop` tool), on top of `api/_lib/shops.js
 | Remove a pro, cancel an invite | `shop` remove_member (approval; the pro is told) |
 | Accept or decline an invite for my own business | `shop` accept_invite / decline_invite (approval; the card repeats what will show and what never will) |
 | Leave a shop page I am listed on | `shop` leave (approval; the listing comes off at once) |
-| Photos, opening hours, map pin, share link, QR code | Owner only for now: pick them on the Shops screen |
+| Set opening hours, or match them to when the team takes bookings | `shop` update with hours / match_team_hours (approval; the card lists the new hours day by day) |
+| Photos, map pin, share link, QR code | Owner only for now: pick them on the Shops screen |
 | Edit my own listing (title, bio, which services show) | Not yet: Shops > My shop listing |
 
 ## How Ivy talks about the "Owner only" items

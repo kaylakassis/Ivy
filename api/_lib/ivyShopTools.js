@@ -10,7 +10,7 @@ import { sql } from './db.js';
 import {
   shopsForWorkspace, loadOwnedShop, createShop, updateShop, setShopStatus, inviteMember, updateRoster, removeMember,
   leaveShop, acceptInvite, declineInvite, listMembers, serializeShop, serializeMember, shopStats, memberStats,
-  cleanShopPatch, isUuid, SHOP_AMENITIES, SHOP_THEMES, SHARED_ON_SHOP, NEVER_ON_SHOP, SHOP_PLAN_NOTE,
+  cleanShopPatch, teamHoursUnion, hoursLinesText, isUuid, SHOP_AMENITIES, SHOP_THEMES, SHARED_ON_SHOP, NEVER_ON_SHOP, SHOP_PLAN_NOTE,
 } from './shops.js';
 
 export const SHOP_READ_ACTIONS = ['get'];
@@ -37,6 +37,8 @@ export const SHOP_TOOLS = [
         show_prices: { type: 'boolean' },
         show_reviews: { type: 'boolean' },
         booking_rules_note: { type: 'string' },
+        hours: { type: 'object', description: 'update: door hours as {"0":[{"start":540,"end":1020}],...}, weekday 0 = Sunday, minutes from midnight; [] = closed' },
+        match_team_hours: { type: 'boolean', description: 'update: set the door hours to when anyone on the page takes bookings' },
         email: { type: 'string', description: 'invite: the pro to invite' },
         member_id: { type: 'string' },
         member_ids: { type: 'array', items: { type: 'string' }, description: 'reorder: every member id in the new order' },
@@ -137,12 +139,19 @@ export async function planShop(ws, a, ctx) {
     const { body, settings } = patchFrom(a);
     const current = serializeShop(shop, { owner: true });
     if (Object.keys(settings).length) body.settings = { ...current.settings, ...settings };
+    if (a.match_team_hours === true) body.hours = teamHoursUnion(await listMembers(shop.id));
+    else if (a.hours != null) body.hours = a.hours;
     if (!Object.keys(body).length) throw new Error('Nothing to change');
     cleanShopPatch(body);
     const parts = [];
     for (const [k, w] of Object.entries(FIELD_WORDS)) {
       const key = k === 'address_label' ? 'addressLabel' : k;
       if (key in body) parts.push(`${w} to "${clip(Array.isArray(body[key]) ? body[key].join(', ') : body[key], 80)}"`);
+    }
+    if ('hours' in body) {
+      const clean = cleanShopPatch({ hours: body.hours }).hours;
+      body.hours = clean;
+      parts.push(`opening hours to ${hoursLinesText(clean)}${a.match_team_hours === true ? " (when the team takes bookings)" : ''}`);
     }
     for (const [k, v] of Object.entries(settings)) parts.push(`${k.replace(/([A-Z])/g, ' $1').toLowerCase()} to ${typeof v === 'boolean' ? (v ? 'on' : 'off') : `"${clip(v, 80)}"`}`);
     return {
