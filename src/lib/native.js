@@ -13,7 +13,9 @@ import { isNative, isIos } from './platform.js';
 let started = false;
 
 // Hosts that should leave Ivy entirely (their own apps handle them).
-const SYSTEM_HOSTS = /(^|\.)apps\.apple\.com$|(^|\.)itunes\.apple\.com$/i;
+// maps.apple.com: a client's address opens in the Maps app (directions,
+// not a web page in a sheet).
+const SYSTEM_HOSTS = /(^|\.)apps\.apple\.com$|(^|\.)itunes\.apple\.com$|^maps\.apple\.com$/i;
 
 export function shouldOpenInSheet(href, currentOrigin) {
   if (!href || typeof href !== 'string') return false;

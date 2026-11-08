@@ -43,6 +43,7 @@ import { useExitAnimation } from '../motion/useExitAnimation.js';
 import { initNative } from '../../lib/native.js';
 import PullToRefresh from '../PullToRefresh.jsx';
 import OfflineBanner from '../OfflineBanner.jsx';
+import OfflineSync from '../offline/OfflineSync.jsx';
 
 export default function AppShell() {
   return (
@@ -274,6 +275,7 @@ function AppShellInner() {
       <RequiredAnswersSheet enabled={answersEnabled} onOpenChange={setAnswersOpen}/>
       {!needsPaywall && <PullToRefresh onRefresh={refresh}/>}
       <OfflineBanner/>
+      <OfflineSync/>
 
       {/* Super-admin preview escape: the wall is unskippable by design, so
           when it's been FORCED on for preview we surface a clear way back

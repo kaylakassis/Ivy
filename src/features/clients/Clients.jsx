@@ -10,6 +10,9 @@ import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import CustomFieldsSettings from './CustomFieldsSettings.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
+import { isNative } from '../../lib/platform.js';
+import { useOffline, useSnapshot } from '../../lib/useOffline.js';
+import OfflineClients from '../../components/offline/OfflineClients.jsx';
 import AnnounceMoveSheet from './AnnounceMoveSheet.jsx';
 import FolderDrawer from './FolderDrawer.jsx';
 import { DuplicatesReview, MergeWithPicker } from './DuplicateClients.jsx';
@@ -41,8 +44,12 @@ export default function Clients() {
   // The list is paged on the server (50 at a time, "Show more" for the
   // next page) for the current tab and search; counts and the analytics
   // cards are the server's numbers over the whole book.
-  const { clients, summary, total, loading, listLoading, create, update, remove, refresh,
+  const { clients, summary, total, loading, listLoading, error, create, update, remove, refresh,
           hasMore, loadMore, loadingMore } = useClients({ tab, query, analyticsWindow, leadWindow });
+  // iPhone app with no signal: the list and a client's essentials from the
+  // copy saved on the phone.
+  const offline = useOffline();
+  const offlineSnapshot = useSnapshot('clients');
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -245,6 +252,10 @@ export default function Clients() {
   // Rows that appeared after the first load (a client just created) grow in
   // live; the ones that were there on load get the list stagger instead.
   const freshIds = useFreshKeys(clients.map((c) => c.id), { ready: !loading });
+
+  if (error && !clients.length && isNative() && (offline || error.offline)) {
+    return <OfflineClients snapshot={offlineSnapshot} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)}/>;
+  }
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

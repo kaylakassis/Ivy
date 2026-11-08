@@ -241,6 +241,12 @@ export default async function handler(req, res) {
       const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };
 
       if ('notes' in body)            push('notes', body.notes == null ? null : String(body.notes).slice(0, 4000));
+      // Owner-only private note (never shown to clients or helpers). The
+      // iPhone app's offline queue appends to it when signal returns.
+      if ('privateNotes' in body) {
+        if (req.helper) return badRequest(res, 'Only the owner can edit private notes');
+        push('private_notes', body.privateNotes == null ? null : String(body.privateNotes).slice(0, 4000));
+      }
       if ('recurrenceRule' in body) {
         if (!VALID_RECURRENCE.has(body.recurrenceRule)) return badRequest(res, 'Invalid recurrence rule');
         // A booking paid with one package session stays a single visit.

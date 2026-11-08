@@ -10,6 +10,7 @@
 // 1000): iPhone 1.0.5 and the client pickers use it.
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
+import { saveSnapshot } from '../../lib/snapshot.js';
 
 const PAGE = 50;
 
@@ -134,6 +135,13 @@ export function useClients({ tab = 'all', query = '', analyticsWindow = 30, lead
   }, [refreshSummary]);
 
   const refresh = useCallback(async () => { await loadFirst(); }, [loadFirst]);
+
+  // iPhone app: keep the essentials of the loaded book on the phone for use
+  // without signal (the unfiltered list only, so a search never narrows it).
+  useEffect(() => {
+    if (loading || tab !== 'all' || q || !clients.length) return;
+    saveSnapshot('clients', clients);
+  }, [clients, loading, tab, q]);
 
   return {
     clients, summary, total, loading, listLoading, error, create, update, remove, refresh,

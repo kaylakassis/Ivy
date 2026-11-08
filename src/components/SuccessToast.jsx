@@ -6,7 +6,9 @@
 import React, { useEffect } from 'react';
 import { Icons } from './Icons.jsx';
 
-export default function SuccessToast({ text, icon = 'Check', duration = 3200, onDone }) {
+// tone 'neutral' (grey badge, text may wrap) is for notices that are not a
+// win, like "the server kept its version".
+export default function SuccessToast({ text, icon = 'Check', duration = 3200, onDone, tone = 'ok' }) {
   useEffect(() => {
     if (!text) return undefined;
     const t = setTimeout(() => onDone && onDone(), duration);
@@ -24,10 +26,10 @@ export default function SuccessToast({ text, icon = 'Check', duration = 3200, on
     }}>
       <div className="card" style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px',
-        boxShadow: 'var(--shadow)', whiteSpace: 'nowrap',
+        boxShadow: 'var(--shadow)', whiteSpace: tone === 'neutral' ? 'normal' : 'nowrap',
       }}>
         <span style={{
-          width: 22, height: 22, borderRadius: 99, flexShrink: 0, background: 'var(--ok)', color: '#fff',
+          width: 22, height: 22, borderRadius: 99, flexShrink: 0, background: tone === 'neutral' ? 'var(--muted)' : 'var(--ok)', color: '#fff',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <Icon size={13} sw={2.6}/>

@@ -5,6 +5,7 @@ import { isNative } from './platform.js';
 import { setNativeAuthToken, clearNativeAuthToken } from './nativeAuth.js';
 import { clearMeCache, forgetLanding } from './landing.js';
 import { clearDeviceCache, clearSiteHistory } from './deviceCache.js';
+import { clearOfflineData } from './offlineData.js';
 import { logOutIap } from './iap.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
@@ -184,6 +185,9 @@ export function AuthProvider({ children }) {
       // Forget this account's role answer and remembered landing so the next
       // sign-in on this device starts from a clean slate.
       clearMeCache(); forgetLanding(); clearDeviceCache(); clearSiteHistory();
+      // The iPhone app's offline copy (today's schedule, clients, recent
+      // messages) and anything queued while offline go with the account.
+      await clearOfflineData();
       // Don't let a per-browser onboarding-skip flag leak into whoever signs
       // in next on this device (e.g. after an account deletion).
       try { localStorage.removeItem('ivy_skip_onboarding_until'); } catch { /* private mode */ }

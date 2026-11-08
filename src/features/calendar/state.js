@@ -3,6 +3,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
 import { haptic } from '../../lib/celebrate.js';
+import { saveSnapshot } from '../../lib/snapshot.js';
+import { bookingsForSnapshot } from './offlineSnapshot.js';
+
+// iPhone app: today's and tomorrow's appointments stay on the phone for use
+// without signal. Setup-only loads carry no bookings, so they save nothing.
+function keepForOffline(calendar, queryString) {
+  if (!calendar || queryString === '?only=setup') return;
+  const { items, today, tomorrow } = bookingsForSnapshot(calendar);
+  saveSnapshot('bookings', items, { today, tomorrow });
+}
 
 export const EMPTY_CAL = {
   settings: {
@@ -51,6 +61,7 @@ export function useCalendar(window) {
   const refresh = useCallback(async () => {
     const r = await api.get('/calendar' + queryString);
     setCal(r.calendar);
+    keepForOffline(r.calendar, queryString);
     return r.calendar;
   }, [queryString]);
 
@@ -58,7 +69,7 @@ export function useCalendar(window) {
     let live = true;
     setLoading(true);
     api.get('/calendar' + queryString)
-      .then((r) => live && setCal(r.calendar))
+      .then((r) => { if (live) { setCal(r.calendar); keepForOffline(r.calendar, queryString); } })
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };

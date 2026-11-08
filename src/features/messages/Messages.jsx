@@ -17,6 +17,9 @@ import { AudioPlayer, RecordingBar, uploadVoiceMemo } from '../../components/Aud
 import GroupChats from './GroupChats.jsx';
 import { MoreMenu, ReportModal, BlockedNotice, ownerModeration } from '../../components/Moderation.jsx';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { isNative } from '../../lib/platform.js';
+import { useOffline, useSnapshot } from '../../lib/useOffline.js';
+import OfflineMessages from '../../components/offline/OfflineMessages.jsx';
 
 export default function Messages() {
   // ?group=<id> (group-chat push notifications, api/_lib/groupChat.js)
@@ -54,6 +57,9 @@ function TabButton({ active, onClick, children }) {
 function DirectMessages() {
   const { threads, loading, error, startThread, updateThread, setMode, refresh: refreshThreads } = useThreads();
   usePullRefresh(refreshThreads);
+  // iPhone app with no signal: the saved conversations, read-only.
+  const offline = useOffline();
+  const offlineSnapshot = useSnapshot('threads');
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
   const { isMobile } = useViewport();
@@ -93,6 +99,9 @@ function DirectMessages() {
 
   if (loading) {
     return <div style={{ padding: 48 }}><Loader/></div>;
+  }
+  if (error && isNative() && (offline || error.offline)) {
+    return <OfflineMessages snapshot={offlineSnapshot}/>;
   }
   if (error) {
     return (

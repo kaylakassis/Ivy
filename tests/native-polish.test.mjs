@@ -19,6 +19,7 @@ assert(!shouldOpenInSheet('sms:+15551234567', APP), 'sms → Messages app');
 assert(!shouldOpenInSheet('itms-apps://apps.apple.com/app/id1', APP), 'itms-apps → App Store app');
 assert(!shouldOpenInSheet('https://apps.apple.com/account/subscriptions', APP), 'App Store page → App Store app');
 assert(!shouldOpenInSheet(APP_STORE_URL, APP), 'Ivy App Store listing → App Store app');
+assert(!shouldOpenInSheet('https://maps.apple.com/?q=12%20Main%20St', APP), 'client address → Maps app');
 assert(!shouldOpenInSheet('', APP) && !shouldOpenInSheet(null, APP), 'empty → nothing');
 
 console.log('\n[2] who sees the get-the-app prompt');

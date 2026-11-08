@@ -22,6 +22,7 @@
 //     knows to look at the header instead of the cookie.
 import { isNative, getPlatform } from './platform.js';
 import { getNativeAuthToken, primeNativeAuth } from './nativeAuth.js';
+import { isOffline, noteNetworkFailure, noteNetworkSuccess, noteOfflineRequest, OFFLINE_MESSAGE } from './offline.js';
 
 const RETRY_METHODS = new Set(['GET']);
 
@@ -64,14 +65,27 @@ async function buildHeaders(body, opts = {}) {
 // networkErr.message is browser jargon ("Load failed" on WebKit, "Failed to
 // fetch" on Chromium). Say what a person can act on and keep the raw text on
 // the error for diagnostics. status 0 = the request never got an answer.
+// Offline (src/lib/offline.js): the request never got an answer and either
+// the browser says there is no connection or this is the second such
+// failure. The message then says the plain thing - "You're offline. Try
+// again when you have signal." - and err.offline is true, so screens with
+// a saved copy can show it instead of an error.
 function networkError(networkErr) {
   const aborted = networkErr?.name === 'AbortError';
-  return Object.assign(
+  const err = Object.assign(
     new Error(aborted
       ? 'Request timed out - please try again.'
       : 'Could not reach Ivy. Check your connection and try again.'),
-    { status: 0, cause: networkErr?.message || 'network error' },
+    { status: 0, cause: networkErr?.message || 'network error', aborted },
   );
+  if (!aborted) {
+    noteNetworkFailure(err);
+    if (isOffline()) {
+      err.message = OFFLINE_MESSAGE;
+      err.offline = true;
+    }
+  }
+  return err;
 }
 
 // Turns a non-2xx Response into the Error api.* throws: the server's own
@@ -105,15 +119,19 @@ export async function httpError(res) {
 export async function apiFetch(method, path, body, opts = {}) {
   const headers = await buildHeaders(body, opts);
   try {
-    return await fetch(`${API_BASE}/api${path}`, {
+    const res = await fetch(`${API_BASE}/api${path}`, {
       method,
       headers,
       credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
       signal: opts.signal,
     });
+    noteNetworkSuccess();
+    return res;
   } catch (networkErr) {
-    throw networkError(networkErr);
+    const err = networkError(networkErr);
+    if (err.offline) noteOfflineRequest();
+    throw err;
   }
 }
 
@@ -142,6 +160,7 @@ async function req(method, path, body, opts = {}) {
     } finally {
       if (timer) clearTimeout(timer);
     }
+    noteNetworkSuccess();
 
     if (!res.ok) throw await httpError(res);
     if (res.status === 204) return null;
@@ -149,14 +168,19 @@ async function req(method, path, body, opts = {}) {
   };
 
   const canRetry = opts.retry !== false && (RETRY_METHODS.has(method) || opts.retry === true);
+  // Already offline before this request: fail fast, no 600ms retry, so a
+  // screen can show its saved copy instead of a spinner.
+  const wasOffline = isOffline() || (typeof navigator !== 'undefined' && navigator.onLine === false);
   try {
     return await doFetch();
   } catch (e) {
     const transient = e.status === 0 || (e.status >= 500 && e.status < 600);
-    if (canRetry && transient) {
+    if (canRetry && transient && !(wasOffline && e.status === 0)) {
       await new Promise((r) => setTimeout(r, 600));
-      return doFetch();
+      try { return await doFetch(); }
+      catch (e2) { if (e2.offline) noteOfflineRequest(); throw e2; }
     }
+    if (e.offline) noteOfflineRequest();
     throw e;
   }
 }
