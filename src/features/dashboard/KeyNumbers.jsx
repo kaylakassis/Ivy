@@ -68,7 +68,7 @@ export default function KeyNumbers({ k, currency, loading, businessType }) {
     // Only once a client has actually used a rebook link this month.
     businessType !== 'product' && Number(k?.rebookedViaLink) > 0 && {
       key: 'rl', label: 'Rebooked via link', value: String(k.rebookedViaLink),
-      sub: `${k.rebookedViaLink === 1 ? 'client booked' : 'clients booked'} again from a rebook link this month`,
+      sub: `${k.rebookedViaLink === 1 ? 'booking' : 'bookings'} made from a rebook link this month`,
       tone: 'up', to: '/calendar',
     },
   ].filter(Boolean);

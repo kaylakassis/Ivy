@@ -29,6 +29,7 @@ import { signSession } from '../api/_lib/auth.js';
 import {
   readAutomations, saveAutomation, templateProblems, renderTemplate, runClientAutomations, enabledWorkspaces,
   dueBirthdayClients, dueQuietClients, dueThisWeek, DEFAULT_TEMPLATES, QUIET_REPEAT_DAYS,
+  templateHtml, renderAutomationEmail,
 } from '../api/_lib/clientAutomations.js';
 import { quietClients, QUIET_DAYS } from '../api/_lib/accountability.js';
 import { executeIvyTool, ledgerEntry } from '../api/_lib/ivyTools.js';
@@ -149,6 +150,10 @@ async function main() {
   assert(/Only \{first_name\}, \{business\} and \{booking_link\}/.test(templateProblems('Hi {name}')), 'an unknown merge field is refused');
   assert(/Plain text only/.test(templateProblems('<b>Hi</b>')) && /under 600/.test(templateProblems('x'.repeat(601))) && templateProblems('   ') && templateProblems(DEFAULT_TEMPLATES.quiet) === null, 'HTML, length and empty are refused; the default passes');
   assert(renderTemplate('Hi {first_name}, {business} {booking_link}', { first_name: 'Bea', business: 'Glow', booking_link: 'https://x' }) === 'Hi Bea, Glow https://x', 'merge fields fill in');
+  const linkHtml = templateHtml('Book: {booking_link} <b>', { first_name: 'Bea', business: 'Glow', booking_link: 'https://www.joinivy.ai/book/glow?rebook=abc.def' });
+  assert(linkHtml.includes('href="https://www.joinivy.ai/book/glow?rebook=abc.def"') && linkHtml.includes('>www.joinivy.ai/book/glow</a>') && linkHtml.includes('&lt;b&gt;'), 'email: the link reads short, the href is the whole signed link, text is escaped');
+  const bdayMail = renderAutomationEmail({ kind: 'birthday', template: DEFAULT_TEMPLATES.birthday, vars: { first_name: 'Bea', business: 'Glow', booking_link: 'https://x.test/book/glow' } });
+  assert(bdayMail.subject === 'Happy birthday, Bea!' && !/Book a time/.test(bdayMail.html), 'birthday email: no booking button unless the message uses {booking_link}');
   const saved = await saveAutomation(A.workspaceId, 'birthday', { template: 'Happy birthday, {first_name}! From all of us at {business}.' });
   assert(saved.row.templateApprovedAt && saved.row.enabled === false, 'saving the template approves it (still off)');
   const on = await saveAutomation(A.workspaceId, 'birthday', { enabled: true });

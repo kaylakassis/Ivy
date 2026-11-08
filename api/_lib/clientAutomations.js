@@ -77,8 +77,11 @@ const firstNameOf = (s) => String(s || '').trim().split(/\s+/)[0] || 'there';
 export function templateHtml(template, vars) {
   const marker = '\u0000link\u0000';
   const text = renderTemplate(template, { ...vars, booking_link: vars.booking_link ? marker : '' });
+  // The link reads as the short booking-page address (the signed part
+  // would stretch the email); the href carries the whole link.
+  const shown = String(vars.booking_link || '').split('?')[0].replace(/^https?:\/\//, '');
   const safe = escapeHtml(text).split(marker).join(vars.booking_link
-    ? `<a href="${escapeHtml(vars.booking_link)}" style="color:#4E63C7;font-weight:600;">${escapeHtml(vars.booking_link)}</a>` : '');
+    ? `<a href="${escapeHtml(vars.booking_link)}" style="color:#4E63C7;font-weight:600;word-break:break-all;">${escapeHtml(shown)}</a>` : '');
   return `<p>${safe.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`;
 }
 

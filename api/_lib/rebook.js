@@ -158,7 +158,9 @@ export function candidateStarts({ windows, duration, step, preferredStart }) {
 
 // ── the suggestion ─────────────────────────────────────────────────────
 // → { serviceId, serviceName, date, weekday, weekdayName, startMin, endMin,
-//     weeks, usual, basis, slot: 'same'|'nearest'|'none' }
+//     weeks, usual, basis,
+//     slot: 'same' | 'nearest' (same day) | 'later_week' (same weekday, a
+//           later week) | 'other_day' (the next open day) | 'none' (the day alone) }
 // or null when the service is gone or not bookable.
 export async function computeRebookSuggestion({ workspaceId, clientId, serviceId, now = new Date() }) {
   const settings = await fetchCalendarSettings(workspaceId);
@@ -198,39 +200,62 @@ export async function computeRebookSuggestion({ workspaceId, clientId, serviceId
   const anchor = mine.rows[0] || anyMine.rows[0] || null;
   const anchorISO = anchor ? isoOf(anchor.date) : todayISO;
   const maxAdvanceDays = Math.max(0, Number(settings.max_advance_days ?? 0));
-  const date = suggestedDate({ anchorISO, weeks: cadence.weeks, todayISO, maxAdvanceDays });
+  const target = suggestedDate({ anchorISO, weeks: cadence.weeks, todayISO, maxAdvanceDays });
+  const horizonISO = maxAdvanceDays > 0 ? addDaysISO(todayISO, maxAdvanceDays) : addDaysISO(todayISO, 365);
 
-  // Time: the same slot when free, else the nearest free one that day.
+  // Time: the same slot when free, else the nearest free one that day. When
+  // the day has nothing free (fully booked, or the business no longer opens
+  // on that weekday), the same weekday in the next weeks, then the next
+  // open day after the target. Capped so a fully booked calendar stays cheap.
   const duration = Number(svc.duration_minutes) || 60;
-  const weekday = weekdayOf(date);
-  const windows = effectiveWindows(settings.availability, svc.availability || null, weekday);
   const step = Math.max(5, settings.slot_fit_service ? duration : (Number(settings.slot_minutes) || 30));
   const minNoticeMs = Math.max(0, Number(settings.min_notice_hours ?? 24)) * 3600 * 1000;
   const preferred = anchor && mine.rows[0] ? Number(anchor.start_min) : null;
-  const fits = (start) => windows.some((w) => start >= w.start && start + duration <= w.end);
-  const free = async (start) => {
-    if (slotEpochMs(date, start, tz) < now.getTime() + minNoticeMs) return false;
+  let checks = 0;
+  const MAX_CHECKS = 60;
+  const free = async (dateISO, start) => {
+    checks++;
+    if (slotEpochMs(dateISO, start, tz) < now.getTime() + minNoticeMs) return false;
     return !(await hasConflict({
-      workspaceId, dateISO: date, start, end: start + duration, serviceId,
+      workspaceId, dateISO, start, end: start + duration, serviceId,
       capacity: Math.max(1, Number(svc.capacity) || 1),
       travelBufferMin: Number(svc.travel_buffer_minutes || 0), bufferMin: Number(settings.buffer_minutes || 0),
     }));
   };
+  const firstFree = async (dateISO, perDay) => {
+    const windows = effectiveWindows(settings.availability, svc.availability || null, weekdayOf(dateISO));
+    const fits = (start) => windows.some((w) => start >= w.start && start + duration <= w.end);
+    if (preferred != null && fits(preferred) && await free(dateISO, preferred)) return { start: preferred, same: true };
+    const candidates = candidateStarts({ windows, duration, step, preferredStart: preferred })
+      .filter((x) => x !== preferred).slice(0, perDay);
+    for (const c of candidates) {
+      if (checks >= MAX_CHECKS) return null;
+      if (await free(dateISO, c)) return { start: c, same: false };
+    }
+    return null;
+  };
+  const days = [target, addDaysISO(target, 7), addDaysISO(target, 14), addDaysISO(target, 21)];
+  for (let i = 1; i <= 13; i++) if (i % 7) days.push(addDaysISO(target, i));
+  let date = target;
   let startMin = null;
   let slot = 'none';
-  if (preferred != null && fits(preferred) && await free(preferred)) {
-    startMin = preferred; slot = 'same';
-  } else {
-    const candidates = candidateStarts({ windows, duration, step, preferredStart: preferred }).slice(0, 30);
-    for (const s of candidates) {
-      if (await free(s)) { startMin = s; slot = 'nearest'; break; }
+  for (const [i, d] of days.entries()) {
+    if (d > horizonISO || checks >= MAX_CHECKS) continue;
+    const hit = await firstFree(d, i === 0 ? 30 : 12);
+    if (hit) {
+      date = d; startMin = hit.start;
+      slot = hit.same && d === target ? 'same' : (d === target ? 'nearest' : (weekdayOf(d) === weekdayOf(target) ? 'later_week' : 'other_day'));
+      break;
     }
   }
+  const weekday = weekdayOf(date);
   return {
     serviceId: svc.id, serviceName: svc.name,
     date, weekday, weekdayName: DAY_NAMES[weekday],
     startMin, endMin: startMin == null ? null : startMin + duration,
     weeks: cadence.weeks, usual: cadence.usual, basis: cadence.basis, slot,
+    // The client's usual weekday (their last visit's), for the "Your usual" line.
+    usualWeekdayName: DAY_NAMES[weekdayOf(target)],
   };
 }
 
@@ -273,12 +298,12 @@ export function fmtMin(m) {
   const n = Number(m);
   if (!Number.isFinite(n)) return '';
   const h = Math.floor(n / 60), mm = n % 60;
-  return `${h % 12 === 0 ? 12 : h % 12}:${String(mm).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(mm).padStart(2, '0')} ${h >= 12 ? 'pm' : 'am'}`;
 }
 // "Your usual: every 3 weeks on Fridays" - only from the client's own history.
 export function usualLine(sug) {
   if (!sug?.usual) return null;
-  return `Your usual: every ${sug.weeks === 1 ? 'week' : `${sug.weeks} weeks`} on ${sug.weekdayName}s`;
+  return `Your usual: every ${sug.weeks === 1 ? 'week' : `${sug.weeks} weeks`} on ${sug.usualWeekdayName || sug.weekdayName}s`;
 }
 
 function escapeHtml(s) {

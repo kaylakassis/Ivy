@@ -248,7 +248,7 @@ function render(template) {
     case 'rebook_link':
       return renderRebookEmail({
         firstName: 'Casey', businessName: R.SAMPLE_BRANDING.businessName, serviceName: '60-min consultation',
-        usual: 'Your usual: every 3 weeks on Tuesdays', when: 'Tuesday, July 29 at 10:00 AM',
+        usual: 'Your usual: every 3 weeks on Tuesdays', when: 'Tuesday, July 29 at 10:00 am',
         url: `${appUrl()}/book/market-theory?rebook=PREVIEW_TOKEN_xxxxxxxx`, branding: R.SAMPLE_BRANDING,
       });
     case 'automation_birthday':

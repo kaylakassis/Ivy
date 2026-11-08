@@ -55,6 +55,8 @@ globalThis.fetch = async (url, init = {}) => {
   }
   return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
 };
+// Only the rebook emails (a booking made earlier sends its confirmation in the background).
+const rebookMails = () => emails.filter((m) => /^Ready for your next/.test(m.subject || ''));
 const mailsTo = (addr) => emails.filter((m) => JSON.stringify(m.to || '').toLowerCase().includes(addr.toLowerCase()));
 
 const mkRes = () => ({
@@ -150,8 +152,21 @@ async function main() {
   await sql`DELETE FROM calendar_blocks WHERE id = ${blk.rows[0].id}`;
   const dayBlk = await sql`INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label) VALUES (${A.workspaceId}, ${sug.date}, 0, 1440, 'x') RETURNING id`;
   const sug3 = await computeRebookSuggestion({ workspaceId: A.workspaceId, clientId: maya, serviceId: A.svc });
-  assert(sug3.date === sug.date && sug3.slot === 'none' && sug3.startMin === null, 'whole day taken → the day alone, no time');
+  assert(sug3.date === addDaysISO(sug.date, 7) && sug3.slot === 'later_week' && sug3.startMin === 600 && sug3.weekdayName === 'Friday', `whole day taken → the same weekday a week later, same time (${sug3.date})`);
+  assert(usualLine(sug3) === 'Your usual: every 3 weeks on Fridays', '...and the usual line is unchanged');
+  // Only the suggested day inside the booking horizon, and it is full → the day alone, no time.
+  const horizonDays = Math.round((Date.parse(sug.date) - Date.parse(todayISO)) / 86400000);
+  await sql`UPDATE calendar_settings SET max_advance_days = ${horizonDays} WHERE workspace_id = ${A.workspaceId}`;
+  const sug4 = await computeRebookSuggestion({ workspaceId: A.workspaceId, clientId: maya, serviceId: A.svc });
+  assert(sug4.date === sug.date && sug4.slot === 'none' && sug4.startMin === null, 'nothing free inside the booking horizon → the day alone, no time');
+  // A business closed on Fridays now → the next open day after the target, never a closed day.
+  await sql`UPDATE calendar_settings SET max_advance_days = 180 WHERE workspace_id = ${A.workspaceId}`;
   await sql`DELETE FROM calendar_blocks WHERE id = ${dayBlk.rows[0].id}`;
+  const noFri = JSON.parse(FULL_WEEK); noFri['5'] = [];
+  await sql.query('UPDATE calendar_settings SET availability = $2::jsonb WHERE workspace_id = $1', [A.workspaceId, JSON.stringify(noFri)]);
+  const sug5 = await computeRebookSuggestion({ workspaceId: A.workspaceId, clientId: maya, serviceId: A.svc });
+  assert(sug5.date === addDaysISO(sug.date, 1) && sug5.slot === 'other_day' && sug5.startMin === 600 && sug5.weekdayName === 'Saturday', `closed on Fridays → Saturday after, same time (${sug5.date} ${sug5.slot})`);
+  await sql.query('UPDATE calendar_settings SET availability = $2::jsonb WHERE workspace_id = $1', [A.workspaceId, FULL_WEEK]);
   // One visit → the service's typical gap from other clients (2 weeks); never "usual".
   const sam = await mkClient(A, 'Sam One', `rebook-sam-${S}@example.com`);
   const zoe = await mkClient(A, 'Zoe Regular', `rebook-zoe-${S}@example.com`);
@@ -185,8 +200,10 @@ async function main() {
   assert((await run(publicRebook, req({ query: { token: old, slug: A.slug } }))).statusCode === 404, 'an expired token is a 404');
   assert((await run(publicRebook, req({ query: { token: 'forged.forged', slug: A.slug } }))).statusCode === 404, 'a forged token is a 404');
   const fullDay = await sql`INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label) VALUES (${A.workspaceId}, ${sug.date}, 0, 1440, 'x') RETURNING id`;
+  await sql`UPDATE calendar_settings SET max_advance_days = ${Math.round((Date.parse(sug.date) - Date.parse(todayISO)) / 86400000)} WHERE workspace_id = ${A.workspaceId}`;
   const noTime = await run(publicRebook, req({ query: { token, slug: A.slug } }));
-  assert(noTime.statusCode === 200 && noTime.body.rebook.startMin === null && /^We opened Friday, .+ for you\. Choose a time that suits you\.$/.test(noTime.body.rebook.pickedLine), `no free time that day: the page opens the day and says so (${noTime.body.rebook.pickedLine})`);
+  assert(noTime.statusCode === 200 && noTime.body.rebook.startMin === null && /^We opened Friday, .+ for you\. Choose a time that suits you\.$/.test(noTime.body.rebook.pickedLine), `no free time: the page opens the day and says so (${noTime.body.rebook.pickedLine})`);
+  await sql`UPDATE calendar_settings SET max_advance_days = 180 WHERE workspace_id = ${A.workspaceId}`;
   await sql`DELETE FROM calendar_blocks WHERE id = ${fullDay.rows[0].id}`;
 
   // ── [3] opt-outs and consent ──────────────────────────────────────────
@@ -271,14 +288,14 @@ async function main() {
   const n0 = (await one(sql`SELECT COUNT(*)::int AS n FROM ivy_pending_actions WHERE workspace_id = ${A.workspaceId}`)).n;
   const held = await executeIvyTool('send_rebook_link', { client_id: maya }, A.ctx);
   assert(held.needs_confirmation === true && /Maya Rivera a link to book Haircut again/.test(held.summary) && /their usual: every 3 weeks on Fridays/.test(held.summary), `held with a card: ${held.summary}`);
-  assert(emails.length === 0 && (await one(sql`SELECT COUNT(*)::int AS n FROM ivy_pending_actions WHERE workspace_id = ${A.workspaceId}`)).n === n0 + 1, 'nothing sent before approval');
+  assert(rebookMails().length === 0 && (await one(sql`SELECT COUNT(*)::int AS n FROM ivy_pending_actions WHERE workspace_id = ${A.workspaceId}`)).n === n0 + 1, 'nothing sent before approval');
   assert(ledgerEntry('send_rebook_link', { client_id: maya }, held)?.status === 'waiting', 'ledger: waiting');
   const row = await one(sql`SELECT id, session_id, tool, args, summary FROM ivy_pending_actions WHERE id = ${held.pending_id}`);
   const done = await executePendingAction({ row, workspaceId: A.workspaceId, userId: A.userId });
-  assert(done.claimed && !done.result.error && done.result.emailed && mailsTo(`rebook-maya-${S}@example.com`).length === 1, 'approved: the email went out once');
+  assert(done.claimed && !done.result.error && done.result.emailed && rebookMails().length === 1, 'approved: the email went out once');
   assert(/^Done\. Emailed and texted Maya Rivera a rebook link for Haircut, opening on Friday/.test(done.text), `done line: ${done.text}`);
   const again = await executePendingAction({ row, workspaceId: A.workspaceId, userId: A.userId });
-  assert(again.claimed === false && mailsTo(`rebook-maya-${S}@example.com`).length === 1, 'a second tap on the same card sends nothing more');
+  assert(again.claimed === false && rebookMails().length === 1, 'a second tap on the same card sends nothing more');
   const refused = await executeIvyTool('send_rebook_link', { client_id: maya }, B.ctx);
   assert(/Client not found/.test(refused.error || ''), "another business's Ivy is refused before any card");
   const noHist = await executeIvyTool('send_rebook_link', { client_id: newbie }, B.ctx);
