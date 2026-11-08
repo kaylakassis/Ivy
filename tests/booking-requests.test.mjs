@@ -42,7 +42,7 @@ import meBookingHandler from '../api/me/bookings/[id].js';
 import { fetchDueBookings } from '../api/cron/booking-reminders.js';
 import { runBookingRequestSweep } from '../api/cron/booking-requests.js';
 import { hasConflict } from '../api/_lib/calendar.js';
-import { approveBookingRequest, isPendingRequest, listOpenRequests } from '../api/_lib/bookingRequests.js';
+import { approveBookingRequest, isPendingRequest, listOpenRequests, notifyClientOfRequestImpl } from '../api/_lib/bookingRequests.js';
 import { executeIvyTool, runApprovedTool, SENSITIVE_TOOLS, ledgerEntry } from '../api/_lib/ivyTools.js';
 import { computeSignals, publicItem } from '../api/_lib/accountability.js';
 import { keyNumbers } from '../api/_lib/dashboardNumbers.js';
@@ -179,7 +179,48 @@ async function run() {
   assert(!!ownerMail && /Approve or decline/.test(ownerMail.html) && noDash(ownerMail.subject), `owner emailed "Booking request: {first}, {service}, {day} at {time}" (${ownerMail?.subject})`);
   const ownerPush = await sql`SELECT title, url FROM notifications WHERE user_id = ${A.userId} AND tag = ${`request-${reqId}`}`;
   assert(ownerPush.rows.length === 1 && /^Booking request: Casey, Consult/.test(ownerPush.rows[0].title) && ownerPush.rows[0].url === `/calendar?request=${reqId}`, 'owner push with deep link');
-  assert(mailsTo(casey.email).length === 0, 'client gets no confirmation yet');
+  const caseyMails = mailsTo(casey.email);
+  assert(!caseyMails.some((m) => /Booking confirmed/.test(m.subject)), 'client gets no confirmation yet');
+  // "We got your request" (1.0.6): once, with the day, time and hold.
+  const ack = caseyMails.filter((m) => m.subject === 'We got your request');
+  const reqRow = await bk(reqId);
+  const holdTxt = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(reqRow.request_expires_at));
+  const d1Label = new Date(`${d1}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+  assert(caseyMails.length === 1 && ack.length === 1, `client gets exactly one email now: "We got your request" (${caseyMails.map((m) => m.subject).join(' | ')})`);
+  const ackText = String(ack[0]?.html || '').replace(/\s+/g, ' ');
+  assert(ackText.includes(`Hi Casey,`) && ackText.includes(`<strong>a Studio</strong> has your request for <strong>Consult</strong> on <strong>${d1Label}</strong> at <strong>10:00 am</strong>. They'll confirm shortly, and we'll email you as soon as they answer. Nothing has been charged.`), 'the words: business, service, day, time; they will confirm; nothing charged');
+  assert(ackText.includes(`Your time is held until ${holdTxt}.`) && /View your request/.test(ackText) && ackText.includes('/me/bookings'), `held until the hold time; "View your request" opens their bookings (portal client) (${holdTxt})`);
+  assert(noDash(ackText) && noDash(ack[0]?.subject), 'no long dashes');
+  assert(/List-Unsubscribe/.test(JSON.stringify(ack[0]?.headers || {})) && !!reqRow.request_ack_sent_at, 'sent as a booking email (preferences apply) and recorded');
+  const ackAgain = await notifyClientOfRequestImpl({ workspaceId: A.wid, bookingId: reqId });
+  await settle(100);
+  assert(ackAgain.sent === false && ackAgain.reason === 'already sent' && mailsTo(casey.email).filter((m) => m.subject === 'We got your request').length === 1, 'never twice for one request');
+  const crossBiz = await notifyClientOfRequestImpl({ workspaceId: B.wid, bookingId: reqId });
+  assert(crossBiz.sent === false && crossBiz.reason === 'not a pending request', 'another business cannot trigger it for this request');
+  // A first-time booker (no portal account): the button is the sign-up link
+  // the booking confirmation uses, with their email filled in.
+  const newbie = { name: 'Nell Newbie', email: `bq-newbie-${STAMP}@example.com` };
+  r = await request(A, newbie, { date: day(20) });
+  assert(r.statusCode === 201 && r.body.booking.isRequest, 'a new booker makes a request');
+  const extraReqs = [r.body.booking.id];
+  await settle(400);
+  const nAck = mailsTo(newbie.email).filter((m) => m.subject === 'We got your request');
+  assert(nAck.length === 1 && /\/signup\?mode=client&(amp;)?email=/.test(nAck[0].html) && nAck[0].html.includes(encodeURIComponent(newbie.email)), 'signed-out: "View your request" goes to sign-up with their email (like the confirmation)');
+  assert(/Hi Nell,/.test(nAck[0]?.html || ''), '...greeted by first name');
+  // A client who turned off booking emails gets none (and is not retried).
+  const quiet = await mkClient('quiet', A);
+  await sql`UPDATE clients SET notification_prefs = '{"bookings": false}'::jsonb WHERE id = ${quiet.clientId}`;
+  r = await request(A, quiet, { date: day(21) });
+  extraReqs.push(r.body.booking?.id);
+  await settle(400);
+  assert(r.statusCode === 201 && mailsTo(quiet.email).filter((m) => m.subject === 'We got your request').length === 0, 'a client who turned off booking emails does not get it');
+  // A plain (no approval) booking never gets it.
+  r = await request(A, newbie, { date: day(22), serviceId: A.svcPlain });
+  await settle(400);
+  assert(r.statusCode === 201 && !r.body.booking.isRequest && mailsTo(newbie.email).filter((m) => m.subject === 'We got your request').length === 1, 'a straight booking gets its confirmation, not this');
+  // Withdraw the extra requests so the counts below stay as they were.
+  await sql`UPDATE bookings SET cancelled_at = NOW(), request_decided_at = NOW(), request_decision = 'cancelled' WHERE id = ANY(${extraReqs}::uuid[])`;
+  await sql`UPDATE bookings SET cancelled_at = NOW() WHERE id = ${r.body.booking.id}`;
   r = await call(meBookingsHandler, req({ cookie: casey.cookie }));
   assert(r.statusCode === 200 && r.body.requested?.some((b) => b.id === reqId && b.status === 'requested' && b.isRequest) && !r.body.upcoming.some((b) => b.id === reqId), 'portal lists it under requested, not upcoming');
 
@@ -313,6 +354,7 @@ async function run() {
   const req5 = r.body.booking.id;
   r = await call(meBookingHandler, req({ method: 'PATCH', cookie: casey.cookie, query: { id: req5 }, body: { rescheduleTo: { date: d5, startMin: 720 } } }));
   assert(r.statusCode === 400 && /Cancel the request/.test(r.body.error), 'reschedule of a pending request is refused with a plain reason');
+  await settle(300); // the "We got your request" email from making it
   const emailsBefore = emails.length;
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: casey.cookie, query: { id: req5 } }));
   assert(r.statusCode === 200 && r.body.cancelled === true && r.body.request === true, 'client cancels the request');

@@ -47,7 +47,7 @@ import {
 import { cardOnFileCheckout } from '../../_lib/bookingFees.js';
 import { shopsForBookingPage, resolveShopReferral } from '../../_lib/shops.js';
 import {
-  requestFieldsFor, depositCardSetupForRequest, notifyOwnerOfRequest,
+  requestFieldsFor, depositCardSetupForRequest, notifyOwnerOfRequest, notifyClientOfRequest,
 } from '../../_lib/bookingRequests.js';
 import {
   joinWaitlist, waitlistSettings, loadOfferByToken, claimOffer, releaseOffer, completeOffer, offerSlotGone,
@@ -942,6 +942,8 @@ async function createBooking(req, res) {
       // Not a booking yet: the owner is asked; confirmation, Google sync and
       // intake forms run when they approve.
       notifyOwnerOfRequest({ workspaceId, bookingId: b.id });
+      // ...and the client hears "We got your request" (1.0.6).
+      notifyClientOfRequest({ workspaceId, bookingId: b.id });
     } else {
       notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' })
         .catch((e) => console.error('[booking] notifyNewBooking failed:', e?.message));

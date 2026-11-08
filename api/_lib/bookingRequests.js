@@ -56,7 +56,7 @@ import { fetchFinanceSettings } from './finance.js';
 import { getProvider } from './payments/index.js';
 import { restoreCredit } from './packages.js';
 import { restoreGiftCardCreditForBooking } from './giftCards.js';
-import { notifyNewBooking } from './bookingNotify.js';
+import { notifyNewBooking, clientPortalLink } from './bookingNotify.js';
 import { syncOnBookingCreated } from './googleSync.js';
 import { attachIntakeForms } from './intake.js';
 
@@ -241,6 +241,74 @@ async function notifyOwnerOfRequestImpl({ workspaceId, bookingId }) {
       userId: ctx.owner_id, type: 'bookings', to: ctx.owner_email,
       subject: `Booking request: ${who}, ${service}, ${day} at ${time}`, html,
     });
+  }
+}
+
+// "We got your request" to the client (1.0.6), once per request. Booking
+// emails like the confirmation (type 'bookings' through sendEmailToClient,
+// so the client's preferences and unsubscribes behave the same). Also for a
+// waitlist claim that became a request: same situation for the client.
+// The button goes where the confirmation's does (clientPortalLink): their
+// bookings for a portal client, else sign-up with their email filled in.
+export function renderRequestReceivedEmail({ firstName, businessName, serviceName, day, time, holdUntil, ctaUrl, branding }) {
+  const subject = 'We got your request';
+  return {
+    subject,
+    html: emailShell({
+      heading: subject,
+      branding,
+      body: `<p>Hi ${escapeHtml(firstName || 'there')},</p>
+        <p><strong>${escapeHtml(businessName)}</strong> has your request for <strong>${escapeHtml(serviceName)}</strong>
+        on <strong>${escapeHtml(day)}</strong> at <strong>${escapeHtml(time)}</strong>. They'll confirm shortly, and we'll email you as soon as they answer. Nothing has been charged.</p>
+        ${holdUntil ? `<p>Your time is held until ${escapeHtml(holdUntil)}.</p>` : ''}`,
+      ctaText: 'View your request',
+      ctaUrl,
+      footer: `If you didn't make this request, please reach out to ${escapeHtml(businessName)} directly.`,
+    }),
+  };
+}
+
+export function notifyClientOfRequest(args) {
+  return keepAlive(notifyClientOfRequestImpl(args).catch((e) => console.error('[booking request] client notify failed:', e?.message)));
+}
+// Exported for tests (awaitable). Returns { sent, reason? }.
+export async function notifyClientOfRequestImpl({ workspaceId, bookingId }) {
+  const ctx = await loadRequestContext({ workspaceId, bookingId });
+  if (!ctx || !isPendingRequest(ctx)) return { sent: false, reason: 'not a pending request' };
+  const to = ctx.client_email || ctx.c_email;
+  if (!to) return { sent: false, reason: 'no email' };
+  // The claim: at most one per request, even if this runs twice.
+  const claim = await sql`
+    UPDATE bookings SET request_ack_sent_at = NOW()
+     WHERE id = ${ctx.id} AND workspace_id = ${workspaceId} AND request_ack_sent_at IS NULL
+    RETURNING id`;
+  if (!claim.rows.length) return { sent: false, reason: 'already sent' };
+  try {
+    const branding = await fetchBranding(workspaceId).catch(() => null);
+    const businessName = branding?.businessName || ctx.biz_name || 'The business';
+    const link = await clientPortalLink({ clientId: ctx.client_id, to, path: '/me/bookings' });
+    const mail = renderRequestReceivedEmail({
+      firstName: first(ctx.client_name || ctx.c_name),
+      businessName,
+      serviceName: ctx.service_name || 'your appointment',
+      day: fmtDay(ctx.date),
+      time: fmtTime(ctx.start_min),
+      holdUntil: ctx.request_expires_at ? fmtStamp(ctx.request_expires_at, ctx.timezone) : null,
+      ctaUrl: link.url,
+      branding,
+    });
+    const r = await sendEmailToClient({
+      clientId: ctx.client_id, workspaceId, type: 'bookings',
+      to, subject: mail.subject, html: mail.html, replyTo: branding?.replyTo,
+    });
+    if (!r?.sent && !(r?.ok && r?.reason === 'muted')) {
+      // Not accepted by the provider: hand the claim back.
+      await sql`UPDATE bookings SET request_ack_sent_at = NULL WHERE id = ${ctx.id} AND workspace_id = ${workspaceId}`.catch(() => {});
+    }
+    return { sent: !!r?.sent, reason: r?.reason || null };
+  } catch (err) {
+    await sql`UPDATE bookings SET request_ack_sent_at = NULL WHERE id = ${ctx.id} AND workspace_id = ${workspaceId}`.catch(() => {});
+    throw err;
   }
 }
 

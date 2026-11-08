@@ -359,6 +359,8 @@ async function run() {
   const filled = await sql`SELECT 1 FROM notifications WHERE user_id = ${W.userId} AND tag = ${`waitlist-claimed-${bk13.id}`}`;
   const asked = await sql`SELECT 1 FROM notifications WHERE user_id = ${W.userId} AND tag = ${`request-${bk13.id}`}`;
   assert(filled.rows.length === 0 && asked.rows.length === 1, 'one owner push: the request, not a "filled" push');
+  const ack13 = mailsTo(eve.email).filter((m) => m.subject === 'We got your request');
+  assert(ack13.length === 1 && /has your request for <strong>Color consult<\/strong>/.test(ack13[0].html) && /Nothing has been charged\./.test(ack13[0].html), 'Eve hears "We got your request", once, like any request');
 }
 
 run()

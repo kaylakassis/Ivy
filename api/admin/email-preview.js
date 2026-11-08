@@ -28,6 +28,7 @@ import { renderSignupReminder } from '../_lib/signupReminders.js';
 import { renderPartnerEmail, SAMPLE_PARTNER_ITEMS } from '../_lib/accountability.js';
 import { renderRebookEmail } from '../_lib/rebook.js';
 import { renderAutomationEmail, DEFAULT_TEMPLATES } from '../_lib/clientAutomations.js';
+import { renderRequestReceivedEmail } from '../_lib/bookingRequests.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const SAMPLE = {
@@ -53,8 +54,8 @@ export const PREVIEW_CATALOGUE = [
   { id: 'data_export_too_big',       group: 'Account',     label: 'Data export ready (too big, link)' },
 
   // Welcome
-  { id: 'welcome_owner',             group: 'Welcome',     label: 'Welcome — business owner' },
-  { id: 'welcome_client',            group: 'Welcome',     label: 'Welcome — client' },
+  { id: 'welcome_owner',             group: 'Welcome',     label: 'Welcome: business owner' },
+  { id: 'welcome_client',            group: 'Welcome',     label: 'Welcome: client' },
 
   // "Finish signing up" reminders (api/cron/signup-reminders.js)
   { id: 'signup_reminder_1',         group: 'Finish sign-up', label: 'Finish sign-up 1 of 3 (about 3 hours)' },
@@ -70,35 +71,36 @@ export const PREVIEW_CATALOGUE = [
   { id: 'partner_away_7d',           group: 'Accountability partner', label: 'Away 7 days check-in (last one)' },
 
   // Admin invites
-  { id: 'admin_invite_sponsored',       group: 'Admin invites', label: 'Admin invite — Sponsored' },
-  { id: 'admin_invite_beta',            group: 'Admin invites', label: 'Admin invite — Beta' },
-  { id: 'admin_invite_business_trial',  group: 'Admin invites', label: 'Admin invite — Business Trial' },
-  { id: 'admin_invite_business_active', group: 'Admin invites', label: 'Admin invite — Business Active' },
-  { id: 'admin_invite_affiliate',       group: 'Admin invites', label: 'Admin invite — Affiliate' },
+  { id: 'admin_invite_sponsored',       group: 'Admin invites', label: 'Admin invite: Sponsored' },
+  { id: 'admin_invite_beta',            group: 'Admin invites', label: 'Admin invite: Beta' },
+  { id: 'admin_invite_business_trial',  group: 'Admin invites', label: 'Admin invite: Business Trial' },
+  { id: 'admin_invite_business_active', group: 'Admin invites', label: 'Admin invite: Business Active' },
+  { id: 'admin_invite_affiliate',       group: 'Admin invites', label: 'Admin invite: Affiliate' },
   { id: 'admin_deliverability_test',    group: 'Admin invites', label: 'Deliverability test (DKIM/SPF/DMARC)' },
 
   // Platform funnel (already extracted)
-  { id: 'trial_reminder_7d',       group: 'Trial',        label: 'Trial reminder — 7 days left' },
-  { id: 'trial_reminder_1d',       group: 'Trial',        label: 'Trial reminder — 1 day left' },
+  { id: 'trial_reminder_7d',       group: 'Trial',        label: 'Trial reminder: 7 days left' },
+  { id: 'trial_reminder_1d',       group: 'Trial',        label: 'Trial reminder: 1 day left' },
   { id: 'trial_reminder_expired',  group: 'Trial',        label: 'Trial expired (auto-downgrade)' },
   { id: 'subscription_started',    group: 'Billing',      label: 'Subscription confirmed (first paid)' },
   { id: 'subscription_renewal',    group: 'Billing',      label: 'Upcoming renewal' },
   { id: 'subscription_cancelled',  group: 'Billing',      label: 'Subscription cancelled' },
   { id: 'payment_failed',          group: 'Billing',      label: 'Payment failed / dunning' },
-  { id: 'winback_offer',           group: 'Win-back',     label: 'Win-back — 30% off offer' },
+  { id: 'winback_offer',           group: 'Win-back',     label: 'Win-back: 30% off offer' },
 
   // Security
-  { id: 'security_new_signin',     group: 'Security',     label: 'Security alert — new sign-in' },
-  { id: 'security_password_changed', group: 'Security',   label: 'Security alert — password changed' },
-  { id: 'security_two_factor_on',  group: 'Security',     label: 'Security alert — 2FA turned on' },
-  { id: 'security_two_factor_off', group: 'Security',     label: 'Security alert — 2FA turned off' },
+  { id: 'security_new_signin',     group: 'Security',     label: 'Security alert: new sign-in' },
+  { id: 'security_password_changed', group: 'Security',   label: 'Security alert: password changed' },
+  { id: 'security_two_factor_on',  group: 'Security',     label: 'Security alert: 2FA turned on' },
+  { id: 'security_two_factor_off', group: 'Security',     label: 'Security alert: 2FA turned off' },
 
   // End-customer (white-labeled with workspace branding)
   { id: 'booking_confirmation_client', group: 'End-customer', label: 'Booking confirmation (to client)' },
+  { id: 'booking_request_received',    group: 'End-customer', label: 'We got your request (booking request, to client)' },
   { id: 'booking_reminder',            group: 'End-customer', label: 'Booking reminder (to client)' },
   { id: 'booking_cancellation_client', group: 'End-customer', label: 'Booking cancelled (to client)' },
   { id: 'invoice_sent',                group: 'End-customer', label: 'Invoice sent' },
-  { id: 'invoice_paid_receipt',        group: 'End-customer', label: 'Invoice paid — receipt' },
+  { id: 'invoice_paid_receipt',        group: 'End-customer', label: 'Invoice paid: receipt' },
   { id: 'invoice_due_soon',            group: 'End-customer', label: 'Invoice due soon (3-day heads-up)' },
   { id: 'invoice_overdue',             group: 'End-customer', label: 'Invoice overdue reminder' },
   { id: 'lead_instant_reply',          group: 'End-customer', label: 'Lead instant auto-reply' },
@@ -108,6 +110,9 @@ export const PREVIEW_CATALOGUE = [
   { id: 'automation_birthday',         group: 'End-customer', label: 'Birthday message (default words)' },
   { id: 'automation_quiet',            group: 'End-customer', label: "We'd love to see you again (default words)" },
 ];
+
+// Exported for tests (tests/email-no-dashes.test.mjs renders every entry).
+export function renderPreview(template) { return render(template); }
 
 function render(template) {
   switch (template) {
@@ -195,15 +200,21 @@ function render(template) {
       return R.renderBookingConfirmationClient({
         clientName: 'Casey Roberts', businessName: R.SAMPLE_BRANDING.businessName,
         serviceName: '60-min consultation',
-        dateLabel: 'Tuesday, July 8, 2026', timeLabel: '10:00 AM – 11:00 AM',
+        dateLabel: 'Tuesday, July 8, 2026', timeLabel: '10:00 AM to 11:00 AM',
         locationAddress: '25389 Madison Ave, Suite C-101, Murrieta CA 92562',
         notes: 'Please bring intake form.',
+      });
+    case 'booking_request_received':
+      return renderRequestReceivedEmail({
+        firstName: 'Casey', businessName: R.SAMPLE_BRANDING.businessName, serviceName: '60-min consultation',
+        day: 'Tuesday, July 8', time: '10:00 am', holdUntil: 'Mon, Jul 7, 3:00 PM',
+        ctaUrl: `${appUrl()}/me/bookings`, branding: R.SAMPLE_BRANDING,
       });
     case 'booking_reminder':
       return R.renderBookingReminder({
         clientName: 'Casey Roberts', businessName: R.SAMPLE_BRANDING.businessName,
         serviceName: '60-min consultation',
-        dateLabel: 'Tomorrow, July 8', timeLabel: '10:00 AM – 11:00 AM',
+        dateLabel: 'Tomorrow, July 8', timeLabel: '10:00 AM to 11:00 AM',
         locationAddress: '25389 Madison Ave, Suite C-101, Murrieta CA 92562',
         when: 'tomorrow',
       });
@@ -284,7 +295,7 @@ export default async function handler(req, res) {
     if (!rendered) return badRequest(res, `Unknown template '${template}'. Use GET /api/admin/email-preview for the list.`);
 
     const to = (typeof body?.to === 'string' && body.to.includes('@')) ? body.to.trim() : user.email;
-    if (!to) return badRequest(res, 'No recipient — set `to` or sign in with an account that has an email.');
+    if (!to) return badRequest(res, 'No recipient. Set `to` or sign in with an account that has an email.');
 
     await sendEmail({
       to,

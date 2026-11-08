@@ -322,11 +322,14 @@ function renderPackageNote(note) {
   return `<p style="margin:14px 0;">Paid with your <strong>${escapeHtml(note.name)}</strong> package. ${note.left} session${note.left === 1 ? '' : 's'} left.</p>`;
 }
 
-async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions, packageNote = null, extraNote = null, depositPayUrl = null }) {
-  // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
-  // straight at /me. Unclaimed walk-ins or never-signed-up public
-  // bookers go to /signup with the email pre-filled - hitting /me
-  // logged-out bounces to /signin with confusing "no account" friction.
+// Where a client email's button should go. Claimed clients
+// (clients.user_id IS NOT NULL) land straight in their portal; unclaimed
+// walk-ins or never-signed-up public bookers go to /signup with the email
+// pre-filled (hitting /me logged-out bounces to /signin with confusing
+// "no account" friction). Shared by the booking confirmation and the
+// "We got your request" email (api/_lib/bookingRequests.js).
+// → { hasPortal, url }
+export async function clientPortalLink({ clientId, to, path = '/me' }) {
   let hasPortal = false;
   if (clientId) {
     try {
@@ -334,9 +337,15 @@ async function sendClientConfirm({ clientId, workspaceId, to, clientName, busine
       hasPortal = !!r.rows[0]?.user_id;
     } catch { /* default to signup path */ }
   }
-  const portalUrl = hasPortal
-    ? `${appUrl()}/me`
-    : `${appUrl()}/signup?mode=client&email=${encodeURIComponent(to)}`;
+  return {
+    hasPortal,
+    url: hasPortal ? `${appUrl()}${path}` : `${appUrl()}/signup?mode=client&email=${encodeURIComponent(to || '')}`,
+  };
+}
+
+async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions, packageNote = null, extraNote = null, depositPayUrl = null }) {
+  // Portal CTA (clientPortalLink): /me for claimed clients, else sign-up.
+  const { hasPortal, url: portalUrl } = await clientPortalLink({ clientId, to });
   const portalCtaText = hasPortal ? 'Open my portal' : 'Claim your portal account';
 
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
@@ -675,7 +684,7 @@ async function notifyBookingRescheduledImpl({ workspaceId, bookingId, oldDateISO
     const newDate      = fmtDate(newDateISO);
     const newTime      = `${fmtTime(ctx.start_min)} to ${fmtTime(ctx.end_min)}`;
     const oldDate      = oldDateISO ? fmtDate(oldDateISO) : null;
-    const oldTime      = (oldStartMin != null && oldEndMin != null) ? `${fmtTime(oldStartMin)} – ${fmtTime(oldEndMin)}` : null;
+    const oldTime      = (oldStartMin != null && oldEndMin != null) ? `${fmtTime(oldStartMin)} to ${fmtTime(oldEndMin)}` : null;
     const branding = await fetchBranding(workspaceId);
 
     const tasks = [];
