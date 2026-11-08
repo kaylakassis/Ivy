@@ -1414,6 +1414,8 @@ async function readAutomationsTool(ws, a) {
   return { ...out, merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Automations](/marketing?tab=workflows)' };
 }
 
+const AUTOMATION_NOUNS = { birthday: 'the birthday message', quiet: 'the "We\'d love to see you again" check-in' };
+
 async function planAutomations(ws, a) {
   if (a.action !== 'update') throw new Error('action must be get, due or update');
   const kind = String(a.kind || '');
@@ -1424,20 +1426,34 @@ async function planAutomations(ws, a) {
   if (a.quiet_days != null) patch.quietDays = a.quiet_days;
   const clean = cleanAutomationPatch(kind, patch);
   const cur = (await readAutomations(ws))[kind];
+  // "the birthday message" / "the \"We'd love to see you again\" check-in":
+  // a plain noun for mid-sentence use (the label alone read "the Birthday
+  // message message").
+  const noun = AUTOMATION_NOUNS[kind] || `the ${KIND_LABELS[kind]}`;
   if (clean.enabled === true && clean.template == null && !cur.templateApprovedAt) {
-    throw new Error(`Save the ${KIND_LABELS[kind]} message first (pass template, the default is: "${DEFAULT_TEMPLATES[kind]}"), then turn it on`);
+    throw new Error(`Save ${noun} first (pass template, the default is: "${DEFAULT_TEMPLATES[kind]}"), then turn it on`);
   }
-  const parts = [];
-  if (clean.enabled != null && clean.enabled !== cur.enabled) parts.push(clean.enabled ? `turn on the ${KIND_LABELS[kind]}` : `turn off the ${KIND_LABELS[kind]}`);
-  if (clean.template != null) parts.push(`${clean.enabled != null ? 'set' : `set the ${KIND_LABELS[kind]}`} message to: "${clean.template}"`);
-  if (clean.channels) parts.push(`send it by ${clean.channels.email && clean.channels.sms ? 'email and text' : clean.channels.email ? 'email only' : 'text only'}`);
-  if (clean.quietDays != null) parts.push(`count a client as quiet after ${clean.quietDays} days`);
-  if (!parts.length) parts.push(`keep the ${KIND_LABELS[kind]} as it is`);
-  const sentence = parts.join(', ');
+  // Each change twice: as the card asks it, and as Done reports it.
+  const now = [], past = [];
+  const add = (ask, did) => { now.push(ask); past.push(did); };
+  if (clean.enabled != null && clean.enabled !== cur.enabled) {
+    add(`${clean.enabled ? 'turn on' : 'turn off'} ${noun}`, `${clean.enabled ? 'turned on' : 'turned off'} ${noun}`);
+  }
+  if (clean.template != null) {
+    if (now.length) add(`using this message: "${clean.template}"`, `using this message: "${clean.template}"`);
+    else add(`change ${noun} to: "${clean.template}"`, `changed ${noun} to: "${clean.template}"`);
+  }
+  if (clean.channels) {
+    const by = clean.channels.email && clean.channels.sms ? 'email and text' : clean.channels.email ? 'email only' : 'text only';
+    add(`send it by ${by}`, `it now goes by ${by}`);
+  }
+  if (clean.quietDays != null) add(`count a client as quiet after ${clean.quietDays} days`, `a client now counts as quiet after ${clean.quietDays} days`);
+  if (!now.length) add(`keep ${noun} as it is`, `kept ${noun} as it is`);
+  const cap = (x) => `${x[0].toUpperCase()}${x.slice(1)}`;
   const on = clean.enabled ?? cur.enabled;
   return {
-    summary: `${sentence[0].toUpperCase()}${sentence.slice(1)}. ${on ? `Ivy will send it to clients for you, each at most once ${ONCE_WORDS[kind]}; clients who turned off these emails or texts never get it.` : 'Nothing goes out while it is off.'}`,
-    done: `${sentence[0].toUpperCase()}${sentence.slice(1)}`,
+    summary: `${cap(now.join(', '))}. ${on ? `Ivy will send it to clients for you, each at most once ${ONCE_WORDS[kind]}; clients who turned off these emails or texts never get it.` : 'Nothing goes out while it is off.'}`,
+    done: cap(past.join(', ')),
     apply: async () => {
       const saved = await saveAutomation(ws, kind, patch);
       return { ok: true, automation: saved.row };

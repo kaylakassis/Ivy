@@ -337,12 +337,13 @@ async function main() {
   const done = await executePendingAction({ row: prow, workspaceId: A.workspaceId, userId: A.userId });
   const afterQ = (await readAutomations(A.workspaceId)).quiet;
   assert(done.claimed && !done.result.error && afterQ.quietDays === 45 && /we miss you/.test(afterQ.template), `approved: saved (${done.text})`);
+  assert(/Changed the "We'd love to see you again" check-in to: /.test(done.text || '') && /a client now counts as quiet after 45 days/.test(done.text || ''), `Done reads as what happened, not as an order (${done.text})`);
   const bad = await executeIvyTool('client_automations', { action: 'update', kind: 'birthday', template: 'Hi {name}' }, A.ctx);
   assert(/Only \{first_name\}/.test(bad.error || '') && (await one(sql`SELECT COUNT(*)::int AS n FROM ivy_pending_actions WHERE workspace_id = ${A.workspaceId}`)).n === n0 + 1, 'a bad template is refused before any card');
   const onC = await executeIvyTool('client_automations', { action: 'update', kind: 'quiet', enabled: true }, C.ctx);
-  assert(/Save the .* message first/.test(onC.error || ''), 'turning on with no saved message is refused before any card');
+  assert(/Save the .* first/.test(onC.error || '') && !/message message/.test(onC.error || ''), `turning on with no saved message is refused before any card (${onC.error})`);
   const offHeld = await executeIvyTool('client_automations', { action: 'update', kind: 'birthday', enabled: false }, A.ctx);
-  assert(offHeld.needs_confirmation && /Turn off the Birthday message\. Nothing goes out while it is off\./.test(offHeld.summary), 'turning off is held too, with the plain consequence');
+  assert(offHeld.needs_confirmation && /Turn off the birthday message\. Nothing goes out while it is off\./.test(offHeld.summary), 'turning off is held too, with the plain consequence');
 
   // ── [9] test send and the cron ─────────────────────────────────────────
   console.log('\n[9] test send, cron');
