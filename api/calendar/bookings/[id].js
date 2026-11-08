@@ -11,12 +11,12 @@ import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
-import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
+import { syncOnBookingUpdated, syncOnBookingDeleted } from '../../_lib/googleSync.js';
 import { restoreCredit, sendPackageRefusal, applyPackageSession } from '../../_lib/packages.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
-import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
-import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled, notifyHelperAssigned } from '../../_lib/bookingNotify.js';
-import { attachIntakeForms } from '../../_lib/intake.js';
+import { fillFromWaitlistOnCancel } from '../../_lib/waitlist.js';
+import { isPendingRequest, approveBookingRequest, declineBookingRequest } from '../../_lib/bookingRequests.js';
+import { notifyBookingCancellation, notifyBookingRescheduled, notifyHelperAssigned } from '../../_lib/bookingNotify.js';
 import { settleOwnerCancellation } from '../../_lib/bookingFees.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
@@ -40,6 +40,28 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH') {
       const body = await readBody(req);
       const booking = found.rows[0];
+
+      // 1.0.6 booking requests: { decideRequest: 'approve' | 'decline', message? }
+      // Owners and helpers with the schedule permission (the same people who
+      // can cancel) decide; the helper never moves money, so a deposit is
+      // still only taken by the shared approve path (saved card or pay link).
+      if (body.decideRequest) {
+        const decision = String(body.decideRequest);
+        if (decision !== 'approve' && decision !== 'decline') return badRequest(res, "decideRequest must be 'approve' or 'decline'");
+        if (!isPendingRequest(booking)) return badRequest(res, 'This booking is not waiting for a decision');
+        const args = { workspaceId, bookingId: id, userId: user.id, message: body.message, actor: req.helper ? 'helper' : 'owner' };
+        const out = decision === 'approve' ? await approveBookingRequest(args) : await declineBookingRequest(args);
+        if (out.notFound) return notFound(res, 'Booking not found');
+        if (out.alreadyDecided) return res.status(409).json({ error: 'This request was already decided', decision: out.decision });
+        return ok(res, {
+          booking: serializeBooking(out.booking, bopts),
+          decision,
+          ...(decision === 'approve' && !req.helper ? { deposit: out.deposit } : {}),
+        });
+      }
+      if (isPendingRequest(booking) && (body.rescheduleTo || body.cancelOccurrence || body.applyClientPackageId)) {
+        return badRequest(res, 'Approve or decline this request first.');
+      }
 
       // Reschedule path: { rescheduleTo: { date, startMin, endMin } }
       // - owner moves a booking to a new slot. Mirrors the client-portal
@@ -299,6 +321,13 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      // Cancelling a pending request is a decline: slot released, client told
+      // to pick another time, nothing to refund (nothing was charged).
+      if (isPendingRequest(found.rows[0])) {
+        const out = await declineBookingRequest({ workspaceId, bookingId: id, userId: user.id });
+        if (out.alreadyDecided || out.notFound) return notFound(res, 'Booking not found or already cancelled');
+        return noContent(res);
+      }
       const r = await sql`
         UPDATE bookings SET cancelled_at = NOW(), cancelled_by = 'owner'
         WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL
@@ -334,24 +363,21 @@ export default async function handler(req, res) {
       // Put any gift-card credit back on the card (exactly-once inside).
       await restoreGiftCardCreditForBooking({ workspaceId, bookingId: id })
         .catch((err) => console.error('[booking cancel] gift card restore failed:', err.message));
-      // Promote next waitlist entry into a real booking. Best-effort -
-      // any failure logs but doesn't fail the cancel.
+      // Offer the freed time to the waitlist (one-tap claim link; the
+      // owner's "fill automatically" switch). Best-effort - any failure
+      // logs but doesn't fail the cancel.
       try {
-        const promoted = await promoteWaitlistOnCancel({
+        await fillFromWaitlistOnCancel({
           workspaceId,
           serviceId: cancelled.service_id,
           dateISO:   cancelled.date,
           startMin:  cancelled.start_min,
           endMin:    cancelled.end_min,
+          sourceBookingId: cancelled.id,
         });
-        if (promoted) {
-          notifyNewBooking({ workspaceId, bookingId: promoted.id, source: 'waitlist' });
-          syncOnBookingCreated({ workspaceId, bookingId: promoted.id });
-          attachIntakeForms({ workspaceId, bookingId: promoted.id });
-        }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('[waitlist] promote failed on cancel:', err.message);
+        console.error('[waitlist] offer failed on cancel:', err.message);
       }
       return noContent(res);
     }

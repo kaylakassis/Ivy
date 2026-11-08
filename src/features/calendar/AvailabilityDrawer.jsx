@@ -64,12 +64,21 @@ const selectStyle = {
   color: 'var(--fg)', fontSize: 14,
 };
 
-export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDays, slotMinutes, slotFitService, bufferMinutes, timezone, onSave, onClose }) {
+// How long a booking request (a service set to "Confirm bookings before
+// they're final") holds its time before it expires.
+const HOLD_OPTIONS = [
+  { v: 12, label: '12 hours' },
+  { v: 24, label: '1 day' },
+  { v: 48, label: '2 days' },
+];
+
+export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDays, slotMinutes, slotFitService, bufferMinutes, timezone, requestHoldHours, onSave, onClose }) {
   const [avail, setAvail] = useState(initial || {});
   const [notice, setNotice] = useState(noticeHours == null ? 24 : Number(noticeHours));
   const [advance, setAdvance] = useState(maxAdvanceDays == null ? 60 : Number(maxAdvanceDays));
   const [startMode, setStartMode] = useState(slotFitService ? 'service' : String(slotMinutes || 30));
   const [buffer, setBuffer] = useState(bufferMinutes == null ? 0 : Number(bufferMinutes));
+  const [hold, setHold] = useState([12, 24, 48].includes(Number(requestHoldHours)) ? Number(requestHoldHours) : 24);
   // Default an unset timezone to the browser's guess so a new owner's booking
   // page is right without them ever opening this drawer.
   const [tz, setTz] = useState(timezone || browserTimeZone() || 'UTC');
@@ -91,6 +100,7 @@ export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDay
         slotFitService: fit,
         bufferMinutes: buffer,
         timezone: tz,
+        requestHoldHours: hold,
         ...(fit ? {} : { slotMinutes: Number(startMode) }),
       });
       onClose();
@@ -165,6 +175,20 @@ export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDay
         </div>
         <select id="buffer" value={buffer} onChange={(e) => setBuffer(Number(e.target.value))} style={selectStyle}>
           {BUFFER_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div style={cardStyle}>
+        <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="request-hold">
+          Booking requests hold a time for
+        </label>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
+          For services set to “Confirm bookings before they’re final” (Services).
+          The time stays held until you approve or decline; after this long the
+          request expires and the client is asked to pick another time.
+        </div>
+        <select id="request-hold" value={hold} onChange={(e) => setHold(Number(e.target.value))} style={selectStyle}>
+          {HOLD_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
         </select>
       </div>
 

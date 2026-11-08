@@ -94,6 +94,7 @@ async function loadSummary(clientIds) {
       `SELECT COUNT(*)::int AS n FROM bookings b
          LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
          WHERE b.client_id = ANY($1) AND b.cancelled_at IS NULL
+         AND (b.requested_at IS NULL OR b.request_decided_at IS NOT NULL)
          AND b.date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date`,
       [clientIds],
     ),

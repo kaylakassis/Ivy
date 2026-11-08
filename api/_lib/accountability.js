@@ -24,6 +24,7 @@ import { workspaceTimeZone } from './calendar.js';
 import { computeSetupStatus } from './setupStatus.js';
 import { listDuplicatePairs } from './clientDuplicates.js';
 import { emailShell } from './email.js';
+import { waitlistSummary } from './waitlist.js';
 
 // ── settings ────────────────────────────────────────────────────────────
 // Kinds of reminders the owner can switch on and off (all on by default).
@@ -465,6 +466,7 @@ async function depositsUnpaidToday(ws, tz) {
       FROM bookings b
       LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
      WHERE b.workspace_id = ${ws} AND b.cancelled_at IS NULL
+       AND (b.requested_at IS NULL OR b.request_decided_at IS NOT NULL)
        AND b.date = (NOW() AT TIME ZONE ${tz})::date
        AND COALESCE(b.deposit_required, 0) > 0 AND b.deposit_paid_at IS NULL
        AND (c.id IS NULL OR c.source IS DISTINCT FROM 'demo')
@@ -734,17 +736,80 @@ async function missingEmail(ws, tz) {
   };
 }
 
+// 1.0.6: booking requests waiting for Approve / Decline. The dashboard card
+// shows Approve and Decline right on the row (`requests`, kept by
+// publicItem); the partner's message links to the calendar.
+async function bookingRequests(ws, tz) {
+  const { rows } = await sql`
+    SELECT b.id, b.client_name, b.date, b.start_min, b.request_expires_at, s.name AS service_name,
+           COUNT(*) OVER ()::int AS total
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
+     WHERE b.workspace_id = ${ws}
+       AND b.requested_at IS NOT NULL AND b.request_decided_at IS NULL AND b.cancelled_at IS NULL
+       AND (c.id IS NULL OR c.source IS DISTINCT FROM 'demo')
+     ORDER BY b.request_expires_at ASC
+     LIMIT 5`;
+  if (!rows.length) return null;
+  const n = rows[0].total;
+  const first = nameList([rows[0].client_name], 1);
+  const dayOf = (d) => new Date(`${String(d instanceof Date ? d.toISOString().slice(0, 10) : d).slice(0, 10)}T00:00:00Z`)
+    .toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  const timeOf = (m) => `${((Math.floor(m / 60) + 11) % 12) + 1}:${String(m % 60).padStart(2, '0')} ${m >= 720 ? 'pm' : 'am'}`;
+  const holdOf = (ts) => {
+    try { return new Intl.DateTimeFormat('en-US', { timeZone: tz || 'UTC', weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(ts)); }
+    catch { return ''; }
+  };
+  const title = n === 1 ? `Booking request from ${first}` : `${n} booking requests to answer`;
+  return {
+    key: 'booking_requests', kind: 'schedule', priority: 1, count: n,
+    title, phrase: n === 1 ? `answer ${possessive(first)} booking request` : `answer ${n} booking requests`,
+    detail: n === 1
+      ? `${rows[0].service_name || 'Session'}, ${dayOf(rows[0].date)} at ${timeOf(rows[0].start_min)}. Held until ${holdOf(rows[0].request_expires_at)}`
+      : 'Each one holds its time until you answer',
+    href: n === 1 ? `/calendar?request=${rows[0].id}` : '/calendar?requests=1', action: 'Review',
+    ids: rows.map((r) => r.id),
+    requests: rows.map((r) => ({
+      id: r.id, firstName: nameList([r.client_name], 1), service: r.service_name || 'Session',
+      when: `${dayOf(r.date)} at ${timeOf(r.start_min)}`, holdsUntil: holdOf(r.request_expires_at),
+    })),
+  };
+}
+
+// 1.0.6: people on the waitlist. Informational (nothing to send): the owner
+// can offer them a time from Calendar > Waitlist.
+async function waitlistWaiting(ws) {
+  const rows = await waitlistSummary(ws);
+  if (!rows.length) return null;
+  const total = rows.reduce((n, r) => n + Number(r.waiting || 0), 0);
+  if (!total) return null;
+  const top = rows[0];
+  const title = rows.length === 1
+    ? `${plural(top.waiting, 'person', 'people')} waiting for ${top.serviceName}`
+    : `${plural(total, 'person', 'people')} waiting for a spot`;
+  return {
+    key: 'waitlist_waiting', kind: 'schedule', priority: 3, count: total,
+    title, phrase: lowerFirst(title),
+    detail: rows.length === 1 ? 'Offer them a time when one opens up' : rows.map((r) => `${r.waiting} for ${r.serviceName}`).join(', '),
+    href: '/calendar?waitlist=1', action: 'See', inAppOnly: true,
+    ids: rows.map((r) => `${r.serviceId}:${r.waiting}`),
+  };
+}
+
 // Display order inside a priority band.
 const ORDER = [
-  'setup', 'unread_messages', 'leads_waiting', 'deposits_unpaid_today', 'autopay_failed', 'deposit_reviews',
+  'setup', 'booking_requests', 'unread_messages', 'leads_waiting', 'deposits_unpaid_today', 'autopay_failed', 'deposit_reviews',
   'invoices_overdue', 'docs_unsent', 'docs_unsigned', 'invoices_draft', 'missing_email', 'tasks_due',
-  'quiet_clients', 'packages_low', 'reviews_reply', 'quiet_week', 'duplicates',
+  'quiet_clients', 'packages_low', 'reviews_reply', 'quiet_week', 'duplicates', 'waitlist_waiting',
 ];
 
 // Every detector by the key of the item it produces. computeSignals runs
 // them all; the admin view's "was it cleared?" check (checkPartnerMentions)
 // re-runs just the one a partner message named.
 const DETECTORS = {
+  booking_requests: (ws, tz) => bookingRequests(ws, tz),
+  waitlist_waiting: (ws) => waitlistWaiting(ws),
   unread_messages: (ws) => unreadMessages(ws),
   leads_waiting: (ws) => leadsWaiting(ws),
   deposit_reviews: (ws) => depositReviews(ws),
@@ -782,6 +847,9 @@ export function publicItem(it) {
     key: it.key, kind: it.kind, priority: it.priority, count: it.count,
     title: it.title, detail: it.detail || null, href: it.href, action: it.action,
     important: it.priority === 1,
+    // 1.0.6: booking requests carry the rows for the card's inline Approve /
+    // Decline buttons (first names only, like every title).
+    ...(Array.isArray(it.requests) ? { requests: it.requests } : {}),
   };
 }
 

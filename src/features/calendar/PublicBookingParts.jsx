@@ -315,11 +315,15 @@ export function DateTimePicker({
             ))
           ) : selected.status === 'full' ? (
             <div className="pb-empty-day">
-              Every time on {shortDate(selected.date)} is taken. Join the waitlist and you'll be booked automatically if a spot opens up.
+              {onWaitlist
+                ? <>Every time on {shortDate(selected.date)} is taken. Join the waitlist and we'll send you a link the moment a spot opens.</>
+                : <>Every time on {shortDate(selected.date)} is taken.</>}
               <div className="pb-actions">
-                <button type="button" className="pb-btn warn" onClick={() => onWaitlist(selected)}>
-                  <Icons.Clock size={14}/> Join the waitlist
-                </button>
+                {onWaitlist && (
+                  <button type="button" className="pb-btn warn" onClick={() => onWaitlist(selected)}>
+                    <Icons.Clock size={14}/> Join the waitlist
+                  </button>
+                )}
                 {nextAvail && (
                   <button type="button" className="pb-btn outline" onClick={onNextAvail}>
                     Next available: {nextAvailableLabel(nextAvail)}

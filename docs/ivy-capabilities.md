@@ -92,7 +92,9 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Locations / rooms | Not yet |
 | Google Calendar connect / disconnect | Owner only: an OAuth connection to a third-party account |
 | Share link / embed code | Ivy can tell them where. Nothing to change |
-| Waitlist | Not yet |
+| Booking requests (a service set to "Confirm bookings before they're final"): see, approve, decline | `list_booking_requests` (read), `approve_booking_request`, `decline_booking_request` (approval: "Approve the booking request from Jordan, Massage, Tuesday, March 3 at 10:00 am. They get the confirmation email. Their $20.00 deposit is charged to the card they saved"). Same `approveBookingRequest` / `declineBookingRequest` as the calendar's buttons (api/_lib/bookingRequests.js); `list_upcoming_bookings` labels a pending request plainly |
+| Waitlist: see who is waiting, offer a time, remove | `waitlist` list (read) / offer / remove (approval: offering sends that person a one-tap claim link by email and text, so the card says so). Same `offerTimeToEntry` as the Waitlist drawer (api/_lib/waitlist.js) |
+| Waitlist settings (on/off, fill automatically, link hours); request hold hours | Not yet (Calendar > Waitlist and Availability) |
 
 ## Clients
 

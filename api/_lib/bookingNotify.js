@@ -49,7 +49,10 @@ export function notifyNewBooking(args) {
   return keepAlive(notifyNewBookingImpl(args));
 }
 
-async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public' }) {
+// `extraNote` (1.0.6): a short message the owner typed when approving a
+// booking request, shown in the client's confirmation. `depositPayUrl`: a
+// pay link when the deposit could not be taken from the saved card.
+async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public', extraNote = null, depositPayUrl = null }) {
   const clientMade = source === 'public' || source === 'client-portal';
   try {
     const { rows } = await sql`
@@ -156,6 +159,8 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public' 
         source,
         branding,
         packageNote: packageNoteFor(ctx),
+        extraNote,
+        depositPayUrl,
       }));
     }
 
@@ -212,12 +217,12 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public' 
     //     or Ivy). No-op unless they claimed their portal and allow
     //     booking pushes. Client-made bookings skip it (they just did it),
     //     and waitlist promotions get their own push in waitlist.js.
-    if (source === 'owner' && ctx.client_id) {
+    if ((source === 'owner' || source === 'request_approved') && ctx.client_id) {
       tasks.push(notifyClientSafe({
         clientId: ctx.client_id,
         type: 'bookings',
         payload: {
-          title: `Booked with ${businessName}`,
+          title: source === 'request_approved' ? `${businessName} confirmed your booking` : `Booked with ${businessName}`,
           body: `${serviceName} · ${dateLabel} at ${fmtTime(ctx.start_min)}`,
           url: '/me/bookings',
           tag: `booking-${ctx.id}`,
@@ -312,7 +317,7 @@ function renderPackageNote(note) {
   return `<p style="margin:14px 0;">Paid with your <strong>${escapeHtml(note.name)}</strong> package. ${note.left} session${note.left === 1 ? '' : 's'} left.</p>`;
 }
 
-async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions, packageNote = null }) {
+async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions, packageNote = null, extraNote = null, depositPayUrl = null }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -349,7 +354,15 @@ async function sendClientConfirm({ clientId, workspaceId, to, clientName, busine
   }
   const opener = source === 'public'
     ? `Your booking with <strong>${escapeHtml(businessName)}</strong> is confirmed.`
-    : `<strong>${escapeHtml(businessName)}</strong> just booked you in.`;
+    : source === 'request_approved'
+      ? `Good news: <strong>${escapeHtml(businessName)}</strong> confirmed your booking request.`
+      : `<strong>${escapeHtml(businessName)}</strong> just booked you in.`;
+  const noteHtml = extraNote
+    ? `<p style="margin:14px 0;padding:12px 14px;background:#F6F5F1;border:1px solid #E8E4DC;border-radius:10px;"><strong>A note from ${escapeHtml(businessName)}:</strong><br/>${escapeHtml(extraNote)}</p>`
+    : '';
+  const depositHtml = depositPayUrl
+    ? `<p style="margin:14px 0;"><strong>One more step:</strong> your deposit is still due. <a href="${escapeHtml(depositPayUrl)}" style="color:#2E3168;">Pay the deposit</a> to lock in your spot.</p>`
+    : '';
   const html = emailShell({
     heading: 'Booking confirmed',
     body: `<p>${greeting}</p>
@@ -367,6 +380,8 @@ async function sendClientConfirm({ clientId, workspaceId, to, clientName, busine
         <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
         <br/><span style="font-size:12px;color:#85827B;">Save this - open it at the start of your session.</span>
       </p>` : ''}
+      ${noteHtml}
+      ${depositHtml}
       ${renderPackageNote(packageNote)}
       ${renderAddToCalendar(calendarLinks)}
       ${renderPrepInstructions(prepInstructions)}

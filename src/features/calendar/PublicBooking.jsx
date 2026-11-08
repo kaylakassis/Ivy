@@ -80,6 +80,15 @@ export default function PublicBooking({ embedded = false }) {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [smsOptIn, setSmsOptIn] = useState(false);
+  // 1.0.6 waitlist preferences: one exact day (the default) or flexible
+  // (preferred weekdays + a time window).
+  const [wlFlexible, setWlFlexible] = useState(false);
+  const [wlDays, setWlDays] = useState([]);
+  const [wlWindow, setWlWindow] = useState('any'); // 'any' | 'morning' | 'afternoon' | 'evening'
+  // A waitlist claim link (?claim=token): { token, offer, loading, error }.
+  const [claim, setClaim] = useState(null);
+  // The booking just made was a REQUEST (service confirms before it's final).
+  const [requestInfo, setRequestInfo] = useState(null);
   // Returning visitor on this device (standalone page only, never the embed).
   const [remember, setRemember] = useState(!embedded);
   const [prefilled, setPrefilled] = useState(false);
@@ -127,6 +136,15 @@ export default function PublicBooking({ embedded = false }) {
     if (params.get('membership') === 'joined')    { setPaymentNotice('membership'); params.delete('membership'); dirty = true; }
     if (params.get('giftcard') === 'cancel')      { setPaymentNotice('cancelled');  params.delete('giftcard');   dirty = true; }
     if (params.get('package') === 'cancel')       { setPaymentNotice('cancelled');  params.delete('package');    dirty = true; }
+    const claimToken = params.get('claim');
+    if (claimToken) {
+      setClaim({ token: claimToken, offer: null, loading: true, error: null });
+      params.delete('claim'); dirty = true;
+    }
+    if (params.get('card') === 'saved' || params.get('card') === 'skipped') {
+      // Back from the card page after a request: nothing to show here.
+      params.delete('card'); dirty = true;
+    }
     if (params.get('payment') === 'error') {
       // Fixed message picked by code; text in the URL is never shown.
       setPaymentError(paymentErrorMessage(params.get('reason')));
@@ -226,6 +244,36 @@ export default function PublicBooking({ embedded = false }) {
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadMyPackages(); }, [slug, embedded]);
+
+  // A waitlist claim link: look the offer up, then land the visitor on the
+  // details step with the offered time and their details filled in.
+  useEffect(() => {
+    if (!claim?.token || claim.offer || claim.error) return undefined;
+    let live = true;
+    api.get('/calendar/public/waitlist-offer?token=' + encodeURIComponent(claim.token), { retry: false })
+      .then((r) => live && setClaim((c) => (c ? { ...c, offer: r.offer, loading: false } : c)))
+      .catch(() => live && setClaim((c) => (c ? { ...c, loading: false, error: 'That link is not valid.' } : c)));
+    return () => { live = false; };
+  }, [claim?.token, claim?.offer, claim?.error]);
+  const claimAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!cal || !claim?.offer || claimAppliedRef.current) return;
+    const o = claim.offer;
+    claimAppliedRef.current = true;
+    if (o.state !== 'open') return;
+    const s = cal.services.find((x) => x.id === o.serviceId);
+    if (!s) return;
+    applyService(cal, s);
+    setSelectedDateISO(o.date);
+    setSlot({ dateISO: o.date, start: o.startMin, end: o.endMin });
+    if (o.clientName) setName(o.clientName);
+    if (o.clientEmail) setEmail(o.clientEmail);
+    if (o.clientPhone) setPhone(o.clientPhone);
+    setWaitlistMode(false);
+    setStep('details');
+    setScrollTarget('top');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cal, claim?.offer]);
 
   // ?buy=<package id> (the portal's and the email's "Buy again") opens
   // that package's checkout once the page has loaded.
@@ -505,6 +553,9 @@ export default function PublicBooking({ embedded = false }) {
     setConfirmedCalendar(null);
     setConfirmedVideoUrl(null);
     setDepositPending(0);
+    setRequestInfo(null);
+    setClaim(null);
+    setWlFlexible(false); setWlDays([]); setWlWindow('any');
     setSelectedAddOns(new Set());
     setCustomAnswers({});
     setGiftCardCode(''); setGiftCardChecked(null); setGiftCodeOpen(false);
@@ -541,6 +592,15 @@ export default function PublicBooking({ embedded = false }) {
         giftCardCode: giftCardChecked && !(usingPackage && !joinWaitlist) ? giftCardCode : null,
         smsConsent: !!(smsOptIn && phone.trim()),
         joinWaitlist,
+        // Waitlist preferences (api/_lib/waitlist.js joinWaitlist).
+        ...(joinWaitlist ? {
+          waitlistFlexible: wlFlexible,
+          preferredDays: wlFlexible ? wlDays : [],
+          preferredStartMin: wlFlexible ? WL_WINDOWS[wlWindow]?.start ?? null : null,
+          preferredEndMin: wlFlexible ? WL_WINDOWS[wlWindow]?.end ?? null : null,
+        } : {}),
+        // One-tap waitlist claim (first to tap gets it).
+        ...(claim?.token && claim.offer?.state === 'open' ? { waitlistClaimToken: claim.token } : {}),
         ...consent.fields(),
         // Pay with one session from the signed-in client's package.
         ...(usingPackage && !joinWaitlist ? { clientPackageId: usePackageId } : {}),
@@ -557,10 +617,14 @@ export default function PublicBooking({ embedded = false }) {
         window.location.href = r.depositCheckoutUrl;
         return;
       }
-      if (Number(r.booking?.depositRequired) > 0) {
+      if (Number(r.booking?.depositRequired) > 0 && !r.request) {
         setDepositPending(Number(r.booking.depositRequired));
       }
-      consent.setCardUrl(r.cardSetupUrl || null);
+      // A booking REQUEST: the time is held; the business confirms. Any
+      // deposit is charged only then (the card page saves it for that).
+      setRequestInfo(r.request ? { ...r.request, depositRequired: Number(r.booking?.depositRequired || 0), cardSetupUrl: r.cardSetupUrl || null } : null);
+      consent.setCardUrl(r.request ? null : (r.cardSetupUrl || null));
+      if (r.claimed) setClaim(null);
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setConfirmedCalendar(r.booking?.calendar || null);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
@@ -569,6 +633,12 @@ export default function PublicBooking({ embedded = false }) {
     } catch (e) {
       if (isArchivedError(e)) { setArchived({ businessName: cal?.settings?.bizName }); return; }
       consent.handleError(e);
+      if (e?.details?.claimState) {
+        // The offered spot is gone (someone was first, or the link ran out).
+        setClaim((c) => (c ? { ...c, offer: c.offer ? { ...c.offer, state: e.details.claimState } : c.offer } : c));
+        setBookErr(e.message || 'That spot is no longer available.');
+        return;
+      }
       const code = e?.details?.code;
       if (code === 'package_used_up' || code === 'package_expired') {
         // Someone (another tab, the business) took the last session or it
@@ -651,12 +721,41 @@ export default function PublicBooking({ embedded = false }) {
           </div>
           <h2 id="pb-done-h" tabIndex={-1}>You're on the list.</h2>
           <p>
-            We'll email <b>{email}</b> the moment a spot opens up for{' '}
-            <b>{longDate(parseISO(slot.dateISO))}</b> at <b>{minToHM(slot.start)}</b>.
-            You'll be auto-booked - no action needed on your end.
+            The moment a spot opens{wlFlexible ? ' that fits what you asked for' : <> on <b>{longDate(parseISO(slot.dateISO))}</b></>},
+            we'll email <b>{email}</b>{smsOptIn && phone.trim() ? ' and text you' : ''} a link to book it.
+            First to tap gets it, so keep an eye out.
           </p>
           <div className="pb-done-actions">
             <button type="button" className="pb-btn outline" onClick={bookAnother}>Pick another time</button>
+          </div>
+        </section>
+      ) : step === 'confirmed' && requestInfo ? (
+        <section className="pb-card pb-done" aria-labelledby="pb-done-h">
+          <div className="pb-done-icon" style={{ background: 'var(--surface)', color: 'var(--accent)', border: '2px dashed var(--accent)' }}>
+            <Icons.Clock size={28} sw={2.4}/>
+          </div>
+          <h2 id="pb-done-h" tabIndex={-1}>Request sent.</h2>
+          <p>{bizName || 'The business'} will confirm shortly. This time is held for you
+            {requestInfo.holdHours ? ` for the next ${requestInfo.holdHours} hours` : ''}, and you'll get an email at <b>{email}</b> as soon as they answer.</p>
+          <div className="pb-done-card">
+            <div className="row"><span>What</span><b>{svc?.name}</b></div>
+            <div className="row"><span>When</span><span>{longDate(parseISO(slot.dateISO))}, {slotDual}</span></div>
+            {where && <div className="row"><span>Where</span><span>{where}</span></div>}
+            {requestInfo.depositRequired > 0 && (
+              <div className="row"><span>Deposit</span><span>${requestInfo.depositRequired.toFixed(2)}, charged only if {bizName || 'the business'} confirms</span></div>
+            )}
+          </div>
+          {requestInfo.depositRequired > 0 && requestInfo.cardSetupUrl && /^https:\/\//.test(requestInfo.cardSetupUrl) && (
+            <div className="pb-done-card" style={{ textAlign: 'left' }}>
+              <div className="metric-label" style={{ marginBottom: 6 }}>Save a card for the deposit</div>
+              <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55, marginBottom: 10 }}>
+                Add a card on a secure page. Nothing is charged now; the ${requestInfo.depositRequired.toFixed(2)} deposit is charged only when {bizName || 'the business'} confirms your time.
+              </div>
+              <a className="pb-btn primary" href={requestInfo.cardSetupUrl}><Icons.Lock size={13}/> Add a card</a>
+            </div>
+          )}
+          <div className="pb-done-actions">
+            <button type="button" className="pb-btn outline" onClick={bookAnother}>Request another time</button>
           </div>
         </section>
       ) : step === 'confirmed' ? (
@@ -777,6 +876,14 @@ export default function PublicBooking({ embedded = false }) {
           <h2 className="pb-h2" id="pb-details-h">
             <span className="pb-num">3</span> {waitlistMode ? 'Join the waitlist' : 'Your details'}
           </h2>
+          {claim?.offer && claim.offer.state === 'open' && (
+            <div className="pb-remembered" style={{ alignItems: 'flex-start' }}>
+              <span>
+                <b>A spot opened up for you.</b> {claim.offer.serviceName}, {longDate(parseISO(claim.offer.date))} at {minToHM(claim.offer.startMin)}.
+                First to tap gets it, so confirm below while it is still yours.
+              </span>
+            </div>
+          )}
           <div className="pb-recap">
             {svc.photoUrl && <img className="pb-svc-photo pb-recap-photo" src={svc.photoUrl} alt="" width="64" height="64"/>}
             <div className="pb-recap-text">
@@ -797,9 +904,15 @@ export default function PublicBooking({ embedded = false }) {
           </div>
           {waitlistMode && (
             <p style={{ margin: '0 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-              Every slot for this day is booked. Drop your details and we'll
-              auto-book you the moment a spot opens up - no action needed
-              on your end.
+              Every time on this day is booked. Leave your details and the
+              moment a spot opens we'll send you a link to book it. First to
+              tap gets it.
+            </p>
+          )}
+          {!waitlistMode && svc.requireApproval && (
+            <p style={{ margin: '0 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              {bizName || 'This business'} confirms each booking personally. Send your
+              request and this time is held for you until they answer.
             </p>
           )}
 
@@ -840,12 +953,52 @@ export default function PublicBooking({ embedded = false }) {
               <label className="pb-check" style={{ marginTop: -6, marginBottom: 10 }}>
                 <input type="checkbox" checked={smsOptIn} onChange={(e) => setSmsOptIn(e.target.checked)}/>
                 <span>
-                  Text me reminders about this booking. Standard messaging rates may apply;
-                  reply STOP at any time to opt out.
+                  {waitlistMode
+                    ? 'Text me when a spot opens up, plus reminders if I book. Standard messaging rates may apply; reply STOP at any time to opt out.'
+                    : 'Text me reminders about this booking. Standard messaging rates may apply; reply STOP at any time to opt out.'}
                 </span>
               </label>
             )}
             </>}
+
+            {waitlistMode && (
+              <Field group label="What works for you?" hint="Tell us if other days would do, so you hear about more openings.">
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <button type="button" className={`pb-btn ${!wlFlexible ? 'primary' : 'outline'}`} style={{ flex: '1 1 140px' }}
+                    aria-pressed={!wlFlexible} onClick={() => setWlFlexible(false)}>
+                    Just {longDate(slotDate)}
+                  </button>
+                  <button type="button" className={`pb-btn ${wlFlexible ? 'primary' : 'outline'}`} style={{ flex: '1 1 140px' }}
+                    aria-pressed={wlFlexible} onClick={() => setWlFlexible(true)}>
+                    Other days too
+                  </button>
+                </div>
+                {wlFlexible && (
+                  <>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }} role="group" aria-label="Preferred days">
+                      {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                        const on = wlDays.includes(d);
+                        return (
+                          <button key={d} type="button" aria-pressed={on}
+                            className={`pb-chip${on ? ' accent' : ''}`}
+                            style={{ cursor: 'pointer', padding: '7px 11px', fontSize: 13, minHeight: 36 }}
+                            onClick={() => setWlDays((xs) => (on ? xs.filter((x) => x !== d) : [...xs, d]))}>
+                            {WL_DAY_NAMES[d]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="pb-hint" style={{ marginTop: 0, marginBottom: 6 }}>{wlDays.length === 0 ? 'Any day is fine.' : 'Only these days.'}</div>
+                    <select className="pb-input" value={wlWindow} onChange={(e) => setWlWindow(e.target.value)} aria-label="Preferred time of day">
+                      <option value="any">Any time of day</option>
+                      <option value="morning">Mornings (before 12:00 pm)</option>
+                      <option value="afternoon">Afternoons (12:00 pm to 5:00 pm)</option>
+                      <option value="evening">Evenings (after 5:00 pm)</option>
+                    </select>
+                  </>
+                )}
+              </Field>
+            )}
 
             {svc.locationType === 'mobile' && (
               <Field label="Where should we come?" hint="Street address, city, ZIP. Apartment / suite + parking notes if relevant.">
@@ -1029,7 +1182,9 @@ export default function PublicBooking({ embedded = false }) {
                     <b>{depositDue > 0 ? `$${depositDue.toFixed(2)} deposit` : '$0.00'}</b>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
-                    {depositDue > 0
+                    {depositDue > 0 && svc.requireApproval
+                      ? `Nothing is charged until ${bizName || 'the business'} confirms your request. You can save a card after sending it; the rest is due at your appointment.`
+                      : depositDue > 0
                       ? "You'll be taken to a secure payment page after confirming. The rest is due at your appointment."
                       : giftApplied >= total
                         ? 'Fully covered by your gift card - nothing due at your appointment.'
@@ -1045,7 +1200,7 @@ export default function PublicBooking({ embedded = false }) {
             {bookErr && (
               <div className="pb-error" role="alert">
                 <span style={{ flex: 1 }}>{bookErr}</span>
-                {/full|taken|just/i.test(bookErr) && (
+                {/full|taken|just/i.test(bookErr) && cal.settings.waitlistEnabled !== false && !claim && (
                   <button type="button" onClick={() => book(true)} disabled={busy} className="pb-btn outline">
                     {busy ? '…' : 'Join the waitlist'}
                   </button>
@@ -1058,8 +1213,8 @@ export default function PublicBooking({ embedded = false }) {
               </button>
               <button type="submit" className="pb-btn primary" disabled={(!usingPackage && (!name.trim() || !email.trim())) || busy || !consent.ready}>
                 {busy
-                  ? (waitlistMode ? 'Joining…' : 'Confirming…')
-                  : (waitlistMode ? 'Join the waitlist' : 'Confirm booking')}
+                  ? (waitlistMode ? 'Joining…' : svc.requireApproval ? 'Sending…' : 'Confirming…')
+                  : (waitlistMode ? 'Join the waitlist' : svc.requireApproval ? 'Request this time' : 'Confirm booking')}
               </button>
             </div>
           </form>
@@ -1108,12 +1263,12 @@ export default function PublicBooking({ embedded = false }) {
                     onNextAvail={goNextAvail}
                     canLoadMore={shownCount < limit}
                     onLoadMore={() => setDayCount((c) => Math.min(limit, c + DAYS_PER_LOAD))}
-                    onWaitlist={joinWaitlistFor}
+                    onWaitlist={cal.settings.waitlistEnabled !== false ? joinWaitlistFor : null}
                     bizTz={bizTz}
                     viewerTz={viewerTz}
                     bizName={bizName}
                   />
-                  <div className="pb-tz">{tzNote} Instant confirmation.</div>
+                  <div className="pb-tz">{tzNote} {svc.requireApproval ? `${bizName || 'The business'} confirms each request personally; the time is held for you meanwhile.` : 'Instant confirmation.'}</div>
                   <PolicyNote svc={svc}/>
                   {slot && (
                     <div className="pb-picked">
@@ -1122,7 +1277,7 @@ export default function PublicBooking({ embedded = false }) {
                         <small>{longDate(slotDate)}, {slotDual}</small>
                       </div>
                       <button type="button" className="pb-btn primary" onClick={goDetails}>
-                        Continue <Icons.Arrow size={14}/>
+                        {svc.requireApproval ? 'Request this time' : 'Continue'} <Icons.Arrow size={14}/>
                       </button>
                     </div>
                   )}
@@ -1315,6 +1470,15 @@ function PageWrap({ tweaks, embedded, accentColor, children }) {
 
 // Form field. Text inputs are wrapped in their <label>; a group of controls
 // (checkboxes) uses a fieldset + legend instead.
+// Waitlist time windows (minutes from midnight) and weekday labels.
+const WL_WINDOWS = {
+  any: { start: null, end: null },
+  morning: { start: 0, end: 12 * 60 },
+  afternoon: { start: 12 * 60, end: 17 * 60 },
+  evening: { start: 17 * 60, end: 24 * 60 },
+};
+const WL_DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 function Field({ label, hint, children, group = false }) {
   if (group) {
     return (

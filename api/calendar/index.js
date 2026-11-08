@@ -17,6 +17,8 @@ import { validateAvailability, validateTimezone } from '../_lib/settingsValidati
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { clientRemindersFrom } from '../_lib/reminderSettings.js';
+import { HOLD_HOURS_OPTIONS } from '../_lib/bookingRequests.js';
+import { OFFER_HOURS_OPTIONS } from '../_lib/waitlist.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -97,6 +99,13 @@ export default async function handler(req, res) {
       `, { rows: [] });
       const sessionBlocks = sessionsAsCalendarBlocks(sessions.rows, settings?.timezone)
         .filter((b) => b.date >= from && b.date <= to);
+      // 1.0.6 booking requests (api/_lib/bookingRequests.js) travel in their
+      // own list. An older app (iPhone 1.0.5) only reads `bookings`, so a
+      // pending request is never drawn there as a confirmed appointment; the
+      // owner gets the push/email and approves from the web or 1.0.6.
+      const isPending = (r) => r.requested_at && !r.request_decided_at && !r.cancelled_at;
+      const confirmedRows = bookings.rows.filter((r) => !isPending(r));
+      const requestRows = bookings.rows.filter(isPending);
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),
@@ -106,7 +115,8 @@ export default async function handler(req, res) {
           })),
           blocks:   [...blocks.rows.map(serializeBlock), ...sessionBlocks],
           // Helper mode (schedule permission): the calendar without revenue.
-          bookings: bookings.rows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
+          bookings: confirmedRows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
+          requests: requestRows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
         },
       });
     }
@@ -228,6 +238,19 @@ export default async function handler(req, res) {
           if (!Number.isFinite(n) || n < -180 || n > 180) return badRequest(res, 'lng must be between -180 and 180');
           push('lng', n);
         }
+      }
+      if ('requestHoldHours' in body) {
+        // 1.0.6: how long a booking request holds its time.
+        const n = Number(body.requestHoldHours);
+        if (!HOLD_HOURS_OPTIONS.includes(n)) return badRequest(res, `requestHoldHours must be one of ${HOLD_HOURS_OPTIONS.join(', ')}`);
+        push('request_hold_hours', n);
+      }
+      if ('waitlistEnabled' in body) push('waitlist_enabled', !!body.waitlistEnabled);
+      if ('waitlistAutoFill' in body) push('waitlist_auto_fill', !!body.waitlistAutoFill);
+      if ('waitlistOfferHours' in body) {
+        const n = Number(body.waitlistOfferHours);
+        if (!OFFER_HOURS_OPTIONS.includes(n)) return badRequest(res, `waitlistOfferHours must be one of ${OFFER_HOURS_OPTIONS.join(', ')}`);
+        push('waitlist_offer_hours', n);
       }
       if ('availability' in body) {
         // Shared validator (api/_lib/settingsValidation.js) — same source of

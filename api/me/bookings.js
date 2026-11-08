@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
     const memberships = await myClientIds(user);
     const myIds = ids(memberships);
-    if (myIds.length === 0) return ok(res, { upcoming: [], past: [], cancelled: [] });
+    if (myIds.length === 0) return ok(res, { upcoming: [], past: [], cancelled: [], requested: [] });
 
     const byClient = new Map(memberships.map((m) => [m.clientId, m]));
 
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
               b.gift_card_credit_cents, b.recurrence_rule, b.client_package_id, b.package_use_mode,
               b.deposit_refunded_amount, cps.refund_deposit_outside_window, b.deposit_refund_request_status,
               b.created_at, b.updated_at,
+              b.requested_at, b.request_expires_at, b.request_decision, b.request_message,
               s.name AS service_name,
               s.location_type, s.location_label,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
@@ -56,13 +57,14 @@ export default async function handler(req, res) {
       // groups rather than 500ing the whole portal.
       // eslint-disable-next-line no-console
       console.error('[me/bookings] query failed (returning empty):', e.message);
-      return ok(res, { upcoming: [], past: [], cancelled: [] });
+      return ok(res, { upcoming: [], past: [], cancelled: [], requested: [] });
     }
 
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = [];
     const past = [];
     const cancelled = [];
+    const requested = [];
     for (const r of rows) {
       const dateISO = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date;
       const m = byClient.get(r.client_id);
@@ -135,14 +137,25 @@ export default async function handler(req, res) {
         fromPackage: !!r.client_package_id,
         packageName: r.client_package_id ? (r.package_name || null) : null,
         packageUseMode: r.client_package_id ? (r.package_use_mode || 'booking') : null,
+        // 1.0.6 booking requests: 'requested' until the business confirms.
+        status: r.cancelled_at ? 'cancelled' : (r.requested_at && !r.request_decision ? 'requested' : 'confirmed'),
+        isRequest: !!(r.requested_at && !r.request_decision && !r.cancelled_at),
+        requestExpiresAt: r.request_expires_at || null,
+        requestDecision: r.request_decision || null,
+        requestMessage: r.request_decision && r.request_decision !== 'approved' ? (r.request_message || null) : null,
       };
       if (r.cancelled_at) cancelled.push(item);
+      // A pending request has its own group: older portals (which only read
+      // upcoming/past/cancelled) never show it as a confirmed appointment.
+      else if (item.isRequest) requested.push(item);
       else if (dateISO >= today) upcoming.push(item);
       else past.push(item);
     }
     upcoming.sort((a, b) => (a.date + String(a.startMin).padStart(4, '0'))
       .localeCompare(b.date + String(b.startMin).padStart(4, '0')));
-    return ok(res, { upcoming, past, cancelled });
+    requested.sort((a, b) => (a.date + String(a.startMin).padStart(4, '0'))
+      .localeCompare(b.date + String(b.startMin).padStart(4, '0')));
+    return ok(res, { upcoming, past, cancelled, requested });
   } catch (err) {
     return serverError(res, err);
   }

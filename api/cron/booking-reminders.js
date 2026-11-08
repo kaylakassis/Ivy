@@ -151,6 +151,8 @@ export async function fetchDueBookings(cursor, shardFilter = '') {
       SELECT ${clientBeatsSql()} AS client_beats, ${ownerBeatsSql()} AS owner_beats
     ) rb
     WHERE b.cancelled_at IS NULL
+      -- A booking request the owner has not approved is not an appointment yet.
+      AND (b.requested_at IS NULL OR b.request_decided_at IS NOT NULL)
       AND b.date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - INTERVAL '1 day'
                      AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date + INTERVAL '8 days'
       -- The same window as a plain UTC date range (every time zone's

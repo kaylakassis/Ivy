@@ -37,6 +37,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (booking.cancelled_at) return badRequest(res, "Can't mark a cancelled booking as a no-show");
+      if (booking.requested_at && !booking.request_decided_at) return badRequest(res, 'This booking request has not been approved yet');
       if (booking.no_show_at)   return badRequest(res, 'Already marked as a no-show');
       const upd = await sql`
         UPDATE bookings SET no_show_at = NOW(), updated_at = NOW()

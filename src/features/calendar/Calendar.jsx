@@ -21,6 +21,8 @@ import PackagesDrawer from './PackagesDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
 import DepositReviews from './DepositReviews.jsx';
+import WaitlistDrawer from './WaitlistDrawer.jsx';
+import BookingRequestsCard from './BookingRequestsCard.jsx';
 import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
@@ -64,6 +66,7 @@ export default function Calendar() {
     addBlock, updateBlock, removeBlock,
     createBooking, updateBooking, applyBooking, cancelBooking, cancelOccurrence,
     completeBooking, editCompletion, clearCompletion,
+    decideRequest,
   } = useCalendar(dataWindow);
   usePullRefresh(refresh);
 
@@ -100,6 +103,15 @@ export default function Calendar() {
       setDrawer('reminders');
       const next = new URLSearchParams(calParams); next.delete('reminders');
       setCalParams(next, { replace: true });
+    } else if (calParams.get('waitlist') === '1') {
+      // Dashboard "people waiting" row, Ivy's waitlist link.
+      setDrawer('waitlist');
+      const next = new URLSearchParams(calParams); next.delete('waitlist');
+      setCalParams(next, { replace: true });
+    } else if (calParams.get('requests') === '1') {
+      // "N booking requests to answer": the requests card sits at the top.
+      const next = new URLSearchParams(calParams); next.delete('requests');
+      setCalParams(next, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calParams]);
@@ -117,7 +129,7 @@ export default function Calendar() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const cid = params.get('newBooking');
-    const bookingId = params.get('booking');
+    const bookingId = params.get('booking') || params.get('request');
     const serviceId = params.get('service');
 
     if (cid) {
@@ -130,7 +142,9 @@ export default function Calendar() {
     }
 
     if (bookingId && Array.isArray(cal?.bookings)) {
-      const b = cal.bookings.find((x) => x.id === bookingId);
+      // A booking request (?request=<id>, from the push / email / dashboard)
+      // lives in cal.requests; its drawer shows Approve / Decline.
+      const b = cal.bookings.find((x) => x.id === bookingId) || (cal.requests || []).find((x) => x.id === bookingId);
       if (b) {
         // Match the shape EventDrawer expects (kind:'booking' + the
         // booking fields). cal.bookings rows already carry these via
@@ -141,7 +155,7 @@ export default function Calendar() {
       // Strip the param either way - if the booking isn't in the list
       // (cancelled, on a different visible range), we don't want the
       // effect to keep re-firing on every cal.bookings change.
-      params.delete('booking');
+      params.delete('booking'); params.delete('request');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
       return;
     }
@@ -155,7 +169,7 @@ export default function Calendar() {
       navigate(`/finance?section=services&service=${encodeURIComponent(serviceId)}${carry ? '&' + carry : ''}`, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, cal?.bookings]);
+  }, [location.search, cal?.bookings, cal?.requests]);
 
   // Force day view on phones - the 7-column week grid is illegible on narrow
   // screens. Users can still pick week/month from the toggle if they want.
@@ -182,9 +196,11 @@ export default function Calendar() {
 
   // Expand recurring bookings into per-occurrence rows for the views to render.
   // The hook is stable as long as the bookings array reference doesn't change.
+  // Booking requests ride along for the grid (drawn dashed, "Requested");
+  // they are never counted anywhere else.
   const expanded = useMemo(() =>
-    expandedBookings(cal.bookings || [], { daysBack: 14, daysAhead: 365 }),
-    [cal.bookings],
+    expandedBookings([...(cal.bookings || []), ...(cal.requests || [])], { daysBack: 14, daysAhead: 365 }),
+    [cal.bookings, cal.requests],
   );
   // Apply the staff filter AFTER expansion so recurring bookings
   // assigned to a staff member still surface on the picked staff's view.
@@ -379,6 +395,9 @@ export default function Calendar() {
           <button className="btn btn-outline" onClick={() => setDrawer('staff')}>
             <Icons.Users size={14}/> {!isTablet && 'Staff'}
           </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('waitlist')} aria-label="Waitlist">
+            <Icons.Clock size={14}/> {!isTablet && 'Waitlist'}
+          </button>
           <button className="btn btn-outline" onClick={() => {
             // The block editor doubles as a general event editor -
             // owner picks "Block bookings" or "Reminder only" inside.
@@ -396,10 +415,18 @@ export default function Calendar() {
         </div>
       )}
 
+      {/* 1.0.6: booking requests waiting for Approve / Decline */}
+      {(cal.requests || []).length > 0 && (
+        <BookingRequestsCard requests={cal.requests} services={cal.services}
+          onOpen={(b) => { setSelectedEvent({ ...b, kind: 'booking' }); setDrawer('event'); }}
+          onDecide={decideRequest}/>
+      )}
+
       {/* Legend (week + day views only - month uses chips inline) */}
       {view !== 'month' && (
         <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
           <Legend color="var(--accent)" label="Booked"/>
+          {(cal.requests || []).length > 0 && <Legend dashed label="Requested"/>}
           <Legend stripe label="Blocked"/>
           <Legend bordered label="Available"/>
         </div>
@@ -532,6 +559,7 @@ export default function Calendar() {
           slotFitService={cal?.settings?.slotFitService}
           bufferMinutes={cal?.settings?.bufferMinutes}
           timezone={cal?.settings?.timezone}
+          requestHoldHours={cal?.settings?.requestHoldHours}
           onSave={saveAvailability}
           onClose={() => setDrawer(null)}
         />
@@ -556,6 +584,10 @@ export default function Calendar() {
       {drawer === 'staff' && (
         <StaffDrawer onClose={() => setDrawer(null)} onChanged={refresh}/>
       )}
+      {drawer === 'waitlist' && (
+        <WaitlistDrawer services={cal.services} settings={cal.settings} onPatchSettings={patchSettings}
+          onClose={() => setDrawer(null)}/>
+      )}
       {drawer === 'event' && selectedEvent && (
         <EventDrawer
           event={selectedEvent}
@@ -572,6 +604,7 @@ export default function Calendar() {
             else await addBlock(payload);
           }}
           onUpdateBooking={updateBooking}
+          onDecideRequest={decideRequest}
           onCancelOccurrence={cancelOccurrence}
           onCompleteBooking={completeBooking}
           onEditCompletion={editCompletion}
@@ -730,14 +763,18 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
                 const svc = (cal?.services || []).find((s) => s.id === b.serviceId);
                 const tile = svc?.color || 'var(--accent)';
                 const ink  = svc?.color ? '#fff' : 'var(--accent-ink)';
+                // A booking request: dashed outline, not filled, "Requested".
+                const req = !!b.isRequest;
                 return (
-                  <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }} style={{
-                    position: 'absolute', top, height: h, left: 4, right: 4,
-                    background: tile, color: ink,
-                    border: `1px solid ${tile}`, borderRadius: 6,
-                    padding: '4px 7px', fontSize: 11, cursor: 'pointer', overflow: 'hidden',
-                  }}>
-                    <div style={{ fontWeight: 600 }}>{b.clientName || 'Client'}</div>
+                  <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }}
+                    title={req ? 'Booking request: waiting for your approval' : undefined}
+                    style={{
+                      position: 'absolute', top, height: h, left: 4, right: 4,
+                      background: req ? 'var(--surface)' : tile, color: req ? 'var(--fg)' : ink,
+                      border: req ? `1.5px dashed ${tile}` : `1px solid ${tile}`, borderRadius: 6,
+                      padding: '4px 7px', fontSize: 11, cursor: 'pointer', overflow: 'hidden',
+                    }}>
+                    <div style={{ fontWeight: 600 }}>{req ? 'Requested: ' : ''}{b.clientName || 'Client'}</div>
                     <div style={{ fontSize: 10, opacity: 0.8 }}>
                       {svc?.name || 'Session'} · {minToHM(b.startMin)}
                     </div>
@@ -759,6 +796,7 @@ function ActionSheet({ onClose, onPick }) {
   // sheet so the mobile "+" menu only surfaces calendar-scoped actions.
   const items = [
     { id: 'staff',        label: 'Staff',        icon: 'Users' },
+    { id: 'waitlist',     label: 'Waitlist',     icon: 'Users' },
     { id: 'availability', label: 'Availability', icon: 'Clock' },
     { id: 'reminders',    label: 'Reminders',    icon: 'Bell' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
@@ -802,15 +840,15 @@ function ActionSheet({ onClose, onPick }) {
   );
 }
 
-function Legend({ color, stripe, bordered, label }) {
+function Legend({ color, stripe, bordered, dashed, label }) {
   let bg = color;
   if (stripe) bg = 'repeating-linear-gradient(-45deg, var(--surface-2) 0 3px, var(--border-strong) 3px 6px)';
-  if (bordered) bg = 'transparent';
+  if (bordered || dashed) bg = 'transparent';
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
       <span style={{
         width: 10, height: 10, borderRadius: 3, background: bg,
-        border: bordered ? '1px solid var(--border-strong)' : 'none',
+        border: bordered ? '1px solid var(--border-strong)' : dashed ? '1.5px dashed var(--accent)' : 'none',
       }}/>
       {label}
     </span>

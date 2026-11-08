@@ -273,6 +273,7 @@ async function planBookingStatus(ws, a, ctx) {
   }
   if (status === 'no_show') {
     if (b.cancelled_at) throw new Error("Can't mark a cancelled booking as a no-show");
+    if (b.requested_at && !b.request_decided_at) throw new Error('That booking request has not been approved yet');
     if (b.no_show_at) throw new Error('Already marked as a no-show');
     return {
       summary: `Mark ${label} as a no-show. No fee is charged (to charge a no-show fee, open the appointment in Calendar).`,

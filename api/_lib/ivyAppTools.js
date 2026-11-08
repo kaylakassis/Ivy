@@ -54,6 +54,12 @@ import {
   partnerOverview, readPartnerSettings, cleanSettingsPatch, savePartnerSettings, snoozeToday,
   PARTNER_KINDS, PARTNER_KIND_LABELS, PARTNER_FREQUENCIES, PARTNER_FREQUENCY_LABELS,
 } from './accountability.js';
+import {
+  listOpenRequests, approveBookingRequest, declineBookingRequest, requestLine, requestStamp, cleanRequestMessage,
+} from './bookingRequests.js';
+import {
+  listWaitlist, waitlistSummary, offerTimeToEntry, removeWaitlistEntry, waitlistDay, waitlistTime,
+} from './waitlist.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -187,6 +193,36 @@ export const APP_TOOLS = [
     },
   },
   {
+    name: 'list_booking_requests',
+    description: "Booking requests waiting for the owner's approval (services set to confirm bookings before they're final): who, what, when, and when the hold runs out.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'approve_booking_request',
+    description: 'Approve a booking request from list_booking_requests. The client gets the confirmation; a deposit is charged to their saved card only now. message: an optional short note to the client.',
+    input_schema: { type: 'object', properties: { booking_id: { type: 'string' }, message: { type: 'string' } }, required: ['booking_id'] },
+  },
+  {
+    name: 'decline_booking_request',
+    description: "Decline a booking request: the time opens up and the client is told to pick another time. message: an optional short note to the client.",
+    input_schema: { type: 'object', properties: { booking_id: { type: 'string' }, message: { type: 'string' } }, required: ['booking_id'] },
+  },
+  {
+    name: 'waitlist',
+    description: 'The booking waitlist. list: who is waiting, for which service and times. offer: send one person (entry_id) a one-tap link for a free time (date YYYY-MM-DD, start_min, end_min). remove: take one person off the list.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'offer', 'remove'] },
+        entry_id: { type: 'string' },
+        date: { type: 'string' },
+        start_min: { type: 'integer' },
+        end_min: { type: 'integer' },
+      },
+      required: ['action'],
+    },
+  },
+  {
     name: 'find_duplicate_clients',
     description: 'Possible duplicate clients (same email, same phone, similar name): each pair with reasons, record counts and which one to keep.',
     input_schema: { type: 'object', properties: { limit: { type: 'integer', description: 'Pairs to return, default 20, max 50.' } } },
@@ -220,9 +256,9 @@ export const APP_TOOLS = [
 ];
 
 // Tools that only read; tools with a read action; everything else writes.
-export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients'];
+export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients', 'list_booking_requests'];
 // A tool's read action(s): they run straight away, never held.
-const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get' };
+const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get', waitlist: 'list' };
 export const APP_MIXED = new Set(Object.keys(READ_ACTION));
 // Always held for approval (by name). send_document is an older tool whose
 // plan now lives here.
@@ -1178,7 +1214,116 @@ async function planDismissDuplicate(ws, a, ctx) {
   };
 }
 
+// ── booking requests + waitlist (1.0.6) ────────────────────────────────
+async function readBookingRequests({ workspaceId }) {
+  const rows = await listOpenRequests(workspaceId);
+  const tz = (await sql`SELECT timezone FROM calendar_settings WHERE workspace_id = ${workspaceId}`).rows[0]?.timezone || null;
+  return {
+    count: rows.length,
+    requests: rows.map((r) => ({
+      booking_id: r.id, client: r.clientName, client_id: r.clientId, service: r.serviceName, date: r.date,
+      time: fmtMin(r.startMin), holds_until: requestStamp(r.requestExpiresAt, tz),
+      deposit_on_approval: r.depositRequired > 0 ? r.depositRequired : 0, note: r.notes,
+      status: 'requested (awaiting your approval)',
+    })),
+    note: rows.length ? 'Approving or declining needs the owner\'s approval card.' : 'No booking requests are waiting.',
+    manage: '[Calendar](/calendar)',
+  };
+}
+async function pendingRequestOrThrow(ws, a) {
+  const id = needId(a.booking_id, 'booking_id', 'list_booking_requests');
+  const r = (await listOpenRequests(ws, { limit: 200 })).find((x) => x.id === id);
+  if (!r) throw new Error('That booking request is not waiting for a decision (it may already be approved, declined or withdrawn)');
+  return r;
+}
+async function planApproveRequest(ws, a, ctx) {
+  const r = await pendingRequestOrThrow(ws, a);
+  const note = cleanRequestMessage(a.message);
+  const dep = r.depositRequired > 0 ? ` Their $${Number(r.depositRequired).toFixed(2)} deposit is charged to the card they saved (or they get a pay link).` : '';
+  return {
+    summary: `Approve the booking request from ${requestLine(r)}. They get the confirmation email${note ? ` with your note: "${note}"` : ''}.${dep}`,
+    done: `Approved ${requestLine(r)} and sent the confirmation`,
+    apply: async () => {
+      const out = await approveBookingRequest({ workspaceId: ws, bookingId: r.id, userId: ctx?.userId || null, message: note, actor: 'ivy' });
+      if (out.notFound) throw new Error('Booking not found');
+      if (out.alreadyDecided) throw new Error(`That request was already ${out.decision || 'decided'}`);
+      const warnings = [];
+      if (out.deposit?.error && !out.deposit?.payUrlSent) warnings.push(`The deposit was not taken: ${out.deposit.error}`);
+      if (out.deposit?.payUrlSent) warnings.push('The deposit could not be charged to a saved card, so the confirmation carries a pay link.');
+      return { ok: true, booking_id: r.id, deposit_charged: out.deposit?.charged || 0, ...(warnings.length ? { warnings } : {}) };
+    },
+  };
+}
+async function planDeclineRequest(ws, a, ctx) {
+  const r = await pendingRequestOrThrow(ws, a);
+  const note = cleanRequestMessage(a.message);
+  return {
+    summary: `Decline the booking request from ${requestLine(r)}. The time opens up and they are emailed "Sorry, that time isn't available" with a link to pick another time${note ? ` and your note: "${note}"` : ''}. Nothing was charged.`,
+    done: `Declined ${requestLine(r)} and told them to pick another time`,
+    apply: async () => {
+      const out = await declineBookingRequest({ workspaceId: ws, bookingId: r.id, userId: ctx?.userId || null, message: note });
+      if (out.notFound) throw new Error('Booking not found');
+      if (out.alreadyDecided) throw new Error(`That request was already ${out.decision || 'decided'}`);
+      return { ok: true, booking_id: r.id };
+    },
+  };
+}
+async function readWaitlist(ws) {
+  const [entries, summary] = await Promise.all([listWaitlist(ws), waitlistSummary(ws)]);
+  return {
+    waiting: summary.map((s) => ({ service_id: s.serviceId, service: s.serviceName, people: s.waiting })),
+    entries: entries.map((e) => ({
+      entry_id: e.id, client: e.clientName, client_id: e.clientId, service: e.serviceName,
+      wants: e.preferenceLabel, status: e.status, joined: e.createdAt,
+      ...(e.lastOffer ? { last_offer: { date: e.lastOffer.date, time: fmtMin(e.lastOffer.startMin), status: e.lastOffer.status, expires: e.lastOffer.expiresAt } } : {}),
+    })),
+    note: 'offer sends that person a one-tap link by email and text (with consent); first to tap gets the spot. Offering or removing needs the owner\'s approval card.',
+    manage: '[Waitlist](/calendar?waitlist=1)',
+  };
+}
+async function planWaitlist(ws, a) {
+  const action = String(a.action || '');
+  if (action === 'remove') {
+    const id = needId(a.entry_id, 'entry_id', 'waitlist list');
+    const e = (await listWaitlist(ws)).find((x) => x.id === id);
+    if (!e) throw new Error('That person is not on the waitlist');
+    return {
+      summary: `Take ${clip(e.clientName, 60)} off the waitlist for ${e.serviceName}. They are not told.`,
+      done: `Took ${clip(e.clientName, 60)} off the waitlist for ${e.serviceName}`,
+      apply: async () => {
+        const out = await removeWaitlistEntry({ workspaceId: ws, id });
+        if (out.notFound) throw new Error('That person is no longer on the waitlist');
+        return { ok: true, entry_id: id };
+      },
+    };
+  }
+  if (action === 'offer') {
+    const id = needId(a.entry_id, 'entry_id', 'waitlist list');
+    const e = (await listWaitlist(ws)).find((x) => x.id === id);
+    if (!e) throw new Error('That person is not on the waitlist');
+    const date = String(a.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('date must be YYYY-MM-DD');
+    const start = Number(a.start_min), end = Number(a.end_min);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start) throw new Error('start_min and end_min (minutes from midnight) are required');
+    const who = `${clip(e.clientName, 60)} (${e.clientEmail})`;
+    const when = `${waitlistDay(date)} at ${waitlistTime(start)}`;
+    return {
+      summary: `Offer ${who} the ${e.serviceName} spot on ${when}. They get an email${e.clientPhone ? ' and a text (if they agreed to texts)' : ''} with a one-tap link to book it; the link expires after the time set in Calendar settings.`,
+      done: `Offered ${who} ${e.serviceName} on ${when}`,
+      apply: async () => {
+        const out = await offerTimeToEntry({ workspaceId: ws, entryId: id, dateISO: date, startMin: start, endMin: end, offeredBy: 'ivy' });
+        if (out.error) throw new Error(out.error);
+        return { ok: true, offer_id: out.offer.id, expires_at: out.offer.expires_at };
+      },
+    };
+  }
+  throw new Error("action must be 'list', 'offer' or 'remove'");
+}
+
 const PLANS = {
+  approve_booking_request: planApproveRequest,
+  decline_booking_request: planDeclineRequest,
+  waitlist: planWaitlist,
   merge_clients: planMergeClients,
   dismiss_duplicate: planDismissDuplicate,
   reminder_settings: planReminders,
@@ -1229,6 +1374,8 @@ function writeHandler(name, read = null) {
 }
 
 export const APP_HANDLERS = {
+  list_booking_requests: readBookingRequests,
+  waitlist: writeHandler('waitlist', readWaitlist),
   list_deposit_reviews: readDepositReviews,
   list_policy_acceptances: readAcceptances,
   find_duplicate_clients: readDuplicates,

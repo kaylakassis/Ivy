@@ -92,10 +92,17 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
                 // color, blocks use their own color (or hatch pattern
                 // for hard blocks without a custom color).
                 let tileBg, tileColor;
+                let tileBorder = 0;
                 if (ev.kind === 'booking') {
                   const svc = (cal.services || []).find((s) => s.id === ev.serviceId);
                   tileBg    = svc?.color || 'var(--accent)';
                   tileColor = svc?.color ? '#fff' : 'var(--accent-ink)';
+                  if (ev.isRequest) {
+                    // A booking request: dashed outline, not filled.
+                    tileBorder = `1.5px dashed ${tileBg}`;
+                    tileBg = 'var(--surface)';
+                    tileColor = 'var(--fg)';
+                  }
                 } else {
                   const isBlocking = ev.blocksBookings !== false;
                   const baseColor  = ev.color || (isBlocking ? null : 'var(--accent)');
@@ -112,13 +119,13 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
                     title={ev.kind === 'block' && ev.blocksBookings === false ? 'Reminder only - slot still bookable' : undefined}
                     style={{
                       width: '100%', textAlign: 'left',
-                      padding: '3px 6px', borderRadius: 4, border: 0,
+                      padding: '3px 6px', borderRadius: 4, border: tileBorder,
                       fontSize: 10.5, fontWeight: 500,
                       background: tileBg,
                       color: tileColor,
                       cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                     }}>
-                    {minToHM(ev.startMin)} {ev.kind === 'booking' ? (ev.clientName || 'Booking') : (ev.label || (ev.blocksBookings === false ? 'Event' : 'Block'))}
+                    {minToHM(ev.startMin)} {ev.kind === 'booking' ? `${ev.isRequest ? 'Requested: ' : ''}${ev.clientName || 'Booking'}` : (ev.label || (ev.blocksBookings === false ? 'Event' : 'Block'))}
                   </button>
                 );
               })}

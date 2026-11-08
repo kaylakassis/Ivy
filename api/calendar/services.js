@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const settingsRow = await ensureCalendarSettings(workspaceId);
     const bizMinutes = clientRemindersFrom(settingsRow?.client_reminders ?? null).minutes;
     const prevRows = await sql`
-      SELECT id, reminder_minutes, reminders_use_default FROM services WHERE workspace_id = ${workspaceId}`;
+      SELECT id, reminder_minutes, reminders_use_default, require_approval FROM services WHERE workspace_id = ${workspaceId}`;
     const prevById = new Map(prevRows.rows.map((r) => [r.id, r]));
 
     const cleaned = [];
@@ -86,6 +86,12 @@ export default async function handler(req, res) {
           || sameSet(reminderMinutes, LEGACY_SERVICE_DEFAULT)
           || (prevFollows && sameSet(reminderMinutes, bizMinutes));
       }
+
+      // 1.0.6 "Confirm bookings before they're final". An older app never
+      // sends it, so the saved value is kept rather than reset to off.
+      let requireApproval = false;
+      if (s && typeof s.requireApproval === 'boolean') requireApproval = s.requireApproval;
+      else if (s?.id && prevById.get(s.id)) requireApproval = !!prevById.get(s.id).require_approval;
 
       const capRaw = s?.capacity ?? 1;
       const capacity = Number.isInteger(capRaw) ? capRaw : Number(capRaw);
@@ -275,6 +281,7 @@ export default async function handler(req, res) {
         prepInstructions,
         reminderMinutes,
         reminderUseDefault,
+        requireApproval,
         capacity,
         intakeFormTemplateIds,
         depositType,
@@ -359,7 +366,8 @@ export default async function handler(req, res) {
             add_ons = ${JSON.stringify(s.addOns)}::jsonb,
             custom_fields = ${JSON.stringify(s.customFields)}::jsonb,
             color = ${s.color || null},
-            availability = ${s.availability ? JSON.stringify(s.availability) : null}::jsonb
+            availability = ${s.availability ? JSON.stringify(s.availability) : null}::jsonb,
+            require_approval = ${s.requireApproval}
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -373,7 +381,7 @@ export default async function handler(req, res) {
             intake_form_template_ids, deposit_type, deposit_amount,
             location_type, location_label, visibility, travel_buffer_minutes,
             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount,
-            add_ons, custom_fields, color, availability
+            add_ons, custom_fields, color, availability, require_approval
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
@@ -382,7 +390,7 @@ export default async function handler(req, res) {
             ${s.locationType}, ${s.locationLabel}, ${s.visibility}, ${s.travelBufferMinutes},
             ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount},
             ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb, ${s.color || null},
-            ${s.availability ? JSON.stringify(s.availability) : null}::jsonb
+            ${s.availability ? JSON.stringify(s.availability) : null}::jsonb, ${s.requireApproval}
           )
           RETURNING *
         `;

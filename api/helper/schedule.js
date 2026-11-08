@@ -72,6 +72,7 @@ export default async function handler(req, res) {
        WHERE b.workspace_id = ${membership.workspaceId}
          AND b.staff_id = ${membership.staffId}
          AND b.cancelled_at IS NULL
+         AND (b.requested_at IS NULL OR b.request_decided_at IS NOT NULL)
          AND (
            (b.recurrence_rule IS NULL AND b.date >= ${from}::date AND b.date <= ${to}::date)
            OR (b.recurrence_rule IS NOT NULL AND b.date <= ${to}::date

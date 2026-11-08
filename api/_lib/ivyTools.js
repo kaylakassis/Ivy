@@ -1603,6 +1603,7 @@ const ACTION_KINDS = {
   create_document_from_template: 'document', send_document: 'document',
   send_document_from_template: 'document', void_document: 'document', resend_document: 'document',
   use_package_session: 'booking', review_deposit_refund: 'invoice', autopay: 'invoice',
+  approve_booking_request: 'booking', decline_booking_request: 'booking', waitlist: 'booking',
   send_policy_for_acceptance: 'message', resend_client_invite: 'message',
 };
 export function ivyActionKind(tool, args) {
@@ -1704,6 +1705,8 @@ const ATTEMPT_TEXT = {
   send_document_from_template: 'Send the template', void_document: 'Void the document', resend_document: 'Resend the document',
   autopay: 'Change automatic payments', client_invite_settings: 'Change the invite setting', resend_client_invite: 'Resend the portal invite',
   merge_clients: 'Merge the two clients', dismiss_duplicate: 'Mark the clients as different people',
+  approve_booking_request: 'Approve the booking request', decline_booking_request: 'Decline the booking request',
+  waitlist: 'Change the waitlist',
 };
 function attemptText(name, a) {
   const who = a?.name || a?.title || a?.subject || '';
@@ -1853,6 +1856,7 @@ async function list_upcoming_bookings({ workspaceId, args }) {
   const { rows } = await sql.query(
     `SELECT b.id, b.client_id, b.client_name, b.client_email,
             b.date, b.start_min, b.end_min, b.notes,
+            (b.requested_at IS NOT NULL AND b.request_decided_at IS NULL) AS is_request,
             s.name AS service_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
@@ -1873,6 +1877,9 @@ async function list_upcoming_bookings({ workspaceId, args }) {
       date: r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date,
       start_min: r.start_min, end_min: r.end_min,
       notes: r.notes || null,
+      // 1.0.6: a booking request the owner has not approved yet holds the
+      // time but is not confirmed (approve_booking_request / decline_...).
+      status: r.is_request ? 'requested (awaiting your approval, not confirmed)' : 'confirmed',
     })),
   };
 }

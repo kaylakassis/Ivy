@@ -73,6 +73,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
       intakeFormTemplateIds: [],
       depositType: 'none',
       depositAmount: 0,
+      requireApproval: false,
       locationType: 'in_person',
       locationLabel: '',
       visibility: 'public',
@@ -121,6 +122,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
         intakeFormTemplateIds: (s.intakeFormTemplateIds || []).slice(),
         depositType: s.depositType || 'none',
         depositAmount: Number(s.depositAmount) || 0,
+        requireApproval: !!s.requireApproval,
         locationType: s.locationType || 'in_person',
         locationLabel: (s.locationLabel || '').trim() || null,
         // A meeting link the server removed (not https): kept until the
@@ -439,6 +441,33 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             depositAmount={service.depositAmount || 0}
             onChange={(patch) => onChange(patch)}
           />
+        </Field>
+
+        <Field label="Confirm bookings before they're final"
+          hint={service.requireApproval
+            ? 'Clients request a time; it is held for them until you approve or decline (Calendar). A deposit is charged only when you approve.'
+            : 'Off: clients book straight away and get an instant confirmation.'}>
+          <button type="button" role="switch" aria-checked={!!service.requireApproval}
+            onClick={() => onChange({ requireApproval: !service.requireApproval })}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+              padding: '10px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: service.requireApproval ? 'var(--accent-soft)' : 'var(--surface-2)',
+              border: '1px solid ' + (service.requireApproval ? 'var(--accent)' : 'var(--border)'),
+              color: service.requireApproval ? 'var(--accent)' : 'var(--fg-2)',
+            }}>
+            <span style={{
+              width: 34, height: 20, borderRadius: 99, flexShrink: 0, position: 'relative',
+              background: service.requireApproval ? 'var(--accent)' : 'var(--surface)',
+              border: `1px solid ${service.requireApproval ? 'var(--accent)' : 'var(--border-strong)'}`,
+            }}>
+              <span style={{
+                position: 'absolute', top: 2, left: service.requireApproval ? 16 : 2, width: 14, height: 14, borderRadius: 99,
+                background: service.requireApproval ? 'var(--accent-ink)' : 'var(--border-strong)', transition: 'left .12s',
+              }}/>
+            </span>
+            {service.requireApproval ? 'On: clients request, you confirm' : 'Off: instant booking'}
+          </button>
         </Field>
 
         {/* Where does this service happen? - three rows by location type:

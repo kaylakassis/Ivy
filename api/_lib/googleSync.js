@@ -101,6 +101,8 @@ export async function syncOnBookingCreated({ workspaceId, bookingId }) {
     `;
     const booking = rows[0];
     if (!booking || booking.cancelled_at) return;
+    // A booking request waits for the owner's approval before it is pushed.
+    if (booking.requested_at && !booking.request_decided_at) return;
     // Already linked to a Google event (a retry, or a booking imported from
     // the owner's own Google Calendar): never insert a second copy.
     if (booking.google_event_id || isGoogleImported(booking)) return;

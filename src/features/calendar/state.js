@@ -21,6 +21,10 @@ export const EMPTY_CAL = {
   services: [],
   blocks: [],
   bookings: [],
+  // 1.0.6: booking requests waiting for Approve / Decline (same shape as
+  // bookings, with isRequest: true). Kept apart so older apps never draw
+  // one as a confirmed appointment.
+  requests: [],
 };
 
 // useCalendar(window?) - `window` is { from, to } in YYYY-MM-DD.
@@ -115,7 +119,7 @@ export function useCalendar(window) {
     // refundDeposit: the owner ticked "Refund the deposit now". Without it a
     // paid deposit becomes a one-tap refund request (Deposits to review).
     await api.del('/calendar/bookings/' + id, opts.refundDeposit ? { refundDeposit: true } : undefined);
-    setCal((c) => ({ ...c, bookings: c.bookings.filter((b) => b.id !== id) }));
+    setCal((c) => ({ ...c, bookings: c.bookings.filter((b) => b.id !== id), requests: (c.requests || []).filter((b) => b.id !== id) }));
   }, []);
 
   const cancelOccurrence = useCallback(async (id, dateISO) => {
@@ -132,8 +136,24 @@ export function useCalendar(window) {
     setCal((c) => ({
       ...c,
       bookings: c.bookings.map((b) => b.id === id ? r.booking : b),
+      requests: (c.requests || []).map((b) => b.id === id ? r.booking : b),
     }));
     return r.booking;
+  }, []);
+
+  // Approve or decline a booking request. Approved: it becomes a booking.
+  // Declined: it leaves the calendar (the slot is free again).
+  const decideRequest = useCallback(async (id, decision, message) => {
+    const r = await api.patch('/calendar/bookings/' + id, { decideRequest: decision, ...(message ? { message } : {}) });
+    haptic(decision === 'approve' ? 'success' : 'light');
+    setCal((c) => ({
+      ...c,
+      requests: (c.requests || []).filter((b) => b.id !== id),
+      bookings: decision === 'approve' && r.booking
+        ? [...c.bookings.filter((b) => b.id !== id), r.booking]
+        : c.bookings.filter((b) => b.id !== id),
+    }));
+    return r;
   }, []);
 
   const createBooking = useCallback(async (input) => {
@@ -175,5 +195,6 @@ export function useCalendar(window) {
     addBlock, updateBlock, removeBlock,
     createBooking, updateBooking, applyBooking, cancelBooking, cancelOccurrence,
     completeBooking, editCompletion, clearCompletion,
+    decideRequest,
   };
 }

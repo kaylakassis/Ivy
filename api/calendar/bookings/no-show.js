@@ -56,13 +56,14 @@ export default async function handler(req, res) {
 
     // Owner-side ownership check.
     const r = await sql`
-      SELECT id, cancelled_at, no_show_at FROM bookings
+      SELECT id, cancelled_at, no_show_at, requested_at, request_decided_at FROM bookings
        WHERE id = ${id} AND workspace_id = ${workspaceId}
        LIMIT 1
     `;
     const b = r.rows[0];
     if (!b) return badRequest(res, 'Booking not found');
     if (b.cancelled_at) return badRequest(res, "Can't mark a cancelled booking as a no-show");
+    if (b.requested_at && !b.request_decided_at) return badRequest(res, 'This booking request has not been approved yet');
     if (b.no_show_at)   return badRequest(res, 'Already marked as a no-show');
 
     // Mark first, guarded, so only one request ever goes on to charge.

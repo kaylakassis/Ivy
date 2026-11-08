@@ -12,10 +12,14 @@ import BookingMoneyNotes, { useKeepDeposit } from './BookingMoneyNotes.jsx';
 
 export default function EventDrawer({
   event, services,
-  onSaveBlock, onUpdateBooking, onCancelOccurrence,
+  onSaveBlock, onUpdateBooking, onDecideRequest, onCancelOccurrence,
   onCompleteBooking, onEditCompletion, onClearCompletion,
   onDelete, onClose, onBookingChanged,
 }) {
+  // 1.0.6: a booking request. Approve / Decline instead of the usual actions.
+  if (event.kind === 'booking' && event.isRequest && !event.cancelledAt) {
+    return <RequestView event={event} svc={services.find((s) => s.id === event.serviceId)} onDecide={onDecideRequest} onClose={onClose}/>;
+  }
   if (event.kind === 'booking') {
     return (
       <BookingView
@@ -385,6 +389,91 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
 
 function ruleLabel(rule) {
   return RECURRENCE_OPTIONS.find((r) => r.value === rule)?.label || rule;
+}
+
+// A booking request waiting for the owner's answer (api/_lib/bookingRequests.js).
+function RequestView({ event, svc, onDecide, onClose }) {
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState(null); // 'decline'
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState(null);
+  const [result, setResult] = useState(null);
+  const decide = async (decision) => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await onDecide(event.id, decision, decision === 'decline' ? note.trim() : '');
+      setResult({ decision, deposit: r?.deposit || null });
+    } catch (e) {
+      setErr(e.message || 'That did not work. Try again.');
+    } finally { setBusy(false); }
+  };
+  const holds = event.requestExpiresAt ? new Date(event.requestExpiresAt) : null;
+  const deposit = Number(event.depositRequired || 0);
+  return (
+    <Drawer title="Booking request" subtitle="Not confirmed yet. The time is held until you answer." onClose={onClose}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 99, border: '1.5px dashed var(--accent)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+        <Icons.Clock size={12} sw={2.2}/> Requested
+      </div>
+      <InfoRow label="Client"  value={event.clientName}/>
+      {(event.clientEmail || '').trim() && <InfoRow label="Email" value={event.clientEmail}/>}
+      <InfoRow label="Service" value={svc?.name || '-'}/>
+      <InfoRow label="Date"    value={parseISO(event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
+      <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
+      <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '-'}/>
+      {deposit > 0 && <InfoRow label="Deposit" value={`$${deposit.toFixed(2)}, charged only when you approve`}/>}
+      {holds && <InfoRow label="Held until" value={holds.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}/>}
+      {event.notes && <InfoRow label="Notes" value={event.notes}/>}
+
+      {result ? (
+        <div style={{ marginTop: 18, padding: '12px 14px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 13.5, lineHeight: 1.5 }}>
+          {result.decision === 'approve' ? (
+            <>
+              <b>Approved.</b> {event.clientName?.split(' ')[0] || 'The client'} got their confirmation and reminders are on.
+              {result.deposit?.charged > 0 && <> Their ${Number(result.deposit.charged).toFixed(2)} deposit was charged.</>}
+              {result.deposit?.payUrlSent && <> No saved card, so the confirmation includes a link to pay the deposit.</>}
+              {result.deposit?.error && !result.deposit?.payUrlSent && <> The deposit could not be taken: {result.deposit.error}</>}
+            </>
+          ) : (
+            <><b>Declined.</b> The time is open again and {event.clientName?.split(' ')[0] || 'the client'} was told to pick another time.</>
+          )}
+          <div style={{ marginTop: 10 }}>
+            <button className="btn btn-outline" onClick={onClose} style={{ width: '100%', justifyContent: 'center' }}>Close</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 24 }}>
+          {err && <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
+          {mode === 'decline' ? (
+            <>
+              <label style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
+                A short note to the client (optional)
+                <input className="input" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500}
+                  placeholder="For example: that day is full, Thursday afternoons are open" style={{ marginTop: 6 }}/>
+              </label>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>They get "Sorry, that time isn't available" with a link to pick another time. Nothing was charged.</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" onClick={() => setMode(null)} disabled={busy} style={{ flex: 1, justifyContent: 'center' }}>Back</button>
+                <button className="btn btn-primary" disabled={busy} onClick={() => decide('decline')}
+                  style={{ flex: 1, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}>
+                  {busy ? 'Declining…' : 'Decline and tell them'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-primary" disabled={busy} onClick={() => decide('approve')} style={{ justifyContent: 'center' }}>
+                {busy ? 'Approving…' : 'Approve and confirm'}
+              </button>
+              <button className="btn btn-outline" disabled={busy} onClick={() => setMode('decline')} style={{ justifyContent: 'center' }}>
+                Decline
+              </button>
+              <button className="btn btn-ghost" onClick={onClose} style={{ justifyContent: 'center' }}>Close</button>
+            </>
+          )}
+        </div>
+      )}
+    </Drawer>
+  );
 }
 
 // No-show + tip + manual-fee actions. All hit endpoints that

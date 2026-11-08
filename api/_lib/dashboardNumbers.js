@@ -44,6 +44,7 @@ export async function keyNumbers(workspaceId, tz = 'UTC') {
                            AND date <  date_trunc('week', NOW() AT TIME ZONE ${tz})::date)::int AS last_week
         FROM bookings
        WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
+         AND (requested_at IS NULL OR request_decided_at IS NOT NULL)
          AND date >= date_trunc('week', NOW() AT TIME ZONE ${tz})::date - 7
          AND date <  date_trunc('week', NOW() AT TIME ZONE ${tz})::date + 7`,
     sql`

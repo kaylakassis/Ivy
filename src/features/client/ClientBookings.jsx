@@ -35,7 +35,7 @@ export function AddToCalendar({ links }) {
 
 export default function ClientBookings() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [data, setData]       = useState({ upcoming: [], past: [], cancelled: [] });
+  const [data, setData]       = useState({ upcoming: [], past: [], cancelled: [], requested: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [tab, setTab] = useState(() => {
@@ -55,7 +55,8 @@ export default function ClientBookings() {
       api.get('/me/bookings'),
       api.get('/me/pending-reviews').catch(() => ({ bookings: [] })),
     ]);
-    setData({ upcoming: b.upcoming || [], past: b.past || [], cancelled: b.cancelled || [] });
+    // 1.0.6: booking requests the business has not answered yet.
+    setData({ upcoming: b.upcoming || [], past: b.past || [], cancelled: b.cancelled || [], requested: b.requested || [] });
     setPendingReviewIds(new Set((p.bookings || []).map((x) => x.id)));
     return b;
   }, []);
@@ -80,7 +81,7 @@ export default function ClientBookings() {
     const c = searchParams.get('cancel');
     if (!searchParams.get('tab') && !r && !c) return;
     consumed.current = true;
-    const find = (id) => data.upcoming.find((b) => b.id === id);
+    const find = (id) => data.upcoming.find((b) => b.id === id) || (data.requested || []).find((b) => b.id === id);
     if (r && find(r)) setRescheduling(find(r));
     if (c && find(c)) { setCancelErr(null); setConfirming(find(c)); }
     const next = new URLSearchParams(searchParams);
@@ -96,7 +97,9 @@ export default function ClientBookings() {
       const r = await api.del('/me/bookings/' + confirming.id);
       await load();
       setConfirming(null);
-      if (r && r.policyMessage) {
+      if (r && r.request) {
+        setNotice({ tone: 'ok', text: 'Your request is cancelled. The business has been told and nothing was charged.' });
+      } else if (r && r.policyMessage) {
         setNotice({ tone: Number(r.feeCharged) > 0 || Number(r.depositKept) > 0 ? 'warn' : 'ok', text: `Your booking is cancelled. ${r.policyMessage}` });
       } else if (r && Number(r.feeCharged) > 0) {
         setNotice({ tone: 'warn', text: `Your booking is cancelled. A ${fmtMoney(r.feeCharged)} late-cancellation fee was charged to your saved card.` });
@@ -124,8 +127,10 @@ export default function ClientBookings() {
     </div></div>
   );
 
-  const rows = data[tab] || [];
-  const counts = { upcoming: data.upcoming.length, past: data.past.length, cancelled: data.cancelled.length };
+  // Requests sit at the top of Upcoming, marked "Requested".
+  const requested = data.requested || [];
+  const rows = tab === 'upcoming' ? [...requested, ...data.upcoming] : (data[tab] || []);
+  const counts = { upcoming: data.upcoming.length + requested.length, past: data.past.length, cancelled: data.cancelled.length };
   // Most recent business to suggest in the empty state.
   const lastPast = data.past.find((b) => b.bizSlug && !b.archived);
 
@@ -245,9 +250,10 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
   const hasCompletion = !!b.completionNotes
     || (Array.isArray(b.completionAttachments) && b.completionAttachments.length > 0);
   const cancelled = !!b.cancelledAt;
-  const pay = !cancelled ? paymentLine(b.payment) : null;
+  const requested = !cancelled && !!b.isRequest;
+  const pay = !cancelled && !requested ? paymentLine(b.payment) : null;
   const where = !cancelled ? whereLine(b) : null;
-  const upcoming = tab === 'upcoming' && !cancelled;
+  const upcoming = tab === 'upcoming' && !cancelled && !requested;
   const again = !upcoming && b.bizSlug && !b.archived ? bookHref(b.bizSlug, b.serviceId) : null;
 
   const actions = [];
@@ -272,6 +278,14 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
       <button key="cancel" onClick={onCancel} className="btn btn-ghost"
         style={{ ...actionBtn, color: 'var(--danger)' }}>
         Cancel
+      </button>,
+    );
+  }
+  if (requested) {
+    actions.push(
+      <button key="cancel-request" onClick={onCancel} className="btn btn-ghost"
+        style={{ ...actionBtn, color: 'var(--danger)' }}>
+        Cancel request
       </button>,
     );
   }
@@ -316,6 +330,13 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div style={{ fontSize: 15.5, fontWeight: 650, lineHeight: 1.3, overflowWrap: 'anywhere' }}>
             {b.serviceName || 'Appointment'}
+            {requested && (
+              <span style={{
+                marginLeft: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                color: 'var(--accent)', verticalAlign: 'middle', padding: '1px 7px', borderRadius: 99,
+                border: '1.5px dashed var(--accent)',
+              }}>Requested</span>
+            )}
             {cancelled && (
               <span style={{
                 marginLeft: 8, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -335,6 +356,18 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
           )}
           {pay && (
             <div style={{ fontSize: 13, fontWeight: 600, color: pay.color }}>{pay.text}</div>
+          )}
+          {requested && (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
+              Waiting for {b.businessName} to confirm.
+              {b.requestExpiresAt ? ` The time is held for you until ${new Date(b.requestExpiresAt).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.` : ''}
+            </div>
+          )}
+          {cancelled && b.requestDecision === 'declined' && (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{b.businessName} could not take this request.{b.requestMessage ? ` "${b.requestMessage}"` : ''}</div>
+          )}
+          {cancelled && b.requestDecision === 'expired' && (
+            <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>{b.businessName} could not confirm this request in time.</div>
           )}
           {cancelled && b.depositRefundStatus === 'pending' && (
             <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>Your deposit refund is being reviewed by {b.businessName}.</div>
@@ -505,9 +538,10 @@ export function cancelPolicy(b, now = Date.now()) {
 
 function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
   const policy = cancelPolicy(booking);
+  const isRequest = !!booking.isRequest;
   return (
     <Sheet onClose={onClose} busy={busy} labelledBy="cancel-title" maxWidth={440}>
-      <DialogHead id="cancel-title" icon="X" tone="danger" title="Cancel this booking?" onClose={onClose} busy={busy}/>
+      <DialogHead id="cancel-title" icon="X" tone="danger" title={isRequest ? 'Cancel this request?' : 'Cancel this booking?'} onClose={onClose} busy={busy}/>
       <div style={{
         padding: 12, borderRadius: 12, background: 'var(--surface-2)',
         border: '1px solid var(--border)', fontSize: 14, lineHeight: 1.55,
@@ -516,17 +550,21 @@ function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
         <div style={{ color: 'var(--fg-2)' }}>{booking.businessName}</div>
         <div style={{ color: 'var(--fg-2)' }}>{fmtDay(booking.date)} · {fmtTimeRange(booking.startMin, booking.endMin)}</div>
       </div>
-      <div style={{
-        padding: '12px 14px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.55,
-        background: policy.tone === 'warn' ? 'color-mix(in srgb, var(--warn) 12%, var(--surface))' : 'var(--surface)',
-        border: `1px solid ${policy.tone === 'warn' ? 'color-mix(in srgb, var(--warn) 40%, var(--border))' : 'var(--border)'}`,
-        display: 'flex', flexDirection: 'column', gap: 6,
-      }}>
-        <div style={{ fontWeight: 650, fontSize: 13 }}>Cancellation policy</div>
-        {policy.lines.map((l) => <div key={l}>{l}</div>)}
-      </div>
+      {!isRequest && (
+        <div style={{
+          padding: '12px 14px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.55,
+          background: policy.tone === 'warn' ? 'color-mix(in srgb, var(--warn) 12%, var(--surface))' : 'var(--surface)',
+          border: `1px solid ${policy.tone === 'warn' ? 'color-mix(in srgb, var(--warn) 40%, var(--border))' : 'var(--border)'}`,
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <div style={{ fontWeight: 650, fontSize: 13 }}>Cancellation policy</div>
+          {policy.lines.map((l) => <div key={l}>{l}</div>)}
+        </div>
+      )}
       <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.55 }}>
-        We will let {booking.businessName} know. This can't be undone, but you can always book again.
+        {isRequest
+          ? `${booking.businessName} has not confirmed this time yet, and nothing was charged. We will let them know you no longer need it.`
+          : <>We will let {booking.businessName} know. This can't be undone, but you can always book again.</>}
       </div>
       <ErrorNote>{error}</ErrorNote>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

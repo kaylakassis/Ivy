@@ -5365,4 +5365,67 @@ CREATE OR REPLACE VIEW workspace_revenue AS
                + CASE WHEN fee_charged_at IS NOT NULL THEN fee_charged_amount ELSE 0 END) AS amt
         FROM bookings GROUP BY workspace_id
     ) bk ON bk.workspace_id = w.id;
+
+-- 1.0.6 Booking requests ("confirm before it's final"). A service with
+-- require_approval makes every public booking a REQUEST: the row holds the
+-- slot (cancelled_at IS NULL, so every conflict check sees it) with
+-- requested_at set and request_decided_at NULL until the owner approves
+-- (request_decision 'approved'), declines ('declined'), the hold runs out
+-- ('expired') or the client withdraws ('cancelled'). The last three also
+-- set cancelled_at, which releases the slot. Reminders, fees, no-shows,
+-- revenue and Google sync all skip a pending request
+-- (api/_lib/bookingRequests.js PENDING_REQUEST_SQL / NOT_PENDING_SQL).
+ALTER TABLE services ADD COLUMN IF NOT EXISTS require_approval BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS request_hold_hours INT NOT NULL DEFAULT 24;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_expires_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_decided_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_decision TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_decided_by UUID;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_message TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_card_setup_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_bookings_requests_open
+  ON bookings(workspace_id, request_expires_at)
+  WHERE requested_at IS NOT NULL AND request_decided_at IS NULL AND cancelled_at IS NULL;
+
+-- 1.0.6 Waitlist, second pass. Entries can be flexible (preferred weekdays
+-- and a time window instead of one exact slot), carry their own text
+-- consent, and expire after 60 days. A cancellation no longer books the
+-- next person straight away: it OFFERS the spot (waitlist_offers) with a
+-- one-tap claim link that expires, then the next person is offered.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS waitlist_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS waitlist_auto_fill BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS waitlist_offer_hours INT NOT NULL DEFAULT 2;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS flexible BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS preferred_days INT[] NOT NULL DEFAULT '{}'::int[];
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS preferred_start_min INT;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS preferred_end_min INT;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS sms_consent_at TIMESTAMPTZ;
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '60 days');
+ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+ALTER TABLE waitlist_entries DROP CONSTRAINT IF EXISTS waitlist_entries_status_check;
+ALTER TABLE waitlist_entries ADD CONSTRAINT waitlist_entries_status_check
+  CHECK (status IN ('waiting', 'offered', 'promoted', 'fulfilled', 'cancelled', 'expired'));
+CREATE INDEX IF NOT EXISTS idx_waitlist_entries_open
+  ON waitlist_entries(workspace_id, service_id, status) WHERE status IN ('waiting', 'offered');
+CREATE TABLE IF NOT EXISTS waitlist_offers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  entry_id UUID NOT NULL REFERENCES waitlist_entries(id) ON DELETE CASCADE,
+  service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  start_min INT NOT NULL,
+  end_min INT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'claiming', 'claimed', 'expired', 'withdrawn', 'slot_gone')),
+  source_booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  claimed_booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  offered_by TEXT NOT NULL DEFAULT 'auto',
+  expires_at TIMESTAMPTZ NOT NULL,
+  claimed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_waitlist_offers_open
+  ON waitlist_offers(workspace_id, status, expires_at) WHERE status IN ('open', 'claiming');
+CREATE INDEX IF NOT EXISTS idx_waitlist_offers_entry ON waitlist_offers(entry_id);
 `;

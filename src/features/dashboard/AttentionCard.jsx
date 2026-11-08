@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import BookingRequestActions from './BookingRequestActions.jsx';
 
 const SHOW = 5;
 
@@ -82,6 +83,10 @@ export default function AttentionCard({ attention, hideKeys = [], onChanged }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>{it.title}</div>
               {it.detail && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 1, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.detail}</div>}
+              {/* 1.0.6: booking requests get Approve / Decline right here. */}
+              {Array.isArray(it.requests) && it.requests.length > 0 && (
+                <BookingRequestActions requests={it.requests} onChanged={onChanged}/>
+              )}
             </div>
             <Link to={it.href || '/dashboard'} className={it.important ? 'btn btn-primary' : 'btn btn-outline'}
               style={{ padding: '6px 11px', fontSize: 12.5, flexShrink: 0, textDecoration: 'none' }}

@@ -104,6 +104,12 @@ export function serializeSettings(row) {
     lat:            row.lat == null ? null : Number(row.lat),
     lng:            row.lng == null ? null : Number(row.lng),
     updatedAt:      row.updated_at,
+    // 1.0.6: how long a booking request holds its time (12 / 24 / 48 hours).
+    requestHoldHours: [12, 24, 48].includes(Number(row.request_hold_hours)) ? Number(row.request_hold_hours) : 24,
+    // 1.0.6 waitlist switches (api/_lib/waitlist.js).
+    waitlistEnabled:  row.waitlist_enabled !== false,
+    waitlistAutoFill: row.waitlist_auto_fill !== false,
+    waitlistOfferHours: [1, 2, 4, 12, 24].includes(Number(row.waitlist_offer_hours)) ? Number(row.waitlist_offer_hours) : 2,
   };
 }
 
@@ -184,6 +190,9 @@ export function serializeService(row, opts = {}) {
     // Slot computation intersects this with the workspace windows so a
     // service can only narrow availability, never expand outside hours.
     availability:      row.availability || null,
+    // 1.0.6: public bookings of this service are requests the owner
+    // confirms (api/_lib/bookingRequests.js). Off = book straight away.
+    requireApproval:   !!row.require_approval,
   };
 }
 
@@ -392,6 +401,15 @@ export function serializeBooking(row, opts = {}) {
     // Unified deposit + balance payment status. Omitted in helper mode -
     // helpers never see revenue.
     payment:             redactMoney ? undefined : computeBookingPayment(row),
+    // 1.0.6 booking requests. 'requested' while the owner has not decided;
+    // older apps never see a pending request here (GET /api/calendar puts
+    // them in `requests`, not `bookings`), so they cannot misread one.
+    status:              row.cancelled_at ? 'cancelled' : (row.requested_at && !row.request_decided_at ? 'requested' : 'confirmed'),
+    isRequest:           !!(row.requested_at && !row.request_decided_at && !row.cancelled_at),
+    requestedAt:         row.requested_at || null,
+    requestExpiresAt:    row.request_expires_at || null,
+    requestDecision:     row.request_decision || null,
+    requestMessage:      row.request_message || null,
   };
 }
 

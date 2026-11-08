@@ -45,6 +45,12 @@ import {
 } from '../../_lib/cancellationPolicy.js';
 import { cardOnFileCheckout } from '../../_lib/bookingFees.js';
 import {
+  requestFieldsFor, depositCardSetupForRequest, notifyOwnerOfRequest,
+} from '../../_lib/bookingRequests.js';
+import {
+  joinWaitlist, waitlistSettings, loadOfferByToken, claimOffer, releaseOffer, completeOffer, offerSlotGone,
+} from '../../_lib/waitlist.js';
+import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
 
@@ -318,7 +324,8 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT cs.workspace_id, cs.availability, cs.slot_minutes, cs.min_notice_hours, cs.slot_fit_service, cs.buffer_minutes, cs.max_advance_days, cs.timezone
+      SELECT cs.workspace_id, cs.availability, cs.slot_minutes, cs.min_notice_hours, cs.slot_fit_service, cs.buffer_minutes, cs.max_advance_days, cs.timezone,
+             cs.request_hold_hours, cs.waitlist_enabled, cs.waitlist_auto_fill, cs.waitlist_offer_hours
       FROM calendar_settings cs
         JOIN workspaces w ON w.id = cs.workspace_id
         JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
@@ -334,6 +341,7 @@ async function createBooking(req, res) {
     const bufferMinutes = Math.max(0, Number(settingsRows.rows[0].buffer_minutes || 0));
     const maxAdvanceDays = Math.max(0, Number(settingsRows.rows[0].max_advance_days ?? 60));
     const workspaceTz = settingsRows.rows[0].timezone || null;
+    const settingsRow = settingsRows.rows[0];
 
     // Validate inputs.
     const date = (body.date || '').toString();
@@ -354,7 +362,9 @@ async function createBooking(req, res) {
     const smsConsent = !!body.smsConsent && !!clientPhone;
     // Waitlist branch: client wants to queue for this slot instead of
     // (or after) failing a booking attempt against a full slot.
-    const joinWaitlist = !!body.joinWaitlist;
+    const wantsWaitlist = !!body.joinWaitlist;
+    // A one-tap claim link from a waitlist offer (api/_lib/waitlist.js).
+    const claimToken = body.waitlistClaimToken ? String(body.waitlistClaimToken).slice(0, 200) : null;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return badRequest(res, 'date must be YYYY-MM-DD');
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
@@ -377,7 +387,7 @@ async function createBooking(req, res) {
     let pkgRow = null;
     if (clientPackageId) {
       if (!/^[0-9a-fA-F-]{36}$/.test(clientPackageId)) return badRequest(res, 'Invalid package');
-      if (joinWaitlist) return badRequest(res, 'Join the waitlist without a package. You can use it when a spot opens.');
+      if (wantsWaitlist) return badRequest(res, 'Join the waitlist without a package. You can use it when a spot opens.');
       if (body.giftCardCode) return badRequest(res, 'Use either a package session or a gift card, not both.');
       const user = await requireUser(req, res);
       if (!user) return;
@@ -397,6 +407,25 @@ async function createBooking(req, res) {
       clientEmail = (pkgRow.client_email || clientEmail || '').toLowerCase();
     }
 
+    // Claiming a waitlist offer: the link is the identity. The offer must be
+    // this business's, still open, and for exactly this time.
+    let claim = null;
+    if (claimToken) {
+      if (pkgRow || wantsWaitlist) return badRequest(res, 'This link books the offered time directly.');
+      const offer = await loadOfferByToken(claimToken);
+      if (!offer || offer.workspace_id !== workspaceId) return badRequest(res, 'That link is not valid.');
+      if (offer.state === 'claimed') return res.status(409).json({ error: 'This spot was already booked.', claimState: 'claimed' });
+      if (offer.state !== 'open') return res.status(410).json({ error: 'This link has expired. The spot went to the next person on the list.', claimState: offer.state });
+      const offerDate = offer.date instanceof Date ? offer.date.toISOString().slice(0, 10) : String(offer.date).slice(0, 10);
+      if (offer.service_id !== serviceId || offerDate !== date || Number(offer.start_min) !== start) {
+        return badRequest(res, 'This link is for a different time.');
+      }
+      claim = offer;
+      clientName = (offer.client_name || clientName || '').slice(0, 120);
+      clientEmail = String(offer.client_email || clientEmail || '').toLowerCase();
+      if (!clientPhone && offer.client_phone) clientPhone = offer.client_phone;
+    }
+
     if (!clientName) return badRequest(res, 'Your name is required');
     if (!validEmail(clientEmail)) return badRequest(res, 'A valid email is required');
 
@@ -407,7 +436,7 @@ async function createBooking(req, res) {
       SELECT id, name, duration_minutes, capacity, price, deposit_type, deposit_amount,
              location_type, location_label, travel_buffer_minutes,
              custom_fields, add_ons, visibility, availability,
-             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount
+             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount, require_approval
         FROM services
        WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
@@ -524,7 +553,9 @@ async function createBooking(req, res) {
     if (slotStartMs < now.getTime() - 60 * 1000) {
       return badRequest(res, 'That time has passed');
     }
-    if (minNoticeHours > 0 && slotStartMs < now.getTime() + minNoticeHours * 3600 * 1000) {
+    // A waitlist claim fills a spot that just opened, often inside the notice
+    // window and that is the point; the past check above still applies.
+    if (!claim && minNoticeHours > 0 && slotStartMs < now.getTime() + minNoticeHours * 3600 * 1000) {
       const noticeLabel = minNoticeHours % 24 === 0
         ? `${minNoticeHours / 24} day${minNoticeHours === 24 ? '' : 's'}`
         : `${minNoticeHours} hour${minNoticeHours === 1 ? '' : 's'}`;
@@ -533,7 +564,7 @@ async function createBooking(req, res) {
     // Booking horizon: clients can't book further out than the owner allows
     // (0 = no limit). One extra day of grace absorbs viewer/server timezone
     // skew at the edge.
-    if (maxAdvanceDays > 0 && slotStartMs > now.getTime() + (maxAdvanceDays + 1) * 86400 * 1000) {
+    if (!claim && maxAdvanceDays > 0 && slotStartMs > now.getTime() + (maxAdvanceDays + 1) * 86400 * 1000) {
       const horizonLabel = maxAdvanceDays % 7 === 0
         ? `${maxAdvanceDays / 7} week${maxAdvanceDays === 7 ? '' : 's'}`
         : `${maxAdvanceDays} day${maxAdvanceDays === 1 ? '' : 's'}`;
@@ -564,53 +595,61 @@ async function createBooking(req, res) {
       : null;
     const policyStatus = policyCheck.decision === 'accepted' ? 'accepted' : 'not_accepted_older_app';
 
-    if (joinWaitlist) {
-      // Insert a waitlist entry instead of a booking. Allowed even when
-      // the slot is currently free - the client may want to be notified
-      // if the time changes; just no-op if there's already an entry
-      // from this email for the exact slot.
-      const existing = await sql`
-        SELECT id FROM waitlist_entries
-        WHERE workspace_id = ${workspaceId}
-          AND service_id = ${serviceId}
-          AND date = ${date} AND start_min = ${start} AND end_min = ${end}
-          AND client_email = ${clientEmail}
-          AND status = 'waiting'
-        LIMIT 1
-      `;
-      if (existing.rows.length > 0) {
-        return created(res, { waitlist: { id: existing.rows[0].id, alreadyJoined: true } });
+    if (wantsWaitlist) {
+      // A waitlist entry instead of a booking (api/_lib/waitlist.js): one
+      // exact slot, or flexible preferences (days + a time window). Caps and
+      // duplicates are handled there. Allowed even when the slot is free.
+      if (!waitlistSettings(settingsRow).enabled) {
+        return badRequest(res, 'This business is not taking waitlist sign-ups right now.');
       }
-      const w = await sql`
-        INSERT INTO waitlist_entries (
-          workspace_id, service_id, client_id,
-          client_name, client_email, client_phone,
-          date, start_min, end_min, notes
-        ) VALUES (
-          ${workspaceId}, ${serviceId}, NULL,
-          ${clientName}, ${clientEmail}, ${clientPhone},
-          ${date}, ${start}, ${end}, ${notes}
-        )
-        RETURNING id
-      `;
+      const joined = await joinWaitlist({
+        workspaceId, serviceId, clientName, clientEmail, clientPhone, smsConsent,
+        date, startMin: start, endMin: end, notes,
+        flexible: !!body.waitlistFlexible,
+        preferredDays: body.preferredDays,
+        preferredStartMin: body.preferredStartMin,
+        preferredEndMin: body.preferredEndMin,
+      });
+      if (joined.error) return res.status(joined.status || 400).json({ error: joined.error });
+      if (joined.alreadyJoined) {
+        return created(res, { waitlist: { id: joined.entry.id, alreadyJoined: true } });
+      }
       if (policyCheck.required) {
         await recordAcceptance({
-          workspaceId, clientId: null, bookingId: null, policy: policyCheck.policy,
+          workspaceId, clientId: joined.entry.client_id || null, bookingId: null, policy: policyCheck.policy,
           status: policyStatus, source: 'waitlist', req, name: clientName, email: clientEmail,
-          terms: { ...policyTerms, waitlistEntryId: w.rows[0].id },
+          terms: { ...policyTerms, waitlistEntryId: joined.entry.id },
         });
       }
-      return created(res, { waitlist: { id: w.rows[0].id, alreadyJoined: false } });
+      return created(res, { waitlist: { id: joined.entry.id, alreadyJoined: false, flexible: !!joined.entry.flexible } });
     }
 
     if (await hasConflict({
       workspaceId, dateISO: date, start, end, serviceId,
       capacity: serviceCapacity, travelBufferMin: travelBuffer, bufferMin: bufferMinutes,
     })) {
+      if (claim) {
+        // The spot was taken by someone else before the tap: the offer is
+        // over; the person stays on the list for the next opening.
+        await offerSlotGone({ offerId: claim.id, workspaceId }).catch(() => {});
+        return res.status(409).json({ error: 'Sorry, that spot was just taken. You are still on the waitlist.', claimState: 'slot_gone' });
+      }
       return badRequest(res, serviceCapacity > 1
         ? 'That class just filled up - please pick another time'
         : 'That slot was just taken - please pick another time');
     }
+    // First to tap gets it: one atomic flip on the offer. The loser sees a
+    // plain message and keeps their place on the list.
+    if (claim) {
+      const won = await claimOffer({ offerId: claim.id, workspaceId });
+      if (!won) return res.status(409).json({ error: 'Someone else just took this spot. You are still on the waitlist.', claimState: 'claimed' });
+    }
+    const unclaim = async () => { if (claim) await releaseOffer({ offerId: claim.id, workspaceId }).catch(() => {}); };
+
+    // Booking requests (api/_lib/bookingRequests.js): a service with
+    // "Confirm bookings before they're final" holds the slot as a REQUEST
+    // until the owner approves. Nothing is charged on a request.
+    const request = requestFieldsFor({ service: svc, settingsRow, now });
 
     // Attach to an existing client by email; create a lead if missing.
     // When the form provided a phone, store / refresh it on the client
@@ -692,6 +731,7 @@ async function createBooking(req, res) {
       }
     }
     const giveBack = async () => {
+      await unclaim();
       if (!pkgConsumed?.ok) return;
       try { await restoreCredit({ workspaceId, clientPackageId }); }
       catch (e) { console.error('[public booking] restoreCredit failed:', e.message); }
@@ -704,7 +744,8 @@ async function createBooking(req, res) {
           workspace_id, service_id, client_id, client_name, client_email, client_phone,
           date, start_min, end_min, notes, deposit_required, location_address,
           video_room_url, custom_field_values, add_on_ids, booking_total,
-          gift_card_credit_cents, source, client_package_id, package_use_mode
+          gift_card_credit_cents, source, client_package_id, package_use_mode,
+          requested_at, request_expires_at
         )
         VALUES (
           ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
@@ -714,9 +755,11 @@ async function createBooking(req, res) {
           ${JSON.stringify(requestedAddOnIds)}::jsonb,
           ${bookingTotal},
           ${giftCardCreditCents},
-          'client',
+          ${claim ? 'waitlist' : 'client'},
           ${pkgRow ? clientPackageId : null},
-          ${packageUseMode}
+          ${packageUseMode},
+          ${request ? request.requestedAt.toISOString() : null},
+          ${request ? request.requestExpiresAt.toISOString() : null}
         )
         RETURNING *
       `;
@@ -778,6 +821,7 @@ async function createBooking(req, res) {
         // also fails the row will be picked up by /api/cron/db-prune
         // eventually, but the slot stays held until then.
         await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
+        await unclaim();
         return badRequest(res, 'Gift card was just used by another transaction - please try a different code.');
       }
     }
@@ -806,7 +850,7 @@ async function createBooking(req, res) {
     // payment_intent (post-payment the webhook overwrites with the
     // real PI / payment id).
     let depositCheckoutUrl = null;
-    if (depositRequired > 0) {
+    if (depositRequired > 0 && !request) {
       try {
         const { adapter, name, settings } = await getProvider(workspaceId);
         // adapter.createCheckoutSession throws if the provider isn't
@@ -853,7 +897,15 @@ async function createBooking(req, res) {
     // A package session used when booked never carries a fee (the session
     // is the penalty), so there is nothing a card would be needed for.
     let cardSetupUrl = null;
-    if (!depositCheckoutUrl && !(pkgRow && packageUseMode !== 'completion')) {
+    if (request && depositRequired > 0) {
+      // Request with a deposit: save the card now (nothing charged), charge
+      // it only when the owner approves (approveBookingRequest).
+      cardSetupUrl = await depositCardSetupForRequest({
+        workspaceId, clientId, bookingId: b.id,
+        successUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=saved`,
+        cancelUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=skipped`,
+      });
+    } else if (!depositCheckoutUrl && !(pkgRow && packageUseMode !== 'completion')) {
       const setup = await cardOnFileCheckout({
         workspaceId, clientId, service: svc, mode: 'setup',
         successUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=saved`,
@@ -865,12 +917,22 @@ async function createBooking(req, res) {
     // should see "confirmed!" without waiting on Resend round-trips. Each is
     // .catch'd: an unhandled rejection here can crash the serverless function
     // (the response is already sent) and take down concurrent requests.
-    notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' })
-      .catch((e) => console.error('[booking] notifyNewBooking failed:', e?.message));
-    syncOnBookingCreated({ workspaceId: b.workspace_id, bookingId: b.id })
-      .catch((e) => console.error('[booking] syncOnBookingCreated failed:', e?.message));
-    attachIntakeForms({ workspaceId, bookingId: b.id })
-      .catch((e) => console.error('[booking] attachIntakeForms failed:', e?.message));
+    if (claim) {
+      await completeOffer({ offerId: claim.id, workspaceId, bookingId: b.id })
+        .catch((e) => console.error('[booking] completeOffer failed:', e?.message));
+    }
+    if (request) {
+      // Not a booking yet: the owner is asked; confirmation, Google sync and
+      // intake forms run when they approve.
+      notifyOwnerOfRequest({ workspaceId, bookingId: b.id });
+    } else {
+      notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' })
+        .catch((e) => console.error('[booking] notifyNewBooking failed:', e?.message));
+      syncOnBookingCreated({ workspaceId: b.workspace_id, bookingId: b.id })
+        .catch((e) => console.error('[booking] syncOnBookingCreated failed:', e?.message));
+      attachIntakeForms({ workspaceId, bookingId: b.id })
+        .catch((e) => console.error('[booking] attachIntakeForms failed:', e?.message));
+    }
     // One-tap add-to-calendar for the confirmation screen: a Google deep
     // link + a signed .ics URL (api/_lib/calendarLinks.js). Best-effort.
     let calendar = null;
@@ -888,9 +950,15 @@ async function createBooking(req, res) {
         bookingTotal: Number(b.booking_total || 0),
         locationType,
         depositRequired,
-        calendar,
+        calendar: request ? null : calendar,
         clientPackageId: pkgRow ? clientPackageId : null,
+        // 1.0.6: 'requested' until the owner approves, else 'confirmed'.
+        status: request ? 'requested' : 'confirmed',
+        isRequest: !!request,
       },
+      // 1.0.6: present when the booking is a request awaiting approval.
+      request: request ? { expiresAt: request.requestExpiresAt.toISOString(), holdHours: request.holdHours } : null,
+      claimed: !!claim,
       depositCheckoutUrl,
       cardSetupUrl,
       policyAccepted: policyCheck.required ? policyStatus === 'accepted' : null,

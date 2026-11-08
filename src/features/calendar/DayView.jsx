@@ -34,7 +34,7 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
         </div>
         <div style={{ flex: 1 }}/>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-          {(cal.bookings || []).filter((b) => b.date === dateISO).length} bookings
+          {(cal.bookings || []).filter((b) => b.date === dateISO && !b.isRequest).length} bookings
           {' · '}
           {(cal.blocks || []).filter((b) => b.date === dateISO).length} blocks
         </div>
@@ -119,15 +119,18 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
             const svc = cal.services.find((s) => s.id === b.serviceId);
             const tile = svc?.color || 'var(--accent)';
             const ink  = svc?.color ? '#fff' : 'var(--accent-ink)';
+            // A booking request: dashed outline, not filled, "Requested".
+            const req = !!b.isRequest;
             return (
               <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }}
+                title={req ? 'Booking request: waiting for your approval' : undefined}
                 style={{
                   position: 'absolute', top, height: h, left: 8, right: 8,
-                  background: tile, color: ink,
-                  border: `1px solid ${tile}`, borderRadius: 8,
+                  background: req ? 'var(--surface)' : tile, color: req ? 'var(--fg)' : ink,
+                  border: req ? `1.5px dashed ${tile}` : `1px solid ${tile}`, borderRadius: 8,
                   padding: '8px 12px', fontSize: 12, cursor: 'pointer', overflow: 'hidden',
                 }}>
-                <div style={{ fontWeight: 600 }}>{b.clientName || 'Client'}</div>
+                <div style={{ fontWeight: 600 }}>{req ? 'Requested: ' : ''}{b.clientName || 'Client'}</div>
                 <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>
                   {svc?.name || 'Session'} · {minToHM(b.startMin)} – {minToHM(b.endMin)}
                 </div>

@@ -14,12 +14,12 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, slotEpochMs, workspaceTimeZone } from '../../_lib/calendar.js';
-import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
+import { syncOnBookingDeleted, syncOnBookingUpdated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
-import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
-import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
-import { attachIntakeForms } from '../../_lib/intake.js';
+import { fillFromWaitlistOnCancel } from '../../_lib/waitlist.js';
+import { notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
+import { isPendingRequest, cancelBookingRequestByClient } from '../../_lib/bookingRequests.js';
 import { settleClientCancellation, describeClientCancellation } from '../../_lib/bookingFees.js';
 import { archivedForbidden } from '../../_lib/businessAccess.js';
 
@@ -44,6 +44,13 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       if (booking.cancelled_at) return badRequest(res, 'Booking already cancelled');
+      // 1.0.6: withdrawing a booking request. Nothing was charged, so there
+      // is no fee or refund; the business is told and the time opens up.
+      if (isPendingRequest(booking)) {
+        const out = await cancelBookingRequestByClient({ workspaceId: booking.workspace_id, bookingId: booking.id, clientIds: myIds });
+        if (out.alreadyDecided) return ok(res, { cancelled: true, deduped: true, request: true });
+        return ok(res, { cancelled: true, request: true, policyMessage: null });
+      }
       // Delivered sessions are not cancellable: a completed or no-show
       // booking (or one whose date already passed) must not restore
       // package credits or fire cancellation flows.
@@ -109,23 +116,19 @@ export default async function handler(req, res) {
       // Put any gift-card credit back on the card (exactly-once inside).
       await restoreGiftCardCreditForBooking({ workspaceId: booking.workspace_id, bookingId: booking.id })
         .catch((err) => console.error('[portal cancel] gift card restore failed:', err.message));
-      // Promote next waitlist entry. Best-effort.
+      // Offer the freed time to the waitlist (one-tap claim link). Best-effort.
       try {
-        const promoted = await promoteWaitlistOnCancel({
+        await fillFromWaitlistOnCancel({
           workspaceId: booking.workspace_id,
           serviceId: booking.service_id,
           dateISO:   booking.date,
           startMin:  booking.start_min,
           endMin:    booking.end_min,
+          sourceBookingId: booking.id,
         });
-        if (promoted) {
-          notifyNewBooking({ workspaceId: booking.workspace_id, bookingId: promoted.id, source: 'waitlist' });
-          syncOnBookingCreated({ workspaceId: booking.workspace_id, bookingId: promoted.id });
-          attachIntakeForms({ workspaceId: booking.workspace_id, bookingId: promoted.id });
-        }
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.error('[waitlist] promote failed on cancel:', err.message);
+        console.error('[waitlist] offer failed on cancel:', err.message);
       }
       // Return JSON instead of 204 so the UI can surface "fee charged"
       // / "fee couldn't be charged" inline. Falls back to ok({}) when
@@ -158,6 +161,7 @@ export default async function handler(req, res) {
         const membership = memberships.find((m) => m.clientId === booking.client_id);
         if (membership?.archived) return archivedForbidden(res);
         if (booking.cancelled_at) return badRequest(res, "Can't reschedule a cancelled booking");
+        if (isPendingRequest(booking)) return badRequest(res, 'This time is still waiting for the business to confirm. Cancel the request and request another time instead.');
         if (booking.recurrence_rule) {
           return badRequest(res, 'Recurring bookings can\'t be rescheduled - cancel this occurrence and book a new one.');
         }
