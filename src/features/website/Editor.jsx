@@ -20,6 +20,8 @@ import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { siteShareUrl } from '../../lib/publicUrl.js';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
+import { hapticTap, hapticSuccess } from '../../lib/haptics.js';
+import { useRatingWin } from '../../lib/ratingPrompt.js';
 
 export default function Editor({
   site, set, setSection, addSection, removeSection, moveSection, moveSectionTo,
@@ -168,11 +170,16 @@ export default function Editor({
     setSection(selected.id, { visible: !selected.visible });
   };
 
+  const ratingWin = useRatingWin();
   const handlePublish = async () => {
     setPublishing(true);
     setPublishErr(null);
+    hapticTap();
+    const firstPublish = !site.publishedAt;
     try {
       await publish();
+      hapticSuccess();
+      if (firstPublish) ratingWin('website_published'); // first published website may ask for a rating
     } catch (e) {
       setPublishErr(e.message || 'Publish failed');
     } finally {

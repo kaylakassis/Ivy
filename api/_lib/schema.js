@@ -5428,4 +5428,9 @@ CREATE TABLE IF NOT EXISTS waitlist_offers (
 CREATE INDEX IF NOT EXISTS idx_waitlist_offers_open
   ON waitlist_offers(workspace_id, status, expires_at) WHERE status IN ('open', 'claiming');
 CREATE INDEX IF NOT EXISTS idx_waitlist_offers_entry ON waitlist_offers(entry_id);
+
+-- 1.0.6 iPhone polish: when this user was last shown Apple's App Store
+-- rating window from the app (src/lib/ratingPrompt.js), so a reinstall does
+-- not ask again sooner than 120 days. Additive.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_prompted_at TIMESTAMPTZ;
 `;

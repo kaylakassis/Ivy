@@ -14,6 +14,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { hapticTap } from '../../lib/haptics.js';
 import { PackageCard, RedeemPackageModal } from './ClientPackages.jsx';
 import { accessLine } from './ClientPrograms.jsx';
 import { AutopaySection, AutopayPrompt, AutopaySheet } from './ClientAutopay.jsx';
@@ -133,6 +134,7 @@ export default function ClientInvoices() {
 
   const openInvoice = async (id) => {
     setOpening(id); setActionErr(null);
+    hapticTap();
     try {
       const r = await api.post('/me/invoices/' + id + '/access-link');
       window.open(r.url, '_blank', 'noopener');

@@ -7,6 +7,7 @@
 // owner to every device.
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { hapticWarning } from '../../lib/haptics.js';
 
 export const PARTNER_WARNING = 'Your accountability partner is here to help you stay on top of things: unanswered messages, unsigned documents, quiet clients. Turn it off anyway?';
 
@@ -159,7 +160,7 @@ export default function AccountabilityPartnerRow() {
             // Counted for the admin view: the warning kept the partner on.
             api.post('/me/accountability', { action: 'warning_kept' }).catch(() => {});
           }}
-          onTurnOff={async () => { const okd = await save({ enabled: false }); if (okd) setAsking(false); }}/>
+          onTurnOff={async () => { hapticWarning(); const okd = await save({ enabled: false }); if (okd) setAsking(false); }}/>
       )}
     </div>
   );

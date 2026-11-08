@@ -15,6 +15,7 @@ import { api } from '../../lib/api.js';
 import { streamReply } from './stream.js';
 import { recoverTurn } from './recover.js';
 import { announceIvyActionsRan } from './openIvy.js';
+import { hapticTap } from '../../lib/haptics.js';
 
 const EMPTY_CTX = {
   revenueThisMonth: 0, openInvoices: 0, activeClients: 0,
@@ -316,9 +317,10 @@ function useIvyState({ enabled = true } = {}) {
     return (m?.pendingActions || []).map((a) => a.id).filter(Boolean);
   }, [messages]);
 
-  const approvePending = useCallback((messageId, pendingId) => (
-    settlePending(messageId, pendingIdsFor(messageId, pendingId), 'approve')
-  ), [settlePending, pendingIdsFor]);
+  const approvePending = useCallback((messageId, pendingId) => {
+    hapticTap();
+    return settlePending(messageId, pendingIdsFor(messageId, pendingId), 'approve');
+  }, [settlePending, pendingIdsFor]);
 
   const dismissPending = useCallback((messageId, pendingId) => (
     settlePending(messageId, pendingIdsFor(messageId, pendingId), 'dismiss')

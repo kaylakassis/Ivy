@@ -32,6 +32,22 @@ const NATIVE = [
   { id: 'more',      to: '/more',      icon: 'More',     label: 'More' },
 ];
 
+// iOS convention: tapping the tab you are already on scrolls it back to the
+// top. The page itself scrolls the window; full-height screens (Ivy,
+// Messages) scroll an inner box, so the tallest scrolled box goes too.
+export function scrollCurrentToTop() {
+  if (typeof window === 'undefined') return;
+  const smooth = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const behavior = smooth ? 'smooth' : 'auto';
+  try { window.scrollTo({ top: 0, behavior }); } catch { window.scrollTo(0, 0); }
+  document.querySelectorAll('.app-page *').forEach((el) => {
+    if (el.scrollTop > 0 && el.scrollHeight > el.clientHeight) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === 'auto' || oy === 'scroll') { try { el.scrollTo({ top: 0, behavior }); } catch { el.scrollTop = 0; } }
+    }
+  });
+}
+
 export default function MobileBottomNav() {
   const { user } = useAuth();
   // Honor the owner's hidden tabs so the bottom bar stays consistent with the
@@ -63,6 +79,7 @@ export default function MobileBottomNav() {
             to={item.to} end={item.to === '/'}
             data-tour={`nav-${item.id}`}
             className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
+            onClick={(e) => { if (e.currentTarget.classList.contains('active')) scrollCurrentToTop(); }}
           >
             {({ isActive }) => (
               <>

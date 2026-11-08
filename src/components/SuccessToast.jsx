@@ -5,10 +5,12 @@
 // Controlled: render it when you have a message, clear the message on onDone.
 import React, { useEffect } from 'react';
 import { Icons } from './Icons.jsx';
+import { hapticSuccess } from '../lib/haptics.js';
 
 export default function SuccessToast({ text, icon = 'Check', duration = 3200, onDone }) {
   useEffect(() => {
     if (!text) return undefined;
+    hapticSuccess(); // collapses with the action's own haptic (400ms debounce)
     const t = setTimeout(() => onDone && onDone(), duration);
     return () => clearTimeout(t);
   }, [text, duration, onDone]);

@@ -1,12 +1,15 @@
 // Pull down at the top of a page to reload it, like every iPhone app.
-// Listens on the window (the app scrolls the page, not an inner box) and
-// ignores pulls that start inside something scrolled, inside an open
-// dialog, or on the full-screen Ivy chat. Runs the page's registered
-// reloaders (usePullRefresh) plus the account refresh the shell passes in.
+// iPhone app only (html.native); on the web it renders nothing. Listens on
+// the window (the app scrolls the page, not an inner box) and ignores pulls
+// that start inside something scrolled, inside an open dialog, the website
+// editor, or the full-screen Ivy chat. Runs the page's registered reloaders
+// (usePullRefresh) plus the account refresh the shell passes in, with a
+// light haptic as the pull arms.
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { runPullRefresh, hasPullHandlers } from '../lib/pullRefresh.js';
-import { haptic } from '../lib/celebrate.js';
+import { haptic } from '../lib/haptics.js';
+import { isNative } from '../lib/platform.js';
 
 const THRESHOLD = 70;   // px of (damped) pull that triggers a refresh
 const MAX = 96;
@@ -14,6 +17,8 @@ const MAX = 96;
 function blockedTarget(t) {
   if (!t || !t.closest) return false;
   if (t.closest('[role="dialog"], [aria-modal="true"], .motion-sheet, .mobile-drawer, input, textarea, select')) return true;
+  // The website editor scrolls and drags its own canvas; never refresh over it.
+  if (t.closest('.website-editor, [data-no-pull-refresh]')) return true;
   if (document.body.classList.contains('ivy-fill') || document.body.classList.contains('keyboard-open')) return true;
   // Something between the finger and the page that is itself scrolled down.
   for (let el = t; el && el !== document.body; el = el.parentElement) {
@@ -29,7 +34,10 @@ export default function PullToRefresh({ onRefresh, fallbackReload = false }) {
   const st = useRef({ y0: null, armed: false, pull: 0, busy: false });
 
   useEffect(() => {
-    if (!('ontouchstart' in window)) return undefined;
+    // iPhone app only: the website (desktop and mobile Safari) keeps the
+    // browser's own gestures, and the app turns off the page rubber-band
+    // (html.native body { overscroll-behavior-y: none }) so the two never fight.
+    if (!isNative() || !('ontouchstart' in window)) return undefined;
     const onStart = (e) => {
       if (st.current.busy || window.scrollY > 0 || e.touches.length !== 1 || blockedTarget(e.target)) { st.current.y0 = null; return; }
       st.current.y0 = e.touches[0].clientY; st.current.armed = false; st.current.pull = 0;

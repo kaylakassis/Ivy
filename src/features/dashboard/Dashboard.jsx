@@ -38,6 +38,8 @@ import KeyNumbers from './KeyNumbers.jsx';
 import { fmtMoney, fmtTime } from './format.js';
 import { FLAGS } from '../../lib/featureFlags.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { checkPartnerRatingWin } from '../../lib/ratingPrompt.js';
+import { isNative } from '../../lib/platform.js';
 
 // ── setup card ─────────────────────────────────────────────────────────
 // Dismissable via "Hide for now" for 7 days (re-shows after, or when a new
@@ -323,6 +325,14 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [loading]);
   useIntervalWhenVisible(loadDashboard, 30000);
+  // iPhone app: a week with the accountability partner on and three items
+  // cleared is a win worth asking for a rating on (src/lib/ratingPrompt.js).
+  const partnerChecked = useRef(false);
+  useEffect(() => {
+    if (!isNative() || partnerChecked.current || !data?.attention?.partnerOn || !ctx?.isOwner) return;
+    partnerChecked.current = true;
+    checkPartnerRatingWin({ role: 'owner', pathname: '/dashboard' }).catch(() => {});
+  }, [data?.attention?.partnerOn, ctx?.isOwner]);
 
   const [streakToast, setStreakToast] = useState(null);
   const celebratedMs = useRef(null);

@@ -22,6 +22,7 @@ import { HelperProvider, useHelper } from './helperContext.jsx';
 import HelperGone from './HelperGone.jsx';
 import NativePushPrompt from '../../components/NativePushPrompt.jsx';
 import { syncPushOnLaunch } from '../../lib/push.js';
+import PullToRefresh from '../../components/PullToRefresh.jsx';
 
 // Tabs appear only for granted permissions (api/_lib/helpers.js):
 // Schedule is always there (own bookings, or the whole calendar with the
@@ -119,6 +120,7 @@ function HelperShellInner() {
           businessName={businessName} showSwitch={showSwitch} nav={nav}
           helps={helps} workspaceId={workspaceId} onSwitchBusiness={switchBusiness}/>
       )}
+      <PullToRefresh/>
       <TermsAcceptModal/>
       <PrivacyUpdateNotice/>
       <NativePushPrompt audience="helper" active={!!me && !paused && !error}/>

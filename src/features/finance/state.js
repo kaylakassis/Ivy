@@ -8,7 +8,8 @@
 // other screens use it).
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
-import { haptic } from '../../lib/celebrate.js';
+import { haptic, hapticTap, hapticWarning } from '../../lib/haptics.js';
+import { useRatingWin } from '../../lib/ratingPrompt.js';
 
 const PAGE = 50;
 // Tab -> server filter. Archived invoices only show under Archived.
@@ -110,6 +111,7 @@ export function useInvoices({ tab = 'all' } = {}) {
   }, [refreshSummary, setInvoices]);
 
   const remove = useCallback(async (id) => {
+    hapticWarning();
     await api.del('/invoices/' + id);
     setList((xs) => xs.filter((i) => i.id !== id));
     setLinked((l) => (l && l.id === id ? null : l));
@@ -117,6 +119,7 @@ export function useInvoices({ tab = 'all' } = {}) {
   }, [refreshSummary]);
 
   const send = useCallback(async (id, clientId) => {
+    hapticTap();
     const r = await api.post('/invoices/send', { id, clientId });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
@@ -133,15 +136,18 @@ export function useInvoices({ tab = 'all' } = {}) {
     return r.invoice;
   }, [refreshSummary, setInvoices]);
 
+  const ratingWin = useRatingWin();
   const markPaid = useCallback(async (id, method) => {
     const r = await api.post('/invoices/mark-paid', { id, method });
     haptic('success');
+    ratingWin('invoice_paid'); // first paid invoice may ask for a rating
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r.invoice;
-  }, [refreshSummary, setInvoices]);
+  }, [refreshSummary, setInvoices, ratingWin]);
 
   const voidInvoice = useCallback(async (id, { notifyClient = false } = {}) => {
+    hapticWarning();
     const r = await api.post('/invoices/void', { id, notifyClient });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
@@ -159,6 +165,7 @@ export function useInvoices({ tab = 'all' } = {}) {
   }, [refreshSummary, setInvoices]);
 
   const refund = useCallback(async (id, { amount, reason } = {}) => {
+    hapticWarning();
     let r;
     try {
       r = await api.post('/invoices/refund', { id, amount, reason });

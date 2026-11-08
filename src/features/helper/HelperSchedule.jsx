@@ -23,6 +23,8 @@ import { TimeInput, inputSty } from '../calendar/Drawer.jsx';
 import AddBookingModal from '../calendar/AddBookingModal.jsx';
 import { expandBookings, fmtDateISO, parseISO, addDays, startOfWeek, WEEKDAYS_SHORT } from '../calendar/utils.js';
 import { useHelper } from './helperContext.jsx';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
+import { hapticTap } from '../../lib/haptics.js';
 
 function fmtTime(min) {
   const h = Math.floor(min / 60), m = min % 60;
@@ -110,6 +112,7 @@ export default function HelperSchedule() {
     }
   }, [workspaceId, full]);
   useEffect(() => { load(); }, [load]);
+  usePullRefresh(load);
 
   // Visible window.
   const range = useMemo(() => {
@@ -315,7 +318,7 @@ function BookingSheet({ o, client, workspaceId, full, staff, onClose: onCloseNow
   // helper mode (never charges a fee server-side).
   const base = `/helper/bookings/${encodeURIComponent(o.id)}`;
   const body = { workspaceId, occurrenceDate: o.occurrenceDate };
-  const complete = () => full
+  const complete = () => (hapticTap(), full)
     ? call(() => api.post('/calendar/bookings/complete', { id: o.id, occurrenceDate: o.occurrenceDate, completionNotes: notes.trim() }), { reload: true })
     : call(() => api.post(`${base}/complete`, { ...body, notes: notes.trim() }));
   const undoComplete = () => full

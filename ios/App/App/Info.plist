@@ -34,6 +34,65 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- Home-screen quick actions (long-press the Ivy icon). SceneDelegate.swift
+	     forwards the tapped item's url to the web app as an ivy://action/...
+	     open, which src/lib/quickActions.js maps to the screen with its
+	     drawer already open. Static items: always the same four. -->
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>ai.joinivy.app.new-booking</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New booking</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeDate</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>ivy://action/new-booking</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>ai.joinivy.app.new-client</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New client</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeContact</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>ivy://action/new-client</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>ai.joinivy.app.new-invoice</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>New invoice</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeCompose</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>ivy://action/new-invoice</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>ai.joinivy.app.ask-ivy</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Ask Ivy</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeMessage</string>
+			<key>UIApplicationShortcutItemUserInfo</key>
+			<dict>
+				<key>url</key>
+				<string>ivy://action/ask-ivy</string>
+			</dict>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
