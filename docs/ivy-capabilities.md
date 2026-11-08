@@ -193,6 +193,24 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Admin features | Owner only and never reachable: Ivy runs as the owner, not as an admin |
 | Anything in another business or another person's account | Never |
 
+## Shop pages (one location, many independent businesses)
+
+Code: `api/_lib/ivyShopTools.js` (the `shop` tool), on top of `api/_lib/shops.js`, which the Shops screen (`/shops`) and the public page (`/shop/:slug`) call too. Every lookup is scoped to the owner's workspace; a shop the owner does not run reads as "not found". Members' clients, money and messages are never in any payload: the owner sees booking counts per member and page views only, and a member sees only their own counts.
+
+| Owner action | Ivy |
+|---|---|
+| See my shop pages, the roster with booking counts, shops I am listed on, invites waiting for me | `shop` get (read) |
+| Create a shop page (name, web address; starts as a draft with me as its first member) | `shop` create (approval) |
+| Edit name, web address, tagline, description, address, phone, amenities, theme, first available on/off, show prices, show reviews, booking rules note | `shop` update (approval) |
+| Publish / unpublish | `shop` publish / unpublish (approval; the card says the page goes live or dark) |
+| Invite a pro by email | `shop` invite (approval; the card says exactly what the email promises: what shows and what never does) |
+| Reorder the team, feature a pro | `shop` reorder / feature (approval) |
+| Remove a pro, cancel an invite | `shop` remove_member (approval; the pro is told) |
+| Accept or decline an invite for my own business | `shop` accept_invite / decline_invite (approval; the card repeats what will show and what never will) |
+| Leave a shop page I am listed on | `shop` leave (approval; the listing comes off at once) |
+| Photos, opening hours, map pin, share link, QR code | Owner only for now: pick them on the Shops screen |
+| Edit my own listing (title, bio, which services show) | Not yet: Shops > My shop listing |
+
 ## How Ivy talks about the "Owner only" items
 
 The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
@@ -212,3 +230,5 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/accountability-partner.test.mjs`: the partner's list (each signal, first names only, workspace isolation), the cron (quiet hours, one a day, away check-ins then stop, the switch, testers and helpers and no-plan owners skipped), the settings endpoint, snooze, and `accountability_partner` held before approval.
 - `tests/policy-generator.test.mjs`: the policy writer (every option combination, Ivy's real deposit, fee and package rules), the starting point from a business's settings, and the "Help me write it" panel.
 - `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy (including draft and set_text from options), documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.
+- `tests/shops.test.mjs`: shop pages. Invite tokens are hashed, expire and refuse the wrong account; nothing shows before accept and nothing after leave, removal or a lapsed plan; the owner's roster carries counts only and member A cannot read member B's listing; the public payload has only each member's chosen public services and no client data; first available picks the true soonest slot across members and books in the right workspace exactly once under concurrency; the shop rating is count-weighted; the `shop` tool is held before approval; the server-rendered page carries title, canonical, Open Graph, LocalBusiness and BreadcrumbList JSON-LD.
+- `tests/shop-helpers.test.mjs`: the pure page helpers (service grouping, first available, open status, guided team search).
