@@ -535,7 +535,7 @@ function TeamPanel({ shop, members, meta, reload }) {
     const what = m.status === 'invited' ? `Cancel the invite for ${m.inviteEmail || m.businessName}?` : `Remove ${m.businessName} from ${shop.name}? Their listing comes off right away and they are told. Their own booking page is unchanged.`;
     if (!window.confirm(what)) return;
     setErr(null);
-    try { await api.delete(`/shops/${encodeURIComponent(shop.id)}/members`, { memberId: m.id }); reload(); }
+    try { await api.del(`/shops/${encodeURIComponent(shop.id)}/members`, { memberId: m.id }); reload(); }
     catch (ex) { setErr(ex.message || 'Could not remove them'); }
   };
   const move = (m, dir) => {
@@ -640,14 +640,14 @@ function SharePanel({ shop, onChange, onDeleted }) {
   };
   const clearJoin = async () => {
     setBusy(true); setErr(null);
-    try { await api.delete(`/shops/${encodeURIComponent(shop.id)}/join-link`); setJoinLink(null); onChange({ ...shop, hasJoinLink: false, joinLinkExpiresAt: null }); }
+    try { await api.del(`/shops/${encodeURIComponent(shop.id)}/join-link`); setJoinLink(null); onChange({ ...shop, hasJoinLink: false, joinLinkExpiresAt: null }); }
     catch (e) { setErr(e.message || 'Could not turn the link off'); }
     finally { setBusy(false); }
   };
   const del = async () => {
     if (!window.confirm(`Delete the shop page "${shop.name}"? The page goes away for good. Every pro keeps their own booking page.`)) return;
     setBusy(true); setErr(null);
-    try { await api.delete(`/shops/${encodeURIComponent(shop.id)}`); onDeleted(); }
+    try { await api.del(`/shops/${encodeURIComponent(shop.id)}`); onDeleted(); }
     catch (e) { setErr(e.message || 'Could not delete'); setBusy(false); }
   };
   return (
@@ -721,7 +721,7 @@ function MyListing({ entry, meta, onBack }) {
   const leave = async () => {
     if (!window.confirm(`Leave ${shop.name}? Your listing comes off their page right away and nothing of yours stays on it. Your own booking page is unchanged.`)) return;
     setBusy(true); setErr(null);
-    try { await api.delete(`/shops/${encodeURIComponent(shop.id)}/listing`); onBack(); }
+    try { await api.del(`/shops/${encodeURIComponent(shop.id)}/listing`); onBack(); }
     catch (ex) { setErr(ex.message || 'Could not leave'); setBusy(false); }
   };
   const summary = hoursLines(shop.hours).filter((l) => l.text !== 'Closed');
