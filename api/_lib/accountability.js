@@ -25,6 +25,7 @@ import { computeSetupStatus } from './setupStatus.js';
 import { listDuplicatePairs } from './clientDuplicates.js';
 import { emailShell } from './email.js';
 import { waitlistSummary } from './waitlist.js';
+import { shopInvitesWaiting } from './shops.js';
 
 // ── settings ────────────────────────────────────────────────────────────
 // Kinds of reminders the owner can switch on and off (all on by default).
@@ -801,8 +802,21 @@ async function waitlistWaiting(ws) {
 const ORDER = [
   'setup', 'booking_requests', 'unread_messages', 'leads_waiting', 'deposits_unpaid_today', 'autopay_failed', 'deposit_reviews',
   'invoices_overdue', 'docs_unsent', 'docs_unsigned', 'invoices_draft', 'missing_email', 'tasks_due',
-  'quiet_clients', 'packages_low', 'reviews_reply', 'quiet_week', 'duplicates', 'waitlist_waiting',
+  'quiet_clients', 'packages_low', 'reviews_reply', 'quiet_week', 'duplicates', 'waitlist_waiting', 'shop_invites',
 ];
+
+// A shop page invited this business and nobody has answered yet (1.0.6).
+async function shopInvitesSignal(ws) {
+  const owner = await sql`SELECT u.email FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE w.id = ${ws}`;
+  const rows = await shopInvitesWaiting(ws, owner.rows[0]?.email || null);
+  if (!rows.length) return null;
+  const title = rows.length === 1 ? `${rows[0].name} invited you to their shop page` : `${rows.length} shop pages invited you`;
+  return {
+    key: 'shop_invites', kind: 'schedule', priority: 2, count: rows.length,
+    title, phrase: lowerFirst(title), detail: 'Accept to be listed next to the other pros, or decline',
+    href: '/shops', action: 'Answer', ids: rows.map((r) => r.id),
+  };
+}
 
 // Every detector by the key of the item it produces. computeSignals runs
 // them all; the admin view's "was it cleared?" check (checkPartnerMentions)
@@ -827,6 +841,7 @@ const DETECTORS = {
   duplicates: (ws) => duplicates(ws),
   quiet_week: (ws, tz) => quietWeek(ws, tz),
   missing_email: (ws, tz) => missingEmail(ws, tz),
+  shop_invites: (ws) => shopInvitesSignal(ws),
 };
 export const SIGNAL_KEYS = Object.keys(DETECTORS);
 

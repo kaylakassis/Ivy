@@ -729,7 +729,13 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host, ord
   const orderHtml   = renderOrderNotice(order, handle);
   const bodyContent = `<div class="ivy-root">${navHtml}${sectionsHtml}${stickyHtml}${popupHtml}${orderHtml}</div>${pvScript}`;
 
-  // Splice into the SPA shell.
+  return renderIntoShell({ headExtras, bodyContent });
+}
+
+// Splice server-rendered head tags + body markup into the built SPA shell
+// (dist/index.html). Shared by the site renderer above and the shop page
+// renderer (api/_lib/shopHtml.js).
+export function renderIntoShell({ headExtras, bodyContent }) {
   let shell = loadShell();
   // Owner text goes in through FUNCTION replacements: a string replacement
   // would read "$&", "$`", "$'" or "$$" in a headline or price as

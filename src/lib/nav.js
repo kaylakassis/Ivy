@@ -28,6 +28,7 @@ export const NAV = [
   { id: 'marketing', to: '/marketing',  label: 'Marketing',      icon: 'Mail',     section: 'Grow' },
   { id: 'reviews',   to: '/reviews',    label: 'Reviews',        icon: 'Heart',    section: 'Grow' },
   { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe',    section: 'Grow' },
+  { id: 'shops',     to: '/shops',      label: 'Shop',           icon: 'Store',    section: 'Grow' },
   // Tools.
   { id: 'docs',      to: '/documents',  label: 'Documents',      icon: 'Doc',      section: 'Tools' },
   { id: 'admin',     to: '/admin',      label: 'Admin',          icon: 'Settings', superAdminOnly: true },
@@ -72,6 +73,7 @@ export const TITLES = {
   comms:     { title: 'Messages',      subtitle: 'Inbox' },
   docs:      { title: 'Documents',     subtitle: 'Waivers, agreements, signatures' },
   website:   { title: 'Website',       subtitle: 'Public presence' },
+  shops:     { title: 'Shop',          subtitle: 'One page for everyone at your location' },
   ivy:       { title: 'Ivy',       subtitle: 'Your AI copilot' },
   admin:     { title: 'Admin',         subtitle: 'Operator console' },
   // /account isn't in NAV (it's reached from the sidebar profile menu)

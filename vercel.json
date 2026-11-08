@@ -184,6 +184,9 @@
     },
     "api/clients/announce-move.js": {
       "maxDuration": 300
+    },
+    "api/shop/**/*.js": {
+      "includeFiles": "dist/**"
     }
   },
   "redirects": [
@@ -232,6 +235,14 @@
     {
       "source": "/site/:handle/:slug",
       "destination": "/api/site/:handle/:slug"
+    },
+    {
+      "source": "/shops-sitemap.xml",
+      "destination": "/api/shop/sitemap.xml"
+    },
+    {
+      "source": "/shop/:slug",
+      "destination": "/api/shop/:slug"
     },
     {
       "source": "/blog",
@@ -341,7 +352,7 @@
       ]
     },
     {
-      "source": "/api/((?!site/|calendar/public/|businesses/).*)",
+      "source": "/api/((?!site/|shop/|calendar/public/|businesses/).*)",
       "headers": [
         {
           "key": "Cache-Control",

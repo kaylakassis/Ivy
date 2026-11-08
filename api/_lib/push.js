@@ -49,7 +49,7 @@ export function publicVapidKey() {
 // only, api/_lib/accountability.js). It is not in LISTED_PUSH_TYPES: older
 // apps draw one generic row per listed type, and the partner's row needs
 // its own label and a turn-off warning, which only the new app has.
-export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement', 'client_optouts', 'accountability'];
+export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement', 'client_optouts', 'accountability', 'shops'];
 export const LISTED_PUSH_TYPES = NOTIFY_TYPES.filter((t) => t !== 'accountability');
 
 // 'ok' when the user can be pushed `type`, 'muted' when they opted out

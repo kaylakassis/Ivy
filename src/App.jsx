@@ -66,6 +66,7 @@ const IvyPro      = lazyRoute(() => import('./features/ivy/IvyPro.jsx'));
 const AccountPage = lazyRoute(() => import('./features/account/AccountPage.jsx'));
 const AdminPage   = lazyRoute(() => import('./features/admin/AdminPage.jsx'));
 const MorePage    = lazyRoute(() => import('./features/more/MorePage.jsx'));
+const ShopsPage   = lazyRoute(() => import('./features/shops/ShopsPage.jsx'));
 
 // ── Lazy: client portal ──
 const ClientHome      = lazyRoute(() => import('./features/client/ClientHome.jsx'));
@@ -101,7 +102,7 @@ const OWNER_PAGES = {
   '/dashboard': Dashboard, '/clients': Clients, '/programs': ProgramsPage, '/calendar': Calendar,
   '/finance': Finance, '/marketing': Marketing, '/reviews': Reviews, '/messages': Messages,
   '/documents': Documents, '/website': Website, '/ivy': IvyPro, '/account': AccountPage,
-  '/more': MorePage, '/admin': AdminPage,
+  '/more': MorePage, '/admin': AdminPage, '/shops': ShopsPage,
 };
 const CLIENT_PAGES = {
   '/me': ClientHome, '/me/messages': ClientMessages, '/me/bookings': ClientBookings,
@@ -131,6 +132,8 @@ const EarlyAccessGate = lazyRoute(() => import('./features/auth/EarlyAccessGate.
 
 // ── Lazy: public surfaces (often a fresh visit's first hit) ──
 const PublicBooking = lazyRoute(() => import('./features/calendar/PublicBooking.jsx'));
+const PublicShop    = lazyRoute(() => import('./features/shops/PublicShop.jsx'));
+const AcceptShopInvite = lazyRoute(() => import('./features/shops/AcceptShopInvite.jsx'));
 const PublicPolicyPage = lazyRoute(() => import('./features/calendar/PublicPolicyPage.jsx'));
 const PublicSite    = lazyRoute(() => import('./features/website/PublicSite.jsx'));
 const EmbedContact  = lazyRoute(() => import('./features/embed/EmbedContact.jsx'));
@@ -220,8 +223,8 @@ export function warmApp(pathname) {
 // Client-facing pages (portal, booking, invoices...) get the client set of
 // lines; the marketing site and auth pages keep the quiet spinner.
 const OWNER_PREFIXES = ['/dashboard', '/clients', '/calendar', '/finance', '/messages', '/ivy',
-  '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding'];
-const CLIENT_PREFIXES = ['/me', '/helper', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/'];
+  '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding', '/shops'];
+const CLIENT_PREFIXES = ['/me', '/helper', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/', '/shop/'];
 function RouteFallback({ client = false }) {
   const { pathname } = useLocation();
   const hit = (list) => list.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : p + '/'));
@@ -419,6 +422,10 @@ export default function App() {
         {/* Public */}
         <Route path="/book/:slug"      element={<PublicBooking />} />
         <Route path="/book/:slug/policy" element={<PublicPolicyPage />} />
+        {/* Shop pages (1.0.6): one location, several independent businesses.
+            The invite landing handles signed-out vs signed-in itself. */}
+        <Route path="/shop/:slug"      element={<PublicShop />} />
+        <Route path="/shops/invite/:token" element={<AcceptShopInvite />} />
         <Route path="/site/:handle"        element={<PublicSite />} />
         <Route path="/site/:handle/:slug"  element={<PublicSite />} />
         <Route path="/sign/:token"     element={<SignPage />} />
@@ -481,6 +488,7 @@ export default function App() {
           <Route path="/campaigns"  element={<MarketingRedirect tab="campaigns"/>} />
           <Route path="/documents"  element={<Documents />} />
           <Route path="/website"    element={<Website />} />
+          <Route path="/shops"      element={<ShopsPage />} />
           <Route path="/ivy"        element={<IvyPro />} />
           <Route path="/account"    element={<AccountPage />} />
           <Route path="/more"       element={<NativeOnly><MorePage /></NativeOnly>} />

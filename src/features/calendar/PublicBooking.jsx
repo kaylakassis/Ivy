@@ -26,7 +26,7 @@ import { useEmbedResize } from '../../lib/embedResize.js';
 import { tzDisplay, browserTimeZone } from '../../lib/timezones.js';
 import { haptic } from '../../lib/celebrate.js';
 import ArchivedBusinessCard, { isArchivedError } from '../../components/ArchivedBusiness.jsx';
-import { fmtDateISO, minToHM, parseISO, startOfToday } from './utils.js';
+import { fmtDateISO, minToHM, parseISO, startOfToday, slotsForDate } from './utils.js';
 import {
   buildDays, findNextAvailable, stripLimit, waitlistSeed, resolveServiceParam, listedServices,
   fmtPrice, fmtDuration, longDate, dualTimeLabel, zoneTimes,
@@ -64,6 +64,9 @@ export default function PublicBooking({ embedded = false }) {
   // Owner's subscription lapsed: the API returns { archived, businessName }
   // instead of a calendar, and any POST answers 403 business_archived.
   const [archived, setArchived] = useState(null);
+  // Came here from a shop page (?shop=<slug>, 1.0.6): the booking is
+  // recorded as made through that page and the pro is told.
+  const [shopSlug, setShopSlug] = useState(null);
 
   const [serviceId, setServiceId] = useState(null);
   const [selectedDateISO, setSelectedDateISO] = useState(null);
@@ -221,6 +224,28 @@ export default function PublicBooking({ embedded = false }) {
         const initial = deep || (listed.length === 1 ? listed[0] : null);
         if (initial) applyService(r.calendar, initial);
         if (deep) setScrollTarget('times');
+        // From a shop page: ?shop=<slug> (only honoured for a shop this
+        // business is really listed on) and, after "first available",
+        // ?date=&start= jump straight to the details step for that slot
+        // when it is still open; otherwise the visitor just picks a time.
+        let shopParam = null, dateParam = null, startParam = null;
+        try {
+          const p = new URLSearchParams(window.location.search);
+          shopParam = p.get('shop'); dateParam = p.get('date'); startParam = p.get('start');
+        } catch { /* no-op */ }
+        if (shopParam && (r.calendar.shops || []).some((x) => x.slug === String(shopParam).toLowerCase())) {
+          setShopSlug(String(shopParam).toLowerCase());
+        }
+        if (deep && dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) && Number.isInteger(Number(startParam))) {
+          const want = Number(startParam);
+          const hit = (slotsForDate(r.calendar, parseISO(dateParam), deep) || []).find((x) => x.available && x.start === want);
+          if (hit) {
+            setSelectedDateISO(dateParam);
+            setSlot({ dateISO: dateParam, start: hit.start, end: hit.end });
+            setStep('details');
+            setScrollTarget('top');
+          }
+        }
       })
       .catch((e) => live && !quiet && setLoadErr(e))
       .finally(() => live && !quiet && setLoading(false));
@@ -601,6 +626,7 @@ export default function PublicBooking({ embedded = false }) {
         } : {}),
         // One-tap waitlist claim (first to tap gets it).
         ...(claim?.token && claim.offer?.state === 'open' ? { waitlistClaimToken: claim.token } : {}),
+        ...(shopSlug ? { shopSlug } : {}),
         ...consent.fields(),
         // Pay with one session from the signed-in client's package.
         ...(usingPackage && !joinWaitlist ? { clientPackageId: usePackageId } : {}),
@@ -670,6 +696,16 @@ export default function PublicBooking({ embedded = false }) {
           showAddress={showAddress} onMessage={() => setContactOpen(true)}/>
       )}
       <div ref={topRef} style={{ scrollMarginTop: 12 }}/>
+
+      {!embedded && (cal.shops || []).length > 0 && (
+        <div className="pb-shop-note">
+          {(cal.shops || []).map((x) => (
+            <a key={x.slug} href={x.url}>
+              <Icons.Home size={13} sw={1.8}/> {shopSlug === x.slug ? `Booking through ${x.name}` : `Part of ${x.name}`}
+            </a>
+          ))}
+        </div>
+      )}
 
       {depositNotice === 'cancelled' && step === 'pick' && (
         <Notice icon={<Icons.Clock size={15} stroke="var(--accent)"/>} onDismiss={() => setDepositNotice(null)}>

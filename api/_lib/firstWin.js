@@ -396,10 +396,11 @@ export async function recordFirstRealBooking({ workspaceId, bookingId, source })
     if (source === 'owner') return false;
     const { rows } = await sql`
       SELECT b.client_name, b.date, b.start_min, b.cancelled_at, b.notes,
-             s.name AS service_name, c.source AS client_source
+             s.name AS service_name, c.source AS client_source, sh.name AS shop_name
         FROM bookings b
         LEFT JOIN services s ON s.id = b.service_id
         LEFT JOIN clients c ON c.id = b.client_id
+        LEFT JOIN shops sh ON sh.id = b.shop_id
        WHERE b.id = ${bookingId} AND b.workspace_id = ${workspaceId}
     `;
     const b = rows[0];
@@ -429,7 +430,8 @@ export async function recordFirstRealBooking({ workspaceId, bookingId, source })
       workspaceId, type: 'bookings',
       payload: {
         title: 'Your first booking is in.',
-        body: `${who} booked${what} on ${celebration.dateLabel} at ${celebration.timeLabel}.`,
+        // Booked from a shop page (1.0.6): say so, like the regular push.
+        body: `${who} booked${what} on ${celebration.dateLabel} at ${celebration.timeLabel}.${b.shop_name ? ` Booked through ${b.shop_name}'s page.` : ''}`,
         url: '/dashboard',
         tag: 'first-win-booking',
       },

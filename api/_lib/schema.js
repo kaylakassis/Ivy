@@ -5433,4 +5433,86 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_offers_entry ON waitlist_offers(entry_id
 -- rating window from the app (src/lib/ratingPrompt.js), so a reinstall does
 -- not ask again sooner than 120 days. Additive.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_prompted_at TIMESTAMPTZ;
+
+-- ── Shops (1.0.6) ────────────────────────────────────────────────────────
+-- One physical location, many independent Ivy businesses. A shop is a
+-- shared public page (/shop/:slug) that lists its members together and lets
+-- a visitor book any of them. Nothing is pooled: every booking lands in the
+-- member's own workspace through that member's own public booking path.
+-- The owner_workspace_id is the business that created the page; it is also
+-- a member (role owner). Members join only by accepting an invite.
+CREATE TABLE IF NOT EXISTS shops (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  slug TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  tagline TEXT,
+  description TEXT,
+  address_label TEXT,
+  city TEXT,
+  region TEXT,
+  country TEXT,
+  lat NUMERIC(9,6),
+  lng NUMERIC(9,6),
+  phone TEXT,
+  timezone TEXT,
+  -- Opening hours in the calendar_settings.availability shape:
+  -- {"0":[{"start":540,"end":1020}], ...} (0 = Sunday, minutes from midnight).
+  hours JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- Uploaded image URLs (Vercel Blob, under the owner workspace prefix).
+  photos JSONB NOT NULL DEFAULT '[]'::jsonb,
+  -- Short tags from the fixed list in api/_lib/shops.js (SHOP_AMENITIES).
+  amenities JSONB NOT NULL DEFAULT '[]'::jsonb,
+  -- { firstAvailable, showPrices, showReviews, theme, bookingRulesNote }
+  settings JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+  -- Share link any Ivy business owner can use to join (hashed, 14 days).
+  join_token_hash TEXT,
+  join_token_expires_at TIMESTAMPTZ,
+  page_views INT NOT NULL DEFAULT 0,
+  published_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shops_owner ON shops(owner_workspace_id);
+CREATE INDEX IF NOT EXISTS idx_shops_slug ON shops(slug);
+CREATE INDEX IF NOT EXISTS idx_shops_status ON shops(status) WHERE status = 'published';
+
+-- Membership is explicit consent. workspace_id is NULL while an email
+-- invite waits for someone who may not have an Ivy business yet; it is set
+-- when the invite is accepted. A workspace can be in several shops (a pro
+-- who works two locations) but only once per shop.
+CREATE TABLE IF NOT EXISTS shop_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  shop_id UUID NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'invited'
+    CHECK (status IN ('invited', 'active', 'declined', 'left', 'removed')),
+  role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'member')),
+  display_order INT NOT NULL DEFAULT 0,
+  featured BOOLEAN NOT NULL DEFAULT FALSE,
+  title TEXT,
+  bio TEXT,
+  -- NULL = every bookable (non only_me, public) service; otherwise the
+  -- member's own chosen list of service ids.
+  visible_service_ids JSONB,
+  invite_email TEXT,
+  invite_token_hash TEXT,
+  invite_expires_at TIMESTAMPTZ,
+  invited_at TIMESTAMPTZ,
+  joined_at TIMESTAMPTZ,
+  left_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shop_members_unique ON shop_members(shop_id, workspace_id) WHERE workspace_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_shop_members_shop ON shop_members(shop_id, status, display_order);
+CREATE INDEX IF NOT EXISTS idx_shop_members_ws ON shop_members(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_shop_members_token ON shop_members(invite_token_hash) WHERE invite_token_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_shop_members_email ON shop_members(shop_id, LOWER(invite_email)) WHERE invite_email IS NOT NULL;
+
+-- Which shop page a booking came through (counts only; the booking itself
+-- belongs to the member's workspace like any other).
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS shop_id UUID REFERENCES shops(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_shop ON bookings(shop_id, workspace_id) WHERE shop_id IS NOT NULL;
 `;

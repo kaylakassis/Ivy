@@ -42,3 +42,4 @@ Disallow: /p/
 
 Sitemap: https://www.joinivy.ai/sitemap.xml
 Sitemap: https://www.joinivy.ai/marketing-sitemap.xml
+Sitemap: https://www.joinivy.ai/shops-sitemap.xml

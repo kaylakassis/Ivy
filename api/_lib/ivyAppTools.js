@@ -60,6 +60,7 @@ import {
 import {
   listWaitlist, waitlistSummary, offerTimeToEntry, removeWaitlistEntry, waitlistDay, waitlistTime,
 } from './waitlist.js';
+import { SHOP_TOOLS, SHOP_READ_ACTIONS, planShop, readShop } from './ivyShopTools.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -253,12 +254,13 @@ export const APP_TOOLS = [
       required: ['client_id_a', 'client_id_b'],
     },
   },
+  ...SHOP_TOOLS,
 ];
 
 // Tools that only read; tools with a read action; everything else writes.
 export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients', 'list_booking_requests'];
 // A tool's read action(s): they run straight away, never held.
-const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get', waitlist: 'list' };
+const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get', waitlist: 'list', shop: SHOP_READ_ACTIONS };
 export const APP_MIXED = new Set(Object.keys(READ_ACTION));
 // Always held for approval (by name). send_document is an older tool whose
 // plan now lives here.
@@ -1339,6 +1341,7 @@ const PLANS = {
   client_invite_settings: planInviteSettings,
   resend_client_invite: planResendInvite,
   accountability_partner: planPartner,
+  shop: planShop,
 };
 
 export async function planAppAction(name, args, ctx) {
@@ -1386,5 +1389,11 @@ export const APP_HANDLERS = {
     invite_new_clients: await inviteSetting(ws), manage: '[Clients](/clients)',
   })),
   accountability_partner: writeHandler('accountability_partner', readPartner),
+  shop: async (ctx) => {
+    if (appCallIsRead('shop', ctx.args)) return readShop(ctx.workspaceId, ctx.args || {}, ctx);
+    const plan = await planAppAction('shop', ctx.args, ctx);
+    const result = await plan.apply();
+    return { ...result, done: result.done || plan.done, summary: plan.summary };
+  },
   ...Object.fromEntries(APP_SENSITIVE.map((n) => [n, writeHandler(n)])),
 };

@@ -75,6 +75,7 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
         pk.status AS package_status,
         (pt.id IS NOT NULL AND pt.active AND pt.visibility = 'public' AND pt.price > 0) AS package_buyable,
         pk.package_id AS package_template_id,
+        sh.name AS shop_name, sh.slug AS shop_slug,
         (b.client_package_id IS NOT NULL AND NOT EXISTS (
           SELECT 1 FROM bookings nb
            WHERE nb.client_package_id = b.client_package_id
@@ -90,6 +91,7 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
       LEFT JOIN users u ON u.id = w.owner_id
       LEFT JOIN client_packages pk ON pk.id = b.client_package_id AND pk.workspace_id = b.workspace_id
       LEFT JOIN packages pt ON pt.id = pk.package_id AND pt.workspace_id = b.workspace_id
+      LEFT JOIN shops sh ON sh.id = b.shop_id
       WHERE b.id = ${bookingId}
     `;
     const ctx = rows[0];
@@ -97,6 +99,8 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
 
     const dateISO = ctx.date instanceof Date ? ctx.date.toISOString().slice(0, 10) : ctx.date;
     const businessName = ctx.biz_name || 'Your business';
+    // Booked from a shop page (1.0.6): one extra line for the owner.
+    const shopLine = ctx.shop_name ? `Booked through ${ctx.shop_name}'s page` : null;
     const serviceName  = ctx.service_name || 'Session';
     const dateLabel    = fmtDate(dateISO);
     const timeLabel    = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
@@ -123,8 +127,8 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
       tasks.push(upsertThreadAndSystemMessage({
         workspaceId,
         clientId: ctx.client_id,
-        text: `📅 New booking: ${serviceName} on ${dateLabel} at ${fmtTime(ctx.start_min)}.`,
-        meta: { bookingId: ctx.id, source },
+        text: `📅 New booking: ${serviceName} on ${dateLabel} at ${fmtTime(ctx.start_min)}.${shopLine ? ` ${shopLine}.` : ''}`,
+        meta: { bookingId: ctx.id, source, ...(ctx.shop_slug ? { shopSlug: ctx.shop_slug } : {}) },
       }));
     }
 
@@ -192,6 +196,7 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
         timeLabel,
         notes: ctx.notes,
         branding,
+        shopLine,
       }));
     }
 
@@ -206,7 +211,7 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
         type: 'bookings',
         payload: {
           title: source === 'waitlist' ? 'Spot filled from your waitlist' : 'New booking',
-          body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
+          body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}${shopLine ? ` · ${shopLine}` : ''}`,
           url: `/calendar?booking=${ctx.id}`,
           tag: `booking-${ctx.id}`,
         },
@@ -400,7 +405,7 @@ async function sendClientConfirm({ clientId, workspaceId, to, clientName, busine
   });
 }
 
-async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail, serviceName, dateLabel, timeLabel, notes, branding }) {
+async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail, serviceName, dateLabel, timeLabel, notes, branding, shopLine = null }) {
   const greeting = ownerName ? `Hi ${escapeHtml(ownerName.split(/\s+/)[0])},` : 'Hi,';
   const html = emailShell({
     heading: 'New booking',
@@ -415,6 +420,7 @@ async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Email</td><td style="padding:6px 0;">${escapeHtml(clientEmail || '-')}</td></tr>
         ${notes ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Note</td><td style="padding:6px 0;">${escapeHtml(notes)}</td></tr>` : ''}
       </table>
+      ${shopLine ? `<p>${escapeHtml(shopLine)}.</p>` : ''}
       <p>The booking is on your calendar and a chat thread is ready for ${escapeHtml(clientName || 'them')}
       under Messages.</p>`,
     ctaText: 'Open the calendar',
