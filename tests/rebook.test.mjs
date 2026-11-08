@@ -30,6 +30,7 @@ import {
   rebookLimitMessage, renderRebookEmail,
 } from '../api/_lib/rebook.js';
 import { keyNumbers } from '../api/_lib/dashboardNumbers.js';
+import { approveBookingRequest } from '../api/_lib/bookingRequests.js';
 import { executeIvyTool, ledgerEntry } from '../api/_lib/ivyTools.js';
 import { executePendingAction } from '../api/_lib/ivyApproval.js';
 import publicRebook from '../api/calendar/public/rebook.js';
@@ -271,6 +272,18 @@ async function main() {
   assert(kA.rebookedViaLink === 1 && kB.rebookedViaLink === 0, 'dashboard: A has 1 rebooked via link this month, B has 0');
   const dash = await run(dashboard, req({ uid: A.userId }));
   assert(dash.statusCode === 200 && dash.body.keyNumbers?.rebookedViaLink === 1 && dash.body.keyNumbers.rebooking, '/api/dashboard keyNumbers.rebookedViaLink (additive, old fields intact)');
+  // With booking requests (1.0.6 together): the same link on a service that
+  // confirms first makes a request; it is not "rebooked" until approved.
+  await sql`UPDATE services SET require_approval = TRUE WHERE id = ${A.svc} AND workspace_id = ${A.workspaceId}`;
+  const b4 = await run(slugHandler, req({ method: 'POST', query: { slug: A.slug }, body: bookBody({ rebook: token, startMin: 900, endMin: 960 }) }));
+  await sql`UPDATE services SET require_approval = FALSE WHERE id = ${A.svc} AND workspace_id = ${A.workspaceId}`;
+  const row4 = b4.body?.booking?.id ? await one(sql`SELECT booked_via, requested_at FROM bookings WHERE id = ${b4.body.booking.id}`) : null;
+  assert(b4.statusCode === 201 && b4.body.booking.status === 'requested' && row4?.booked_via === 'rebook' && row4.requested_at, `a rebook link on an approval service makes a request, still marked rebook (${b4.statusCode})`);
+  assert((await keyNumbers(A.workspaceId, 'UTC')).rebookedViaLink === 1, 'a pending request is not counted as rebooked via link');
+  const appr = await approveBookingRequest({ workspaceId: A.workspaceId, bookingId: b4.body.booking.id, userId: A.userId, message: '', actor: 'owner' });
+  assert(!appr.notFound && !appr.alreadyDecided && (await keyNumbers(A.workspaceId, 'UTC')).rebookedViaLink === 2, 'once approved it counts');
+  await sql`UPDATE bookings SET cancelled_at = NOW() WHERE id = ${b4.body.booking.id}`;
+  assert((await keyNumbers(A.workspaceId, 'UTC')).rebookedViaLink === 1, 'cancelled, it stops counting');
 
   // ── [6] the client portal ──────────────────────────────────────────────
   console.log('\n[6] client portal');
