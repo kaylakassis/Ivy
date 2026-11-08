@@ -371,10 +371,10 @@ export async function deliverAutomation({ ws, kind, client, branding = null }) {
 
 // The cron's loop: every enabled automation in the sending window, each due
 // client claimed then delivered. Stops at `deadline`.
-export async function runClientAutomations({ shardFilter = '', deadline = Infinity, perWorkspaceCap = 200 } = {}) {
+export async function runClientAutomations({ shardFilter = '', deadline = Infinity, perWorkspaceCap = 200, workspaceId = null, inWindow = true } = {}) {
   const counts = { workspaces: 0, considered: 0, sent: 0, emailed: 0, texted: 0, skipped: 0, retried: 0, failed: 0 };
   for (const kind of KINDS) {
-    const wss = await enabledWorkspaces(kind, { shardFilter });
+    const wss = await enabledWorkspaces(kind, { shardFilter, workspaceId, inWindow });
     for (const ws of wss) {
       if (Date.now() >= deadline) return { ...counts, terminatedBy: 'deadline' };
       counts.workspaces++;
