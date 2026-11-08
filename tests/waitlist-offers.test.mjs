@@ -19,6 +19,7 @@
 //  [10]  Ivy: list reads; offer and remove are approval-gated and run once
 //  [11]  entries expire after 60 days; the partner counts people waiting
 //  [12]  Ivy's cancel_booking offers the freed time like every other cancel
+//  [13]  a claim on an approval service becomes a request (one owner push)
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/waitlist-offers.test.mjs
 process.env.SECRETS_KEY ||= 'a'.repeat(64);
@@ -335,6 +336,29 @@ async function run() {
   assert(deeOffers.length === 1 && deeOffers[0].status === 'open' && deeOffers[0].source_booking_id === zed12, 'the freed time is offered to Dee');
   await until(() => mailsTo(dee.email).some((m) => /A spot opened/.test(m.subject)));
   assert(mailsTo(dee.email).some((m) => /A spot opened/.test(m.subject)), 'Dee gets the claim link');
+
+  console.log('\n[13] claiming a spot on an approval service sends a request');
+  const svcReq = (await sql`INSERT INTO services (workspace_id, name, price, duration_minutes, visibility, require_approval)
+    VALUES (${W.wid}, 'Color consult', 50, 60, 'public', TRUE) RETURNING id`).rows[0].id;
+  const WR = { ...W, svc: svcReq };
+  const D13 = day(13);
+  const eve = person('Eve');
+  const zed13 = (await sql`INSERT INTO bookings (workspace_id, service_id, client_name, client_email, date, start_min, end_min, booking_total, source)
+    VALUES (${W.wid}, ${svcReq}, 'Zed Booked', ${`wl-zed13-${STAMP}@example.com`}, ${D13}, 600, 660, 50, 'owner') RETURNING id`).rows[0].id;
+  r = await join(WR, eve, { date: D13 });
+  assert(r.statusCode === 201, 'Eve joins for the full slot');
+  r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: W.cookie, query: { id: zed13 } }));
+  await until(() => mailsTo(eve.email).some((m) => /A spot opened/.test(m.subject)));
+  const eveToken = tokenIn(mailsTo(eve.email).find((m) => /A spot opened/.test(m.subject)).html);
+  r = await book(WR, eve, { date: D13, token: eveToken });
+  assert(r.statusCode === 201, `the claim goes through (${r.statusCode})`);
+  const claimed13 = (await offersFor(W.wid, D13, 600))[0];
+  const bk13 = (await sql`SELECT * FROM bookings WHERE id = ${claimed13.claimed_booking_id}`).rows[0];
+  assert(claimed13.status === 'claimed' && !!bk13.requested_at && !bk13.request_decided_at, 'the claim is a booking request (the owner confirms this service)');
+  await settle(500);
+  const filled = await sql`SELECT 1 FROM notifications WHERE user_id = ${W.userId} AND tag = ${`waitlist-claimed-${bk13.id}`}`;
+  const asked = await sql`SELECT 1 FROM notifications WHERE user_id = ${W.userId} AND tag = ${`request-${bk13.id}`}`;
+  assert(filled.rows.length === 0 && asked.rows.length === 1, 'one owner push: the request, not a "filled" push');
 }
 
 run()

@@ -431,11 +431,15 @@ export async function completeOffer({ offerId, workspaceId, bookingId }) {
   await linkWaitlistAcceptance({ workspaceId, waitlistEntryId: offer.entry_id, bookingId, clientId: cl.rows[0]?.client_id || null });
   keepAlive((async () => {
     const b = await sql`
-      SELECT b.client_name, b.date, b.start_min, s.name AS service_name
+      SELECT b.client_name, b.date, b.start_min, b.requested_at, b.request_decided_at, b.cancelled_at, s.name AS service_name
         FROM bookings b LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        WHERE b.id = ${bookingId} AND b.workspace_id = ${workspaceId}`;
     const row = b.rows[0];
     if (!row) return;
+    // A service set to "Confirm bookings before they're final" turns the
+    // claim into a request: the owner already gets the request push and
+    // email (bookingRequests.js), so no second, inaccurate "filled" push.
+    if (row.requested_at && !row.request_decided_at && !row.cancelled_at) return;
     notifyOwnerSafe({
       workspaceId, type: 'bookings',
       payload: {
