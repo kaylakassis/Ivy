@@ -32,6 +32,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       if (isOwner) {
         const stats = await shopStats(shop);
+        const mine = await ownServices(workspaceId);
         // Counts are attached to each roster row by the owner's own view,
         // keyed by member id so no workspace id leaves the server.
         const roster = members.map((m) => ({
@@ -39,7 +40,7 @@ export default async function handler(req, res) {
           stats: m.workspace_id ? (stats.byWorkspace[m.workspace_id] || { total: 0, last30: 0, upcoming: 0 }) : null,
           // The owner may pick which of THEIR OWN services show; for other
           // members this stays with the member.
-          services: m.workspace_id === workspaceId ? await ownServices(workspaceId) : undefined,
+          services: m.workspace_id === workspaceId ? mine : undefined,
         }));
         return ok(res, {
           role: 'owner',

@@ -42,7 +42,6 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=3600');
     return res.end(html);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[shop SSR] error:', err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

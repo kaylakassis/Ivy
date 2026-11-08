@@ -9,7 +9,7 @@
 // and the back button rewinds the filter, not the route.
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelRowList } from '../../components/Skeleton.jsx';
@@ -49,6 +49,8 @@ export default function ClientDiscover() {
   };
 
   const [businesses, setBusinesses] = useState([]);
+  // Shop pages (1.0.6): several independent businesses at one location.
+  const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -78,7 +80,7 @@ export default function ClientDiscover() {
     }
     if (minRating != null) qs.set('minRating', minRating);
     api.get('/me/discover' + (qs.toString() ? '?' + qs.toString() : ''))
-      .then((r) => live && setBusinesses(r.businesses || []))
+      .then((r) => { if (!live) return; setBusinesses(r.businesses || []); setShops(Array.isArray(r.shops) ? r.shops : []); })
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
@@ -179,6 +181,18 @@ export default function ClientDiscover() {
           })}
         </div>
       </div>
+
+      {/* Shop pages: one location, several pros, book any of them. */}
+      {!loading && shops.length > 0 && (
+        <div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>
+            Shops
+          </div>
+          <div className="discover-grid">
+            {shops.map((s) => <ShopCard key={s.slug} shop={s}/>)}
+          </div>
+        </div>
+      )}
 
       {/* Results */}
       {loading ? (
@@ -475,6 +489,32 @@ function useDebounced(value, ms) {
 }
 
 // ─── Card ───────────────────────────────────────────────────────────
+
+// A shop page card: several pros at one address, one page to book any of
+// them. Opens the public page itself (it works signed in or out).
+function ShopCard({ shop }) {
+  const cover = shop.photoUrl
+    ? `linear-gradient(0deg, rgba(0,0,0,0.22), rgba(0,0,0,0)), url(${shop.photoUrl}) center/cover`
+    : bannerFor(shop.slug || shop.name);
+  const where = [shop.city, shop.region].filter(Boolean).join(', ') || shop.addressLabel;
+  return (
+    <Link to={shop.url || `/shop/${shop.slug}`} className="card discover-card"
+      style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: 0, textAlign: 'left', border: '1px solid var(--border)', color: 'inherit', textDecoration: 'none' }}>
+      <div style={{ aspectRatio: '4 / 3', background: cover, position: 'relative', display: 'flex', alignItems: 'flex-end', padding: 12 }}>
+        <div style={{ padding: '3px 8px', borderRadius: 99, background: 'rgba(15,15,15,0.78)', fontSize: 10.5, fontWeight: 700, color: '#fff' }}>
+          {shop.memberCount} {shop.memberCount === 1 ? 'pro' : 'pros'}
+        </div>
+      </div>
+      <div style={{ padding: 14, flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shop.name}</div>
+        <div style={{ display: 'inline-block', alignSelf: 'flex-start', padding: '2px 8px', borderRadius: 6, fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--surface-2)', color: 'var(--muted)' }}>Shop</div>
+        {shop.tagline && <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.4 }}>{shop.tagline}</div>}
+        {where && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{where}</div>}
+        <div style={{ marginTop: 'auto', paddingTop: 6, fontSize: 12.5, fontWeight: 600, color: 'var(--accent)' }}>See the team and book</div>
+      </div>
+    </Link>
+  );
+}
 
 function BusinessCard({ biz, q, onOpen }) {
   const initial = (biz.bizName || '?').trim()[0]?.toUpperCase() || '?';

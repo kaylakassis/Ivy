@@ -389,3 +389,12 @@ textarea.pb-input { font-family: inherit; resize: vertical; line-height: 1.45; }
 .pb-pkg-title { display: flex; align-items: center; gap: 6px; font-weight: 650; color: var(--fg); overflow-wrap: anywhere; }
 .pb-pkg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .pb-pkg-actions .pb-btn { flex: 1 1 140px; }
+
+/* ── Part of a shop page (1.0.6) ────────────────────────── */
+.pb-shop-note { display: flex; flex-wrap: wrap; gap: 8px; margin: -6px 0 14px; }
+.pb-shop-note a {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px;
+  border-radius: 99px; font-size: 12.5px; font-weight: 600; text-decoration: none;
+  background: var(--accent-soft); color: var(--accent); border: 1px solid transparent;
+}
+.pb-shop-note a:hover { border-color: var(--accent); }

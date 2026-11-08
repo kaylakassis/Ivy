@@ -6,17 +6,33 @@
 // Accepting binds the invite to the business the signed-in user OWNS, and
 // only when that business has an active plan, trial or comp. An email
 // invite can only be accepted by that email's account.
-import { requireUser, readSession } from '../_lib/auth.js';
+import { requireUser, readSession, normalizeAccountEmail } from '../_lib/auth.js';
+import { sql } from '../_lib/db.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { recordWorkspaceAudit } from '../_lib/audit.js';
-import { findInvite, inviteInfo, acceptInvite, declineInvite, ownedWorkspaceOf, serializeShop, ShopError } from '../_lib/shops.js';
+import { findInvite, inviteInfo, acceptInvite, declineInvite, ownedWorkspaceOf, serializeShop, isUuid, ShopError } from '../_lib/shops.js';
 import { loadWorkspaceAccess } from '../_lib/businessAccess.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const DEAD = 'This invite link is not valid any more. Ask the shop to send a new one.';
+
+async function findInviteForUser(inviteId, user) {
+  if (!isUuid(inviteId) || !user) return null;
+  const ws = await ownedWorkspaceOf(user.id);
+  const email = normalizeAccountEmail(user.email);
+  const { rows } = await sql.query(
+    `SELECT * FROM shop_members WHERE id = $1 AND status = 'invited' AND invite_expires_at > NOW()
+       AND (workspace_id = $2 OR (workspace_id IS NULL AND LOWER(invite_email) = $3)) LIMIT 1`,
+    [inviteId, ws, email],
+  );
+  const member = rows[0];
+  if (!member) return null;
+  const shop = (await sql`SELECT * FROM shops WHERE id = ${member.shop_id} LIMIT 1`).rows[0];
+  return shop ? { kind: 'member', shop, member } : null;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return methodNotAllowed(res, ['GET', 'POST']);
@@ -54,7 +70,9 @@ export default async function handler(req, res) {
     const raw = typeof body?.token === 'string' ? body.token : '';
     const action = body?.action === 'decline' ? 'decline' : body?.action === 'accept' ? 'accept' : null;
     if (!action) return badRequest(res, 'action must be accept or decline');
-    const found = await findInvite(raw);
+    // From the in-app invite card there is no link: the invite is named by
+    // id and must be addressed to the signed-in owner's business or email.
+    const found = raw ? await findInvite(raw) : await findInviteForUser(String(body?.inviteId || ''), user);
     if (!found) return res.status(410).json({ error: DEAD, status: 'dead' });
     if (action === 'decline') {
       const out = await declineInvite({ found, user });

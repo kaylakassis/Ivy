@@ -21,7 +21,6 @@ export default async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
     return res.end(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('[shops sitemap] error:', err);
     res.statusCode = 500;
     return res.end('');
