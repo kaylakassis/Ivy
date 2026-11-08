@@ -1178,7 +1178,7 @@ export default function PublicBooking({ embedded = false }) {
                     </div>
                   )}
                   <div className="row" style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
-                    <span>Due now</span>
+                    <span>{svc.requireApproval && depositDue > 0 ? 'Due once confirmed' : 'Due now'}</span>
                     <b>{depositDue > 0 ? `$${depositDue.toFixed(2)} deposit` : '$0.00'}</b>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
@@ -1221,6 +1221,20 @@ export default function PublicBooking({ embedded = false }) {
         </section>
       ) : (
         <>
+          {/* A waitlist claim link that no longer books: say why. */}
+          {claim && !claim.loading && (claim.error || (claim.offer && claim.offer.state !== 'open')) && (
+            <div className="pb-remembered" role="status" style={{ alignItems: 'flex-start' }}>
+              <span>
+                {claim.error
+                  ? 'That link is not valid. You can still pick a time below.'
+                  : claim.offer.state === 'claimed'
+                    ? 'This link has already been used, so that spot is taken. You can pick another time below.'
+                    : claim.offer.state === 'expired'
+                      ? 'This link has expired, so the spot went to the next person on the list. You are still on the waitlist, or pick another time below.'
+                      : 'That spot is no longer available. You can pick another time below.'}
+              </span>
+            </div>
+          )}
           {/* No services but things to buy: show those first. */}
           {!hasServices && hasOfferings && (
             <MoreFrom cal={cal} embedded={embedded} defaultOpen heading={null}
