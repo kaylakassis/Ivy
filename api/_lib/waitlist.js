@@ -25,8 +25,9 @@ import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { hasConflict, fetchCalendarSettings, slotEpochMs } from './calendar.js';
-import { notifyOwnerSafe } from './push.js';
+import { notifyOwnerSafe, notifyClientSafe } from './push.js';
 import { keepAlive } from './keepAlive.js';
+import { linkWaitlistAcceptance } from './cancellationPolicy.js';
 
 export const WAITLIST_MAX_PER_CLIENT_PER_SERVICE = 3;
 export const WAITLIST_MAX_OPEN_PER_WORKSPACE = 200;
@@ -39,7 +40,8 @@ export const OPEN_STATUSES = ['waiting', 'offered'];
 export function waitlistSettings(row) {
   const hours = Number(row?.waitlist_offer_hours);
   return {
-    enabled: row ? row.waitlist_enabled !== false : true,
+    // Off by default for new businesses (schema.js); no settings row = off.
+    enabled: row ? row.waitlist_enabled !== false : false,
     autoFill: row ? row.waitlist_auto_fill !== false : true,
     offerHours: OFFER_HOURS_OPTIONS.includes(hours) ? hours : DEFAULT_OFFER_HOURS,
   };
@@ -280,6 +282,7 @@ async function notifyOffer({ workspaceId, entry, offer, rawToken, settings }) {
     const branding = await fetchBranding(workspaceId).catch(() => null);
     const html = emailShell({
       heading: 'A spot opened up',
+      preheader: `${line} First to tap gets it.`,
       branding,
       body: `<p>Hi ${escapeHtml(first(entry.client_name))},</p>
         <p>${escapeHtml(line)} Tap to book: <a href="${escapeHtml(link)}" style="color:#2E3168;">${escapeHtml(link)}</a></p>
@@ -291,6 +294,13 @@ async function notifyOffer({ workspaceId, entry, offer, rawToken, settings }) {
     const args = { workspaceId, type: 'bookings', subject: `A spot opened: ${service}, ${day} at ${time}`, html, replyTo: branding?.replyTo };
     if (entry.client_id) await sendEmailToClient({ clientId: entry.client_id, to: entry.client_email, ...args });
     else await sendEmailToClientByAddress({ email: entry.client_email, ...args });
+  }
+  // Portal push (no-op unless they claimed their portal): opens the claim page.
+  if (entry.client_id) {
+    notifyClientSafe({
+      clientId: entry.client_id, type: 'bookings',
+      payload: { title: 'A spot opened up', body: `${line} First to tap gets it.`, url: `/book/${encodeURIComponent(s?.slug || '')}?claim=${encodeURIComponent(rawToken)}`, tag: `waitlist-offer-${offer.id}` },
+    });
   }
   const consentAt = await smsConsentFor({ workspaceId, entry });
   if (consentAt) {
@@ -416,13 +426,20 @@ export async function completeOffer({ offerId, workspaceId, bookingId }) {
   await sql`
     UPDATE waitlist_entries SET status = 'fulfilled', promoted_at = NOW(), promoted_booking_id = ${bookingId}, updated_at = NOW()
      WHERE id = ${offer.entry_id} AND workspace_id = ${workspaceId}`;
+  // The policy they accepted when joining the list follows the booking too.
+  const cl = await sql`SELECT client_id FROM bookings WHERE id = ${bookingId} AND workspace_id = ${workspaceId}`;
+  await linkWaitlistAcceptance({ workspaceId, waitlistEntryId: offer.entry_id, bookingId, clientId: cl.rows[0]?.client_id || null });
   keepAlive((async () => {
     const b = await sql`
-      SELECT b.client_name, b.date, b.start_min, s.name AS service_name
+      SELECT b.client_name, b.date, b.start_min, b.requested_at, b.request_decided_at, b.cancelled_at, s.name AS service_name
         FROM bookings b LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        WHERE b.id = ${bookingId} AND b.workspace_id = ${workspaceId}`;
     const row = b.rows[0];
     if (!row) return;
+    // A service set to "Confirm bookings before they're final" turns the
+    // claim into a request: the owner already gets the request push and
+    // email (bookingRequests.js), so no second, inaccurate "filled" push.
+    if (row.requested_at && !row.request_decided_at && !row.cancelled_at) return;
     notifyOwnerSafe({
       workspaceId, type: 'bookings',
       payload: {

@@ -31,7 +31,7 @@
 //        completed" releases the session and charges the fee once
 //  [18]  dashboard refund (charge.refunded) is recorded, never refunded twice
 //  [19]  currency follows the business
-//  [20]  waitlist acceptance follows the promoted booking
+//  [20]  waitlist acceptance follows the booking made from a claim link
 //  [21]  owner-sent acceptance link
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/cancellation-policy.test.mjs
@@ -62,7 +62,7 @@ import { buildClientPortalExport } from '../api/_lib/clientExport.js';
 import { loadPublicSite } from '../api/_lib/publicSite.js';
 import { renderSiteHtml } from '../api/_lib/siteHtml.js';
 import { isInsideWindow, effectiveTerms } from '../api/_lib/bookingFees.js';
-import { promoteWaitlistOnCancel } from '../api/_lib/waitlist.js';
+import { fillFromWaitlistOnCancel } from '../api/_lib/waitlist.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -163,9 +163,10 @@ async function mkBiz(label, { currency = 'USD', tz = 'UTC', connected = true } =
     VALUES (${u}, ${`${label} Studio`}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
   const slug = `cp-${label}-${STAMP}`.toLowerCase();
   await sql.query(
-    `INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone, slot_minutes, min_notice_hours, max_advance_days, availability)
-     VALUES ($1, $2, $3, $4, 30, 0, 365, $5::jsonb)
-     ON CONFLICT (workspace_id) DO UPDATE SET slug = $3, biz_name = $2, timezone = $4, slot_minutes = 30, min_notice_hours = 0, max_advance_days = 365, availability = $5::jsonb`,
+    // waitlist_enabled: the waitlist is off for a new business (1.0.6).
+    `INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone, slot_minutes, min_notice_hours, max_advance_days, availability, waitlist_enabled)
+     VALUES ($1, $2, $3, $4, 30, 0, 365, $5::jsonb, TRUE)
+     ON CONFLICT (workspace_id) DO UPDATE SET slug = $3, biz_name = $2, timezone = $4, slot_minutes = 30, min_notice_hours = 0, max_advance_days = 365, availability = $5::jsonb, waitlist_enabled = TRUE`,
     [wid, `${label} Studio`, slug, tz, ALL_DAY],
   );
   const acct = `acct_cp_${label}_${STAMP}`;
@@ -698,15 +699,25 @@ async function run() {
   r = await call(meBookingHandler, req({ method: 'DELETE', cookie: eu.cookie, query: { id: booking.id } }));
   assert(charges()[0]?.body.currency === 'eur' && charges()[0].body.amount === '4000', 'fee charged in EUR');
 
-  console.log('\n[20] waitlist acceptance follows the promoted booking');
+  console.log('\n[20] waitlist acceptance follows the booking made from a claim link');
   const wdate = nextWeekday(15);
   r = await call(publicCalendarHandler, req({ method: 'POST', query: { slug: A.slug }, body: {
     serviceId: A.svcNoDep, date: wdate, startMin: 600, endMin: 660, clientName: 'Wren', clientEmail: `wren-${STAMP}@example.com`,
     joinWaitlist: true, policyAccepted: true, policyVersionId: v2.id } }));
   assert(r.statusCode === 201 && r.body.waitlist?.id, 'joined the waitlist with the box ticked');
-  const promoted = await promoteWaitlistOnCancel({ workspaceId: A.wid, serviceId: A.svcNoDep, dateISO: wdate, startMin: 600, endMin: 660 });
-  acc = promoted ? (await sql`SELECT * FROM cancellation_policy_acceptances WHERE booking_id = ${promoted.id}`).rows : [];
-  assert(promoted && acc.length === 1 && acc[0].source === 'waitlist' && acc[0].policy_text === POLICY_V2 && acc[0].client_id, 'promoted booking carries the acceptance');
+  // A cancellation offers the spot (one-tap link); nobody is booked without their tap.
+  emails.length = 0;
+  const offer = await fillFromWaitlistOnCancel({ workspaceId: A.wid, serviceId: A.svcNoDep, dateISO: wdate, startMin: 600, endMin: 660 });
+  await settle(200);
+  const wrenMail = emails.find((e) => [].concat(e.to).includes(`wren-${STAMP}@example.com`));
+  const claimToken = [...String(wrenMail?.html || '').matchAll(/\?claim=([A-Za-z0-9_-]+)/g)].map((m) => m[1]).sort((x, y) => y.length - x.length)[0];
+  assert(offer && !!claimToken, 'the spot is offered by email with a claim link');
+  r = await call(publicCalendarHandler, req({ method: 'POST', query: { slug: A.slug }, body: {
+    serviceId: A.svcNoDep, date: wdate, startMin: 600, endMin: 660, clientName: 'Wren', clientEmail: `wren-${STAMP}@example.com`,
+    waitlistClaimToken: claimToken, policyAccepted: true, policyVersionId: v2.id } }));
+  assert(r.statusCode === 201 && r.body.claimed === true, `claiming books the spot (${r.statusCode})`);
+  acc = (await sql`SELECT * FROM cancellation_policy_acceptances WHERE booking_id = ${r.body.booking.id} ORDER BY source`).rows;
+  assert(acc.some((a) => a.source === 'waitlist' && a.policy_text === POLICY_V2 && a.client_id) && acc.some((a) => a.source === 'booking_page'), 'the booking carries the waitlist acceptance and the one from the claim page');
 
   console.log('\n[21] owner-sent acceptance link');
   const walk = await mkClient('walkin', A);

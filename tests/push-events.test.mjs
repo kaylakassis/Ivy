@@ -106,7 +106,7 @@ async function flush() {
 const push = await import('../api/_lib/push.js');
 const { sendApnsToTokens } = await import('../api/_lib/apns.js');
 const { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } = await import('../api/_lib/bookingNotify.js');
-const { promoteWaitlistOnCancel } = await import('../api/_lib/waitlist.js');
+const { fillFromWaitlistOnCancel } = await import('../api/_lib/waitlist.js');
 const { markInvoicePaid } = await import('../api/_lib/invoicePayments.js');
 const { runApprovedTool } = await import('../api/_lib/ivyTools.js');
 const ownerThreadHandler = (await import('../api/messages/[id].js')).default;
@@ -190,8 +190,9 @@ async function setup() {
   const w = await sql`INSERT INTO workspaces (owner_id, name, subscription_status, subscription_period_end)
     VALUES (${people.owner.userId}, 'Push Studio', 'active', NOW() + INTERVAL '30 days') RETURNING id`;
   wsId = w.rows[0].id;
-  await sql`INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone)
-    VALUES (${wsId}, 'Push Studio', ${TAG}, 'UTC') ON CONFLICT (workspace_id) DO NOTHING`;
+  // The waitlist is off for a new business (1.0.6); this one uses it.
+  await sql`INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone, waitlist_enabled)
+    VALUES (${wsId}, 'Push Studio', ${TAG}, 'UTC', TRUE) ON CONFLICT (workspace_id) DO NOTHING`;
   // The stranger owns a different business: nothing here may reach them.
   const w2 = await sql`INSERT INTO workspaces (owner_id, name, subscription_status, subscription_period_end)
     VALUES (${people.stranger.userId}, 'Elsewhere', 'active', NOW() + INTERVAL '30 days') RETURNING id`;
@@ -342,11 +343,13 @@ async function run() {
   await sql`INSERT INTO waitlist_entries (workspace_id, service_id, client_id, client_name, client_email, date, start_min, end_min)
     VALUES (${wsId}, ${serviceId}, ${people.client.clientId}, 'Casey Client', ${people.client.email}, ${wDate}, 600, 660)`;
   m = mark();
-  const promoted = await promoteWaitlistOnCancel({ workspaceId: wsId, serviceId, dateISO: wDate, startMin: 600, endMin: 660 });
+  // 1.0.6: the spot is OFFERED with a one-tap claim link (nobody is booked
+  // without their tap); the push opens the claim page.
+  const offer = await fillFromWaitlistOnCancel({ workspaceId: wsId, serviceId, dateISO: wDate, startMin: 600, endMin: 660 });
   await flush();
-  assert(!!promoted, 'promoted into a booking');
-  onlyTo(m, { client: 1 }, 'waitlist promotion');
-  assert(got('client', m)[0]?.url === '/me/bookings', 'opens Bookings');
+  assert(!!offer, 'the spot is offered');
+  onlyTo(m, { client: 1 }, 'waitlist offer');
+  assert(/^\/book\/[^?]+\?claim=/.test(got('client', m)[0]?.url || ''), `opens the claim page (${got('client', m)[0]?.url})`);
 
   console.log('\n[8] website enquiry');
   const handle = `${TAG}-site`;

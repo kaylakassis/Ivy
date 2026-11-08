@@ -129,6 +129,7 @@ console.log('\n[7] Policy, formatting, contact links');
   assert(lines[0] === 'A $20 deposit is due when you book.', lines[0]);
   assert(lines[1] === 'Cancelling within 1 day of your appointment may come with a $25 fee.', lines[1]);
   assert(policyLines({ price: 200, depositType: 'percent', depositAmount: 25 })[0] === 'A $50 deposit (25%) is due when you book.', 'percent deposit uses the total');
+  assert(policyLines({ price: 50, depositType: 'fixed', depositAmount: 15, requireApproval: true })[0] === 'A $15 deposit is charged only once your time is confirmed.', 'a request service: deposit only once confirmed');
   assert(policyLines({ price: 80, depositType: 'full' })[0] === 'Paid in full when you book.', 'full payment');
   assert(policyLines({ price: 80, cancellationFeeAmount: 10, cancellationWindowHours: 6 })[0].includes('6 hours'), 'hour windows');
   assert(policyLines({ price: 80, depositType: 'none', cancellationFeeAmount: 0 }).length === 0, 'no policy configured = nothing shown');

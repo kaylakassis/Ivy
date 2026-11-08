@@ -364,6 +364,8 @@ export function PolicyNote({ svc, total }) {
 
 // Phones: fixed bar once a time is picked.
 export function StickyBar({ svc, slot, dateObj, extra = null, onContinue }) {
+  // 1.0.6: a service that needs the owner's OK says so on the button.
+  const cta = svc?.requireApproval ? 'Request this time' : 'Continue';
   if (!svc || !slot || !dateObj) return null;
   return (
     <div className="pb-sticky" role="region" aria-label="Your selection">
@@ -373,7 +375,7 @@ export function StickyBar({ svc, slot, dateObj, extra = null, onContinue }) {
         {extra && <small>{extra}</small>}
       </div>
       <button type="button" className="pb-btn primary" onClick={onContinue}>
-        Continue <Icons.Arrow size={14}/>
+        {cta} <Icons.Arrow size={14}/>
       </button>
     </div>
   );

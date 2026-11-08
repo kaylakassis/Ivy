@@ -5394,6 +5394,11 @@ CREATE INDEX IF NOT EXISTS idx_bookings_requests_open
 -- next person straight away: it OFFERS the spot (waitlist_offers) with a
 -- one-tap claim link that expires, then the next person is offered.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS waitlist_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+-- The waitlist is off for new businesses until the owner turns it on
+-- (Calendar > Waitlist). Businesses that already had a booking page keep
+-- the waitlist they had: the column was added above with TRUE for every
+-- existing row, and only rows created from now on start FALSE.
+ALTER TABLE calendar_settings ALTER COLUMN waitlist_enabled SET DEFAULT FALSE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS waitlist_auto_fill BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS waitlist_offer_hours INT NOT NULL DEFAULT 2;
 ALTER TABLE waitlist_entries ADD COLUMN IF NOT EXISTS flexible BOOLEAN NOT NULL DEFAULT FALSE;

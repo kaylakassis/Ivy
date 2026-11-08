@@ -147,6 +147,9 @@ export default function Calendar() {
       return;
     }
 
+    // Wait for the first load: the deep link must not be stripped while the
+    // lists are still empty.
+    if (bookingId && loading) return;
     if (bookingId && Array.isArray(cal?.bookings)) {
       // A booking request (?request=<id>, from the push / email / dashboard)
       // lives in cal.requests; its drawer shows Approve / Decline.
@@ -175,7 +178,7 @@ export default function Calendar() {
       navigate(`/finance?section=services&service=${encodeURIComponent(serviceId)}${carry ? '&' + carry : ''}`, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, cal?.bookings, cal?.requests]);
+  }, [location.search, cal?.bookings, cal?.requests, loading]);
 
   // Force day view on phones - the 7-column week grid is illegible on narrow
   // screens. Users can still pick week/month from the toggle if they want.

@@ -254,7 +254,7 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
   const pay = !cancelled && !requested ? paymentLine(b.payment) : null;
   const where = !cancelled ? whereLine(b) : null;
   const upcoming = tab === 'upcoming' && !cancelled && !requested;
-  const again = !upcoming && b.bizSlug && !b.archived ? bookHref(b.bizSlug, b.serviceId) : null;
+  const again = !upcoming && !requested && b.bizSlug && !b.archived ? bookHref(b.bizSlug, b.serviceId) : null;
 
   const actions = [];
   if (upcoming && b.videoRoomUrl) {

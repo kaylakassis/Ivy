@@ -71,7 +71,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | See upcoming / search bookings, weekly hours, blocked time | `list_upcoming_bookings`, `search_bookings`, `get_availability` |
 | Book an appointment | `create_booking` (approval: the client is emailed a confirmation, and the card shows any note it carries) |
 | Add many appointments from a photo or list | `add_bookings_from_list` (approval) |
-| Reschedule, cancel (optionally notify) | `reschedule_booking`, `cancel_booking` (approval). Cancelling is the Calendar's cancel: never a fee, a paid deposit goes to Deposits to review (the card says so), a package session and gift card credit go back |
+| Reschedule, cancel (optionally notify) | `reschedule_booking`, `cancel_booking` (approval). Cancelling is the Calendar's cancel: never a fee, a paid deposit goes to Deposits to review (the card says so), a package session and gift card credit go back. The freed time is offered to the waitlist (when the owner has it on); on a booking request still waiting for an answer it is a decline (slot released, client told) |
 | Deposits to review: refund or keep | `list_deposit_reviews`, `review_deposit_refund` (approval: "Refund Jordan's $20.00 deposit? (cancelled 2 days ahead, your policy refunds it)") |
 | Use a package session for a booking made without one | `use_package_session` (approval, says sessions left before and after) |
 | Mark completed (with notes) / undo | `update_booking_status` (approval) |

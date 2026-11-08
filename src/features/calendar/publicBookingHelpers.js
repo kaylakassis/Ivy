@@ -242,13 +242,16 @@ export function policyLines(svc, total = null) {
   const price = Number(total ?? svc.price ?? 0);
   const type = svc.depositType || 'none';
   const amt = Number(svc.depositAmount || 0);
+  // 1.0.6: a service that needs the owner's OK charges nothing on request;
+  // the deposit is taken only once the business confirms.
+  const when = svc.requireApproval ? 'is charged only once your time is confirmed' : 'is due when you book';
   if (price > 0 && type === 'full') {
-    out.push('Paid in full when you book.');
+    out.push(svc.requireApproval ? 'Paid in full once your time is confirmed.' : 'Paid in full when you book.');
   } else if (price > 0 && type === 'percent' && amt > 0) {
     const due = Math.round(price * Math.min(100, amt)) / 100;
-    out.push(`A ${fmtPrice(due)} deposit (${amt}%) is due when you book.`);
+    out.push(`A ${fmtPrice(due)} deposit (${amt}%) ${when}.`);
   } else if (price > 0 && type === 'fixed' && amt > 0) {
-    out.push(`A ${fmtPrice(Math.min(amt, price))} deposit is due when you book.`);
+    out.push(`A ${fmtPrice(Math.min(amt, price))} deposit ${when}.`);
   }
   const fee = Number(svc.cancellationFeeAmount || 0);
   const hours = Number.isInteger(svc.cancellationWindowHours) ? svc.cancellationWindowHours : 24;
