@@ -27,6 +27,7 @@ import { signSession } from '../api/_lib/auth.js';
 import {
   cadenceFrom, suggestedDate, candidateStarts, weeksFromGapDays, gapsOf, median,
   mintRebookToken, verifyRebookToken, computeRebookSuggestion, sendRebookLink, usualLine, addDaysISO, weekdayOf,
+  rebookLimitMessage, renderRebookEmail,
 } from '../api/_lib/rebook.js';
 import { keyNumbers } from '../api/_lib/dashboardNumbers.js';
 import { executeIvyTool, ledgerEntry } from '../api/_lib/ivyTools.js';
@@ -183,6 +184,10 @@ async function main() {
   assert((await run(publicRebook, req({ query: { token, slug: B.slug } }))).statusCode === 404, "the same token on another business's page is a 404");
   assert((await run(publicRebook, req({ query: { token: old, slug: A.slug } }))).statusCode === 404, 'an expired token is a 404');
   assert((await run(publicRebook, req({ query: { token: 'forged.forged', slug: A.slug } }))).statusCode === 404, 'a forged token is a 404');
+  const fullDay = await sql`INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label) VALUES (${A.workspaceId}, ${sug.date}, 0, 1440, 'x') RETURNING id`;
+  const noTime = await run(publicRebook, req({ query: { token, slug: A.slug } }));
+  assert(noTime.statusCode === 200 && noTime.body.rebook.startMin === null && /^We opened Friday, .+ for you\. Choose a time that suits you\.$/.test(noTime.body.rebook.pickedLine), `no free time that day: the page opens the day and says so (${noTime.body.rebook.pickedLine})`);
+  await sql`DELETE FROM calendar_blocks WHERE id = ${fullDay.rows[0].id}`;
 
   // ── [3] opt-outs and consent ──────────────────────────────────────────
   console.log('\n[3] opt-outs');
@@ -215,6 +220,20 @@ async function main() {
   assert((await run(rebookLinkApi, req({ method: 'POST', body: { id: bk.id }, uid: B.userId }))).statusCode === 404, "another owner cannot send for A's booking");
   assert((await run(rebookLinkApi, req({ method: 'POST', body: { id: 'nope' }, uid: A.userId }))).statusCode === 400, 'a bad id is refused');
   assert((await run(rebookLinkApi, req({ method: 'POST', body: { id: bk.id } }))).statusCode === 401, 'signed out is refused');
+  assert(/You have sent a lot of rebook links/.test(rebookLimitMessage({ allowed: false, scope: 'business' })) && /Maya already got/.test(rebookLimitMessage({ allowed: false, scope: 'client' }, 'Maya')), 'the refusal says which limit (this client today, or the business this hour)');
+  const helperU = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
+    VALUES (${`rebook-helper-${S}@example.com`}, 'x', 'Helper', NOW(), 'v1', NOW()) RETURNING id`).rows[0].id;
+  await sql`INSERT INTO staff_members (workspace_id, user_id, name, permissions) VALUES (${A.workspaceId}, ${helperU}, 'Helper', '{"clients":true,"schedule":true,"messages":true}'::jsonb)`;
+  await sql`DELETE FROM rate_limits WHERE key LIKE ${'rebook:%'}`;
+  emails.length = 0;
+  const hr = await run(rebookLinkApi, { ...req({ method: 'POST', body: { id: bk.id }, uid: helperU }), headers: { ...req({ uid: helperU }).headers, 'x-helper-workspace': A.workspaceId } });
+  assert(hr.statusCode === 403 && emails.length === 0, `a helper cannot send a rebook link (${hr.statusCode})`);
+  const cr = await run(rebookLinkApi, req({ method: 'POST', body: { id: bk.id }, uid: mayaUser }));
+  assert(cr.statusCode >= 400 && cr.statusCode !== 200 && emails.length === 0, `a client login cannot send one (${cr.statusCode})`);
+  const evil = await run(rebookLinkApi, { ...req({ method: 'POST', body: { id: bk.id }, uid: A.userId }), headers: { ...req({ uid: A.userId }).headers, origin: 'https://evil.example' } });
+  assert(evil.statusCode === 403 && emails.length === 0, `a cross-origin request is refused (${evil.statusCode})`);
+  const preview = renderRebookEmail({ firstName: 'Casey', businessName: 'Studio <b>', serviceName: 'Cut', usual: null, when: 'Friday, May 1', url: 'https://x.test/book/s?rebook=t' });
+  assert(preview.subject === 'Ready for your next Cut?' && preview.html.includes('Studio &lt;b&gt;') && /We picked Friday, May 1 for you\. You can choose another time/.test(preview.html) && !/Your usual/.test(preview.html), 'the email without a usual rhythm never says "Your usual", and escapes names');
 
   // ── [5] booking through the link ───────────────────────────────────────
   console.log('\n[5] booked_via = rebook');

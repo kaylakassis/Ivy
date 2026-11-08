@@ -48,7 +48,9 @@ export default async function handler(req, res) {
         usual: sug.usual,
         slot: sug.slot,
         usualLine: usualLine(sug),
-        pickedLine: `We picked ${fmtSuggestionDay(sug)} for you. Tap Continue, or choose another time.`,
+        pickedLine: sug.startMin != null
+          ? `We picked ${fmtSuggestionDay(sug)} for you. Tap Continue, or choose another time.`
+          : `We opened ${fmtSuggestionDay(sug)} for you. Choose a time that suits you.`,
       },
     });
   } catch (err) {

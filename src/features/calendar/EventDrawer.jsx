@@ -329,7 +329,9 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         <BookingExtraActions event={event} onBookingChanged={onBookingChanged}/>
       )}
 
-      {!event.cancelledAt && event.clientId && (
+      {/* Once the visit has started (or is marked done): rebooking is for after a visit. */}
+      {!event.cancelledAt && event.clientId
+        && (isOccurrencePast(occurrenceISO, event.startMin) || !!event.completionLog?.[String(occurrenceISO).slice(0, 10)]) && (
         <RebookLinkRow event={event} masterId={masterId}/>
       )}
 
@@ -431,7 +433,7 @@ function RebookLinkRow({ event, masterId }) {
       {out && (
         <div role="status" style={{ marginTop: 8, fontSize: 12.5, color: out.sent ? 'var(--ok, #2c8a4a)' : 'var(--danger)', lineHeight: 1.5 }}>
           {out.sent
-            ? `Sent by ${[out.emailed ? 'email' : null, out.texted ? 'text' : null].filter(Boolean).join(' and ')}. It opens on ${when}${out.suggestion?.usual ? ` (their usual: every ${out.suggestion.weeks} ${out.suggestion.weeks === 1 ? 'week' : 'weeks'})` : ''}.`
+            ? `Sent by ${[out.emailed ? 'email' : null, out.texted ? 'text' : null].filter(Boolean).join(' and ')}. It opens on ${when}${out.suggestion?.usual ? ` (their usual: every ${out.suggestion.weeks === 1 ? 'week' : `${out.suggestion.weeks} weeks`})` : ''}.`
             : `Nothing went out. Email: ${out.emailReason || 'ok'}. Text: ${out.smsReason || 'ok'}.`}
           {out.url && (
             <span> <button type="button" className="btn btn-ghost" onClick={copy} style={{ fontSize: 12, padding: '2px 8px' }}>{copied ? 'Copied' : 'Copy link'}</button></span>

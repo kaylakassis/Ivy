@@ -13,7 +13,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { sendRebookLink, rebookSendAllowed } from '../../_lib/rebook.js';
+import { sendRebookLink, rebookSendAllowed, rebookLimitMessage } from '../../_lib/rebook.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     const gate = await rebookSendAllowed({ workspaceId, clientId: booking.client_id });
     if (!gate.allowed) {
       res.setHeader('Retry-After', String(gate.retryAfterSeconds || 3600));
-      return res.status(429).json({ error: 'This client already got a rebook link today. Try again tomorrow.' });
+      return res.status(429).json({ error: rebookLimitMessage(gate) });
     }
     const out = await sendRebookLink({ workspaceId, clientId: booking.client_id, serviceId: booking.service_id || null, bookingId: booking.id });
     if (out.error) return badRequest(res, out.error);

@@ -82,6 +82,24 @@ export function templateHtml(template, vars) {
   return `<p>${safe.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`;
 }
 
+// The email for one automation (also the admin email preview,
+// api/admin/email-preview.js). → { subject, html }
+export function renderAutomationEmail({ kind, template, vars, branding, footer }) {
+  const subject = EMAIL_SUBJECTS[kind](vars);
+  const withCta = (kind === 'quiet' || String(template).includes('{booking_link}')) && !!vars.booking_link;
+  return {
+    subject,
+    html: emailShell({
+      heading: subject,
+      body: templateHtml(template, vars),
+      ctaText: withCta ? 'Book a time' : null,
+      ctaUrl: withCta ? vars.booking_link : null,
+      footer: footer ?? `Sent by ${escapeHtml(vars.business)}.`,
+      branding,
+    }),
+  };
+}
+
 // ── settings ───────────────────────────────────────────────────────────
 function serialize(kind, row, extra = {}) {
   return {
@@ -332,19 +350,10 @@ export async function deliverAutomation({ ws, kind, client, branding = null }) {
   if (channels.email) {
     if (!client.email) out.emailReason = 'no email';
     else {
-      const withCta = kind === 'quiet' || template.includes('{booking_link}');
+      const mail = renderAutomationEmail({ kind, template, vars, branding: b });
       const r = await sendEmailToClient({
         clientId: client.client_id, workspaceId: ws.workspace_id, type: 'marketing', to: client.email,
-        subject: EMAIL_SUBJECTS[kind](vars),
-        replyTo: b.replyTo,
-        html: emailShell({
-          heading: EMAIL_SUBJECTS[kind](vars),
-          body: templateHtml(template, vars),
-          ctaText: withCta && vars.booking_link ? 'Book a time' : null,
-          ctaUrl: withCta && vars.booking_link ? vars.booking_link : null,
-          footer: `Sent by ${escapeHtml(business)}.`,
-          branding: b,
-        }),
+        subject: mail.subject, replyTo: b.replyTo, html: mail.html,
       }).catch((e) => ({ ok: false, sent: false, reason: e?.message || 'send failed' }));
       out.emailed = !!r?.sent;
       if (!out.emailed) out.emailReason = r?.reason || 'send failed';
@@ -429,18 +438,12 @@ export async function sendTestAutomation({ workspaceId, kind, to, ownerName, tem
   const cs = (await sql`SELECT slug FROM calendar_settings WHERE workspace_id = ${workspaceId}`).rows[0];
   const business = b.businessName || 'your business';
   const vars = { first_name: firstNameOf(ownerName), business, booking_link: cs?.slug ? `${appUrl()}/book/${encodeURIComponent(cs.slug)}` : '' };
-  const subject = EMAIL_SUBJECTS[kind](vars);
-  const withCta = kind === 'quiet' || tpl.includes('{booking_link}');
-  await sendEmail({
-    to, subject: `[Test] ${subject}`,
-    html: emailShell({
-      heading: subject, body: templateHtml(tpl, vars),
-      ctaText: withCta && vars.booking_link ? 'Book a time' : null, ctaUrl: withCta && vars.booking_link ? vars.booking_link : null,
-      footer: 'This is a test of your automated message. Clients see their own first name and, when they have one, a link to book their usual service again.',
-      branding: b,
-    }),
+  const mail = renderAutomationEmail({
+    kind, template: tpl, vars, branding: b,
+    footer: 'This is a test of your automated message. Clients see their own first name and, when they have one, a link to book their usual service again.',
   });
-  return { to, subject };
+  await sendEmail({ to, subject: `[Test] ${mail.subject}`, html: mail.html });
+  return { to, subject: mail.subject };
 }
 
 export function isUuid(v) { return UUID_RE.test(String(v || '')); }

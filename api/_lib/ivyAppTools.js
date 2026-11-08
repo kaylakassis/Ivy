@@ -47,7 +47,7 @@ import { CADENCE_WORDS, cardLong, fmtAmount, invoiceAutopayLine, seriesAutopayLa
 import { serializeInvoice } from './finance.js';
 import { setInviteNewClients, resendInviteProblem, resendClientInvite } from './clientNotify.js';
 import { recordWorkspaceAudit } from './audit.js';
-import { sendRebookLink, computeRebookSuggestion, lastServiceFor, usualLine, fmtSuggestionDay, rebookSendAllowed } from './rebook.js';
+import { sendRebookLink, computeRebookSuggestion, lastServiceFor, usualLine, fmtSuggestionDay, rebookSendAllowed, rebookLimitMessage } from './rebook.js';
 import { readAutomations, saveAutomation, cleanAutomationPatch, dueThisWeek, KIND_LABELS, ONCE_WORDS, DEFAULT_TEMPLATES } from './clientAutomations.js';
 import { fetchBranding } from './branding.js';
 import { listDuplicatePairs, dismissDuplicatePair } from './clientDuplicates.js';
@@ -1233,11 +1233,11 @@ async function planRebookLink(ws, a) {
   const usual = usualLine(sug);
   const name = clip(client.name || 'the client', 60);
   return {
-    summary: `${how} ${name} a link to book ${clip(sug.serviceName, 60)} again. It opens on ${fmtSuggestionDay(sug)}${usual ? ` (${usual.replace('Your usual', 'their usual')})` : ` (${sug.weeks} weeks out, like most clients of this service)`}. The link is theirs alone and works for 90 days.`,
+    summary: `${how} ${name} a link to book ${clip(sug.serviceName, 60)} again. It opens on ${fmtSuggestionDay(sug)}${usual ? ` (${usual.replace('Your usual', 'their usual')})` : ` (a ${sug.weeks}-week gap${sug.basis === 'service' ? ', the usual one for this service' : ''})`}. The link is theirs alone and works for 90 days.`,
     done: `Sent ${name} a rebook link for ${clip(sug.serviceName, 60)}`,
     apply: async () => {
       const gate = await rebookSendAllowed({ workspaceId: ws, clientId });
-      if (!gate.allowed) throw new Error(`${name} already got a rebook link today. Try again tomorrow`);
+      if (!gate.allowed) throw new Error(rebookLimitMessage(gate, name).replace(/\.$/, ''));
       const out = await sendRebookLink({ workspaceId: ws, clientId, serviceId });
       if (out.error) throw new Error(out.error);
       if (!out.ok) throw new Error(`The rebook link did not go out (email: ${out.emailReason || 'ok'}; text: ${out.smsReason || 'ok'}). Nothing was sent`);

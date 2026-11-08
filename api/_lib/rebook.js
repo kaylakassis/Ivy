@@ -288,10 +288,38 @@ const firstNameOf = (s) => String(s || '').trim().split(/\s+/)[0] || 'there';
 
 // The owner's button and Ivy both go through here. Rate limited per client
 // per day and per business per hour. Returns { allowed, retryAfterSeconds }.
+// `scope` says which limit stopped it ('client' or 'business').
 export async function rebookSendAllowed({ workspaceId, clientId }) {
   const a = await rateLimit({ key: `rebook:client:${clientId}`, max: REBOOK_SEND_PER_CLIENT_PER_DAY, windowSeconds: 86400 });
-  if (!a.allowed) return a;
-  return rateLimit({ key: `rebook:ws:${workspaceId}`, max: REBOOK_SEND_PER_WORKSPACE_PER_HOUR, windowSeconds: 3600 });
+  if (!a.allowed) return { ...a, scope: 'client' };
+  const b = await rateLimit({ key: `rebook:ws:${workspaceId}`, max: REBOOK_SEND_PER_WORKSPACE_PER_HOUR, windowSeconds: 3600 });
+  return b.allowed ? b : { ...b, scope: 'business' };
+}
+// Plain words for a refusal from rebookSendAllowed.
+export function rebookLimitMessage(gate, firstName = 'This client') {
+  return gate?.scope === 'business'
+    ? 'You have sent a lot of rebook links in the last hour. Try again in a little while.'
+    : `${firstName} already got a rebook link today. Try again tomorrow.`;
+}
+
+// The rebook email (also the admin email preview, api/admin/email-preview.js).
+// → { subject, html }
+export function renderRebookEmail({ firstName, businessName, serviceName, usual, when, url, branding }) {
+  const subject = `Ready for your next ${serviceName}?`;
+  const picked = when ? `We picked ${escapeHtml(when)} for you.` : '';
+  return {
+    subject,
+    html: emailShell({
+      heading: subject,
+      body: `<p>Hi ${escapeHtml(firstName || 'there')},</p>
+        <p>Booking your next <strong>${escapeHtml(serviceName)}</strong> with <strong>${escapeHtml(businessName)}</strong> takes one tap.</p>
+        ${usual ? `<p><strong>${escapeHtml(usual)}.</strong> ${picked}</p>`
+                : `<p>${picked} You can choose another time if that one does not suit.</p>`}`,
+      ctaText: 'Book again', ctaUrl: url,
+      footer: `This link is just for you and works for ${REBOOK_TTL_DAYS} days.`,
+      branding,
+    }),
+  };
 }
 
 // Email and (with consent and the choice) text a client their rebook link.
@@ -327,20 +355,10 @@ export async function sendRebookLink({ workspaceId, clientId, serviceId = null, 
   if (channels.email !== false) {
     if (!client.email) emailReason = 'no email on file';
     else {
+      const mail = renderRebookEmail({ firstName: first, businessName: business, serviceName: sug.serviceName, usual, when, url: link.url, branding });
       const r = await sendEmailToClient({
         clientId: client.id, workspaceId, type: 'marketing', to: client.email,
-        subject: `Ready for your next ${sug.serviceName}?`,
-        replyTo: branding.replyTo,
-        html: emailShell({
-          heading: `Ready for your next ${sug.serviceName}?`,
-          body: `<p>Hi ${escapeHtml(first)},</p>
-            <p>It has been a little while since your last <strong>${escapeHtml(sug.serviceName)}</strong> with <strong>${escapeHtml(business)}</strong>. Your next one is a tap away.</p>
-            ${usual ? `<p><strong>${escapeHtml(usual)}.</strong> We have put ${escapeHtml(when)} first in line for you.</p>`
-                    : `<p>We have suggested ${escapeHtml(when)} for you. Pick another time if that one does not suit.</p>`}`,
-          ctaText: 'Book again', ctaUrl: link.url,
-          footer: `This link is just for you and works for ${REBOOK_TTL_DAYS} days.`,
-          branding,
-        }),
+        subject: mail.subject, replyTo: branding.replyTo, html: mail.html,
       }).catch((e) => ({ ok: false, sent: false, reason: e?.message || 'send failed' }));
       emailed = !!r?.sent;
       if (!emailed) emailReason = r?.reason === 'muted' ? 'the client turned off these emails' : (r?.reason || 'the email did not go out');

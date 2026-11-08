@@ -298,6 +298,21 @@ async function main() {
   assert((await run(automationsApi, req({ method: 'PATCH', uid: A.userId, body: { kind: 'quiet', template: 'Hi {nope}' } }))).statusCode === 400, 'PATCH refuses a bad template');
   assert((await run(automationsApi, req({ method: 'PATCH', uid: A.userId, body: { kind: 'other', enabled: true } }))).statusCode === 400, 'PATCH refuses an unknown kind');
   assert((await run(automationsApi, req({}))).statusCode === 401, 'signed out is refused');
+  // Roles: a helper of A (even with every permission) and a client login cannot read or change these.
+  const helperU = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
+    VALUES (${`ca-helper-${Date.now()}@example.com`}, 'x', 'Helper', NOW(), 'v1', NOW()) RETURNING id`).rows[0].id;
+  await sql`INSERT INTO staff_members (workspace_id, user_id, name, permissions) VALUES (${A.workspaceId}, ${helperU}, 'Helper', '{"clients":true,"schedule":true,"messages":true}'::jsonb)`;
+  const hdr = { 'x-helper-workspace': A.workspaceId };
+  const hGet = await run(automationsApi, req({ uid: helperU, headers: hdr }));
+  const hPatch = await run(automationsApi, req({ method: 'PATCH', uid: helperU, headers: hdr, body: { kind: 'quiet', enabled: false } }));
+  const hTest = await run(testApi, req({ method: 'POST', uid: helperU, headers: hdr, body: { kind: 'quiet' } }));
+  assert(hGet.statusCode === 403 && hPatch.statusCode === 403 && hTest.statusCode === 403 && (await readAutomations(A.workspaceId)).quiet.quietDays === 60, `a helper is refused (${hGet.statusCode}/${hPatch.statusCode}/${hTest.statusCode}) and nothing changed`);
+  const hNoHdr = await run(automationsApi, req({ method: 'PATCH', uid: helperU, body: { kind: 'quiet', enabled: true } }));
+  assert(hNoHdr.statusCode === 403, `a helper without the header gets no business of their own (${hNoHdr.statusCode})`);
+  const evil = await run(automationsApi, req({ method: 'PATCH', uid: A.userId, headers: { origin: 'https://evil.example' }, body: { kind: 'quiet', enabled: false } }));
+  assert(evil.statusCode === 403, `a cross-origin write is refused (${evil.statusCode})`);
+  const longTpl = await run(automationsApi, req({ method: 'PATCH', uid: A.userId, body: { kind: 'quiet', template: 'x'.repeat(601) } }));
+  assert(longTpl.statusCode === 400 && /under 600/.test(longTpl.body.error), 'a message over 600 characters is refused');
   const getB = await run(automationsApi, req({ uid: B.userId }));
   assert(getB.statusCode === 200 && getB.body.automations.quiet.enabled === false && getB.body.business === 'Glow Studio b', 'B reads only its own settings');
 

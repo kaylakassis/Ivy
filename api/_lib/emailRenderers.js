@@ -311,7 +311,7 @@ export function renderInvoiceSent({
 }
 
 export function renderInvoicePaidReceipt({
-  clientName, businessName, number, amount, method, branding,
+  clientName, businessName, number, amount, method, branding, rebookServiceName,
 }) {
   const greeting = clientName ? `Hi ${escapeHtml(firstName(clientName))},` : 'Hi,';
   const biz = escapeHtml(businessName || SAMPLE_BRANDING.businessName);
@@ -321,7 +321,8 @@ export function renderInvoicePaidReceipt({
       heading: 'Payment received',
       body: `<p>${greeting}</p>
         <p>Thanks - we received your payment of <strong>${fmtMoney(amount)}</strong> for invoice <strong>${escapeHtml(number || 'INV-1042')}</strong>${method && method !== 'other' ? ` (paid by ${escapeHtml(method)})` : ''}.</p>
-        <p>This email is your receipt.</p>`,
+        <p>This email is your receipt.</p>${rebookServiceName ? `<p style="margin-top:22px;">Ready for your next ${escapeHtml(rebookServiceName)}?
+    <a href="${appUrl()}/book/preview?rebook=PREVIEW_TOKEN_xxxxxxxx" style="color:#4E63C7;font-weight:600;text-decoration:none;">Book again</a></p>` : ''}`,
       footer: `Need anything? Reply to this email to reach ${biz}.`,
       branding: branding || SAMPLE_BRANDING,
     }),
