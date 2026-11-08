@@ -296,5 +296,11 @@ assert(fromCal.items.find((b) => b.id === 'b1').completed === true && fromCal.it
 const sheet = read('src/components/offline/OfflineBookingSheet.jsx');
 assert(sheet.includes("kind: 'complete'") && sheet.includes("kind: 'note'") && !sheet.includes('onCancelOccurrence') && !sheet.includes('rescheduleTo'), 'the offline sheet offers Complete and a private note, nothing else');
 assert(read('src/lib/native.js').includes('maps\\.apple\\.com'), 'maps.apple.com opens in the Maps app, not the in-app browser sheet');
+// Signal back while a screen shows the saved copy: it reloads by itself.
+assert(/setCal\(r\.calendar\);\s*\/\/[^\n]*\n\s*setError\(null\);/.test(read('src/features/calendar/state.js')), 'calendar: a successful reload clears the offline error (back to the live day view)');
+assert((read('src/features/messages/state.js').match(/setError\(null\)/g) || []).length >= 2, 'messages: a successful reload or poll clears the offline error');
+assert(/if \(offlineView && !offline\) refresh\(\)/.test(read('src/features/clients/Clients.jsx')), 'clients: reloads the live list when signal returns');
+assert(read('src/styles/global.css').includes('body.has-offline-bar .motion-drawer') && read('src/components/OfflineBanner.jsx').includes("'--offline-bar-h'"), 'a sheet opened under the offline bar keeps its header below the bar');
+
 console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

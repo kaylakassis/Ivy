@@ -51,6 +51,9 @@ export default function Clients() {
   const offline = useOffline();
   const offlineSnapshot = useSnapshot('clients');
   const offlineView = !!error && !clients.length && isNative() && (offline || error.offline);
+  // Signal is back: load the live list (this screen has no pull-to-refresh
+  // reloader for the shell to run).
+  useEffect(() => { if (offlineView && !offline) refresh(); }, [offlineView, offline, refresh]);
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);

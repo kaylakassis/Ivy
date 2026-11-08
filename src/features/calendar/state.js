@@ -61,6 +61,8 @@ export function useCalendar(window) {
   const refresh = useCallback(async () => {
     const r = await api.get('/calendar' + queryString);
     setCal(r.calendar);
+    // A load that failed earlier (no signal) is over once one succeeds.
+    setError(null);
     keepForOffline(r.calendar, queryString);
     return r.calendar;
   }, [queryString]);

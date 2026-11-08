@@ -23,6 +23,8 @@ export function useThreads() {
   const refresh = useCallback(async () => {
     const r = await api.get('/messages');
     setThreads(r.threads || []);
+    // A load that failed earlier (no signal) is over once one succeeds.
+    setError(null);
     saveSnapshot('threads', r.threads || []);
     return r.threads;
   }, []);
@@ -45,6 +47,7 @@ export function useThreads() {
     try {
       const r = await api.get('/messages');
       setThreads(r.threads || []);
+      setError(null);
     } catch { /* keep current state on transient failure */ }
   }, []);
   useIntervalWhenVisible(silentRefresh, 15000);

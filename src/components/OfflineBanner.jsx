@@ -62,14 +62,32 @@ export default function OfflineBanner() {
   }, []);
 
   const offline = native ? (detected || browserOffline) : browserOffline;
-  if (!offline && !back && !toast) return null;
+
+  // While the bar is up, a full-height sheet (booking, client) keeps its
+  // header and close button below it: the bar's height is published as
+  // --offline-bar-h and body.has-offline-bar pads .motion-drawer (global.css).
+  const barRef = React.useRef(null);
+  const shown = offline || back || toast;
+  React.useLayoutEffect(() => {
+    const body = document.body;
+    const el = barRef.current;
+    if (!shown || !el) { body.classList.remove('has-offline-bar'); return undefined; }
+    const measure = () => document.documentElement.style.setProperty('--offline-bar-h', `${el.offsetHeight + 12}px`);
+    measure();
+    body.classList.add('has-offline-bar');
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    if (ro) ro.observe(el);
+    return () => { if (ro) ro.disconnect(); body.classList.remove('has-offline-bar'); };
+  }, [shown]);
+
+  if (!shown) return null;
   let text;
   if (offline && native && savedAt) text = `Offline. Showing what Ivy saved at ${fmtSavedAt(savedAt)}.`;
   else if (offline) text = native ? OFFLINE_MESSAGE : "You're offline. Ivy will catch up as soon as you're back online.";
   else if (back) text = 'Back online.';
   else text = OFFLINE_MESSAGE;
   return createPortal((
-    <div role="status" className={`offline-bar${!offline && back ? ' is-back' : ''}`} data-offline-bar={offline ? 'offline' : back ? 'back' : 'toast'}>
+    <div ref={barRef} role="status" className={`offline-bar${!offline && back ? ' is-back' : ''}`} data-offline-bar={offline ? 'offline' : back ? 'back' : 'toast'}>
       {text}
     </div>
   ), document.body);
