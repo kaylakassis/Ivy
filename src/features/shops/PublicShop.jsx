@@ -89,6 +89,12 @@ export function readableAccent(hex, dark) {
 }
 
 // The pro's own booking page, preloaded with service (+ time) and the shop.
+// HOOK (booking requests / waitlist, 1.0.6 parallel work): every booking
+// from a shop page goes through this hand-off to the pro's normal public
+// booking path (POST /api/calendar/public/:slug with shopSlug), so a pro
+// who takes requests instead of instant bookings, or a full day that
+// offers the waitlist, is handled by their own page with no change here.
+// A shop-wide "request any pro" flow would start in ShopBody's go().
 export function bookHref(shop, member, service = null, slot = null) {
   const p = new URLSearchParams();
   p.set('shop', shop.slug);
