@@ -5365,4 +5365,46 @@ CREATE OR REPLACE VIEW workspace_revenue AS
                + CASE WHEN fee_charged_at IS NOT NULL THEN fee_charged_amount ELSE 0 END) AS amt
         FROM bookings GROUP BY workspace_id
     ) bk ON bk.workspace_id = w.id;
+
+-- 1.0.6 one-tap rebook + client automations (birthday, "we'd love to see
+-- you again"). bookings.booked_via = 'rebook' marks a booking made through a
+-- signed rebook link (source stays 'client' so older counts are unchanged);
+-- rebook_link_sent_at records the owner's last "Send rebook link" tap.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booked_via TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS rebook_link_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_bookings_workspace_booked_via
+  ON bookings(workspace_id, created_at DESC) WHERE booked_via IS NOT NULL;
+-- One row per workspace per kind. OFF by default; the template counts as
+-- approved when the owner saves it (template_approved_at).
+CREATE TABLE IF NOT EXISTS client_automations (
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('birthday', 'quiet')),
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  template TEXT,
+  channels JSONB NOT NULL DEFAULT '{"email": true, "sms": false}'::jsonb,
+  quiet_days INT NOT NULL DEFAULT 42 CHECK (quiet_days BETWEEN 7 AND 365),
+  template_approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (workspace_id, kind)
+);
+-- Sent ledger: the claim is the INSERT (unique per client, kind and period:
+-- the year for birthdays, the send day for quiet check-ins), so two runs at
+-- once can only send once. A failed send deletes its claim to retry later.
+CREATE TABLE IF NOT EXISTS client_automation_sends (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK (kind IN ('birthday', 'quiet')),
+  period_key TEXT NOT NULL,
+  claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at TIMESTAMPTZ,
+  emailed BOOLEAN NOT NULL DEFAULT FALSE,
+  texted BOOLEAN NOT NULL DEFAULT FALSE,
+  UNIQUE (workspace_id, client_id, kind, period_key)
+);
+CREATE INDEX IF NOT EXISTS idx_client_automation_sends_client
+  ON client_automation_sends(workspace_id, client_id, claimed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_client_automation_sends_workspace_sent
+  ON client_automation_sends(workspace_id, sent_at DESC) WHERE sent_at IS NOT NULL;
 `;

@@ -38,6 +38,7 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { mintRebookLink } from '../_lib/rebook.js';
 
 export const MIN_HOURS_AFTER = 2;
 export const MAX_HOURS_AFTER = 7 * 24;
@@ -177,7 +178,14 @@ async function handler(req, res) {
         const link = `${appUrl()}/review/${encodeURIComponent(raw)}`;
         // A "book again" nudge turns the review email into repeat business
         // for owners who have a public booking page.
-        const rebookUrl = r.slug ? `${appUrl()}/book/${encodeURIComponent(r.slug)}` : null;
+        // 1.0.6: a signed one-tap rebook link (same service, suggested day
+        // and time; api/_lib/rebook.js) when the booking has a client and a
+        // service, else the plain booking page.
+        let rebookUrl = r.slug ? `${appUrl()}/book/${encodeURIComponent(r.slug)}` : null;
+        if (r.slug && r.client_id && r.service_id) {
+          const link = await mintRebookLink({ workspaceId: r.workspace_id, clientId: r.client_id, serviceId: r.service_id, slug: r.slug }).catch(() => null);
+          if (link) rebookUrl = link.url;
+        }
 
         // Pre-rated quick-action links - clicking a star on the email
         // takes them straight to the form with that rating selected.
@@ -200,8 +208,9 @@ async function handler(req, res) {
               <p style="text-align:center;line-height:1.7;">
                 <a href="${link}?rating=5" style="text-decoration:none;font-size:30px;letter-spacing:4px;color:#E0B645;">★ ★ ★ ★ ★</a>
               </p>${rebookUrl ? `
-              <p style="text-align:center;margin:22px 0 0;font-size:14px;color:#85827B;">
-                Ready to come back? <a href="${rebookUrl}" style="color:#4E63C7;font-weight:600;text-decoration:none;">Book your next ${escapeHtml(r.service_name || 'visit')}</a>.
+              <p style="text-align:center;margin:26px 0 0;font-size:14px;color:#85827B;">Ready to come back?</p>
+              <p style="text-align:center;margin:8px 0 0;">
+                <a href="${rebookUrl}" style="display:inline-block;padding:9px 16px;border:1px solid #4E63C7;border-radius:10px;color:#4E63C7;font-weight:600;text-decoration:none;font-size:14px;">Book your next ${escapeHtml(r.service_name || 'visit')}</a>
               </p>` : ''}`,
             ctaText: 'Leave a review',
             ctaUrl: link,

@@ -411,7 +411,11 @@ export function renderReviewRequest({ clientName, businessName, serviceName, bra
       body: `<p>${greeting}</p>
         <p>Thanks for visiting <strong>${biz}</strong>. Would you mind sharing how it went? Tap a rating below.</p>
         <div style="text-align:center;margin:18px 0;">${stars(0)}</div>
-        <p style="color:#93A3A0;font-size:12.5px;">It takes about 10 seconds. Honest feedback helps the business improve and helps other clients pick the right service.</p>`,
+        <p style="color:#93A3A0;font-size:12.5px;">It takes about 10 seconds. Honest feedback helps the business improve and helps other clients pick the right service.</p>
+        <p style="text-align:center;margin:26px 0 0;font-size:14px;color:#85827B;">Ready to come back?</p>
+        <p style="text-align:center;margin:8px 0 0;">
+          <a href="${appUrl()}/book/preview?rebook=PREVIEW_TOKEN_xxxxxxxx" style="display:inline-block;padding:9px 16px;border:1px solid #4E63C7;border-radius:10px;color:#4E63C7;font-weight:600;text-decoration:none;font-size:14px;">Book your next ${svc}</a>
+        </p>`,
       footer: `Reply if you'd rather share feedback privately. — ${biz}`,
       branding: branding || SAMPLE_BRANDING,
     }),

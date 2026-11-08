@@ -227,6 +227,14 @@ a.pb-meta-item:hover span, button.pb-meta-item:hover span { text-decoration: und
 .pb-btn.outline:hover { background: var(--surface-2); }
 .pb-btn.warn { background: color-mix(in srgb, var(--warn) 14%, var(--surface)); color: var(--fg); border-color: var(--warn); }
 .pb-tz { font-size: 12px; color: var(--muted); line-height: 1.5; margin-top: 6px; }
+/* "Your usual: every 3 weeks on Fridays" when the page was opened from a rebook link. */
+.pb-rebook {
+  display: flex; align-items: flex-start; gap: 10px; margin: 0 0 14px;
+  padding: 10px 12px; border-radius: 12px; font-size: 13px; line-height: 1.45; color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.pb-rebook svg { flex-shrink: 0; margin-top: 2px; color: var(--accent); }
 .pb-policy {
   margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.55;
   background: var(--surface-2); border: 1px solid var(--border); color: var(--fg-2);

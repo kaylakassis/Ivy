@@ -147,6 +147,10 @@
     {
       "path": "/api/cron/review-ask",
       "schedule": "35 17 * * *"
+    },
+    {
+      "path": "/api/cron/client-automations",
+      "schedule": "25 * * * *"
     }
   ],
   "functions": {

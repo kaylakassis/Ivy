@@ -65,6 +65,12 @@ export default function KeyNumbers({ k, currency, loading, businessType }) {
         : `${rb.rebooked} of ${rb.cohort} clients seen 1 to 4 months ago booked again`,
       to: '/clients',
     },
+    // Only once a client has actually used a rebook link this month.
+    businessType !== 'product' && Number(k?.rebookedViaLink) > 0 && {
+      key: 'rl', label: 'Rebooked via link', value: String(k.rebookedViaLink),
+      sub: `${k.rebookedViaLink === 1 ? 'client booked' : 'clients booked'} again from a rebook link this month`,
+      tone: 'up', to: '/calendar',
+    },
   ].filter(Boolean);
   return (
     <section aria-label="Key numbers" className="dash-numbers">

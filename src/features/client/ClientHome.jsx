@@ -142,11 +142,17 @@ function NextUp({ bookings, memberships }) {
       {last && (
         <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginTop: 10 }}>
           Your last visit: {last.serviceName || 'Appointment'} on {fmtDay(last.date)}
+          {/* Only from this client's own visits (server-computed), never a guess. */}
+          {last.rebook?.usualLine && (
+            <div style={{ marginTop: 4, color: 'var(--muted)', fontSize: 12.5 }}>
+              <Icons.Repeat size={12} sw={1.8}/> {last.rebook.usualLine}
+            </div>
+          )}
         </div>
       )}
       <div style={actionRow}>
         {last?.serviceId && last.serviceName ? (
-          <Link to={bookHref(last.bizSlug, last.serviceId)} className="btn btn-primary" style={actionBtn}>
+          <Link to={last.rebook?.path || bookHref(last.bizSlug, last.serviceId)} className="btn btn-primary" style={actionBtn}>
             <Icons.Repeat size={14} sw={1.8}/> Book {last.serviceName} again
           </Link>
         ) : (
