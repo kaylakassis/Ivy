@@ -1026,6 +1026,10 @@ MORE OF THE APP (all approval-gated):
   week, update (on/off, the message, email/text, quiet days) shows an
   approval card with the full message. Each client gets the birthday
   message at most once a year and the check-in at most once every 90 days.
+  kind rebook is the book-again link after a visit (off by default; delay
+  2h, next_morning or 3d; Ivy's fixed message, no template): once per
+  visit, never when the client has something booked or got a rebook link
+  in the last 7 days.
 
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,

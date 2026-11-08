@@ -48,7 +48,7 @@ import { serializeInvoice } from './finance.js';
 import { setInviteNewClients, resendInviteProblem, resendClientInvite } from './clientNotify.js';
 import { recordWorkspaceAudit } from './audit.js';
 import { sendRebookLink, computeRebookSuggestion, lastServiceFor, usualLine, fmtSuggestionDay, rebookSendAllowed, rebookLimitMessage } from './rebook.js';
-import { readAutomations, saveAutomation, cleanAutomationPatch, dueThisWeek, KIND_LABELS, ONCE_WORDS, DEFAULT_TEMPLATES } from './clientAutomations.js';
+import { readAutomations, saveAutomation, cleanAutomationPatch, dueThisWeek, KIND_LABELS, ONCE_WORDS, DEFAULT_TEMPLATES, REBOOK_DELAY_LABELS, REBOOK_MESSAGE } from './clientAutomations.js';
 import { fetchBranding } from './branding.js';
 import { listDuplicatePairs, dismissDuplicatePair } from './clientDuplicates.js';
 import { mergePreview, mergeRefusal, mergeClients, mergeSentence, mergeNames, movesPhrase, cleanFieldChoices } from './clientMerge.js';
@@ -268,16 +268,17 @@ export const APP_TOOLS = [
   },
   {
     name: 'client_automations',
-    description: "Birthday message and \"we'd love to see you again\" check-in that Ivy sends to clients. get: settings and templates. due: who gets one this week. update: kind birthday|quiet with enabled, template (plain text; {first_name} {business} {booking_link}), channels {email, sms}, quiet_days (quiet only).",
+    description: "Birthday message, \"we'd love to see you again\" check-in and the book-again link after a visit, which Ivy sends to clients. get: settings and templates. due: who gets one (this week; for rebook, the visits that will get the link and when). update: kind birthday|quiet|rebook with enabled, template (birthday/quiet only, plain text; {first_name} {business} {booking_link}), channels {email, sms}, quiet_days (quiet only), delay (rebook only: 2h, next_morning or 3d).",
     input_schema: {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['get', 'due', 'update'] },
-        kind: { type: 'string', enum: ['birthday', 'quiet'] },
+        kind: { type: 'string', enum: ['birthday', 'quiet', 'rebook'] },
         enabled: { type: 'boolean' },
         template: { type: 'string' },
         channels: { type: 'object', properties: { email: { type: 'boolean' }, sms: { type: 'boolean' } } },
         quiet_days: { type: 'integer' },
+        delay: { type: 'string', enum: ['2h', 'next_morning', '3d'] },
       },
       required: ['action'],
     },
@@ -1401,7 +1402,12 @@ async function readAutomationsTool(ws, a) {
     return {
       birthday: { on: due.birthday.enabled, this_week: due.birthday.clients.map((c) => ({ client_id: c.clientId, name: c.name, day: fmtDay(c.day) })) },
       quiet: { on: due.quiet.enabled, quiet_days: due.quiet.quietDays, count: due.quiet.count, clients: due.quiet.clients.slice(0, 20).map((c) => ({ client_id: c.clientId, name: c.name })) },
-      note: 'Each client gets the birthday message at most once a year and the check-in at most once every 90 days; an automation that is off sends nothing.',
+      rebook: {
+        on: due.rebook.enabled, when: REBOOK_DELAY_LABELS[due.rebook.delay], count: due.rebook.count,
+        clients: due.rebook.clients.slice(0, 20).map((c) => ({ client_id: c.clientId, name: c.name, service: c.service, ...(due.rebook.enabled ? { goes_out: c.sendsAtLabel } : {}) })),
+        ...(due.rebook.enabled ? {} : { off_note: 'Off: these are the visits from the last few days that would get the link if it were on.' }),
+      },
+      note: 'Each client gets the birthday message at most once a year, the check-in at most once every 90 days and the book-again link once per visit (never when they have something booked); an automation that is off sends nothing.',
       manage: '[Automations](/marketing?tab=workflows)',
     };
   }
@@ -1409,12 +1415,16 @@ async function readAutomationsTool(ws, a) {
   const out = {};
   for (const k of Object.keys(all)) {
     const r = all[k];
+    if (k === 'rebook') {
+      out[k] = { label: r.label, on: r.enabled, when: r.delayLabel, delay: r.delay, channels: r.channels, message: { email_subject: REBOOK_MESSAGE.subject, text: REBOOK_MESSAGE.text }, sent_this_month: r.sentThisMonth, once: r.once };
+      continue;
+    }
     out[k] = { label: r.label, on: r.enabled, template: r.template, channels: r.channels, ...(k === 'quiet' ? { quiet_days: r.quietDays } : {}), template_saved: !!r.templateApprovedAt, sent_this_month: r.sentThisMonth, once: r.once };
   }
   return { ...out, merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Automations](/marketing?tab=workflows)' };
 }
 
-const AUTOMATION_NOUNS = { birthday: 'the birthday message', quiet: 'the "We\'d love to see you again" check-in' };
+const AUTOMATION_NOUNS = { birthday: 'the birthday message', quiet: 'the "We\'d love to see you again" check-in', rebook: 'the book-again link after a visit' };
 
 async function planAutomations(ws, a) {
   if (a.action !== 'update') throw new Error('action must be get, due or update');
@@ -1424,13 +1434,14 @@ async function planAutomations(ws, a) {
   if (a.template != null) patch.template = a.template;
   if (a.channels != null) patch.channels = a.channels;
   if (a.quiet_days != null) patch.quietDays = a.quiet_days;
+  if (a.delay != null) patch.delay = a.delay;
   const clean = cleanAutomationPatch(kind, patch);
   const cur = (await readAutomations(ws))[kind];
   // "the birthday message" / "the \"We'd love to see you again\" check-in":
   // a plain noun for mid-sentence use (the label alone read "the Birthday
   // message message").
   const noun = AUTOMATION_NOUNS[kind] || `the ${KIND_LABELS[kind]}`;
-  if (clean.enabled === true && clean.template == null && !cur.templateApprovedAt) {
+  if (kind !== 'rebook' && clean.enabled === true && clean.template == null && !cur.templateApprovedAt) {
     throw new Error(`Save ${noun} first (pass template, the default is: "${DEFAULT_TEMPLATES[kind]}"), then turn it on`);
   }
   // Each change twice: as the card asks it, and as Done reports it.
@@ -1448,11 +1459,24 @@ async function planAutomations(ws, a) {
     add(`send it by ${by}`, `it now goes by ${by}`);
   }
   if (clean.quietDays != null) add(`count a client as quiet after ${clean.quietDays} days`, `a client now counts as quiet after ${clean.quietDays} days`);
+  if (clean.delay != null) {
+    const w = REBOOK_DELAY_LABELS[clean.delay].toLowerCase();
+    add(`send it ${w === 'next morning' ? 'the next morning at 9am' : `${w} the visit is marked complete`}`, `it now goes ${w === 'next morning' ? 'the next morning at 9am' : `${w} the visit is marked complete`}`);
+  }
+  // The book-again link is Ivy's fixed message: the card shows it in full.
+  if (kind === 'rebook' && clean.enabled === true && !cur.enabled) {
+    add(`the email says "${REBOOK_MESSAGE.subject}" with a Book again button, the text says "${REBOOK_MESSAGE.text}"`,
+      `the email says "${REBOOK_MESSAGE.subject}" with a Book again button`);
+  }
   if (!now.length) add(`keep ${noun} as it is`, `kept ${noun} as it is`);
   const cap = (x) => `${x[0].toUpperCase()}${x.slice(1)}`;
   const on = clean.enabled ?? cur.enabled;
   return {
-    summary: `${cap(now.join(', '))}. ${on ? `Ivy will send it to clients for you, each at most once ${ONCE_WORDS[kind]}; clients who turned off these emails or texts never get it.` : 'Nothing goes out while it is off.'}`,
+    summary: `${cap(now.join(', '))}. ${on
+      ? (kind === 'rebook'
+        ? 'Ivy will send it to clients for you, once per visit, never when they already have something booked or got a rebook link in the last 7 days; clients who turned off these emails or texts never get it.'
+        : `Ivy will send it to clients for you, each at most once ${ONCE_WORDS[kind]}; clients who turned off these emails or texts never get it.`)
+      : 'Nothing goes out while it is off.'}`,
     done: cap(past.join(', ')),
     apply: async () => {
       const saved = await saveAutomation(ws, kind, patch);

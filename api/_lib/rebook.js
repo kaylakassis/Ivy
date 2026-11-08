@@ -333,7 +333,7 @@ export function rebookLimitMessage(gate, firstName = 'This client') {
 
 // The rebook email (also the admin email preview, api/admin/email-preview.js).
 // → { subject, html }
-export function renderRebookEmail({ firstName, businessName, serviceName, usual, when, url, branding }) {
+export function renderRebookEmail({ firstName, businessName, serviceName, usual, when, url, branding, footer = null }) {
   const subject = `Ready for your next ${serviceName}?`;
   const picked = when ? `We picked ${escapeHtml(when)} for you.` : '';
   return {
@@ -345,7 +345,7 @@ export function renderRebookEmail({ firstName, businessName, serviceName, usual,
         ${usual ? `<p><strong>${escapeHtml(usual)}.</strong> ${picked}</p>`
                 : `<p>${picked} You can choose another time if that one does not suit.</p>`}`,
       ctaText: 'Book again', ctaUrl: url,
-      footer: `This link is just for you and works for ${REBOOK_TTL_DAYS} days.`,
+      footer: footer || `This link is just for you and works for ${REBOOK_TTL_DAYS} days.`,
       branding,
     }),
   };
@@ -365,9 +365,14 @@ export async function sendRebookLink({ workspaceId, clientId, serviceId = null, 
   const blocked = await sql`SELECT 1 FROM contact_blocks WHERE workspace_id = ${workspaceId} AND client_id = ${clientId} LIMIT 1`;
   if (blocked.rows.length) return { ok: false, error: 'Messages between you and this client are blocked' };
   let svcId = serviceId;
-  if (!svcId) {
+  // The visit the send is recorded on (rebook_link_sent_at): the caller's,
+  // else the client's latest (Ivy sends without one), so "a rebook link in
+  // the last 7 days" covers every way a link goes out.
+  let recordOn = bookingId;
+  if (!svcId || !recordOn) {
     const last = await lastServiceFor({ workspaceId, clientId });
-    svcId = last?.serviceId || null;
+    if (!svcId) svcId = last?.serviceId || null;
+    if (!recordOn) recordOn = last?.bookingId || null;
   }
   if (!svcId) return { ok: false, error: `${firstNameOf(client.name)} has no past appointment to book again` };
   const link = await mintRebookLink({ workspaceId, clientId, serviceId: svcId });
@@ -380,9 +385,11 @@ export async function sendRebookLink({ workspaceId, clientId, serviceId = null, 
   const usual = usualLine(sug);
   const when = fmtSuggestionDay(sug);
 
-  let emailed = false, emailReason = null;
+  // *Code: the plain reason for callers that decide what to retry (the
+  // automation); *Reason: the words shown to the owner.
+  let emailed = false, emailReason = null, emailCode = null;
   if (channels.email !== false) {
-    if (!client.email) emailReason = 'no email on file';
+    if (!client.email) { emailReason = 'no email on file'; emailCode = 'no email'; }
     else {
       const mail = renderRebookEmail({ firstName: first, businessName: business, serviceName: sug.serviceName, usual, when, url: link.url, branding });
       const r = await sendEmailToClient({
@@ -390,29 +397,35 @@ export async function sendRebookLink({ workspaceId, clientId, serviceId = null, 
         subject: mail.subject, replyTo: branding.replyTo, html: mail.html,
       }).catch((e) => ({ ok: false, sent: false, reason: e?.message || 'send failed' }));
       emailed = !!r?.sent;
-      if (!emailed) emailReason = r?.reason === 'muted' ? 'the client turned off these emails' : (r?.reason || 'the email did not go out');
+      if (!emailed) {
+        emailCode = r?.reason || 'send failed';
+        emailReason = r?.reason === 'muted' ? 'the client turned off these emails' : (r?.reason || 'the email did not go out');
+      }
     }
-  } else emailReason = 'not chosen';
+  } else { emailReason = 'not chosen'; emailCode = 'not chosen'; }
 
-  let texted = false, smsReason = null;
+  let texted = false, smsReason = null, smsCode = null;
   if (channels.sms !== false) {
-    if (!client.phone) smsReason = 'no phone on file';
-    else if (!client.sms_consent_at || client.sms_stopped_at) smsReason = 'the client has not agreed to texts';
+    if (!client.phone) { smsReason = 'no phone on file'; smsCode = 'no phone'; }
+    else if (!client.sms_consent_at || client.sms_stopped_at) { smsReason = 'the client has not agreed to texts'; smsCode = 'no consent'; }
     else {
       const r = await sendClientSms({
         workspaceId, phone: client.phone, consentAt: client.sms_consent_at, respectQuietHours: true,
         body: `Hi ${first}, ready for your next ${sug.serviceName} with ${business}? Book again here: ${link.url}`,
       });
       texted = !!r.ok;
-      if (!texted) smsReason = r.reason === 'quiet-hours' ? 'it is outside texting hours' : (r.reason || 'the text did not go out');
+      if (!texted) {
+        smsCode = r.reason || 'send failed';
+        smsReason = r.reason === 'quiet-hours' ? 'it is outside texting hours' : (r.reason || 'the text did not go out');
+      }
     }
-  } else smsReason = 'not chosen';
+  } else { smsReason = 'not chosen'; smsCode = 'not chosen'; }
 
-  if (bookingId && (emailed || texted)) {
-    await sql`UPDATE bookings SET rebook_link_sent_at = NOW() WHERE id = ${bookingId} AND workspace_id = ${workspaceId}`.catch(() => {});
+  if (recordOn && (emailed || texted)) {
+    await sql`UPDATE bookings SET rebook_link_sent_at = NOW() WHERE id = ${recordOn} AND workspace_id = ${workspaceId}`.catch(() => {});
   }
   return {
-    ok: emailed || texted, url: link.url, emailed, texted, emailReason, smsReason, suggestion: sug,
+    ok: emailed || texted, url: link.url, emailed, texted, emailReason, smsReason, emailCode, smsCode, suggestion: sug,
     client: { id: client.id, name: client.name, email: client.email || null, phone: client.phone || null },
     service: { id: sug.serviceId, name: sug.serviceName },
   };

@@ -1,6 +1,6 @@
 // POST /api/automations/test  { kind, template? }
-// "Send me a test": emails the signed-in owner their birthday or
-// "we'd love to see you again" message with sample values (their own first
+// "Send me a test": emails the signed-in owner their birthday,
+// "we'd love to see you again" or book-again message with sample values (their own first
 // name, their business). Nothing is recorded and no client is involved.
 // Owner only, rate limited.
 import { requireUser } from '../_lib/auth.js';

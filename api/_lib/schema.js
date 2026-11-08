@@ -5562,4 +5562,23 @@ CREATE INDEX IF NOT EXISTS idx_client_automation_sends_client
   ON client_automation_sends(workspace_id, client_id, claimed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_client_automation_sends_workspace_sent
   ON client_automation_sends(workspace_id, sent_at DESC) WHERE sent_at IS NOT NULL;
+-- 1.0.6 "Book-again link after a visit" (api/_lib/clientAutomations.js,
+-- kind 'rebook'): a third client automation. rebook_delay is when the link
+-- goes out after a visit is marked complete; enabled_at is when the switch
+-- last went on (visits completed before that are never picked up). The
+-- ledger row for a visit carries its booking (period_key is
+-- '<booking id>:<occurrence date>', so each visit sends at most once).
+ALTER TABLE client_automations DROP CONSTRAINT IF EXISTS client_automations_kind_check;
+ALTER TABLE client_automations ADD CONSTRAINT client_automations_kind_check CHECK (kind IN ('birthday', 'quiet', 'rebook'));
+ALTER TABLE client_automation_sends DROP CONSTRAINT IF EXISTS client_automation_sends_kind_check;
+ALTER TABLE client_automation_sends ADD CONSTRAINT client_automation_sends_kind_check CHECK (kind IN ('birthday', 'quiet', 'rebook'));
+ALTER TABLE client_automations ADD COLUMN IF NOT EXISTS rebook_delay TEXT NOT NULL DEFAULT 'next_morning';
+ALTER TABLE client_automations DROP CONSTRAINT IF EXISTS client_automations_rebook_delay_check;
+ALTER TABLE client_automations ADD CONSTRAINT client_automations_rebook_delay_check CHECK (rebook_delay IN ('2h', 'next_morning', '3d'));
+ALTER TABLE client_automations ADD COLUMN IF NOT EXISTS enabled_at TIMESTAMPTZ;
+ALTER TABLE client_automation_sends ADD COLUMN IF NOT EXISTS booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL;
+
+-- 1.0.6 "We got your request" email to the client (api/_lib/bookingRequests.js):
+-- set when it is claimed, so a request is acknowledged at most once.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_ack_sent_at TIMESTAMPTZ;
 `;

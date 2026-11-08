@@ -1,12 +1,16 @@
-// /api/automations - the two client-facing automations Ivy sends for the
-// owner (api/_lib/clientAutomations.js): the birthday message and "we'd
-// love to see you again".
-//   GET   → { automations: { birthday, quiet }, business, due? }
-//           ?due=1 adds who is due this week (birthdays in the next 7 days,
-//           the quiet clients the next run would write to).
-//   PATCH → { kind, enabled?, template?, channels?, quietDays? }
+// /api/automations - the client-facing automations Ivy sends for the
+// owner (api/_lib/clientAutomations.js): the birthday message, "we'd love
+// to see you again" and (1.0.6) the book-again link after a visit.
+//   GET   → { automations: { birthday, quiet, rebook }, business, due? }
+//           ?due=1 adds who is due (birthdays in the next 7 days, the quiet
+//           clients the next run would write to, the visits that will get
+//           a book-again link and when).
+//   PATCH → { kind, enabled?, template?, channels?, quietDays?, delay? }
 //           Saving a template approves it; turning on needs an approved
-//           template. Owner only: these send to clients.
+//           template (the book-again link has Ivy's fixed message, so
+//           turning it on is enough). delay is rebook only: 2h,
+//           next_morning or 3d. Owner only: these send to clients.
+import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
@@ -25,10 +29,15 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     if (req.method === 'GET') {
-      const [automations, branding] = await Promise.all([readAutomations(workspaceId), fetchBranding(workspaceId).catch(() => ({}))]);
+      const [automations, branding, svc] = await Promise.all([
+        readAutomations(workspaceId), fetchBranding(workspaceId).catch(() => ({})),
+        sql`SELECT name FROM services WHERE workspace_id = ${workspaceId} AND visibility <> 'only_me' ORDER BY created_at ASC LIMIT 1`.catch(() => ({ rows: [] })),
+      ]);
       const out = {
         automations,
         business: branding.businessName || 'your business',
+        // For the book-again preview ("Ready for your next {service}?").
+        sampleService: svc.rows[0]?.name || null,
         mergeFields: MERGE_FIELD_HELP,
         maxTemplateChars: MAX_TEMPLATE_CHARS,
       };
