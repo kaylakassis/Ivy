@@ -190,8 +190,9 @@ async function setup() {
   const w = await sql`INSERT INTO workspaces (owner_id, name, subscription_status, subscription_period_end)
     VALUES (${people.owner.userId}, 'Push Studio', 'active', NOW() + INTERVAL '30 days') RETURNING id`;
   wsId = w.rows[0].id;
-  await sql`INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone)
-    VALUES (${wsId}, 'Push Studio', ${TAG}, 'UTC') ON CONFLICT (workspace_id) DO NOTHING`;
+  // The waitlist is off for a new business (1.0.6); this one uses it.
+  await sql`INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone, waitlist_enabled)
+    VALUES (${wsId}, 'Push Studio', ${TAG}, 'UTC', TRUE) ON CONFLICT (workspace_id) DO NOTHING`;
   // The stranger owns a different business: nothing here may reach them.
   const w2 = await sql`INSERT INTO workspaces (owner_id, name, subscription_status, subscription_period_end)
     VALUES (${people.stranger.userId}, 'Elsewhere', 'active', NOW() + INTERVAL '30 days') RETURNING id`;

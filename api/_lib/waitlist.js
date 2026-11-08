@@ -40,7 +40,8 @@ export const OPEN_STATUSES = ['waiting', 'offered'];
 export function waitlistSettings(row) {
   const hours = Number(row?.waitlist_offer_hours);
   return {
-    enabled: row ? row.waitlist_enabled !== false : true,
+    // Off by default for new businesses (schema.js); no settings row = off.
+    enabled: row ? row.waitlist_enabled !== false : false,
     autoFill: row ? row.waitlist_auto_fill !== false : true,
     offerHours: OFFER_HOURS_OPTIONS.includes(hours) ? hours : DEFAULT_OFFER_HOURS,
   };

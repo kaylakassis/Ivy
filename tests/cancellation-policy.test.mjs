@@ -163,9 +163,10 @@ async function mkBiz(label, { currency = 'USD', tz = 'UTC', connected = true } =
     VALUES (${u}, ${`${label} Studio`}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
   const slug = `cp-${label}-${STAMP}`.toLowerCase();
   await sql.query(
-    `INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone, slot_minutes, min_notice_hours, max_advance_days, availability)
-     VALUES ($1, $2, $3, $4, 30, 0, 365, $5::jsonb)
-     ON CONFLICT (workspace_id) DO UPDATE SET slug = $3, biz_name = $2, timezone = $4, slot_minutes = 30, min_notice_hours = 0, max_advance_days = 365, availability = $5::jsonb`,
+    // waitlist_enabled: the waitlist is off for a new business (1.0.6).
+    `INSERT INTO calendar_settings (workspace_id, biz_name, slug, timezone, slot_minutes, min_notice_hours, max_advance_days, availability, waitlist_enabled)
+     VALUES ($1, $2, $3, $4, 30, 0, 365, $5::jsonb, TRUE)
+     ON CONFLICT (workspace_id) DO UPDATE SET slug = $3, biz_name = $2, timezone = $4, slot_minutes = 30, min_notice_hours = 0, max_advance_days = 365, availability = $5::jsonb, waitlist_enabled = TRUE`,
     [wid, `${label} Studio`, slug, tz, ALL_DAY],
   );
   const acct = `acct_cp_${label}_${STAMP}`;

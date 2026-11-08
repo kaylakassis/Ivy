@@ -18,6 +18,7 @@
 //   [9]  "fill automatically" off: a cancellation sends no offer
 //  [10]  Ivy: list reads; offer and remove are approval-gated and run once
 //  [11]  entries expire after 60 days; the partner counts people waiting
+//  [12]  Ivy's cancel_booking offers the freed time like every other cancel
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/waitlist-offers.test.mjs
 process.env.SECRETS_KEY ||= 'a'.repeat(64);
@@ -52,6 +53,17 @@ globalThis.fetch = async (url, init = {}) => {
   return json({});
 };
 const settle = (ms = 300) => new Promise((r) => setTimeout(r, ms));
+// Notifications run in the background (keepAlive); under a loaded shared DB
+// they can take longer than a fixed pause, so wait for the condition.
+async function until(fn, ms = 5000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (fn()) return true;
+    // eslint-disable-next-line no-await-in-loop
+    await settle(100);
+  }
+  return !!fn();
+}
 const mailsTo = (addr) => emails.filter((m) => [].concat(m.to).map((x) => String(x).toLowerCase()).includes(addr.toLowerCase()));
 const tokenIn = (html) => [...String(html).matchAll(/\?claim=([A-Za-z0-9_-]+)/g)].map((m) => m[1]).sort((x, y) => y.length - x.length)[0] || null;
 
@@ -214,7 +226,8 @@ async function run() {
   r = await book(W, ana, { date: D, token: anaToken });
   assert(r.statusCode === 409 && r.body.claimState === 'claimed', 'using the link again: already booked');
   let sweep = await runBookingRequestSweep();
-  assert(sweep.offersExpired === 0, 'nothing to sweep');
+  // The sweep is global (other suites share the DB): check this business only.
+  assert((await offersFor(W.wid, D, 600))[0].status === 'claimed', 'the sweep leaves the claimed offer alone');
 
   console.log('\n[6] the flexible match is next; expiry hands the spot on');
   r = await call(ownerBookingHandler, req({ method: 'DELETE', cookie: W.cookie, query: { id: won.body.booking.id } }));
@@ -224,6 +237,7 @@ async function run() {
   assert(!!benOffer && benOffer.status === 'open' && !offers.some((o) => o.entry_id === calId), 'Ben (that weekday, mornings) is offered; Cal (another weekday) is not');
   const benMail = mailsTo(ben.email).at(-1);
   assert(!!benMail && /A spot opened/.test(benMail.subject), 'Ben emailed');
+  await until(() => texts.some((t) => /A spot opened: Massage/.test(t.Body)));
   const benText = texts.find((t) => /A spot opened: Massage/.test(t.Body));
   assert(!!benText && benText.To === '+15555550123' && benText.Body.includes('Tap to book') && benText.Body.includes(`/book/${W.slug}?claim=`) && /First to tap gets it/.test(benText.Body), 'Ben texted the same line with the link (consent given)');
   const benToken = tokenIn(benMail.html);
@@ -268,7 +282,7 @@ async function run() {
   assert(r.statusCode === 400 && /length of the service/.test(r.body.error), 'an offer must match the service length');
   r = await call(waitlistItemHandler, req({ method: 'POST', cookie: W.cookie, query: { id: benId }, body: { offer: { date: day(9), startMin: 600, endMin: 660 } } }));
   assert(r.statusCode === 200 && r.body.offer.status === 'open' && r.body.offer.offeredBy === 'owner', 'owner offers Ben a time by hand');
-  await settle(300);
+  await until(() => texts.filter((t) => t.To === '+15555550123').length >= 2);
   assert(texts.filter((t) => t.To === '+15555550123').length === 2, 'Ben texted again (with consent)');
   r = await call(waitlistItemHandler, req({ method: 'DELETE', cookie: W.cookie, query: { id: calId } }));
   assert(r.statusCode === 204 && (await entryOf(calId)).status === 'cancelled', 'owner removes Cal');
@@ -308,6 +322,19 @@ async function run() {
   assert(n >= 1 && (await entryOf(benId)).status === 'expired', 'an entry past 60 days expires');
   const sum = await waitlistSummary(W.wid);
   assert(!sum.some((s) => s.serviceId === W.svc), 'expired entries no longer count');
+
+  console.log("\n[12] Ivy's cancel fills from the waitlist too");
+  const D12 = day(12);
+  const dee = person('Dee');
+  const zed12 = await confirmedBooking(W, { date: D12 });
+  r = await join(W, dee, { date: D12 });
+  assert(r.statusCode === 201, 'Dee joins for the full slot');
+  t = await runApprovedTool('cancel_booking', { booking_id: zed12 }, { workspaceId: W.wid, userId: W.userId });
+  assert(t.cancelled === true && !t.request_declined, 'Ivy cancels the appointment');
+  const deeOffers = await offersFor(W.wid, D12, 600);
+  assert(deeOffers.length === 1 && deeOffers[0].status === 'open' && deeOffers[0].source_booking_id === zed12, 'the freed time is offered to Dee');
+  await until(() => mailsTo(dee.email).some((m) => /A spot opened/.test(m.subject)));
+  assert(mailsTo(dee.email).some((m) => /A spot opened/.test(m.subject)), 'Dee gets the claim link');
 }
 
 run()

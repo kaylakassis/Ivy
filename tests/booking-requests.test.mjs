@@ -18,6 +18,7 @@
 //  [10]  helpers: schedule permission decides, no permission cannot
 //  [11]  isolation: another business cannot see or decide the request
 //  [12]  Ivy: list reads, approve/decline are approval-gated, run once
+//  [14]  Ivy's cancel_booking on a pending request is a decline
 //  [13]  accountability partner: "Booking request from {first}" with inline rows
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/booking-requests.test.mjs
@@ -42,7 +43,7 @@ import { fetchDueBookings } from '../api/cron/booking-reminders.js';
 import { runBookingRequestSweep } from '../api/cron/booking-requests.js';
 import { hasConflict } from '../api/_lib/calendar.js';
 import { approveBookingRequest, isPendingRequest, listOpenRequests } from '../api/_lib/bookingRequests.js';
-import { executeIvyTool, runApprovedTool, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
+import { executeIvyTool, runApprovedTool, SENSITIVE_TOOLS, ledgerEntry } from '../api/_lib/ivyTools.js';
 import { computeSignals, publicItem } from '../api/_lib/accountability.js';
 import { keyNumbers } from '../api/_lib/dashboardNumbers.js';
 
@@ -189,7 +190,7 @@ async function run() {
   const pub = r.body.calendar.bookings.find((b) => b.id === reqId);
   assert(pub && pub.status === 'booked' && pub.clientName === undefined, 'public grid shows the time taken, identity redacted');
   assert(r.body.calendar.services.find((s) => s.id === A.svcReq)?.requireApproval === true, 'public services carry requireApproval');
-  assert(r.body.calendar.settings.waitlistEnabled === true && r.body.calendar.settings.requestHoldHours === 24, 'settings carry the new switches');
+  assert(r.body.calendar.settings.waitlistEnabled === false && r.body.calendar.settings.requestHoldHours === 24, 'settings carry the new switches (waitlist off for a new business)');
 
   console.log('\n[3] owner calendar keeps requests apart from bookings');
   r = await call(ownerCalendarHandler, req({ cookie: A.cookie }));
@@ -384,6 +385,21 @@ async function run() {
   assert(Array.isArray(pub8.requests) && pub8.requests[0].id === req8 && pub8.requests[0].firstName === 'Casey' && pub8.requests[0].service === 'Consult', 'public item carries rows for Approve / Decline');
   assert(!(await computeSignals(B.wid)).some((s) => s.key === 'booking_requests'), 'owner B has no such signal');
   assert(noDash(sig.title) && noDash(sig.detail), 'no dashes in the copy');
+
+  console.log('\n[14] Ivy cancel_booking on a pending request declines it');
+  const d9 = day(17);
+  r = await request(A, noCard, { date: d9 });
+  const req9 = r.body.booking.id;
+  t = await runApprovedTool('cancel_booking', { booking_id: req9 }, { workspaceId: B.wid, userId: B.userId });
+  assert(!!t.error && isPendingRequest(await bk(req9)), 'another business cannot cancel it');
+  t = await runApprovedTool('cancel_booking', { booking_id: req9 }, { workspaceId: A.wid, userId: A.userId });
+  const b9 = await bk(req9);
+  assert(t.cancelled === true && t.request_declined === true && b9.request_decision === 'declined' && !!b9.cancelled_at, 'declined, not a plain cancel');
+  const led = ledgerEntry('cancel_booking', { booking_id: req9 }, t);
+  assert(/Declined the booking request from Casey/.test(JSON.stringify(led)), `the activity line says so (${JSON.stringify(led).slice(0, 160)})`);
+  assert(!(await hasConflict({ workspaceId: A.wid, dateISO: d9, start: 600, end: 660, serviceId: A.svcReq, capacity: 1 })), 'the time is free again');
+  t = await runApprovedTool('cancel_booking', { booking_id: req9 }, { workspaceId: A.wid, userId: A.userId });
+  assert(!!t.error, 'cancelling it again fails plainly');
 
   // Tidy: the plain booking, so later suites do not trip over it.
   await sql`DELETE FROM bookings WHERE id = ${plainId}`;
