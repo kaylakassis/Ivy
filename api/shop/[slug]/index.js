@@ -39,7 +39,10 @@ export default async function handler(req, res) {
     const html = renderShopHtml({ payload, host });
     res.statusCode = 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=3600');
+    // Short edge cache only, no stale serving: the markup lists the team,
+    // so a pro who leaves is gone from it within half a minute. Browsers
+    // always revalidate (max-age=0).
+    res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=30');
     return res.end(html);
   } catch (err) {
     console.error('[shop SSR] error:', err);

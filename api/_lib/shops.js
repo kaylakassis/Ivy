@@ -831,6 +831,45 @@ export async function updateListing({ shopId, workspaceId, body }) {
   return r.rows[0] || m;
 }
 
+// The hours the listed team actually takes bookings: the union of every
+// active member's own weekly availability (already public on each booking
+// page), merged per day and capped at 4 windows. The owner can copy this
+// into the shop's door hours in one tap so "Open until" never says the
+// shop is closed while a pro on it is bookable.
+export function teamHoursUnion(members) {
+  const out = {};
+  for (let d = 0; d <= 6; d++) {
+    const all = [];
+    for (const m of (members || [])) {
+      if (m.status !== 'active' || !m.workspace_id || !isWorkspaceActive(m)) continue;
+      const list = (m.availability && m.availability[String(d)]) || [];
+      for (const w of (Array.isArray(list) ? list : [])) {
+        const start = Number(w?.start), end = Number(w?.end);
+        if (Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end <= 1440 && start < end) all.push({ start, end });
+      }
+    }
+    all.sort((a, b) => a.start - b.start);
+    const merged = [];
+    for (const w of all) {
+      const last = merged[merged.length - 1];
+      if (last && w.start <= last.end) last.end = Math.max(last.end, w.end);
+      else merged.push({ ...w });
+    }
+    // More than 4 separate windows: close the smallest gaps until 4 remain.
+    while (merged.length > 4) {
+      let gi = 0, best = Infinity;
+      for (let i = 0; i < merged.length - 1; i++) {
+        const gap = merged[i + 1].start - merged[i].end;
+        if (gap < best) { best = gap; gi = i; }
+      }
+      merged[gi].end = merged[gi + 1].end;
+      merged.splice(gi + 1, 1);
+    }
+    out[String(d)] = merged;
+  }
+  return out;
+}
+
 // ── stats (counts only) ──────────────────────────────────────────────────
 
 // Owner view: bookings made through the shop page, per member, as counts.

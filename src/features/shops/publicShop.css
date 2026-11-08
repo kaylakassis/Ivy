@@ -134,3 +134,45 @@
   .sh-week { grid-template-columns: 1fr 1fr; }
   .sh-photos { margin: 0 0 16px; padding: 0; }
 }
+
+/* ── Hero cover without photos, live soonest opening (1.0.6 polish) ── */
+.sh-cover {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding: 18px;
+  border-radius: 18px; border: 1px solid var(--border);
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 26%, transparent) 0%, transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--accent) 14%, transparent) 0%, transparent 70%),
+    var(--surface);
+}
+.sh-cover-faces { display: flex; flex-shrink: 0; }
+.sh-cover-faces > * {
+  width: 46px; height: 46px; border-radius: 99px; margin-left: -10px; border: 3px solid var(--surface);
+  object-fit: cover; background: var(--accent); color: var(--accent-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 600; font-size: 18px;
+}
+.sh-cover-faces > *:first-child { margin-left: 0; }
+.sh-cover-text { font-size: 14px; font-weight: 600; color: var(--fg-2); line-height: 1.35; }
+.sh-soonest-all {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 14px; padding: 12px 14px;
+  border-radius: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.sh-soonest-all small { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-2); }
+.sh-soonest-all b { display: block; font-size: 17px; margin-top: 2px; }
+.sh-live-dot {
+  width: 10px; height: 10px; border-radius: 99px; flex-shrink: 0; background: var(--ok);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+.sh-soonest-text small { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-2); margin-bottom: 2px; }
+.sh-soonest { flex-wrap: wrap; }
+.sh-team-ask { margin-bottom: 14px; }
+.sh-root .sh-ask { margin-bottom: 14px; }
+.sh-days { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; margin: 0 -2px; padding: 0 2px; }
+.sh-days::-webkit-scrollbar { display: none; }
+.sh-day-chip { flex: 0 0 auto; }
+.sh-meta .pb-link-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0; font-size: inherit; }
+.sh-meta .pb-link-btn.sh-open { color: var(--ok); }
+.sh-meta .pb-link-btn.sh-closed { color: var(--fg-2); }
+@media (max-width: 560px) {
+  .sh-soonest-all .pb-btn, .sh-soonest .pb-btn { flex: 1 1 100%; }
+}

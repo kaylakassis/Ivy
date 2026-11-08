@@ -81,14 +81,14 @@ export default function AcceptShopInvite() {
           <>
             <h1 style={h1}>This invite link is not valid any more</h1>
             <p style={p}>It was used, declined, or it expired. Ask the shop to send a new one.</p>
-            <div style={{ marginTop: 16 }}><Link to="/" className="btn btn-outline">Go to Ivy</Link></div>
+            <div style={{ marginTop: 16 }}><Link to="/" className="btn btn-outline" style={{ textDecoration: 'none' }}>Go to Ivy</Link></div>
           </>
         )}
         {!dead && err && !info && (
           <>
             <h1 style={h1}>This link is not valid</h1>
             <p style={p}>{err}</p>
-            <div style={{ marginTop: 16 }}><Link to="/" className="btn btn-outline">Go to Ivy</Link></div>
+            <div style={{ marginTop: 16 }}><Link to="/" className="btn btn-outline" style={{ textDecoration: 'none' }}>Go to Ivy</Link></div>
           </>
         )}
         {!dead && !err && !info && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Checking your invite…</div>}
@@ -106,7 +106,7 @@ export default function AcceptShopInvite() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
               <button className="btn btn-primary" onClick={() => nav('/shops', { replace: true })}>Open Shop <Icons.Arrow size={14}/></button>
               {done.action === 'accept' && done.shop?.status === 'published' && (
-                <a className="btn btn-outline" href={`/shop/${encodeURIComponent(info.shop.slug)}`}>See the page</a>
+                <a className="btn btn-outline" style={{ textDecoration: 'none' }} href={`/shop/${encodeURIComponent(info.shop.slug)}`}>See the page</a>
               )}
             </div>
           </>
@@ -129,27 +129,27 @@ export default function AcceptShopInvite() {
             <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
               {authLoading ? null : !user ? (
                 <>
-                  <Link className="btn btn-primary" style={{ justifyContent: 'center' }} to={`/signin?next=${encodeURIComponent(here)}${info.email ? `&email=${encodeURIComponent(info.email)}` : ''}`}>Sign in to accept</Link>
-                  <Link className="btn btn-outline" style={{ justifyContent: 'center' }} to={`/signup?next=${encodeURIComponent(here)}`}>New to Ivy? Create your business</Link>
+                  <Link className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }} to={`/signin?next=${encodeURIComponent(here)}${info.email ? `&email=${encodeURIComponent(info.email)}` : ''}`}>Sign in to accept</Link>
+                  <Link className="btn btn-outline" style={{ justifyContent: 'center', textDecoration: 'none' }} to={`/signup?next=${encodeURIComponent(here)}`}>New to Ivy? Create your business</Link>
                 </>
               ) : info.me?.isShopOwner ? (
                 <p style={p}>This is your own shop page. You are already on it.</p>
               ) : !info.me?.hasBusiness ? (
                 <>
                   <p style={p}>You are signed in as {user.email}, but this account has no Ivy business yet. A shop page lists businesses, so create yours first and open this link again.</p>
-                  <Link className="btn btn-primary" style={{ justifyContent: 'center' }} to="/onboarding">Set up my business</Link>
+                  <Link className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }} to="/onboarding">Set up my business</Link>
                 </>
               ) : !info.me?.planActive ? (
                 <>
                   <p style={p}>Your business needs an active plan, trial or complimentary access to be listed. Start or renew your plan, then open this link again.</p>
-                  <Link className="btn btn-primary" style={{ justifyContent: 'center' }} to="/account#billing">Open billing</Link>
+                  <Link className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }} to="/account#billing">Open billing</Link>
                 </>
               ) : (
                 <>
-                  <button className="btn btn-primary" style={{ justifyContent: 'center' }} disabled={busy} onClick={() => answer('accept')}>
+                  <button className="btn btn-primary" style={{ justifyContent: 'center', textDecoration: 'none' }} disabled={busy} onClick={() => answer('accept')}>
                     {busy ? 'Working…' : `Accept as ${info.me?.businessName || user.email}`}
                   </button>
-                  <button className="btn btn-outline" style={{ justifyContent: 'center' }} disabled={busy} onClick={() => answer('decline')}>Decline</button>
+                  <button className="btn btn-outline" style={{ justifyContent: 'center', textDecoration: 'none' }} disabled={busy} onClick={() => answer('decline')}>Decline</button>
                 </>
               )}
             </div>

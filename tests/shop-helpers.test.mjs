@@ -3,7 +3,7 @@
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/shop-helpers.test.mjs
 import {
-  groupServices, sectionServices, firstAvailable, nextForMemberAny, weekSlots, openStatus, hoursLines, shopRating,
+  groupServices, sectionServices, firstAvailable, nextForMemberAny, nextAcrossShop, weekSlots, openStatus, hoursLines, shopRating,
   searchTeam, weekdayFromText, nextLabel, relativeDay,
 } from '../src/features/shops/shopHelpers.js';
 import { addDays, fmtDateISO } from '../src/features/calendar/utils.js';
@@ -60,6 +60,9 @@ console.log('\n[2] First available across the shop');
   const w = weekSlots(g, [A, B], tomorrow, { days: 2, max: 5 });
   assert(w.length === 5 && w.every((s, i) => i === 0 || s.ms >= w[i - 1].ms) && w[0].member.id === 'b', 'week list soonest first, capped');
   assert(firstAvailable(g, [], tomorrow) === null, 'no members → null');
+  const na = nextAcrossShop([A3, B3], tomorrow);
+  assert(na && na.member.id === 'b', 'soonest opening on the team compares real instants across pros');
+  assert(nextAcrossShop([], tomorrow) === null, 'soonest opening: empty team → null');
 }
 
 console.log('\n[3] Open status and hours lines');

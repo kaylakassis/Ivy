@@ -91,9 +91,6 @@ export default function ShopsPage() {
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 'clamp(26px, 4.5vw, 36px)', letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05 }}>
-          One page for everyone at your location.
-        </h2>
         <p style={{ color: 'var(--fg-2)', fontSize: 14.5, maxWidth: 620, margin: 0, lineHeight: 1.5 }}>
           A shop page lists every pro who works at your address, with the first available time across all of them. Each pro stays their own business: their link, prices, policies, clients and money. You see booking counts, never their clients.
         </p>
@@ -113,7 +110,11 @@ export default function ShopsPage() {
           <div style={{ ...sectionTitle, margin: 0 }}>Shop pages you run</div>
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icons.Plus size={14}/> New shop page</button>
         </div>
-        {data.owned.length === 0 ? (
+        {data.owned.length === 0 && (data.invites.length > 0 || data.memberships.length > 0) ? (
+          <div className="card" style={{ padding: 16, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+            You do not run a shop page. If you run the location, create one and invite the pros who work there.
+          </div>
+        ) : data.owned.length === 0 ? (
           <div className="card" style={{ padding: 28 }}>
             <EmptyNote icon="Store" title="No shop page yet"
               hint="Create one for your location, invite the pros who work there, and share one link that books any of you."
@@ -284,7 +285,7 @@ function ShopEditor({ shopId, meta, onBack }) {
           }}>{label}</button>
         ))}
       </div>
-      {tab === 'details' && <DetailsForm shop={shop} meta={meta} onSaved={(s) => setDetail((d) => ({ ...d, shop: s }))}/>}
+      {tab === 'details' && <DetailsForm shop={shop} meta={meta} teamHours={detail.teamHours} onSaved={(s) => setDetail((d) => ({ ...d, shop: s }))}/>}
       {tab === 'team' && <TeamPanel shop={shop} members={members} meta={meta} reload={load}/>}
       {tab === 'share' && <SharePanel shop={shop} onChange={(s) => setDetail((d) => ({ ...d, shop: s }))} onDeleted={onBack}/>}
     </div>
@@ -310,7 +311,7 @@ function PublishControl({ shop, onChange }) {
   );
 }
 
-function DetailsForm({ shop, meta, onSaved }) {
+function DetailsForm({ shop, meta, teamHours, onSaved }) {
   const [f, setF] = useState(() => ({
     name: shop.name, slug: shop.slug, tagline: shop.tagline, description: shop.description, addressLabel: shop.addressLabel,
     city: shop.city, region: shop.region, country: shop.country, lat: shop.lat ?? '', lng: shop.lng ?? '', phone: shop.phone,
@@ -382,6 +383,12 @@ function DetailsForm({ shop, meta, onSaved }) {
         <div style={sectionTitle}>Opening hours</div>
         <HoursEditor hours={f.hours} onChange={(h) => set('hours', h)}/>
         <div style={hint}>These are the shop's door hours. Each pro's bookable times still come from their own calendar.</div>
+        {teamHours && Object.values(teamHours).some((l) => Array.isArray(l) && l.length > 0) && JSON.stringify(teamHours) !== JSON.stringify(f.hours) && (
+          <div style={{ ...row, marginTop: 4 }}>
+            <button type="button" className="btn btn-outline" onClick={() => { set('hours', teamHours); setOk('Hours now match when the team takes bookings. Save to keep them.'); }}>Match the team's hours</button>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Open whenever anyone on the page takes bookings.</span>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 18, display: 'grid', gap: 12 }}>
@@ -421,7 +428,7 @@ function DetailsForm({ shop, meta, onSaved }) {
       <Err>{err}</Err><Ok>{ok}</Ok>
       <div style={row}>
         <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
-        <a className="btn btn-outline" href={shop.url} target="_blank" rel="noopener noreferrer">Preview</a>
+        <a className="btn btn-outline" href={shop.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Preview</a>
       </div>
     </form>
   );
@@ -659,7 +666,7 @@ function SharePanel({ shop, onChange, onDeleted }) {
           <input className="input" readOnly value={url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 220 }} aria-label="Shop page link"/>
           <button type="button" className="btn btn-primary" onClick={() => copy(url, () => { setCopied(true); setTimeout(() => setCopied(false), 1600); })}><Icons.Copy size={14}/> {copied ? 'Copied' : 'Copy link'}</button>
           <button type="button" className="btn btn-outline" onClick={() => setQr(true)}>QR code</button>
-          <a className="btn btn-outline" href={shop.url} target="_blank" rel="noopener noreferrer">Preview</a>
+          <a className="btn btn-outline" href={shop.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>Preview</a>
         </div>
         <div style={hint}>Put it in the window, on receipts and on every pro's Instagram. It books any of you.</div>
       </div>

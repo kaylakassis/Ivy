@@ -20,7 +20,7 @@ import ArchivedBusinessCard from '../../components/ArchivedBusiness.jsx';
 import { mapsUrl, telHref } from '../calendar/publicBookingHelpers.js';
 import { TEMPLATES } from '../website/templates.js';
 import {
-  groupServices, sectionServices, nextForMember, nextForMemberAny, firstAvailable, weekSlots, nextLabel, relativeDay,
+  groupServices, sectionServices, nextForMember, nextForMemberAny, nextAcrossShop, firstAvailable, weekSlots, nextLabel, relativeDay,
   openStatus, hoursLines, shopRating, searchTeam, minToHM, fmtPrice, fmtDuration, WEEKDAYS,
 } from './shopHelpers.js';
 import '../calendar/publicBooking.css';
@@ -36,11 +36,56 @@ const AMENITY_LABELS = {
 function safeHex(c) {
   return typeof c === 'string' && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3}([0-9a-fA-F]{2})?)?$/.test(c.trim()) ? c.trim() : null;
 }
-function inkFor(hex) {
-  let h = hex.replace('#', '');
+function rgbOf(hex) {
+  let h = hex.replace('#', '').slice(0, 6);
   if (h.length === 3) h = h.split('').map((x) => x + x).join('');
-  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#111111' : '#ffffff';
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+const lumOf = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+const hexOf = (rgb) => '#' + rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+function inkFor(hex) {
+  return lumOf(rgbOf(hex)) > 0.6 ? '#111111' : '#ffffff';
+}
+// A theme accent that stays readable as text and fills on this page's
+// background, same hue either way: in dark mode a deep navy is lifted to a
+// clear periwinkle; in light mode a bright lime is pulled down to a deep
+// olive. Works in HSL so the colour keeps its character.
+function toHsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, sat, l];
+}
+function fromHsl([h, sat, l]) {
+  if (sat === 0) return [l * 255, l * 255, l * 255];
+  const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+  const p = 2 * l - q;
+  const f = (t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
+export function readableAccent(hex, dark) {
+  const safe = safeHex(hex);
+  if (!safe) return null;
+  const [h, sat, l] = toHsl(rgbOf(safe));
+  if (dark) {
+    if (l >= 0.6) return safe;
+    // Near-greys (e.g. a black theme) stay neutral; coloured accents keep
+    // enough saturation to read as a colour, not a grey.
+    return hexOf(fromHsl([h, sat < 0.08 ? sat : Math.max(sat, 0.5), 0.72]));
+  }
+  if (l <= 0.45) return safe;
+  return hexOf(fromHsl([h, sat, 0.34]));
 }
 
 // The pro's own booking page, preloaded with service (+ time) and the shop.
@@ -83,11 +128,12 @@ export default function PublicShop() {
     if (data?.shop?.name) document.title = `${data.shop.name}${data.shop.city ? ` · ${data.shop.city}` : ''}`;
   }, [data]);
 
+  const dark = tweaks.direction === 'bold';
   const accent = useMemo(() => {
     const theme = data?.shop?.settings?.theme;
     const tpl = TEMPLATES[theme];
-    return safeHex(tpl?.vars?.['--site-accent']);
-  }, [data]);
+    return readableAccent(tpl?.vars?.['--site-accent'], dark);
+  }, [data, dark]);
   const brandVars = accent ? {
     '--accent': accent, '--accent-ink': inkFor(accent),
     '--accent-soft': `color-mix(in srgb, ${accent} 16%, var(--surface))`,
@@ -175,6 +221,7 @@ function ShopBody({ data, now, navigate }) {
   };
   const mapHref = shop.addressLabel ? mapsUrl(shop.addressLabel) : null;
   const tel = telHref(shop.phone);
+  const soonestAll = useMemo(() => nextAcrossShop(members, now), [members, now]);
   const allReviews = useMemo(() => members
     .flatMap((m) => (m.reviews?.recent || []).map((r) => ({ ...r, who: m.firstName || m.businessName })))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 12), [members]);
@@ -182,9 +229,20 @@ function ShopBody({ data, now, navigate }) {
   return (
     <>
       <header className="sh-hero">
-        {shop.photos?.length > 0 && (
+        {shop.photos?.length > 0 ? (
           <div className="sh-photos" aria-label={`Photos of ${shop.name}`}>
             {shop.photos.map((u, i) => <img key={u} src={u} alt={i === 0 ? shop.name : ''} loading={i === 0 ? 'eager' : 'lazy'}/>)}
+          </div>
+        ) : members.length > 0 && (
+          <div className="sh-cover">
+            <div className="sh-cover-faces" aria-hidden="true">
+              {members.slice(0, 5).map((m) => (m.photoUrl
+                ? <img key={m.id} src={m.photoUrl} alt=""/>
+                : <span key={m.id}>{(m.proName || m.businessName || '?').trim()[0]?.toUpperCase()}</span>))}
+            </div>
+            <div className="sh-cover-text">
+              {members.length === 1 ? 'One independent pro' : `${members.length} independent pros`}, one address
+            </div>
           </div>
         )}
         <h1 className="sh-name">{shop.name}</h1>
@@ -218,37 +276,47 @@ function ShopBody({ data, now, navigate }) {
             {shop.amenities.map((a) => <span key={a} className="pb-chip">{AMENITY_LABELS[a] || a}</span>)}
           </div>
         )}
+        {soonestAll && (
+          <div className="sh-soonest-all" aria-live="polite">
+            <span className="sh-live-dot" aria-hidden="true"/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <small>Soonest opening on the team</small>
+              <b>{soonestAll.member.firstName || soonestAll.member.businessName} · {relativeDay(soonestAll.dateISO, shop.timezone, now)} {minToHM(soonestAll.slot.start)}</b>
+            </div>
+            <Link className="pb-btn primary" to={bookHref(shop, soonestAll.member)}>Book with {soonestAll.member.firstName || soonestAll.member.businessName}</Link>
+          </div>
+        )}
         <div className="sh-hero-actions">
           <button type="button" className="pb-btn primary" onClick={() => scrollTo('book')}>Book now</button>
           <button type="button" className="pb-btn outline" onClick={() => scrollTo('team')}>Meet the team</button>
         </div>
       </header>
 
-      {members.length > 1 && (
-        <section className="pb-card sh-ask" aria-label="Find the right pro">
-          <div className="sh-ask-row">
-            <Icons.Search size={15}/>
-            <input className="pb-input" type="search" value={ask} onChange={(e) => setAsk(e.target.value.slice(0, 120))}
-              placeholder="Who does fades on Saturdays?" aria-label="Search the team by service and day"/>
-          </div>
-          <div className="sh-days" role="group" aria-label="Day of the week">
-            <button type="button" className={`sh-day-chip${askDay == null ? ' on' : ''}`} onClick={() => setAskDay(null)}>Any day</button>
-            {WEEKDAYS.map((d, i) => (
-              <button key={d} type="button" className={`sh-day-chip${askDay === i ? ' on' : ''}`} onClick={() => setAskDay(askDay === i ? null : i)}>{d.slice(0, 3)}</button>
-            ))}
-          </div>
-          {search && (
-            <div className="sh-ask-result" aria-live="polite">
-              {search.matches.length === 0
-                ? <>No one on the team matches that{search.weekday != null ? ` on ${WEEKDAYS[search.weekday]}s` : ''}. Try another word or day.</>
-                : <>{search.matches.length === 1 ? 'One pro' : `${search.matches.length} pros`} match{search.weekday != null ? ` on ${WEEKDAYS[search.weekday]}s` : ''}: {search.matches.map((x) => `${x.member.firstName || x.member.businessName} (${x.services.map((s) => s.name).join(', ')})`).join('; ')}.</>}
-            </div>
-          )}
-        </section>
-      )}
-
       <section id="team" className="pb-card" aria-labelledby="sh-team-h" style={{ scrollMarginTop: 12 }}>
         <h2 className="pb-h2" id="sh-team-h">The team</h2>
+        {members.length > 1 && (
+          <div className="sh-ask" role="search" aria-label="Find the right pro">
+            <div className="sh-ask-row">
+              <Icons.Search size={15}/>
+              <input className="pb-input" type="search" value={ask} onChange={(e) => setAsk(e.target.value.slice(0, 120))}
+                placeholder="Who does fades on Saturdays?" aria-label="Search the team by service and day"/>
+            </div>
+            <div className="sh-days" role="group" aria-label="Day of the week">
+              <button type="button" className={`sh-day-chip${askDay == null ? ' on' : ''}`} onClick={() => setAskDay(null)}>Any day</button>
+              {WEEKDAYS.map((d, i) => (
+                <button key={d} type="button" className={`sh-day-chip${askDay === i ? ' on' : ''}`} onClick={() => setAskDay(askDay === i ? null : i)}>{d.slice(0, 3)}</button>
+              ))}
+            </div>
+            {search && (
+              <div className="sh-ask-result" aria-live="polite">
+                {search.matches.length === 0
+                  ? <>No one on the team matches that{search.weekday != null ? ` on ${WEEKDAYS[search.weekday]}s` : ''}. Try another word or day.</>
+                  : <>{search.matches.length === 1 ? 'One pro' : `${search.matches.length} pros`} match{search.weekday != null ? ` on ${WEEKDAYS[search.weekday]}s` : ''}: {search.matches.map((x) => `${x.member.firstName || x.member.businessName} (${x.services.map((s) => s.name).join(', ')})`).join('; ')}.</>}
+              </div>
+            )}
+          </div>
+        )}
+
         {members.length === 0 ? (
           <div className="pb-empty-day">No one is listed on this page yet.</div>
         ) : (
@@ -302,7 +370,8 @@ function ShopBody({ data, now, navigate }) {
                         {soonest ? (
                           <div className="sh-soonest">
                             <div className="sh-soonest-text">
-                              <b>{who === 'any' && g.members.length > 1 ? 'Soonest: ' : 'Next: '}{soonest.member.firstName || soonest.member.businessName} · {relativeDay(soonest.dateISO, shop.timezone, now)} {minToHM(soonest.slot.start)}</b>
+                              <small>{who === 'any' && g.members.length > 1 ? 'Soonest across the team' : 'Next open time'}</small>
+                              <b>{soonest.member.firstName || soonest.member.businessName} · {relativeDay(soonest.dateISO, shop.timezone, now)} {minToHM(soonest.slot.start)}</b>
                               <span>
                                 {soonest.service.name} · {fmtDuration(soonest.service.durationMinutes)}
                                 {settings.showPrices !== false && !soonest.service.hidePrice && ` · ${fmtPrice(soonest.service.price)}`}

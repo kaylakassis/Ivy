@@ -23,7 +23,11 @@ export default async function handler(req, res) {
     ])) return;
     const payload = await publicShopPayload(slug);
     if (!payload) return notFound(res, 'No shop page at that address');
-    res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+    // Never cached: a pro who leaves (or whose plan lapses) must vanish on
+    // the next load, and open times must be live. (A browser honours
+    // stale-while-revalidate too, so even a short shared cache kept a
+    // departed pro on screen for minutes.)
+    res.setHeader('Cache-Control', 'no-store');
     return ok(res, payload);
   } catch (err) {
     return serverError(res, err);

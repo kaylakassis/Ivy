@@ -10,7 +10,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { recordWorkspaceAudit } from '../../_lib/audit.js';
 import {
-  loadShopForWorkspace, updateShop, deleteShop, serializeShop, serializeMember, shopStats, memberStats, ShopError,
+  loadShopForWorkspace, updateShop, deleteShop, serializeShop, serializeMember, shopStats, memberStats, teamHoursUnion, ShopError,
 } from '../../_lib/shops.js';
 import { sql } from '../../_lib/db.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
@@ -47,6 +47,9 @@ export default async function handler(req, res) {
           shop: serializeShop(shop, { owner: true }),
           members: roster,
           stats: { pageViews: stats.pageViews, total: stats.total, last30: stats.last30 },
+          // When the listed team takes bookings (union of their public
+          // weekly hours), for "Match the team's hours" (1.0.6+ app).
+          teamHours: teamHoursUnion(members),
         });
       }
       // Member view: own listing only.

@@ -96,6 +96,18 @@ export function nextForMemberAny(member, from = new Date()) {
   return best;
 }
 
+// The soonest opening anywhere on the team (any pro, any listed service),
+// for the hero's live "Soonest opening" line. Ties go to the pro listed
+// first. → { member, service, dateISO, slot, ms } or null.
+export function nextAcrossShop(members, from = new Date()) {
+  let best = null;
+  for (const m of (members || [])) {
+    const n = nextForMemberAny(m, from);
+    if (n && (!best || n.ms < best.ms)) best = n;
+  }
+  return best;
+}
+
 // First available across the shop for one service name: the true soonest
 // slot among every pro who offers it. Ties go to the pro listed first.
 export function firstAvailable(group, members, from = new Date()) {

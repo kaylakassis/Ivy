@@ -34,11 +34,12 @@ import inviteH from '../api/shops/invite.js';
 import slugCheckH from '../api/shops/slug-check.js';
 import shopDataH from '../api/shop/[slug]/data.js';
 import shopHtmlH from '../api/shop/[slug]/index.js';
+import shopPvH from '../api/shop/[slug]/pv.js';
 import sitemapH from '../api/shop/sitemap.xml.js';
 import publicBooking from '../api/calendar/public/[slug].js';
 import discoverH from '../api/me/discover.js';
 import { planAppAction, appToolNeedsApproval, appCallIsRead, APP_HANDLERS } from '../api/_lib/ivyAppTools.js';
-import { shopInvitesWaiting } from '../api/_lib/shops.js';
+import { shopInvitesWaiting, teamHoursUnion } from '../api/_lib/shops.js';
 import { groupServices, firstAvailable, shopRating } from '../src/features/shops/shopHelpers.js';
 import { addDays, fmtDateISO } from '../src/features/calendar/utils.js';
 
@@ -225,6 +226,7 @@ async function main() {
   await sql`INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label, blocks_bookings) VALUES (${B.ws}, ${T}, 600, 720, 'Dentist appointment', TRUE)`;
   r = await call(shopById, { user: A, query: { id: shop.id } });
   assert(r.statusCode === 200 && r.body.role === 'owner' && r.body.members.length >= 3, 'owner reads the roster');
+  assert(JSON.stringify(r.body.teamHours?.['1']) === JSON.stringify([{ start: 540, end: 1020 }]), 'owner gets the team\'s merged weekly hours for "Match the team\'s hours"');
   const bRoster = r.body.members.find((m) => m.businessName === 'Bravo Cuts');
   assert(bRoster.stats.total === 1 && bRoster.services === undefined, 'owner sees counts for B, not B\'s services or clients');
   const ownerJson = JSON.stringify(r.body);
@@ -257,6 +259,15 @@ async function main() {
   assert(!pubJson.includes(B.ws) && !pubJson.includes(A.ws), 'no workspace ids leak');
   assert(pubB.blocks.some((b) => b.label === 'Busy' && b.startMin === 600) && pubB.bookings.length === 1 && !('clientName' in pubB.bookings[0]), 'blocks read "Busy"; bookings are redacted');
   assert(pubB.bookUrl === `/book/${B.slug}` && r.body.shop.settings.theme === 'warm' && r.body.shop.amenities.includes('parking'), 'book link, theme and amenities');
+
+  assert(r.headers['cache-control'] === 'no-store', 'public payload is never cached, so a pro who leaves vanishes on the next load');
+  // Page views: one per visitor per 10 minutes, repeats answered quietly.
+  const pvIp = '198.51.100.77';
+  const pv1 = await call(shopPvH, { method: 'POST', query: { slug: shop.slug }, body: {}, headers: { 'x-forwarded-for': pvIp } });
+  const pv2 = await call(shopPvH, { method: 'POST', query: { slug: shop.slug }, body: {}, headers: { 'x-forwarded-for': pvIp } });
+  const pvBad = await call(shopPvH, { method: 'POST', query: { slug: 'x'.repeat(300) }, body: {} });
+  const views = (await sql`SELECT page_views FROM shops WHERE id = ${shop.id}`).rows[0].page_views;
+  assert(pv1.statusCode === 200 && pv1.body.counted === true && pv2.statusCode === 200 && pv2.body.counted === false && pvBad.statusCode === 200 && pvBad.body.counted === false && Number(views) === 1, 'page view counted once per visitor; repeats and bad slugs answer 200 without counting');
 
   // ───────────────────────────────────────────────────────────────────
   console.log('\n[5] first available + concurrency');
@@ -440,6 +451,7 @@ async function main() {
   assert(/<h1>Main Street Barbers<\/h1>/.test(html) && /The team/.test(html) && /Alpha Barbers/.test(html) && /Book with Alpha/.test(html), 'readable hero and team markup');
   assert(!html.includes('Priya') && !html.includes('Dentist') && !html.includes('Bravo Cuts') && !html.includes('Charlie Color'), 'no private data; left/removed members absent');
   assert(/id="root"/.test(html), 'SPA shell mounts on top');
+  assert(/max-age=0/.test(r.headers['cache-control']) && !/stale-while-revalidate/.test(r.headers['cache-control']), 'HTML is only briefly edge-cached and never served stale');
   r = await call(sitemapH, {});
   assert(r.statusCode === 200 && String(r.body).includes(`/shop/${shop.slug}</loc>`) && !String(r.body).includes(`second-${S}`), 'sitemap lists published shops only');
   const vercel = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
@@ -472,6 +484,19 @@ async function main() {
   assert(mailsTo(A.email).length === before, 'owner who muted shop emails gets none');
   const text = fs.readFileSync(new URL('../api/_lib/shops.js', import.meta.url), 'utf8') + fs.readFileSync(new URL('../src/features/shops/PublicShop.jsx', import.meta.url), 'utf8') + fs.readFileSync(new URL('../src/features/shops/ShopsPage.jsx', import.meta.url), 'utf8');
   assert(!/[–—]/.test(text) && !/business OS/i.test(text), 'copy has no em/en dashes and never says "business OS"');
+
+  {
+    const act = { status: 'active', workspace_id: 'w', subscription_status: 'active', subscription_period_end: new Date(Date.now() + 86400000) };
+    const u = teamHoursUnion([
+      { ...act, availability: { 1: [{ start: 540, end: 720 }, { start: 780, end: 1020 }] } },
+      { ...act, availability: { 1: [{ start: 700, end: 800 }], 2: [{ start: 600, end: 660 }, { start: 700, end: 720 }, { start: 760, end: 780 }, { start: 800, end: 820 }, { start: 900, end: 960 }] } },
+      { ...act, status: 'left', availability: { 0: [{ start: 0, end: 1440 }] } },
+      { ...act, subscription_status: 'cancelled', subscription_period_end: new Date(Date.now() - 86400000), availability: { 3: [{ start: 60, end: 120 }] } },
+    ]);
+    assert(JSON.stringify(u['1']) === JSON.stringify([{ start: 540, end: 1020 }]), 'team hours: overlapping windows merge');
+    assert(u['2'].length === 4 && u['2'][0].start === 600 && u['2'][3].end === 960, 'team hours: capped at 4 windows by closing the smallest gaps');
+    assert(u['0'].length === 0 && u['3'].length === 0, 'team hours: members who left or lapsed do not count');
+  }
 
   console.log(`\n${pass} passed, ${fail} failed`);
 }
