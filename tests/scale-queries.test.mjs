@@ -61,7 +61,7 @@ function mkRes() {
 }
 
 const tag = `scaleq-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-let uid, ws;
+let uid, ws, planUid, planWs;
 
 async function run() {
   try {
@@ -75,6 +75,18 @@ async function run() {
     assert(/date >=/.test(dateScan?.['Index Cond'] || ''), `with a date range condition (${dateScan?.['Index Cond'] || 'none'})`);
 
     console.log('\n[2] review-requests finds candidates through the completion_log index');
+    // Give the planner realistic statistics: on a near-empty table (a fresh
+    // CI database) every index costs about the same and the choice is a
+    // coin toss. Production has many active bookings and few with a recent
+    // completion entry, which is what the GIN index is for.
+    planUid = (await sql`INSERT INTO users (email, password_hash) VALUES (${`${tag}-plan@example.com`}, 'x') RETURNING id`).rows[0].id;
+    planWs = (await sql`INSERT INTO workspaces (owner_id) VALUES (${planUid}) RETURNING id`).rows[0].id;
+    await sql`INSERT INTO bookings (workspace_id, client_name, client_email, date, start_min, end_min)
+      SELECT ${planWs}, 'C', 'c@example.com', CURRENT_DATE - (g % 400), 540, 600 FROM generate_series(1, 4000) g`;
+    await sql`INSERT INTO bookings (workspace_id, client_name, client_email, date, start_min, end_min, completion_log)
+      SELECT ${planWs}, 'C', 'c@example.com', CURRENT_DATE - 1, 540, 600, jsonb_build_object((CURRENT_DATE - 1)::text, NOW()::text)
+        FROM generate_series(1, 20) g`;
+    await sql`ANALYZE bookings`;
     const vq = (await captureSql(() => selectDueReviewRequests())).find((q) => /FROM bookings b/.test(q.text));
     const vNodes = nodes(await planOf(vq));
     const logScan = vNodes.find((n) => n['Index Name'] === 'idx_bookings_completion_log');
@@ -128,6 +140,8 @@ async function run() {
       await sql`DELETE FROM workspaces WHERE id = ${ws}`.catch(() => {});
     }
     if (uid) await sql`DELETE FROM users WHERE id = ${uid}`.catch(() => {});
+    if (planWs) await sql`DELETE FROM workspaces WHERE id = ${planWs}`.catch(() => {});
+    if (planUid) await sql`DELETE FROM users WHERE id = ${planUid}`.catch(() => {});
   }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
