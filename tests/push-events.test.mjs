@@ -106,7 +106,7 @@ async function flush() {
 const push = await import('../api/_lib/push.js');
 const { sendApnsToTokens } = await import('../api/_lib/apns.js');
 const { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } = await import('../api/_lib/bookingNotify.js');
-const { promoteWaitlistOnCancel } = await import('../api/_lib/waitlist.js');
+const { fillFromWaitlistOnCancel } = await import('../api/_lib/waitlist.js');
 const { markInvoicePaid } = await import('../api/_lib/invoicePayments.js');
 const { runApprovedTool } = await import('../api/_lib/ivyTools.js');
 const ownerThreadHandler = (await import('../api/messages/[id].js')).default;
@@ -342,11 +342,13 @@ async function run() {
   await sql`INSERT INTO waitlist_entries (workspace_id, service_id, client_id, client_name, client_email, date, start_min, end_min)
     VALUES (${wsId}, ${serviceId}, ${people.client.clientId}, 'Casey Client', ${people.client.email}, ${wDate}, 600, 660)`;
   m = mark();
-  const promoted = await promoteWaitlistOnCancel({ workspaceId: wsId, serviceId, dateISO: wDate, startMin: 600, endMin: 660 });
+  // 1.0.6: the spot is OFFERED with a one-tap claim link (nobody is booked
+  // without their tap); the push opens the claim page.
+  const offer = await fillFromWaitlistOnCancel({ workspaceId: wsId, serviceId, dateISO: wDate, startMin: 600, endMin: 660 });
   await flush();
-  assert(!!promoted, 'promoted into a booking');
-  onlyTo(m, { client: 1 }, 'waitlist promotion');
-  assert(got('client', m)[0]?.url === '/me/bookings', 'opens Bookings');
+  assert(!!offer, 'the spot is offered');
+  onlyTo(m, { client: 1 }, 'waitlist offer');
+  assert(/^\/book\/[^?]+\?claim=/.test(got('client', m)[0]?.url || ''), `opens the claim page (${got('client', m)[0]?.url})`);
 
   console.log('\n[8] website enquiry');
   const handle = `${TAG}-site`;
