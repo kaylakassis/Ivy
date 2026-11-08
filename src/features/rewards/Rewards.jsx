@@ -12,13 +12,15 @@ const RULE_TYPE_LABELS = {
   custom:   'Custom',
 };
 
-// The "why rewards work" stat tiles. Shown on the pre-launch landing AND
-// kept permanently in the manager (above the rules) - the motivation
-// shouldn't disappear the moment the program goes live.
+// The "why rewards work" tiles. Shown on the pre-launch landing AND kept
+// permanently in the manager (above the rules) - the motivation shouldn't
+// disappear the moment the program goes live. Plain value statements only:
+// the earlier tiles quoted third-party percentages we could not stand
+// behind, so no figures here.
 const WHY_STATS = [
-  { value: '67%',    body: 'Repeat customers spend 67% more than new customers.', src: 'Bain & Company',  tone: 'ok',     icon: <Icons.Trending size={18} sw={1.8}/> },
-  { value: '60–70%', body: 'Probability of selling to an existing customer vs. 5–20% for new ones.', src: 'Invesp', tone: 'accent', icon: <Icons.Users    size={18} sw={1.8}/> },
-  { value: '2.5×',   body: 'Businesses with loyalty programs grow revenue 2.5× faster.', src: 'Annex Cloud', tone: 'warn',   icon: <Icons.Heart    size={18} sw={1.8}/> },
+  { title: 'They come back',      body: 'A reward to look forward to gives clients a reason to book their next visit.', tone: 'ok',     icon: <Icons.Trending size={18} sw={1.8}/> },
+  { title: 'Your best clients',   body: 'The people who already know you are the easiest ones to book again.',          tone: 'accent', icon: <Icons.Users    size={18} sw={1.8}/> },
+  { title: 'They tell friends',   body: 'Referral rewards turn happy clients into the way new people find you.',          tone: 'warn',   icon: <Icons.Heart    size={18} sw={1.8}/> },
 ];
 
 export default function Rewards() {
@@ -53,7 +55,7 @@ function RewardsLanding({ onLaunch }) {
   const offerings = [
     { title: 'Visit-based rewards', body: 'Book 5, get 1 free.' },
     { title: 'Spend-based rewards', body: 'Spend $300, get $25 credit.' },
-    { title: 'Referral bonuses',    body: 'Refer a friend - both get rewarded.' },
+    { title: 'Referral bonuses',    body: 'Refer a friend and you both get rewarded.' },
     { title: 'Custom rules',        body: 'Design your own loyalty program.' },
   ];
 
@@ -76,7 +78,7 @@ function RewardsLanding({ onLaunch }) {
       <div className="card" style={{ padding: 24, marginBottom: 18 }}>
         <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Why reward programs work</h3>
         <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Loyalty isn't about giveaways - it's about making your best clients feel seen. The data agrees:
+          Loyalty isn't about giveaways. It's about making your best clients feel seen.
         </p>
         <div className="grid-auto-sm">
           {WHY_STATS.map((s, i) => <StatTile key={i} {...s}/>)}
@@ -117,7 +119,7 @@ function RewardsLanding({ onLaunch }) {
   );
 }
 
-function StatTile({ value, body, src, tone, icon }) {
+function StatTile({ title, body, tone, icon }) {
   const fg = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--warn)' : 'var(--accent)';
   return (
     <div style={{
@@ -125,9 +127,8 @@ function StatTile({ value, body, src, tone, icon }) {
       display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'center', alignItems: 'center',
     }}>
       <div style={{ color: fg }}>{icon}</div>
-      <div className="metric-value" style={{ fontSize: 30, color: fg }}>{value}</div>
-      <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45 }}>{body}</div>
-      <div style={{ fontSize: 10, color: 'var(--muted-2)' }}>- {src}</div>
+      <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--fg)' }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45 }}>{body}</div>
     </div>
   );
 }
