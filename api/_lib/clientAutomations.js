@@ -20,8 +20,8 @@
 //             Once per completed visit; never when the client has
 //             something booked or a pending request, already got a rebook
 //             link in the last 7 days (the owner's button, Ivy, this
-//             automation, the "we'd love to see you again" message or a
-//             review request, which carries a book-again button), was a
+//             automation or the "we'd love to see you again" message; a
+//             review request does not count), was a
 //             no-show or cancelled, booked a group class (capacity > 1),
 //             or is blocked. The message is Ivy's fixed one, so there is no
 //             template: turning it on approves it.
@@ -402,12 +402,12 @@ export async function dueRebookVisits(ws, { mode = 'due', since = null, limit = 
                                   OR (fb.recurrence_rule IS NOT NULL
                                       AND (fb.recurrence_until IS NULL OR fb.recurrence_until >= ws.local_today))))
           -- any rebook link in the last ${REBOOK_GAP_DAYS} days: the owner's button or Ivy
-          -- (rebook_link_sent_at), this automation or the check-in (ledger),
-          -- a review request (it carries a book-again button)
+          -- (rebook_link_sent_at), this automation or the check-in (ledger).
+          -- A review request does not count: the owner turned this on so
+          -- the client gets the book-again email itself (Kayla, 1.0.6).
           AND NOT EXISTS (SELECT 1 FROM bookings rb
                            WHERE rb.workspace_id = c.workspace_id AND rb.client_id = c.id
-                             AND (rb.rebook_link_sent_at > NOW() - INTERVAL '${REBOOK_GAP_DAYS} days'
-                                  OR rb.review_requested_at > NOW() - INTERVAL '${REBOOK_GAP_DAYS} days'))
+                             AND rb.rebook_link_sent_at > NOW() - INTERVAL '${REBOOK_GAP_DAYS} days')
           AND NOT EXISTS (SELECT 1 FROM client_automation_sends y
                            WHERE y.workspace_id = c.workspace_id AND y.client_id = c.id
                              AND y.kind IN ('rebook', 'quiet')

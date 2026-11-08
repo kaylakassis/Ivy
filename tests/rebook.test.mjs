@@ -210,7 +210,14 @@ async function main() {
   // ── [3] opt-outs and consent ──────────────────────────────────────────
   console.log('\n[3] opt-outs');
   emails.length = 0; texts.length = 0;
+  // Texts respect quiet hours (8am to 9pm in the business's zone). Run this
+  // part in a zone where it is the middle of the day right now, so the test
+  // passes whatever time it runs, then go back to UTC.
+  const dayZone = ['UTC', 'America/New_York', 'America/Los_Angeles', 'Pacific/Honolulu', 'Asia/Tokyo', 'Asia/Kolkata', 'Europe/Berlin', 'Australia/Sydney']
+    .find((z) => { const h = Number(new Intl.DateTimeFormat('en-US', { timeZone: z, hour: 'numeric', hourCycle: 'h23' }).format(new Date())); return h >= 10 && h <= 18; });
+  await sql`UPDATE calendar_settings SET timezone = ${dayZone} WHERE workspace_id = ${A.workspaceId}`;
   const out1 = await sendRebookLink({ workspaceId: A.workspaceId, clientId: maya, serviceId: A.svc });
+  await sql`UPDATE calendar_settings SET timezone = 'UTC' WHERE workspace_id = ${A.workspaceId}`;
   assert(out1.ok && out1.emailed && out1.texted, 'Maya (email + SMS consent): emailed and texted');
   assert(mailsTo(`rebook-maya-${S}@example.com`).length === 1 && /Ready for your next Haircut/.test(emails[0].subject), 'the email: "Ready for your next Haircut?"');
   assert(/Your usual: every 3 weeks on Fridays/.test(emails[0].html) && emails[0].html.includes(`/book/${A.slug}?rebook=`), 'with her usual rhythm and the signed link');
@@ -304,7 +311,9 @@ async function main() {
   assert(rebookMails().length === 0 && (await one(sql`SELECT COUNT(*)::int AS n FROM ivy_pending_actions WHERE workspace_id = ${A.workspaceId}`)).n === n0 + 1, 'nothing sent before approval');
   assert(ledgerEntry('send_rebook_link', { client_id: maya }, held)?.status === 'waiting', 'ledger: waiting');
   const row = await one(sql`SELECT id, session_id, tool, args, summary FROM ivy_pending_actions WHERE id = ${held.pending_id}`);
+  await sql`UPDATE calendar_settings SET timezone = ${dayZone} WHERE workspace_id = ${A.workspaceId}`; // texting hours, as in [3]
   const done = await executePendingAction({ row, workspaceId: A.workspaceId, userId: A.userId });
+  await sql`UPDATE calendar_settings SET timezone = 'UTC' WHERE workspace_id = ${A.workspaceId}`;
   assert(done.claimed && !done.result.error && done.result.emailed && rebookMails().length === 1, 'approved: the email went out once');
   assert(/^Done\. Emailed and texted Maya Rivera a rebook link for Haircut, opening on Friday/.test(done.text), `done line: ${done.text}`);
   const again = await executePendingAction({ row, workspaceId: A.workspaceId, userId: A.userId });

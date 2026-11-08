@@ -200,8 +200,9 @@ async function main() {
   const due = await dueRebookVisits(wsA, { mode: 'due', since: wsA.enabled_at });
   const dueIds = due.map((r) => r.client_id);
   assert(dueIds.includes(ana.id) && dueIds.includes(ivo.id) && dueIds.includes(mo.id) && dueIds.includes(fay.id), 'due: Ana, Mo, the opted-out client (checked at send), the failing address');
-  const notDue = { ben: 'a later booking', cal: 'a pending request', dee: 'a no-show', eve: 'a cancellation', fin: 'a rebook link 2 days ago', gus: 'a group class', hal: 'blocked', jo: 'a visit before it went on', kim: 'a repeating series', lu: 'a review request (it has a book-again button)' };
-  const people = { ben, cal, dee, eve, fin, gus, hal, jo, kim, lu };
+  assert(dueIds.includes(lu.id), 'due: a client who just got a review request (the owner turned this on, so they get the book-again email too)');
+  const notDue = { ben: 'a later booking', cal: 'a pending request', dee: 'a no-show', eve: 'a cancellation', fin: 'a rebook link 2 days ago', gus: 'a group class', hal: 'blocked', jo: 'a visit before it went on', kim: 'a repeating series' };
+  const people = { ben, cal, dee, eve, fin, gus, hal, jo, kim };
   for (const [k, why] of Object.entries(notDue)) assert(!dueIds.includes(people[k].id), `not due: ${why}`);
   assert(dueIds.filter((x) => x === pia.id).length === 1, 'two visits close together: one row for the client');
   assert(due.find((r) => r.client_id === ana.id)?.period_key === `${anaV.id}:${anaV.day}`, 'the ledger key is the visit (booking and day)');
