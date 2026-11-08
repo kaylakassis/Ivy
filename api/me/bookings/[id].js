@@ -409,7 +409,7 @@ async function sessionStarted(booking) {
 async function postRescheduleNote({ workspaceId, clientId, booking, newDate, newStart, newEnd }) {
   try {
     const oldDate = booking.date instanceof Date ? booking.date.toISOString().slice(0, 10) : booking.date;
-    const note = `📅 Client moved the booking from ${oldDate} ${fmtTime(booking.start_min)} to ${newDate} ${fmtTime(newStart)} to ${fmtTime(newEnd)}.`;
+    const note = `📅 Client moved the booking from ${oldDate} ${fmtTime(booking.start_min)} to ${newDate}, ${fmtTime(newStart)} until ${fmtTime(newEnd)}.`;
     const tIns = await sql`
       INSERT INTO message_threads (workspace_id, client_id)
       VALUES (${workspaceId}, ${clientId})
