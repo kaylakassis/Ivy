@@ -761,8 +761,8 @@ function MyListing({ entry, meta, onBack }) {
           </div>
 
           <form onSubmit={save} className="card" style={{ padding: 18, display: 'grid', gap: 14 }}>
-            <div style={sectionTitle}>My listing</div>
-            <WhatIsShared shared={meta.shared} neverShared={meta.neverShared}/>
+            <div style={{ ...sectionTitle, margin: 0 }}>My listing</div>
+            <WhatIsShared shared={meta.shared} neverShared={meta.neverShared} flush/>
             <label><span style={lbl}>Title</span><input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} maxLength={60} placeholder="Barber, Color specialist, Massage therapist"/></label>
             <label><span style={lbl}>Short bio</span><textarea className="input" rows={3} value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} maxLength={600} placeholder="A couple of lines about you and what you do best."/><div style={hint}>Leave empty to show your booking page tagline.</div></label>
             <div>

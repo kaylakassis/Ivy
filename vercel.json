@@ -188,45 +188,25 @@
   "redirects": [
     {
       "source": "/compare",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/features",
       "permanent": true
     },
     {
       "source": "/vs/:slug",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/features",
       "permanent": true
     },
     {
       "source": "/tools",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/features",
       "permanent": true
     },
     {
       "source": "/tools/:slug",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/features",
       "permanent": true
     }
@@ -270,122 +250,62 @@
     },
     {
       "source": "/pricing",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/pricing.html"
     },
     {
       "source": "/tour",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/tour.html"
     },
     {
       "source": "/features",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/features.html"
     },
     {
       "source": "/about",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/about.html"
     },
     {
       "source": "/support",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/support.html"
     },
     {
       "source": "/security",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/security.html"
     },
     {
       "source": "/mobile",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/mobile.html"
     },
     {
       "source": "/integrations",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/integrations.html"
     },
     {
       "source": "/privacy",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/privacy.html"
     },
     {
       "source": "/terms",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/terms.html"
     },
     {
       "source": "/do-not-sell",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/do-not-sell.html"
     },
     {
       "source": "/for/:slug",
-      "has": [
-        {
-          "type": "host",
-          "value": "www.joinivy.ai"
-        }
-      ],
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/for/:slug.html"
     },
     {

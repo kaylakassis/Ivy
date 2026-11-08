@@ -12,9 +12,9 @@ import { useAuth } from '../../lib/auth.jsx';
 const h1 = { fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500, letterSpacing: '-0.02em', margin: '0 0 8px' };
 const p = { fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55, margin: 0 };
 
-export function WhatIsShared({ shared, neverShared }) {
+export function WhatIsShared({ shared, neverShared, flush = false }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: 14 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginTop: flush ? 0 : 14 }}>
       <div style={{ padding: 12, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
         <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ok)', marginBottom: 6 }}>Shown on the page</div>
         <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13, lineHeight: 1.6, color: 'var(--fg-2)' }}>
