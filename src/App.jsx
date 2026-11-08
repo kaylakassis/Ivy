@@ -19,6 +19,7 @@ import ViewToggle from './components/ViewToggle.jsx';
 import PWAPrompts from './components/PWAPrompts.jsx';
 import NativeAppLock from './components/NativeAppLock.jsx';
 import LaunchVeil from './lib/launchVeil.jsx';
+import NativeUrlOpens from './components/NativeUrlOpens.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
 import RootRouter, { MarketingHome } from './features/marketing/RootRouter.jsx';
@@ -529,6 +530,8 @@ export default function App() {
     <ViewToggle/>
     {isNative() && <NativeAppLock/>}
     {isNative() && <LaunchVeil/>}
+    {/* Quick actions and ivy:// links from iOS → in-app routes. */}
+    {isNative() && <NativeUrlOpens/>}
     {/* "Add Ivy to your home screen" prompts are for Safari visitors. In the
         native app the user is already there, so never mount them. */}
     {!isNative() && <PWAPrompts/>}

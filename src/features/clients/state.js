@@ -10,6 +10,7 @@
 // 1000): iPhone 1.0.5 and the client pickers use it.
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
+import { hapticTap } from '../../lib/haptics.js';
 
 const PAGE = 50;
 
@@ -102,6 +103,7 @@ export function useClients({ tab = 'all', query = '', analyticsWindow = 30, lead
   // null on an older API) rides along on the returned object so
   // the page can say whether the portal invite really went out.
   const create = useCallback(async (input) => {
+    hapticTap();
     const r = await api.post('/clients', input);
     setClients((cs) => [r.client, ...cs]);
     setTotal((n) => (n == null ? n : n + 1));

@@ -18,6 +18,7 @@ import { stagger, useFreshKeys, GrowIn } from '../../components/motion/stagger.j
 import { useFolders } from './folders.js';
 import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 
 const DAY = 86400e3;
 
@@ -43,6 +44,7 @@ export default function Clients() {
   // cards are the server's numbers over the whole book.
   const { clients, summary, total, loading, listLoading, create, update, remove, refresh,
           hasMore, loadMore, loadingMore } = useClients({ tab, query, analyticsWindow, leadWindow });
+  usePullRefresh(refresh);
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);

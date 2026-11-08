@@ -5365,4 +5365,9 @@ CREATE OR REPLACE VIEW workspace_revenue AS
                + CASE WHEN fee_charged_at IS NOT NULL THEN fee_charged_amount ELSE 0 END) AS amt
         FROM bookings GROUP BY workspace_id
     ) bk ON bk.workspace_id = w.id;
+
+-- 1.0.6 iPhone polish: when this user was last shown Apple's App Store
+-- rating window from the app (src/lib/ratingPrompt.js), so a reinstall does
+-- not ask again sooner than 120 days. Additive.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_prompted_at TIMESTAMPTZ;
 `;

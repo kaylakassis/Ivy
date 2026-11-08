@@ -2,7 +2,8 @@
 // GET on mount; mutations call dedicated endpoints and refresh local state.
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { haptic } from '../../lib/celebrate.js';
+import { haptic, hapticTap } from '../../lib/haptics.js';
+import { useRatingWin } from '../../lib/ratingPrompt.js';
 
 export const EMPTY_CAL = {
   settings: {
@@ -151,11 +152,14 @@ export function useCalendar(window) {
     setCal((c) => ({ ...c, bookings: c.bookings.map((b) => b.id === booking.id ? booking : b) }));
   }, []);
 
+  const ratingWin = useRatingWin();
   const completeBooking = useCallback(async (id, occurrenceDate, body) => {
+    hapticTap();
     const r = await api.post('/calendar/bookings/complete', { id, occurrenceDate, ...body });
     setCal((c) => ({ ...c, bookings: c.bookings.map((b) => b.id === id ? r.booking : b) }));
+    ratingWin('booking_completed'); // 10th completed booking may ask for a rating
     return r.booking;
-  }, []);
+  }, [ratingWin]);
 
   const editCompletion = useCallback(async (id, occurrenceDate, body) => {
     const r = await api.patch('/calendar/bookings/complete', { id, occurrenceDate, ...body });

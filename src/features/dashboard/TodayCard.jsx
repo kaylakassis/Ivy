@@ -6,6 +6,8 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { hapticTap } from '../../lib/haptics.js';
+import { useRatingWin } from '../../lib/ratingPrompt.js';
 import { fmtMoney, fmtTime } from './format.js';
 
 function nowMinutes() {
@@ -40,12 +42,15 @@ export default function TodayCard({ today = [], money, currency, onChanged }) {
   const m = nowMinutes();
   const live = next && next.startMin <= m && next.endMin > m;
 
+  const ratingWin = useRatingWin();
   const complete = async (b, on) => {
     setBusy(b.id); setErr(null);
     setDone((d) => ({ ...d, [b.id]: on }));
+    if (on) hapticTap();
     try {
       if (on) await api.post('/calendar/bookings/complete', { id: b.id, occurrenceDate: b.date });
       else await api.del('/calendar/bookings/complete', { id: b.id, occurrenceDate: b.date });
+      if (on) ratingWin('booking_completed'); // 10th completed booking may ask for a rating
       onChanged?.();
     } catch (e) {
       setDone((d) => ({ ...d, [b.id]: !on }));

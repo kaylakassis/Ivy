@@ -6,12 +6,15 @@ import React, { useMemo, useState, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
-import { fireConfetti, haptic } from '../../lib/celebrate.js';
+import { fireConfetti } from '../../lib/celebrate.js';
+import { hapticSuccess } from '../../lib/haptics.js';
+import { useRatingWin } from '../../lib/ratingPrompt.js';
 import { useProducts } from './posState.js';
 
 const money = (n) => '$' + Number(n || 0).toFixed(2);
 
 export default function PointOfSale() {
+  const ratingWin = useRatingWin();
   const { products, loading, recordSale, today } = useProducts();
   const [cart, setCart] = useState([]); // [{ key, productId?, name, rate, qty, stockQty?, trackStock? }]
   const [clientName, setClientName]   = useState('');
@@ -74,7 +77,7 @@ export default function PointOfSale() {
       setResult(r.paid
         ? { paid: true, receiptEmailed: !!r.receiptEmailed }
         : { payUrl: r.payUrl });
-      if (r.paid) { fireConfetti(); haptic(); } // money in the door — mark the moment
+      if (r.paid) { fireConfetti(); hapticSuccess(); ratingWin('invoice_paid'); } // money in the door — mark the moment
       setCart([]); setClientName(''); setClientEmail('');
       saleKeyRef.current = null; // success - next sale gets a fresh key
     } catch (e) {

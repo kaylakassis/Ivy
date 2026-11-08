@@ -234,6 +234,7 @@ function ThreadRow({ thread, active, onClick, index }) {
 
 function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBack }) {
   const { thread, messages, loading, error, send, refresh } = useThread(threadId);
+  usePullRefresh(refresh);
   // Bubbles that arrive after the thread first rendered (just sent, or a
   // reply that polling brought in) grow in; the baseline resets per thread.
   const freshMsgIds = useFreshKeys((messages || []).map((m) => m.id), { ready: !loading && !!thread, resetKey: threadId });
