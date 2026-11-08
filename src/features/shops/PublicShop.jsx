@@ -231,6 +231,12 @@ function ShopBody({ data, now, navigate }) {
   const mapHref = shop.addressLabel ? mapsUrl(shop.addressLabel) : null;
   const tel = telHref(shop.phone);
   const soonestAll = useMemo(() => nextAcrossShop(members, now), [members, now]);
+  const todayWeekday = useMemo(() => {
+    try {
+      const wd = new Intl.DateTimeFormat('en-US', { weekday: 'short', ...(shop.timezone ? { timeZone: shop.timezone } : {}) }).format(now);
+      return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd);
+    } catch { return now.getDay(); }
+  }, [shop.timezone, now]);
   const allReviews = useMemo(() => members
     .flatMap((m) => (m.reviews?.recent || []).map((r) => ({ ...r, who: m.firstName || m.businessName })))
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 12), [members]);
@@ -437,6 +443,45 @@ function ShopBody({ data, now, navigate }) {
         <section className="pb-card" aria-labelledby="sh-about-h">
           <h2 className="pb-h2" id="sh-about-h">About {shop.name}</h2>
           <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.6, color: 'var(--fg-2)', whiteSpace: 'pre-line' }}>{shop.description}</p>
+        </section>
+      )}
+
+      {(shop.addressLabel || (shop.lat != null && shop.lng != null) || Object.values(shop.hours || {}).some((l) => Array.isArray(l) && l.length)) && (
+        <section id="visit" className="pb-card" aria-labelledby="sh-visit-h" style={{ scrollMarginTop: 12 }}>
+          <h2 className="pb-h2" id="sh-visit-h">Visit</h2>
+          <div className="sh-visit">
+            {shop.lat != null && shop.lng != null && (
+              <div className="sh-map">
+                <iframe title={`Map of ${shop.name}`} loading="lazy"
+                  src={`https://www.openstreetmap.org/export/embed.html?bbox=${[shop.lng - 0.006, shop.lat - 0.004, shop.lng + 0.006, shop.lat + 0.004].join(',')}&layer=mapnik&marker=${shop.lat},${shop.lng}`}/>
+              </div>
+            )}
+            <div className="sh-visit-info">
+              {shop.addressLabel && (
+                <div>
+                  <div className="sh-visit-label">Address</div>
+                  <div>{shop.addressLabel}</div>
+                  {mapHref && <a className="pb-link-btn" href={mapHref} target="_blank" rel="noopener noreferrer">Get directions</a>}
+                </div>
+              )}
+              {Object.values(shop.hours || {}).some((l) => Array.isArray(l) && l.length) && (
+                <div>
+                  <div className="sh-visit-label">Hours</div>
+                  <ul className="sh-hours">
+                    {hoursLines(shop.hours).map((l) => (
+                      <li key={l.day} className={l.weekday === todayWeekday ? 'today' : ''}><span>{l.day}</span><span>{l.text}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {tel && (
+                <div>
+                  <div className="sh-visit-label">Phone</div>
+                  <a className="pb-link-btn" href={tel}>{shop.phone}</a>
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       )}
 
