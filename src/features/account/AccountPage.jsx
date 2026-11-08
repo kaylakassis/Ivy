@@ -912,9 +912,12 @@ function NotificationPrefs({ emailOnly = false }) {
         if (cancelled) return;
         setPushPrefs(r.pushPrefs || r.prefs || {});
         setEmailPrefs(r.emailPrefs || {});
-        setPushTypes(r.pushTypes || r.types || []);
+        // 'shops' is left out of the server lists (1.0.5 has no label for it);
+        // this app draws it whenever the server knows the setting.
+        const withShops = (list, prefs) => (prefs && 'shops' in prefs && !list.includes('shops') ? [...list, 'shops'] : list);
+        setPushTypes(withShops(r.pushTypes || r.types || [], r.pushPrefs || r.prefs));
         // 'programs' emails go to clients (their own per-business switch), never to owners.
-        setEmailTypes((r.emailTypes || []).filter((t) => t !== 'programs'));
+        setEmailTypes(withShops((r.emailTypes || []).filter((t) => t !== 'programs'), r.emailPrefs));
       })
       .catch((e) => { if (!cancelled) setErr(e.message); });
     return () => { cancelled = true; };

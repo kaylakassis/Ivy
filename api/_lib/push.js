@@ -50,7 +50,9 @@ export function publicVapidKey() {
 // apps draw one generic row per listed type, and the partner's row needs
 // its own label and a turn-off warning, which only the new app has.
 export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement', 'client_optouts', 'accountability', 'shops'];
-export const LISTED_PUSH_TYPES = NOTIFY_TYPES.filter((t) => t !== 'accountability');
+// 'accountability' and 'shops' are drawn by the 1.0.6+ app itself; 1.0.5 has no
+// label for them, so they stay out of the list it renders.
+export const LISTED_PUSH_TYPES = NOTIFY_TYPES.filter((t) => t !== 'accountability' && t !== 'shops');
 
 // 'ok' when the user can be pushed `type`, 'muted' when they opted out
 // of it, 'gone' when the account was deleted (its device rows may still

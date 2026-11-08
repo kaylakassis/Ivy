@@ -38,7 +38,7 @@ export const EMAIL_NOTIFY_TYPES = [
 ];
 // Types the owner manages somewhere other than the generic email list
 // (the partner's email switch sits under its own row in Notifications).
-export const UNLISTED_EMAIL_TYPES = ['accountability'];
+export const UNLISTED_EMAIL_TYPES = ['accountability', 'shops'];
 
 // Owner-only categories never go to clients, so the client portal does
 // not offer a switch for them. 'programs' is the mirror image (client-only)
