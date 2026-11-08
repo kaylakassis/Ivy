@@ -42,7 +42,7 @@ export const SAMPLE_BRANDING = {
   businessName: 'Market Theory Studio',
   accentColor:  '#5CC98E',
   logoUrl:      null,
-  emailSignature: '— The Market Theory Team',
+  emailSignature: 'The Market Theory Team',
   replyTo:      'hello@example.com',
 };
 
@@ -63,7 +63,7 @@ export function renderVerifyEmail({ firstName: fnRaw, link }) {
         <p style="color:#93A3A0;font-size:12.5px;">This link expires in 24 hours. If you didn't sign up for Ivy, you can ignore this email.</p>`,
       ctaText: 'Verify my email',
       ctaUrl: url,
-      footer: `Trouble with the button? Paste this link into your browser. — The Ivy Team`,
+      footer: `Trouble with the button? Paste this link into your browser.<br/>The Ivy Team`,
     }),
   };
 }
@@ -78,10 +78,10 @@ export function renderPasswordReset({ firstName: fnRaw, link }) {
       preheader: 'Tap the button to choose a new password.',
       body: `<p>Hi ${fn},</p>
         <p>Someone (hopefully you) requested a password reset on your Ivy account. Tap the button to choose a new password.</p>
-        <p style="color:#93A3A0;font-size:12.5px;">This link expires in 1 hour. If you didn't request a reset, you can safely ignore this email — your password stays the same.</p>`,
+        <p style="color:#93A3A0;font-size:12.5px;">This link expires in 1 hour. If you didn't request a reset, you can safely ignore this email. Your password stays the same.</p>`,
       ctaText: 'Reset my password',
       ctaUrl: url,
-      footer: `For your security, links can only be used once. — The Ivy Team`,
+      footer: `For your security, links can only be used once.<br/>The Ivy Team`,
     }),
   };
 }
@@ -95,7 +95,7 @@ export function renderAccountDeletionRequest({ firstName: fnRaw, finalDeleteDate
     subject: 'Your Ivy account deletion request',
     html: emailShell({
       heading: 'Your account deletion request',
-      preheader: `Here's what happens — and how to cancel.`,
+      preheader: `Here's what happens, and how to cancel.`,
       body: `<p>Hi ${fn},</p>
         <p>We've received your request to delete your Ivy account. Here's what happens next:</p>
         <ul style="padding-left:20px;margin:14px 0;">
@@ -103,11 +103,11 @@ export function renderAccountDeletionRequest({ firstName: fnRaw, finalDeleteDate
           <li>Until then, it's deactivated but <strong>recoverable</strong></li>
           <li>After that date, your data is permanently erased and can't be restored</li>
         </ul>
-        <p><strong>Changed your mind?</strong> One-click restore using the button below — works any time before ${escapeHtml(date)}.</p>
+        <p><strong>Changed your mind?</strong> One-click restore using the button below: it works any time before ${escapeHtml(date)}.</p>
         <p>(Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>`,
       ctaText: 'Keep my account →',
       ctaUrl: url,
-      footer: `Thanks for trying Ivy. Questions? <a href="mailto:${escapeHtml(supportEmail)}" style="color:#5CC98E;text-decoration:underline;">${escapeHtml(supportEmail)}</a>. — The Ivy Team`,
+      footer: `Thanks for trying Ivy. Questions? <a href="mailto:${escapeHtml(supportEmail)}" style="color:#5CC98E;text-decoration:underline;">${escapeHtml(supportEmail)}</a>.<br/>The Ivy Team`,
     }),
   };
 }
@@ -120,9 +120,9 @@ export function renderAccountRestored({ firstName: fnRaw }) {
       heading: 'Welcome back',
       preheader: `Your account and data are right where you left them.`,
       body: `<p>Hi ${fn},</p>
-        <p>Your Ivy account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them — nothing was lost during the recovery window.</p>
+        <p>Your Ivy account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them. Nothing was lost during the recovery window.</p>
         <p>If you didn't restore your account, change your password right away.</p>`,
-      footer: `Glad you're back. — The Ivy Team`,
+      footer: `Glad you're back.<br/>The Ivy Team`,
     }),
   };
 }
@@ -132,12 +132,12 @@ export function renderDataExportReady({ firstName: fnRaw, filename, sizeMb, atta
   const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
   const body = !attached
     ? `<p>Hi ${fn},</p>
-       <p>Your data export for your Ivy account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb || '24.5'} MB</strong>), so we couldn't attach it here.</p>
+       <p>Your data export for your Ivy account is ready, but it turned out to be a bit large to email safely (about <strong>${sizeMb || '24.5'} MB</strong>), so we couldn't attach it here.</p>
        <p>You can download the complete file any time from <strong>Account → Your data → Download my data</strong>. It includes your clients, bookings, financials, and account records.</p>
        <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#5CC98E;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`
     : `<p>Hi ${fn},</p>
        <p>Your data export for your Ivy account is ready. It's attached to this email as <strong>${escapeHtml(filename || 'ivy-export-2026-06-22.json')}</strong> (${sizeMb || '3.2'} MB of JSON) and includes your clients, bookings, financials, and account records.</p>
-       <p>For your security, keep this file somewhere safe — it's a complete copy of your data.</p>
+       <p>For your security, keep this file somewhere safe. It's a complete copy of your data.</p>
        <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#5CC98E;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`;
   return {
     subject: 'Your Ivy data export is ready',
@@ -145,7 +145,7 @@ export function renderDataExportReady({ firstName: fnRaw, filename, sizeMb, atta
       heading: 'Your data export is ready',
       preheader: attached === false ? 'Download instructions inside.' : 'Download attached.',
       body,
-      footer: `Requested from your account on ${new Date().toUTCString()}. — The Ivy Team`,
+      footer: `Requested from your account on ${new Date().toUTCString()}.<br/>The Ivy Team`,
     }),
   };
 }
@@ -169,8 +169,8 @@ function renderAdminInvite({ kind, firstName: fnRaw, name }) {
     sponsored: `<p>${greet}</p>
       <p>You've been given full access to Ivy - no subscription needed. Treat it like the paid version: the calendar, clients, invoicing, AI assistant, all of it. Set your password below and you're in.</p>`,
     beta: `<p>${greet}</p>
-      <p>You've been invited to the <strong>Ivy beta</strong> — early access to the full app with no subscription and no card needed. You get the same toolset paying customers do (clients, calendar, invoicing, documents, messaging, Ivy your AI assistant, the whole thing), free for the duration of the beta.</p>
-      <p>In return, we'd love your honest feedback as you use it — what works, what's broken, what's missing. Just reply to any Ivy email and it reaches a real person.</p>
+      <p>You've been invited to the <strong>Ivy beta</strong>: early access to the full app with no subscription and no card needed. You get the same toolset paying customers do (clients, calendar, invoicing, documents, messaging, Ivy your AI assistant, the whole thing), free for the duration of the beta.</p>
+      <p>In return, we'd love your honest feedback as you use it: what works, what's broken, what's missing. Just reply to any Ivy email and it reaches a real person.</p>
       <p>Set your password below to get started.</p>`,
     affiliate: `<p>${greet}</p>
       <p>Welcome to the Ivy affiliate program. You've got a referral code that earns you credit on every business that signs up through it. Set your password and the code will be waiting for you in your account.</p>`,
@@ -269,7 +269,7 @@ export function renderBookingCancellationClient({
         <p>Want to rebook? You can pick a new time from their booking page any time.</p>`,
       ctaText: 'Rebook',
       ctaUrl: `${appUrl()}/me`,
-      footer: `Questions? Just reply — this email goes straight to ${biz}.`,
+      footer: `Questions? Just reply. This email goes straight to ${biz}.`,
       branding: branding || SAMPLE_BRANDING,
     }),
   };
@@ -304,7 +304,7 @@ export function renderInvoiceSent({
         <p>You can pay it in a couple of taps using the button below.</p>`,
       ctaText: 'View & pay invoice',
       ctaUrl: viewUrl || `${appUrl()}/invoice/PREVIEW_TOKEN_xxxxxxxx`,
-      footer: `Questions? Just reply — this email goes straight to ${biz}.`,
+      footer: `Questions? Just reply. This email goes straight to ${biz}.`,
       branding: branding || SAMPLE_BRANDING,
     }),
   };
@@ -417,7 +417,7 @@ export function renderReviewRequest({ clientName, businessName, serviceName, bra
         <p style="text-align:center;margin:8px 0 0;">
           <a href="${appUrl()}/book/preview?rebook=PREVIEW_TOKEN_xxxxxxxx" style="display:inline-block;padding:9px 16px;border:1px solid #4E63C7;border-radius:10px;color:#4E63C7;font-weight:600;text-decoration:none;font-size:14px;">Book your next ${svc}</a>
         </p>`,
-      footer: `Reply if you'd rather share feedback privately. — ${biz}`,
+      footer: `Reply if you'd rather share feedback privately.<br/>${biz}`,
       branding: branding || SAMPLE_BRANDING,
     }),
   };
@@ -435,7 +435,7 @@ export function renderAdminDeliverabilityTest() {
       body: `<p>This is a deliverability test from Ivy at <strong>${new Date().toUTCString()}</strong>.</p>
         <p>If you're reading this in your inbox (not Spam), your Resend domain is configured correctly: SPF, DKIM, and DMARC are passing and the From address is verified.</p>
         <p>If this landed in Spam, check Resend → Domains and make sure every DNS record is green.</p>`,
-      footer: `Sent from the admin Settings card. — Ivy`,
+      footer: `Sent from the admin Settings card.<br/>Ivy`,
     }),
   };
 }

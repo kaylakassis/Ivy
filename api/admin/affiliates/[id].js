@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       const before = r.rows[0];
       if ('code' in body) {
         const c = String(body.code || '').trim().toUpperCase();
-        if (!CODE_RE.test(c)) return badRequest(res, 'Code must be 3–40 chars; A–Z, 0–9, _ or -.');
+        if (!CODE_RE.test(c)) return badRequest(res, 'Code must be 3 to 40 characters: letters A to Z, digits 0 to 9, _ or -.');
         const dup = await sql`SELECT 1 FROM affiliates WHERE code = ${c} AND id <> ${id}`;
         if (dup.rows.length > 0) return badRequest(res, 'Code already in use.');
         await sql`UPDATE affiliates SET code = ${c}, updated_at = NOW() WHERE id = ${id}`;

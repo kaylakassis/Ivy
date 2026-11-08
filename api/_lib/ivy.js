@@ -561,9 +561,9 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   // customers to mock replies. Only free/trialing workspaces get throttled
   // when the platform-wide cap is hit. (The await only runs when capped.)
   if (globalCap.capped && !(workspaceId && await isPaidWorkspace(workspaceId))) {
-    console.error('[ivy] GLOBAL daily cap reached — pausing live replies', globalCap);
+    console.error('[ivy] GLOBAL daily cap reached, pausing live replies', globalCap);
     return {
-      text: sanitizeIvyReply("Ivy is at capacity for today across Ivy and is taking a short breather. Live answers are back tomorrow — in the meantime, your dashboard has your latest numbers."),
+      text: sanitizeIvyReply("Ivy is at capacity for today across Ivy and is taking a short breather. Live answers are back tomorrow. In the meantime, your dashboard has your latest numbers."),
       mode: 'mock',
       error: 'global-cap',
     };
@@ -1781,7 +1781,7 @@ function mockReply(text, ctx, attachment) {
     return `Retention is about rhythm. Of your ${ctx.activeClients} active client${ctx.activeClients === 1 ? '' : 's'}, ${ctx.quietClients} have had no booking or message in 3+ weeks. Want a draft of a light check-in to send them?`;
   }
   if (t.includes('pricing') || t.includes('rates') || t.includes('raise')) {
-    return `A simple rule: raise rates when you're >70% booked for 4 weeks straight. You have ${ctx.upcomingSessions} session${ctx.upcomingSessions === 1 ? '' : 's'} on the books in the next 7 days. If your calendar's been steadily full, that's a green light. Want me to walk through a 10–15% increase plan?`;
+    return `A simple rule: raise rates when you're >70% booked for 4 weeks straight. You have ${ctx.upcomingSessions} session${ctx.upcomingSessions === 1 ? '' : 's'} on the books in the next 7 days. If your calendar's been steadily full, that's a green light. Want me to walk through a 10 to 15% increase plan?`;
   }
   if (t.includes('lead') || t.includes('acquisition') || t.includes('grow')) {
     return `Three high-leverage moves this week:\n\n1. Post a short case study of a client win on socials.\n2. Email your 10 most engaged past clients asking for a referral.\n3. Sharpen the CTA on your homepage - one offer, one button.\n\nWant me to draft any of these?`;

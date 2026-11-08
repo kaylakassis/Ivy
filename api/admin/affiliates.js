@@ -110,7 +110,7 @@ async function createAffiliate(req, res) {
 
   const code = codeRaw && CODE_RE.test(codeRaw) ? codeRaw : await uniqueCode();
   if (codeRaw && !CODE_RE.test(codeRaw)) {
-    return badRequest(res, 'Code must be 3–40 chars; A–Z, 0–9, _ or -.');
+    return badRequest(res, 'Code must be 3 to 40 characters: letters A to Z, digits 0 to 9, _ or -.');
   }
 
   const ins = await sql`

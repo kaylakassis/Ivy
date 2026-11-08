@@ -178,9 +178,9 @@ async function sendRestoreConfirmation({ email, name }) {
         heading: 'Welcome back',
         preheader: `Your account and data are right where you left them.`,
         body: `<p>Hi ${escapeHtml(fn)},</p>
-          <p>Your Ivy account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them — nothing was lost during the recovery window.</p>
+          <p>Your Ivy account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them. Nothing was lost during the recovery window.</p>
           <p>If you didn't restore your account, change your password right away.</p>`,
-        footer: `Glad you're back. — The Ivy Team`,
+        footer: `Glad you're back.<br/>The Ivy Team`,
       }),
     });
   } catch (err) {

@@ -122,13 +122,13 @@ async function notifyAdminOfBug({ id, severity, title, body, url, reporterEmail,
 
   const html = emailShell({
     heading: `New bug report: ${title}`,
-    preheader: `${sevLabel} severity — from ${reporterEmail || 'an Ivy user'}.`,
+    preheader: `${sevLabel} severity, from ${reporterEmail || 'an Ivy user'}.`,
     body: `<p>A new bug report just came in.</p>
       ${body ? `<blockquote style="margin:14px 0;padding:12px 16px;border-left:3px solid #5CC98E;background:#0B4136;border-radius:6px;font-size:14px;line-height:1.55;color:#ECF0F1;white-space:pre-wrap;">${escapeHtml(body)}</blockquote>` : '<p style="color:#93A3A0;">(no description provided)</p>'}
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 6px;font-size:13px;line-height:1.7;">${detailRows}</table>`,
     ctaText: 'Open in admin',
     ctaUrl: `${appUrl()}/admin?tab=bugs`,
-    footer: `You're getting this because your email is on SUPER_ADMIN_EMAIL or your account is user_type='super_admin'. — Ivy`,
+    footer: `You're getting this because your email is on SUPER_ADMIN_EMAIL or your account is user_type='super_admin'.<br/>Ivy`,
   });
   await sendEmail({
     to,

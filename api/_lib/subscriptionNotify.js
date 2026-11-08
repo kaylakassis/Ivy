@@ -76,11 +76,11 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
 
   let subject, preheader, heading, body, ctaText;
   if (stage === '7d') {
-    subject = `You've got 7 days left — here's what you've built, ${fnPlain}`;
+    subject = `You've got 7 days left: here's what you've built, ${fnPlain}`;
     preheader = `Keep your clients, data, and Ivy before your trial ends.`;
     heading = 'You\'ve got 7 days left';
     body = `<p>Hi ${fn},</p>
-      <p>You're one week out from the end of your Ivy trial — and you've already set up the kind of system most owners overpay for and scatter across multiple disconnected tools.</p>
+      <p>You're one week out from the end of your Ivy trial, and you've already set up the kind of system most owners overpay for and scatter across multiple disconnected tools.</p>
       <p>Right now, inside <strong>${biz}</strong>, you have:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Your client list, pipeline, and history in one place</li>
@@ -88,7 +88,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
         <li>Ivy, your AI assistant, learning your business</li>
         <li>Financials and reporting tracking every dollar</li>
       </ul>
-      <p>When your trial ends on <strong>${endDate}</strong>, you keep your account — but the business features above pause until you choose a plan. Lock everything in now and don't lose a beat.</p>`;
+      <p>When your trial ends on <strong>${endDate}</strong>, you keep your account, but the business features above pause until you choose a plan. Lock everything in now and don't lose a beat.</p>`;
     ctaText = 'Choose my plan →';
   } else if (stage === '2d') {
     // The heads-up promised on the paywall: ~2 days out, so the owner has time
@@ -98,7 +98,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
     heading = 'Your trial ends in 2 days';
     body = `<p>Hi ${fn},</p>
       <p>Just so it's not a surprise: your Ivy trial ends in <strong>2 days, on ${endDate}</strong>.</p>
-      <p>If you're getting value from <strong>${biz}</strong>, pick a plan and everything keeps running without a break. If it's not for you, no charge — cancel in one tap from your account, anytime.</p>
+      <p>If you're getting value from <strong>${biz}</strong>, pick a plan and everything keeps running without a break. If it's not for you, there's no charge. Cancel in one tap from your account, anytime.</p>
       <p>Either way, you're in control. We just didn't want the date to sneak up on you.</p>`;
     ctaText = 'Choose my plan →';
   } else if (stage === '1d') {
@@ -107,9 +107,9 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
     heading = 'Your trial ends tomorrow';
     body = `<p>Hi ${fn},</p>
       <p>Quick heads-up: your trial ends <strong>tomorrow, ${endDate}</strong>.</p>
-      <p>After that, your business tools — client management, scheduling, Ivy, financials, and reporting — switch off until you pick a plan, and your booking page, website and client portal for <strong>${biz}</strong> are archived for clients. Your data stays safe and waiting, but everything stops until you subscribe.</p>
+      <p>After that, your business tools (client management, scheduling, Ivy, financials, and reporting) switch off until you pick a plan, and your booking page, website and client portal for <strong>${biz}</strong> are archived for clients. Your data stays safe and waiting, but everything stops until you subscribe.</p>
       <p>You've already done the hard part of setting it up. Don't let it go quiet.</p>`;
-    ctaText = 'Keep everything — subscribe →';
+    ctaText = 'Keep everything: subscribe →';
   } else if (stage === 'expired') {
     subject = 'Your Ivy trial has ended';
     const keepUntil = fmtDate(new Date(new Date(trialEndsAt).getTime() + 28 * 864e5));
@@ -135,7 +135,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
   const html = emailShell({
     heading, body, preheader,
     ctaText, ctaUrl: billingUrl(),
-    footer: `No long-term contract. Cancel anytime. — The Ivy Team`,
+    footer: `No long-term contract. Cancel anytime.<br/>The Ivy Team`,
   });
   return { subject, html, preheader };
 }
@@ -145,8 +145,8 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
 // Returns null for a stage with no email (keeps push + email in lockstep).
 function trialPushPayload(stage) {
   const map = {
-    '7d': { title: '7 days left on your trial', body: 'Lock in your plan before the trial ends — keep everything running.' },
-    '2d': { title: 'Your trial ends in 2 days', body: 'A couple of days left. Pick a plan to keep your business tools on — no surprise charges.' },
+    '7d': { title: '7 days left on your trial', body: 'Lock in your plan before the trial ends and keep everything running.' },
+    '2d': { title: 'Your trial ends in 2 days', body: 'A couple of days left. Pick a plan to keep your business tools on. No surprise charges.' },
     '1d': { title: 'Your trial ends tomorrow', body: 'Last day to keep your client tools, scheduling, and Ivy switched on.' },
     'expired': { title: 'Your trial has ended', body: 'Your data is safe. Reactivate to switch your business tools back on.' },
   };
@@ -275,23 +275,23 @@ export function renderSubscriptionStarted({ periodEnd, amountCents, currency, fi
     : '';
   const preheader = `Here's how to get the most out of it this week.`;
   const html = emailShell({
-    heading: `You're in — welcome to ${PLAN_NAME}`,
+    heading: `You're in. Welcome to ${PLAN_NAME}`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>You're officially on <strong>${PLAN_NAME}</strong>. Thanks for trusting Ivy to run <strong>${biz}</strong>${amount ? ` — here's your receipt for <strong>${amount}</strong>` : ''}, and you're all set.</p>
+      <p>You're officially on <strong>${PLAN_NAME}</strong>. Thanks for trusting Ivy to run <strong>${biz}</strong>${amount ? `. Here's your receipt for <strong>${amount}</strong>` : ''}, and you're all set.</p>
       ${renewLine}
       <p>If you want a fast win this week, start here:</p>
       <ol style="padding-left:20px;margin:14px 0;">
         <li><strong>Connect your calendar</strong> so bookings sync automatically</li>
-        <li><strong>Ask Ivy</strong> one thing you're stuck on — she's trained on your business now</li>
+        <li><strong>Ask Ivy</strong> one thing you're stuck on. She's trained on your business now</li>
         <li><strong>Send your booking link</strong> to a client and watch the flow end-to-end</li>
       </ol>
-      <p>Need anything? Reply to this email — a real person reads it.</p>`,
+      <p>Need anything? Reply to this email. A real person reads it.</p>`,
     ctaText: 'Open my dashboard →',
     ctaUrl: dashboardUrl(),
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
-  return { subject: `You're in — welcome to ${PLAN_NAME}`, html, preheader };
+  return { subject: `You're in. Welcome to ${PLAN_NAME}`, html, preheader };
 }
 
 export async function notifySubscriptionStarted({ workspaceId, periodEnd, amountCents, currency }) {
@@ -335,22 +335,22 @@ export function renderReferralReward({ variant, weeks = 1, delivery = 'stripe', 
       : `it comes straight off your next invoice, nothing to do`;
 
   if (variant === 'referred') {
-    const preheader = `Your first week is on us — welcome to ${PLAN_NAME}.`;
+    const preheader = `Your first week is on us. Welcome to ${PLAN_NAME}.`;
     const html = emailShell({
-      heading: `Welcome — your first week's on us`,
+      heading: `Welcome! Your first week's on us`,
       preheader,
       body: `<p>Hi ${fn},</p>
         <p>Thanks for joining <strong>${PLAN_NAME}</strong> through a friend's invite. As a welcome gift, you've earned <strong>${wk}</strong>: ${landed}.</p>
         <p>Now go make running <strong>${biz}</strong> feel easy. Ask Ivy anything to get started.</p>`,
       ctaText: 'Open my dashboard →',
       ctaUrl: dashboardUrl(),
-      footer: `— The Ivy Team`,
+      footer: `The Ivy Team`,
     });
-    return { subject: `Welcome to ${PLAN_NAME} — your first week's on us`, html, preheader };
+    return { subject: `Welcome to ${PLAN_NAME}: your first week's on us`, html, preheader };
   }
 
   // referrer
-  const preheader = `Someone you referred subscribed — you earned ${wk}.`;
+  const preheader = `Someone you referred subscribed, so you earned ${wk}.`;
   const html = emailShell({
     heading: `You earned ${wk} 🎉`,
     preheader,
@@ -359,9 +359,9 @@ export function renderReferralReward({ variant, weeks = 1, delivery = 'stripe', 
       <p>Keep sharing your link and keep earning: a free week every time a friend subscribes and pays for their first week.</p>`,
     ctaText: 'See my referrals →',
     ctaUrl: `${appUrl()}/account#referrals`,
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
-  return { subject: `You earned ${wk} — thanks for the referral`, html, preheader };
+  return { subject: `You earned ${wk}. Thanks for the referral`, html, preheader };
 }
 
 export async function notifyReferralReward({ workspaceId, variant, weeks = 1, delivery = 'stripe' }) {
@@ -408,17 +408,17 @@ export function renderUpcomingRenewal({ periodEnd, amountCents, currency, firstN
   const biz = escapeHtml(businessName || 'your business');
   const amount = amountCents != null ? fmtMoneyCents(amountCents, currency) : '';
   const renewDate = fmtDate(periodEnd);
-  const preheader = `No action needed — just a quick heads-up.`;
+  const preheader = `No action needed, just a quick heads-up.`;
   const html = emailShell({
     heading: `Your plan renews on ${renewDate}`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>A friendly heads-up: your <strong>${PLAN_NAME}</strong> plan renews on <strong>${renewDate}</strong>${amount ? ` for <strong>${amount}</strong>` : ''}, billed to your card on file. No action needed — this is just so there are no surprises.</p>
-      <p>Since your last renewal, <strong>${biz}</strong> has kept its bookings, clients, Ivy automations, and reporting running without a break — and it'll keep going.</p>
+      <p>A friendly heads-up: your <strong>${PLAN_NAME}</strong> plan renews on <strong>${renewDate}</strong>${amount ? ` for <strong>${amount}</strong>` : ''}, billed to your card on file. No action needed. This is just so there are no surprises.</p>
+      <p>Since your last renewal, <strong>${biz}</strong> has kept its bookings, clients, Ivy automations, and reporting running without a break, and it'll keep going.</p>
       <p>Need to update your card or change plans? You can do it anytime.</p>`,
     ctaText: 'Manage subscription',
     ctaUrl: billingUrl(),
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
   return { subject: `Your Ivy plan renews on ${renewDate}`, html, preheader };
 }
@@ -453,19 +453,19 @@ export function renderWinbackOffer({
   const months = durationMonths || 3;
   const preheader = `Your account's still here. So is the offer.`;
   const html = emailShell({
-    heading: `Come back to Ivy — ${percentOff}% off your next ${months} months`,
+    heading: `Come back to Ivy: ${percentOff}% off your next ${months} months`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>We saved your spot. Everything you built in <strong>${biz}</strong> — clients, history, settings, Ivy's knowledge of your business — is exactly where you left it.</p>
+      <p>We saved your spot. Everything you built in <strong>${biz}</strong> (clients, history, settings, Ivy's knowledge of your business) is exactly where you left it.</p>
       <p>To make coming back easy, here's <strong>${percentOff}% off your first ${months} months</strong> when you reactivate:</p>
       <div style="margin:18px 0;padding:14px 18px;border-radius:10px;background:#0B4136;border:1px solid #276353;text-align:center;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:18px;letter-spacing:0.12em;font-weight:600;color:#5CC98E;">${escapeHtml(promoCode)}</div>
       <p>Apply the code at checkout. Offer expires <strong>${fmtDate(expiresAt)}</strong>, and you can cancel anytime.</p>`,
     ctaText: 'Claim my offer →',
     ctaUrl: `${appUrl()}/account?tab=billing&winback=1`,
-    footer: `This is a one-time offer — once it expires it doesn't come back. — The Ivy Team`,
+    footer: `This is a one-time offer. Once it expires, it doesn't come back.<br/>The Ivy Team`,
   });
   return {
-    subject: `Come back to Ivy — ${percentOff}% off your next ${months} months`,
+    subject: `Come back to Ivy: ${percentOff}% off your next ${months} months`,
     html, preheader,
   };
 }
@@ -506,12 +506,12 @@ export function renderPaymentFailed({ amountCents, currency, nextAttemptAt, firs
     heading: `Action needed: your payment didn't go through`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>We tried to process your <strong>${amount}</strong> payment for Ivy and it didn't go through — usually an expired card or a temporary bank hold.</p>
+      <p>We tried to process your <strong>${amount}</strong> payment for Ivy and it didn't go through. That's usually an expired card or a temporary bank hold.</p>
       ${retryLine}
-      <p>If the retry fails too, your business features in <strong>${biz}</strong> will pause until the balance is settled — so it's worth two minutes now. If you've already updated your card, you can ignore this.</p>`,
+      <p>If the retry fails too, your business features in <strong>${biz}</strong> will pause until the balance is settled, so it's worth two minutes now. If you've already updated your card, you can ignore this.</p>`,
     ctaText: 'Update payment method',
     ctaUrl: billingUrl(),
-    footer: `Critical billing notice — sent regardless of your preferences so you don't miss it. — The Ivy Team`,
+    footer: `Critical billing notice, sent regardless of your preferences so you don't miss it.<br/>The Ivy Team`,
   });
   return { subject: `Action needed: your Ivy payment didn't go through`, html, preheader };
 }
@@ -551,24 +551,24 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
   const accessUntil = endsAt
     ? `<li>You keep <strong>full access until ${fmtDate(endsAt)}</strong> (the end of your paid period)</li>`
     : `<li>Your access ended with this cancellation, so the next point applies now</li>`;
-  const preheader = endsAt ? `You keep full access until ${fmtDate(endsAt)}.` : `Your account is safe — reactivate any time.`;
+  const preheader = endsAt ? `You keep full access until ${fmtDate(endsAt)}.` : `Your account is safe. Reactivate any time.`;
   const html = emailShell({
-    heading: `Your subscription is cancelled — what happens next`,
+    heading: `Your subscription is cancelled: what happens next`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>Your Ivy subscription is cancelled. We're sorry to see you go — but a few things to make this painless:</p>
+      <p>Your Ivy subscription is cancelled. We're sorry to see you go, but here are a few things to make this painless:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         ${accessUntil}
         <li>After that, your booking page, website and client portal for <strong>${biz}</strong> are archived: clients see a notice instead, and nothing can be booked or bought</li>
         <li>Your data is kept for <strong>7 days</strong> after that so you can download it (Account → Your data, or the subscription screen), then it is <strong>permanently deleted</strong></li>
         <li>Resubscribe before then and everything is exactly as you left it</li>
       </ul>
-      <p>If something wasn't working — Ivy, a missing feature, pricing — just reply and tell me. I read every one, and it genuinely shapes what we build next.</p>`,
+      <p>If something wasn't working (Ivy, a missing feature, pricing), just reply and tell me. I read every one, and it genuinely shapes what we build next.</p>`,
     ctaText: 'Changed your mind? Reactivate →',
     ctaUrl: billingUrl(),
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
-  return { subject: `Your Ivy subscription is cancelled — what happens next`, html, preheader };
+  return { subject: `Your Ivy subscription is cancelled: what happens next`, html, preheader };
 }
 
 export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
@@ -608,7 +608,7 @@ export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, sourc
       <p>If you meant to keep going, turn renewal back on ${where} before ${endDate} and nothing changes.</p>`,
     ctaText: source === 'apple' ? 'Manage in the App Store →' : 'Keep my plan →',
     ctaUrl: source === 'apple' ? 'https://apps.apple.com/account/subscriptions' : billingUrl(),
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
   return { subject: `Your Ivy plan ends on ${endDate}`, html, preheader };
 }
@@ -665,7 +665,7 @@ export function renderDataDeletionScheduled({ deleteAt, endedAt, firstName: fnRa
         <p>Your login stays either way, and we keep billing records and any moderation reports as required.</p>`,
       ctaText: 'Pick a plan →',
       ctaUrl: billingUrl(),
-      footer: `— The Ivy Team`,
+      footer: `The Ivy Team`,
     });
     return { subject: `Your Ivy workspace is kept until ${deleteDate}`, html, preheader };
   }
@@ -681,7 +681,7 @@ export function renderDataDeletionScheduled({ deleteAt, endedAt, firstName: fnRa
       <p>Your login stays, so you can sign in later to start fresh or delete your account entirely. We keep billing records and any moderation reports as required.</p>`,
     ctaText: 'Download my data →',
     ctaUrl: `${appUrl()}/`,
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
   return { subject: `Your Ivy access has ended. Download your data before ${deleteDate}`, html, preheader };
 }
@@ -700,7 +700,7 @@ export function renderDataDeletionReminder({ deleteAt, firstName: fnRaw, busines
       <p>If you want a copy, sign in now and use <strong>Download my data</strong> or <strong>Email me a copy</strong>. If you want to keep going, ${keepVerb} before then and nothing is deleted.</p>`,
     ctaText: trial ? 'Pick a plan →' : 'Download my data →',
     ctaUrl: trial ? billingUrl() : `${appUrl()}/`,
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
   return { subject: `2 days left to download your Ivy data`, html, preheader };
 }
@@ -717,7 +717,7 @@ export function renderDataDeleted({ firstName: fnRaw }) {
       <p>Thank you for running your business on Ivy.</p>`,
     ctaText: 'Open Ivy →',
     ctaUrl: `${appUrl()}/`,
-    footer: `— The Ivy Team`,
+    footer: `The Ivy Team`,
   });
   return { subject: 'Your Ivy workspace data has been deleted', html, preheader };
 }

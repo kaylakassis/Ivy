@@ -473,9 +473,9 @@ export async function explainWorkflowSuggestion(workspaceId, { dismissed = [] } 
         matched: inv.length,
         of: considered,
         sharePct: considered ? Math.round((inv.length / considered) * 100) : 0,
-        examples: inv.slice(0, 4).map((r) => `${r.client} — ${r.inv_number}${r.inv_total != null ? `, $${Number(r.inv_total).toLocaleString()}` : ''} (${r.inv_dt})`),
+        examples: inv.slice(0, 4).map((r) => `${r.client}: ${r.inv_number}${r.inv_total != null ? `, $${Number(r.inv_total).toLocaleString()}` : ''} (${r.inv_dt})`),
       };
-      if (rates.length === 1) habit.note = `every one was for $${rates[0].toLocaleString()} — a consistent fee, which is why Ivy can safely auto-draft it`;
+      if (rates.length === 1) habit.note = `every one was for $${rates[0].toLocaleString()}, a consistent fee, which is why Ivy can safely auto-draft it`;
       else if (rates.length > 1) habit.note = 'the amounts vary, so Ivy proposes a reminder to send it rather than guessing a total';
       base.habits.push(habit);
     }
@@ -487,7 +487,7 @@ export async function explainWorkflowSuggestion(workspaceId, { dismissed = [] } 
         matched: docs.length,
         of: considered,
         sharePct: considered ? Math.round((docs.length / considered) * 100) : 0,
-        examples: docs.slice(0, 4).map((r) => `${r.client} — “${r.doc_name}” (${r.doc_dt})`),
+        examples: docs.slice(0, 4).map((r) => `${r.client}: “${r.doc_name}” (${r.doc_dt})`),
       });
     }
   } else if (trigger === 'booking_completed') {

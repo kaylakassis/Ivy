@@ -66,7 +66,7 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
     preheader = 'Was this you?';
     heading = 'New sign-in to your account';
     intro = `Your Ivy account was just signed into:`;
-    decided = `<p><strong>If this was you, you're all set</strong> — no action needed.</p>
+    decided = `<p><strong>If this was you, you're all set.</strong> No action needed.</p>
       <p>If you don't recognize this, secure your account right away by changing your password.</p>`;
   } else if (kind === 'password_changed') {
     subject = 'Your Ivy password was changed';
@@ -113,7 +113,7 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
       ${decided}`,
     ctaText: kind === 'password_changed' ? 'Reset my password' : 'Review account security',
     ctaUrl: kind === 'password_changed' ? `${appUrl()}/forgot-password` : `${appUrl()}/account?tab=security`,
-    footer: `You're getting this because it affects your account's security. For your protection, these alerts can't be turned off. — The Ivy Team`,
+    footer: `You're getting this because it affects your account's security. For your protection, these alerts can't be turned off.<br/>The Ivy Team`,
   });
   return { subject, html, preheader };
 }

@@ -41,7 +41,7 @@ function warnIfNotPooler(url) {
       // eslint-disable-next-line no-console
       console.warn(
         `[db] DATABASE_URL points at a NON-POOLER Neon host (${host}). ` +
-        `Serverless will exhaust the connection cap under load — switch ` +
+        `Serverless will exhaust the connection cap under load. Switch ` +
         `to the '-pooler' URL from your Neon dashboard.`,
       );
     }

@@ -440,7 +440,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'create_workflow',
-    description: "Create an automation workflow. The owner describes the rule in natural language; you translate it to triggers + actions and confirm the structure before creating. Triggers: 'lead_created', 'client_created', 'client_inactive' (config: daysInactive), 'booking_completed' (config: daysAfter). Actions: 'send_email' (subject+body), 'send_sms' (body), 'create_task' (title+dueInDays), 'send_document' (templateId), 'create_invoice' (config.items:[{description,quantity,rate}], optional taxRate+dueInDays — DRAFTS an invoice for the client; the owner reviews+sends it, it never auto-sends; only use fixed amounts the owner states), 'wait' (days+hours), 'if_has_tag' (tag), 'if_lacks_tag' (tag). Tokens {{firstName}} {{clientName}} {{businessName}} {{ownerName}} substitute at runtime (including in invoice line descriptions).",
+    description: "Create an automation workflow. The owner describes the rule in natural language; you translate it to triggers + actions and confirm the structure before creating. Triggers: 'lead_created', 'client_created', 'client_inactive' (config: daysInactive), 'booking_completed' (config: daysAfter). Actions: 'send_email' (subject+body), 'send_sms' (body), 'create_task' (title+dueInDays), 'send_document' (templateId), 'create_invoice' (config.items:[{description,quantity,rate}], optional taxRate+dueInDays: DRAFTS an invoice for the client; the owner reviews+sends it, it never auto-sends; only use fixed amounts the owner states), 'wait' (days+hours), 'if_has_tag' (tag), 'if_lacks_tag' (tag). Tokens {{firstName}} {{clientName}} {{businessName}} {{ownerName}} substitute at runtime (including in invoice line descriptions).",
     input_schema: {
       type: 'object',
       properties: {
@@ -476,7 +476,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'explain_workflow_suggestion',
-    description: "Read-only. Return the concrete evidence behind the automation Ivy detected (surfaced in your context as an \"Automation opportunity\") — the actual clients/sessions, how many of the recent sample matched, the share %, and whether amounts are consistent. Call this BEFORE explaining WHY you suggested the automation so you cite real specifics instead of guessing. Returns { available:false } when there's no current suggestion.",
+    description: "Read-only. Return the concrete evidence behind the automation Ivy detected (surfaced in your context as an \"Automation opportunity\"): the actual clients/sessions, how many of the recent sample matched, the share %, and whether amounts are consistent. Call this BEFORE explaining WHY you suggested the automation so you cite real specifics instead of guessing. Returns { available:false } when there's no current suggestion.",
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -880,7 +880,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'complete_onboarding',
-    description: "Mark the owner's setup as complete and publish them into the main app. Call this ONLY after the essentials exist — a business name, at least one service, and weekly availability (use update_settings / create_service / set_availability to create anything missing) — and the owner is happy with their booking page. Idempotent (safe to call more than once).",
+    description: "Mark the owner's setup as complete and publish them into the main app. Call this ONLY after the essentials exist: a business name, at least one service, and weekly availability (use update_settings / create_service / set_availability to create anything missing), and the owner is happy with their booking page. Idempotent (safe to call more than once).",
     input_schema: { type: 'object', properties: {} },
   },
   {
@@ -893,7 +893,7 @@ export const IVY_TOOLS = [
         all_day:   { type: 'boolean', description: 'True for a full-day block; if true, start_min/end_min are ignored.' },
         start_min: { type: 'integer', minimum: 0, maximum: 1440, description: 'Minutes since midnight, e.g. 540 = 9:00 AM.' },
         end_min:   { type: 'integer', minimum: 0, maximum: 1440 },
-        label:     { type: 'string', description: 'Short description shown on the calendar tile, e.g. "Out — dentist".' },
+        label:     { type: 'string', description: 'Short description shown on the calendar tile, e.g. "Out: dentist".' },
       },
       required: ['date'],
     },

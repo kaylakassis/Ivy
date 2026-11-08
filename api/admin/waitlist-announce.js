@@ -26,12 +26,12 @@ const MAX_ANNOUNCE = 5000;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const BATCH = 20;
 
-const DEFAULT_SUBJECT = 'Ivy is live — claim your 20% founding discount';
+const DEFAULT_SUBJECT = 'Ivy is live: claim your 20% founding discount';
 const DEFAULT_HEADING = "We're live 🎉";
 const DEFAULT_BODY = `
-  <p>Thanks for being on the Ivy waitlist. The doors are open — you can sign up now.</p>
+  <p>Thanks for being on the Ivy waitlist. The doors are open, and you can sign up now.</p>
   <p><b>Your founding-member perk:</b> sign up with <b>this same email address</b> and you'll
-  automatically get <b>20% off for your first 12 months</b>. No code needed — it applies at checkout.</p>
+  automatically get <b>20% off for your first 12 months</b>. No code needed. It applies at checkout.</p>
   <p>Welcome aboard 👋</p>
 `;
 

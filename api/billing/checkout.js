@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       evictWorkspaceGateCache(workspaceId);
       await recordTrialClaim({ email: user.email, workspaceId, source: 'no-card' });
       // eslint-disable-next-line no-console
-      console.warn('[billing/checkout] Stripe not configured — granted no-card fallback trial for workspace', workspaceId);
+      console.warn('[billing/checkout] Stripe not configured: granted no-card fallback trial for workspace', workspaceId);
       return ok(res, { url: null, trialStarted: true, fallback: 'no-card' });
     }
 
