@@ -305,21 +305,28 @@ const lowerFirst = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 // the partner, the dashboard, and Ivy's own snapshot (workspaceContext and
 // buildBriefing in api/_lib/ivy.js), so every surface agrees. $1 is the
 // workspace id; the caller adds ORDER BY / LIMIT.
-export const QUIET_CLIENT_WHERE = `
+// The same rule for any number of days (the "We'd love to see you again"
+// automation lets the owner choose how long is quiet; the partner, the
+// dashboard and Ivy use QUIET_DAYS). days is a validated integer.
+export function quietClientWhere(days = QUIET_DAYS) {
+  const n = Math.max(1, Math.min(3650, Math.round(Number(days) || QUIET_DAYS)));
+  return `
   c.workspace_id = $1
   AND c.stage = 'active'
   AND c.source IS DISTINCT FROM 'demo'
-  AND c.created_at < NOW() - INTERVAL '${QUIET_DAYS} days'
+  AND c.created_at < NOW() - INTERVAL '${n} days'
   AND NOT EXISTS (
     SELECT 1 FROM message_threads mt JOIN messages m ON m.thread_id = mt.id
      WHERE mt.workspace_id = c.workspace_id AND mt.client_id = c.id
-       AND m.created_at >= NOW() - INTERVAL '${QUIET_DAYS} days')
+       AND m.created_at >= NOW() - INTERVAL '${n} days')
   AND NOT EXISTS (
     SELECT 1 FROM bookings b
      WHERE b.workspace_id = c.workspace_id AND b.client_id = c.id AND b.cancelled_at IS NULL
-       AND (b.date >= (NOW() - INTERVAL '${QUIET_DAYS} days')::date
+       AND (b.date >= (NOW() - INTERVAL '${n} days')::date
             OR (b.recurrence_rule IS NOT NULL
                 AND (b.recurrence_until IS NULL OR b.recurrence_until >= CURRENT_DATE))))`;
+}
+export const QUIET_CLIENT_WHERE = quietClientWhere(QUIET_DAYS);
 
 export async function quietClients(workspaceId, { limit = 5 } = {}) {
   const { rows } = await sql.query(

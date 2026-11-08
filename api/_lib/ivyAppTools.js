@@ -47,6 +47,8 @@ import { CADENCE_WORDS, cardLong, fmtAmount, invoiceAutopayLine, seriesAutopayLa
 import { serializeInvoice } from './finance.js';
 import { setInviteNewClients, resendInviteProblem, resendClientInvite } from './clientNotify.js';
 import { recordWorkspaceAudit } from './audit.js';
+import { sendRebookLink, computeRebookSuggestion, lastServiceFor, usualLine, fmtSuggestionDay, rebookSendAllowed, rebookLimitMessage } from './rebook.js';
+import { readAutomations, saveAutomation, cleanAutomationPatch, dueThisWeek, KIND_LABELS, ONCE_WORDS, DEFAULT_TEMPLATES } from './clientAutomations.js';
 import { fetchBranding } from './branding.js';
 import { listDuplicatePairs, dismissDuplicatePair } from './clientDuplicates.js';
 import { mergePreview, mergeRefusal, mergeClients, mergeSentence, mergeNames, movesPhrase, cleanFieldChoices } from './clientMerge.js';
@@ -255,12 +257,37 @@ export const APP_TOOLS = [
     },
   },
   ...SHOP_TOOLS,
+  {
+    name: 'send_rebook_link',
+    description: "Email (and text, with consent) a client a one-tap link to book the same service again, opening on a suggested day and time from their own rhythm. service_id optional (their last service). The owner approves first.",
+    input_schema: {
+      type: 'object',
+      properties: { client_id: { type: 'string' }, service_id: { type: 'string' } },
+      required: ['client_id'],
+    },
+  },
+  {
+    name: 'client_automations',
+    description: "Birthday message and \"we'd love to see you again\" check-in that Ivy sends to clients. get: settings and templates. due: who gets one this week. update: kind birthday|quiet with enabled, template (plain text; {first_name} {business} {booking_link}), channels {email, sms}, quiet_days (quiet only).",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['get', 'due', 'update'] },
+        kind: { type: 'string', enum: ['birthday', 'quiet'] },
+        enabled: { type: 'boolean' },
+        template: { type: 'string' },
+        channels: { type: 'object', properties: { email: { type: 'boolean' }, sms: { type: 'boolean' } } },
+        quiet_days: { type: 'integer' },
+      },
+      required: ['action'],
+    },
+  },
 ];
 
 // Tools that only read; tools with a read action; everything else writes.
 export const APP_READ_ONLY = ['list_deposit_reviews', 'list_policy_acceptances', 'find_duplicate_clients', 'list_booking_requests'];
 // A tool's read action(s): they run straight away, never held.
-const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get', waitlist: 'list', shop: SHOP_READ_ACTIONS };
+const READ_ACTION = { reminder_settings: 'get', cancellation_policy: ['get', 'draft'], autopay: 'status', client_invite_settings: 'get', accountability_partner: 'get', waitlist: 'list', shop: SHOP_READ_ACTIONS, client_automations: ['get', 'due'] };
 export const APP_MIXED = new Set(Object.keys(READ_ACTION));
 // Always held for approval (by name). send_document is an older tool whose
 // plan now lives here.
@@ -1322,10 +1349,108 @@ async function planWaitlist(ws, a) {
   throw new Error("action must be 'list', 'offer' or 'remove'");
 }
 
+// ── one-tap rebook link (api/_lib/rebook.js) ───────────────────────────
+async function planRebookLink(ws, a) {
+  const clientId = needId(a.client_id, 'client_id', 'search_clients');
+  const c = await sql`SELECT id, name, email, phone, sms_consent_at, sms_stopped_at FROM clients WHERE id = ${clientId} AND workspace_id = ${ws}`;
+  const client = c.rows[0];
+  if (!client) throw new Error('Client not found');
+  let serviceId = a.service_id ? needId(a.service_id, 'service_id', 'list_services') : null;
+  if (serviceId) {
+    const sv = await sql`SELECT id FROM services WHERE id = ${serviceId} AND workspace_id = ${ws} AND visibility <> 'only_me'`;
+    if (!sv.rows.length) throw new Error('Service not found');
+  } else {
+    const last = await lastServiceFor({ workspaceId: ws, clientId });
+    if (!last) throw new Error(`${firstName(client.name)} has no past appointment to book again. Pass service_id to pick one`);
+    serviceId = last.serviceId;
+  }
+  const blocked = await sql`SELECT 1 FROM contact_blocks WHERE workspace_id = ${ws} AND client_id = ${clientId} LIMIT 1`;
+  if (blocked.rows.length) throw new Error('Messages between you and this client are blocked');
+  const slug = (await ensureCalendarSettings(ws))?.slug;
+  if (!slug) throw new Error('Your business has no booking page yet. Choose a booking address in Calendar first');
+  const canEmail = !!client.email;
+  const canText = !!(client.phone && client.sms_consent_at && !client.sms_stopped_at);
+  if (!canEmail && !canText) throw new Error(`${firstName(client.name)} has no email on file and has not agreed to texts`);
+  const sug = await computeRebookSuggestion({ workspaceId: ws, clientId, serviceId });
+  if (!sug) throw new Error('That service is not available to book');
+  const how = canEmail && canText ? 'Email and text' : canEmail ? 'Email' : 'Text';
+  const usual = usualLine(sug);
+  const name = clip(client.name || 'the client', 60);
+  return {
+    summary: `${how} ${name} a link to book ${clip(sug.serviceName, 60)} again. It opens on ${fmtSuggestionDay(sug)}${usual ? ` (${usual.replace('Your usual', 'their usual')})` : ` (a ${sug.weeks}-week gap${sug.basis === 'service' ? ', the usual one for this service' : ''})`}. The link is theirs alone and works for 90 days.`,
+    done: `Sent ${name} a rebook link for ${clip(sug.serviceName, 60)}`,
+    apply: async () => {
+      const gate = await rebookSendAllowed({ workspaceId: ws, clientId });
+      if (!gate.allowed) throw new Error(rebookLimitMessage(gate, name).replace(/\.$/, ''));
+      const out = await sendRebookLink({ workspaceId: ws, clientId, serviceId });
+      if (out.error) throw new Error(out.error);
+      if (!out.ok) throw new Error(`The rebook link did not go out (email: ${out.emailReason || 'ok'}; text: ${out.smsReason || 'ok'}). Nothing was sent`);
+      const went = [out.emailed ? 'emailed' : null, out.texted ? 'texted' : null].filter(Boolean).join(' and ');
+      const warnings = [];
+      if (canEmail && !out.emailed) warnings.push(`The email did not go out: ${out.emailReason}.`);
+      if (canText && !out.texted) warnings.push(`The text did not go out: ${out.smsReason}.`);
+      return { ok: true, emailed: out.emailed, texted: out.texted, suggested: fmtSuggestionDay(sug), done: `${went[0].toUpperCase()}${went.slice(1)} ${name} a rebook link for ${clip(sug.serviceName, 60)}, opening on ${fmtSuggestionDay(sug)}`, warnings };
+    },
+  };
+}
+
+// ── client automations (api/_lib/clientAutomations.js) ─────────────────
+async function readAutomationsTool(ws, a) {
+  if (a.action === 'due') {
+    const due = await dueThisWeek(ws);
+    return {
+      birthday: { on: due.birthday.enabled, this_week: due.birthday.clients.map((c) => ({ client_id: c.clientId, name: c.name, day: fmtDay(c.day) })) },
+      quiet: { on: due.quiet.enabled, quiet_days: due.quiet.quietDays, count: due.quiet.count, clients: due.quiet.clients.slice(0, 20).map((c) => ({ client_id: c.clientId, name: c.name })) },
+      note: 'Each client gets the birthday message at most once a year and the check-in at most once every 90 days; an automation that is off sends nothing.',
+      manage: '[Automations](/marketing?tab=workflows)',
+    };
+  }
+  const all = await readAutomations(ws);
+  const out = {};
+  for (const k of Object.keys(all)) {
+    const r = all[k];
+    out[k] = { label: r.label, on: r.enabled, template: r.template, channels: r.channels, ...(k === 'quiet' ? { quiet_days: r.quietDays } : {}), template_saved: !!r.templateApprovedAt, sent_this_month: r.sentThisMonth, once: r.once };
+  }
+  return { ...out, merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Automations](/marketing?tab=workflows)' };
+}
+
+async function planAutomations(ws, a) {
+  if (a.action !== 'update') throw new Error('action must be get, due or update');
+  const kind = String(a.kind || '');
+  const patch = {};
+  if (a.enabled != null) patch.enabled = a.enabled;
+  if (a.template != null) patch.template = a.template;
+  if (a.channels != null) patch.channels = a.channels;
+  if (a.quiet_days != null) patch.quietDays = a.quiet_days;
+  const clean = cleanAutomationPatch(kind, patch);
+  const cur = (await readAutomations(ws))[kind];
+  if (clean.enabled === true && clean.template == null && !cur.templateApprovedAt) {
+    throw new Error(`Save the ${KIND_LABELS[kind]} message first (pass template, the default is: "${DEFAULT_TEMPLATES[kind]}"), then turn it on`);
+  }
+  const parts = [];
+  if (clean.enabled != null && clean.enabled !== cur.enabled) parts.push(clean.enabled ? `turn on the ${KIND_LABELS[kind]}` : `turn off the ${KIND_LABELS[kind]}`);
+  if (clean.template != null) parts.push(`${clean.enabled != null ? 'set' : `set the ${KIND_LABELS[kind]}`} message to: "${clean.template}"`);
+  if (clean.channels) parts.push(`send it by ${clean.channels.email && clean.channels.sms ? 'email and text' : clean.channels.email ? 'email only' : 'text only'}`);
+  if (clean.quietDays != null) parts.push(`count a client as quiet after ${clean.quietDays} days`);
+  if (!parts.length) parts.push(`keep the ${KIND_LABELS[kind]} as it is`);
+  const sentence = parts.join(', ');
+  const on = clean.enabled ?? cur.enabled;
+  return {
+    summary: `${sentence[0].toUpperCase()}${sentence.slice(1)}. ${on ? `Ivy will send it to clients for you, each at most once ${ONCE_WORDS[kind]}; clients who turned off these emails or texts never get it.` : 'Nothing goes out while it is off.'}`,
+    done: `${sentence[0].toUpperCase()}${sentence.slice(1)}`,
+    apply: async () => {
+      const saved = await saveAutomation(ws, kind, patch);
+      return { ok: true, automation: saved.row };
+    },
+  };
+}
+
 const PLANS = {
   approve_booking_request: planApproveRequest,
   decline_booking_request: planDeclineRequest,
   waitlist: planWaitlist,
+  send_rebook_link: planRebookLink,
+  client_automations: planAutomations,
   merge_clients: planMergeClients,
   dismiss_duplicate: planDismissDuplicate,
   reminder_settings: planReminders,
@@ -1395,5 +1520,6 @@ export const APP_HANDLERS = {
     const result = await plan.apply();
     return { ...result, done: result.done || plan.done, summary: plan.summary };
   },
+  client_automations: writeHandler('client_automations', readAutomationsTool),
   ...Object.fromEntries(APP_SENSITIVE.map((n) => [n, writeHandler(n)])),
 };

@@ -250,6 +250,8 @@ export default async function handler(req, res) {
         revenue: numbers.revenue, bookingsWeek: numbers.bookingsWeek, newClients: numbers.newClients,
         outstanding: numbers.outstanding, rebooking: numbers.rebooking,
         expensesThisMonth: Number(exp.rows[0].v || 0),
+        // 1.0.6 (additive): bookings made this month through a rebook link.
+        rebookedViaLink: numbers.rebookedViaLink || 0,
       } : null,
       money: numbers ? numbers.money : null,
       week,

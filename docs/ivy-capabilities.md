@@ -168,6 +168,9 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Reply publicly to a review / remove the reply | `reply_to_review` (approval) |
 | Ask for a review | `send_review_request` (approval) |
 | Appeal a review | Owner only: a request to the support team in the owner's own words |
+| Send a client a one-tap rebook link (booking drawer "Send rebook link") | `send_rebook_link` (approval; the card says the service, the suggested day and time and whether it is the client's own rhythm) |
+| Birthday message and "we'd love to see you again": read settings, see who is due this week | `client_automations` get / due (read) |
+| Turn those on or off, edit the message, choose email or text, set quiet days | `client_automations` update (approval; the card shows the full message) |
 | Rewards / loyalty rules, referrals | Not yet |
 | Group chats | Not yet |
 
@@ -232,6 +235,8 @@ The system prompt (`api/_lib/ivy.js`, "WHAT YOU CANNOT DO") sets three rules:
 - `tests/client-merge.test.mjs`: duplicate detection precision, "Not the same person", the merge moving every client reference (the list of tables is read from the database catalog), opt-outs, cards and autopay, exactly-once, workspace isolation, and the Ivy approval flow for `merge_clients` and `dismiss_duplicate`.
 - `tests/accountability-partner.test.mjs`: the partner's list (each signal, first names only, workspace isolation), the cron (quiet hours, one a day, away check-ins then stop, the switch, testers and helpers and no-plan owners skipped), the settings endpoint, snooze, and `accountability_partner` held before approval.
 - `tests/policy-generator.test.mjs`: the policy writer (every option combination, Ivy's real deposit, fee and package rules), the starting point from a business's settings, and the "Help me write it" panel.
+- `tests/rebook.test.mjs`: the rebook suggestion (median gap, weekday, same or nearest free time), signed tokens (forged, expired, another business), opt-outs, the owner button's rate limit, bookings marked `booked_via = 'rebook'` and the dashboard number, and `send_rebook_link` held before approval.
+- `tests/client-automations.test.mjs`: birthday once a year and the check-in once per 90 days (claim before send under two concurrent runs), the quiet rule shared with the partner, exclusions (lead, future booking, recent automated message, opt-out), the owner's time zone window, workspace isolation, and `client_automations` held before approval.
 - `tests/ivy-tools-today.test.mjs`: reminders, package sessions, deposits, the cancellation policy (including draft and set_text from options), documents, autopay and invites: held before approval, the real effect after, invalid input refused before a card, workspace isolation, ledger text, and `cancel_booking` turning a paid deposit into a review request.
 - `tests/shops.test.mjs`: shop pages. Invite tokens are hashed, expire and refuse the wrong account; nothing shows before accept and nothing after leave, removal or a lapsed plan; the owner's roster carries counts only and member A cannot read member B's listing; the public payload has only each member's chosen public services and no client data; first available picks the true soonest slot across members and books in the right workspace exactly once under concurrency; the shop rating is count-weighted; the `shop` tool is held before approval; the server-rendered page carries title, canonical, Open Graph, LocalBusiness and BreadcrumbList JSON-LD.
 - `tests/shop-helpers.test.mjs`: the pure page helpers (service grouping, first available, open status, guided team search).

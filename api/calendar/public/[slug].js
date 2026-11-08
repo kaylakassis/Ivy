@@ -32,6 +32,7 @@ import { notifyPackageExhausted } from '../../_lib/packageNotify.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { loadBookingForInvite, calendarLinksFor } from '../../_lib/calendarLinks.js';
+import { verifyRebookToken } from '../../_lib/rebook.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { getProvider } from '../../_lib/payments/index.js';
@@ -356,6 +357,11 @@ async function createBooking(req, res) {
     let clientEmail = (body.clientEmail || '').toString().trim().toLowerCase();
     const clientPackageId = body.clientPackageId ? String(body.clientPackageId) : null;
     const notes = body.notes ? String(body.notes).slice(0, 1000) : null;
+    // 1.0.6: a booking made through a signed rebook link (api/_lib/rebook.js)
+    // is marked booked_via = 'rebook' for the dashboard's "Rebooked via
+    // link" count. The token must be valid and for THIS business; anything
+    // else is ignored (the booking still goes through as a normal one).
+    const rebookToken = body.rebook ? verifyRebookToken(String(body.rebook).slice(0, 600)) : null;
     // Phone is optional - only normalized if the field was non-empty so
     // bookings without phones still succeed.
     let clientPhone = null;
@@ -754,7 +760,7 @@ async function createBooking(req, res) {
           date, start_min, end_min, notes, deposit_required, location_address,
           video_room_url, custom_field_values, add_on_ids, booking_total,
           gift_card_credit_cents, source, client_package_id, package_use_mode,
-          requested_at, request_expires_at, shop_id
+          requested_at, request_expires_at, shop_id, booked_via
         )
         VALUES (
           ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
@@ -769,7 +775,8 @@ async function createBooking(req, res) {
           ${packageUseMode},
           ${request ? request.requestedAt.toISOString() : null},
           ${request ? request.requestExpiresAt.toISOString() : null},
-          ${viaShop ? viaShop.id : null}
+          ${viaShop ? viaShop.id : null},
+          ${rebookToken && rebookToken.workspaceId === workspaceId ? 'rebook' : null}
         )
         RETURNING *
       `;

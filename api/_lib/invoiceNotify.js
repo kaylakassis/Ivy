@@ -6,6 +6,7 @@
 //   • notifyInvoiceOverdue - fires from a daily cron that catches sent
 //                            invoices past due_date.
 import { sql } from './db.js';
+import { clientAllowsEmail } from './notificationPrefs.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { celebrateFirstPayment, celebrateRevenueMonthMilestone } from './milestones.js';
@@ -57,6 +58,10 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
     const howPaid = autopaid
       ? `. Paid automatically with ${escapeHtml(cardLong(inv.autopay_card_brand, inv.autopay_card_last4))}`
       : (method && method !== 'other' ? ` (paid by ${escapeHtml(paidMethodLabel(method))})` : '');
+    // 1.0.6: when the invoice paid for an appointment, a one-tap rebook link
+    // (api/_lib/rebook.js) for that service. The receipt itself always goes;
+    // the rebook line only when the client still takes announcement emails.
+    const rebookLine = await rebookLineForInvoice({ workspaceId, invoiceId, clientId: inv.client_id }).catch(() => '');
     const html = emailShell({
       heading: 'Payment received',
       branding,
@@ -65,7 +70,7 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
         <strong>${escapeHtml(inv.number)}</strong>${howPaid}.</p>
         <p>This email is your receipt.</p>${autopaid
           ? '<p style="color:#6b7280;font-size:13px">You can turn off automatic payments any time in your client portal under Payments.</p>'
-          : ''}`,
+          : ''}${rebookLine}`,
       footer: `Need anything? Reply to this email to reach ${escapeHtml(business)}.`,
     });
     await sendEmailToClient({
@@ -346,4 +351,28 @@ export async function notifyInvoiceVoided({ workspaceId, invoiceId }) {
     reportError(err, { extra: { invoiceId, workspaceId } });
     return { sent: false };
   }
+}
+
+// "Ready for your next X? Book again" under a paid receipt, when the invoice
+// collected for a completed appointment with a service and a client who
+// has not turned off announcement emails. '' otherwise.
+async function rebookLineForInvoice({ workspaceId, invoiceId, clientId }) {
+  if (!clientId) return '';
+  const { rows } = await sql`
+    SELECT b.id, b.service_id, s.name AS service_name, cs.slug
+      FROM bookings b
+      JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+     WHERE b.workspace_id = ${workspaceId} AND b.collect_invoice_id = ${invoiceId}
+       AND b.client_id = ${clientId} AND b.cancelled_at IS NULL AND b.no_show_at IS NULL
+       AND s.visibility <> 'only_me'
+     ORDER BY b.date DESC LIMIT 1`;
+  const b = rows[0];
+  if (!b?.slug) return '';
+  if (!(await clientAllowsEmail(clientId, 'marketing'))) return '';
+  const { mintRebookLink } = await import('./rebook.js');
+  const link = await mintRebookLink({ workspaceId, clientId, serviceId: b.service_id, slug: b.slug });
+  if (!link) return '';
+  return `<p style="margin-top:22px;">Ready for your next ${escapeHtml(b.service_name)}?
+    <a href="${link.url}" style="color:#4E63C7;font-weight:600;text-decoration:none;">Book again</a></p>`;
 }

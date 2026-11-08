@@ -395,6 +395,9 @@ export function serializeBooking(row, opts = {}) {
     },
     cancelledBy:         row.cancelled_by || null,
     source:              row.source || null,
+    // 1.0.6 (additive): booked through a rebook link; last "Send rebook link".
+    bookedVia:           row.booked_via || null,
+    rebookLinkSentAt:    row.rebook_link_sent_at || null,
     tipAmount:           money(Number(row.tip_amount || 0)),
     tipChargedAt:        money(row.tip_charged_at || null),
     completionLog:       row.completion_log || {},

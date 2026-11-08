@@ -14,6 +14,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useWorkflows } from './state.js';
 import WorkflowEditor from './WorkflowEditor.jsx';
 import WorkflowTemplatePicker from './WorkflowTemplatePicker.jsx';
+import ClientAutomations from './ClientAutomations.jsx';
 
 const TRIGGER_LABELS = {
   lead_created:      'When a lead fills out the contact form',
@@ -91,6 +92,10 @@ export default function Workflows() {
           <Icons.Plus size={13} sw={2}/> New workflow
         </button>
       </div>
+
+      {/* 1.0.6: the two ready-made client messages Ivy sends (birthday,
+          "we'd love to see you again"), above the owner's own workflows. */}
+      <ClientAutomations/>
 
       {workflows.length === 0 ? (
         <div className="card" style={{ padding: 48, textAlign: 'center' }}>

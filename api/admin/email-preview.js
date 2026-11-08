@@ -26,6 +26,8 @@ import * as R from '../_lib/emailRenderers.js';
 import { appUrl } from '../_lib/tokens.js';
 import { renderSignupReminder } from '../_lib/signupReminders.js';
 import { renderPartnerEmail, SAMPLE_PARTNER_ITEMS } from '../_lib/accountability.js';
+import { renderRebookEmail } from '../_lib/rebook.js';
+import { renderAutomationEmail, DEFAULT_TEMPLATES } from '../_lib/clientAutomations.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const SAMPLE = {
@@ -101,6 +103,10 @@ export const PREVIEW_CATALOGUE = [
   { id: 'invoice_overdue',             group: 'End-customer', label: 'Invoice overdue reminder' },
   { id: 'lead_instant_reply',          group: 'End-customer', label: 'Lead instant auto-reply' },
   { id: 'review_request',              group: 'End-customer', label: 'Review request (post-service)' },
+  // 1.0.6 one-tap rebook + client automations
+  { id: 'rebook_link',                 group: 'End-customer', label: 'Rebook link (owner button / Ivy)' },
+  { id: 'automation_birthday',         group: 'End-customer', label: 'Birthday message (default words)' },
+  { id: 'automation_quiet',            group: 'End-customer', label: "We'd love to see you again (default words)" },
 ];
 
 function render(template) {
@@ -219,7 +225,7 @@ function render(template) {
     case 'invoice_paid_receipt':
       return R.renderInvoicePaidReceipt({
         clientName: 'Casey Roberts', businessName: R.SAMPLE_BRANDING.businessName,
-        number: 'INV-1042', amount: 240, method: 'card',
+        number: 'INV-1042', amount: 240, method: 'card', rebookServiceName: '60-min consultation',
       });
     case 'invoice_due_soon':
       return R.renderInvoiceDueSoon({
@@ -239,6 +245,20 @@ function render(template) {
       return R.renderReviewRequest({
         clientName: 'Casey Roberts', businessName: R.SAMPLE_BRANDING.businessName, serviceName: '60-min consultation',
       });
+    case 'rebook_link':
+      return renderRebookEmail({
+        firstName: 'Casey', businessName: R.SAMPLE_BRANDING.businessName, serviceName: '60-min consultation',
+        usual: 'Your usual: every 3 weeks on Tuesdays', when: 'Tuesday, July 29 at 10:00 am',
+        url: `${appUrl()}/book/market-theory?rebook=PREVIEW_TOKEN_xxxxxxxx`, branding: R.SAMPLE_BRANDING,
+      });
+    case 'automation_birthday':
+    case 'automation_quiet': {
+      const kind = template === 'automation_birthday' ? 'birthday' : 'quiet';
+      return renderAutomationEmail({
+        kind, template: DEFAULT_TEMPLATES[kind], branding: R.SAMPLE_BRANDING,
+        vars: { first_name: 'Casey', business: R.SAMPLE_BRANDING.businessName, booking_link: `${appUrl()}/book/market-theory?rebook=PREVIEW_TOKEN_xxxxxxxx` },
+      });
+    }
 
     default:
       return null;

@@ -178,7 +178,7 @@ export default function ClientBookings() {
           <EmptyCard icon="Calendar" title="Nothing booked right now"
             hint={lastPast ? `Ready for your next visit with ${lastPast.businessName}?` : 'When you book a session, it will show up here.'}
             action={lastPast
-              ? <Link className="btn btn-primary" to={bookHref(lastPast.bizSlug, lastPast.serviceId)} style={actionBtn}>Book again</Link>
+              ? <Link className="btn btn-primary" to={lastPast.rebook?.path || bookHref(lastPast.bizSlug, lastPast.serviceId)} style={actionBtn}>Book again</Link>
               : <Link className="btn btn-primary" to="/me/discover" style={actionBtn}>Find a business</Link>}/>
         ) : tab === 'past' ? (
           <EmptyCard icon="Clock" title="No past visits yet" hint="Once you have been to an appointment, it will be listed here."
@@ -254,7 +254,10 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
   const pay = !cancelled && !requested ? paymentLine(b.payment) : null;
   const where = !cancelled ? whereLine(b) : null;
   const upcoming = tab === 'upcoming' && !cancelled && !requested;
-  const again = !upcoming && !requested && b.bizSlug && !b.archived ? bookHref(b.bizSlug, b.serviceId) : null;
+  // 1.0.6: the one-tap rebook link (same service, suggested day and time)
+  // when the server computed one for this visit, else the plain service
+  // link. Never on a pending request (it is not a visit yet).
+  const again = !upcoming && !requested && b.bizSlug && !b.archived ? (b.rebook?.path || bookHref(b.bizSlug, b.serviceId)) : null;
 
   const actions = [];
   if (upcoming && b.videoRoomUrl) {
@@ -291,7 +294,8 @@ function BookingCard({ booking: b, tab, reviewable, onCancel, onReschedule, onRe
   }
   if (again) {
     actions.push(
-      <Link key="again" to={again} className="btn btn-primary" style={actionBtn}>
+      <Link key="again" to={again} className="btn btn-primary" style={actionBtn}
+        title={b.rebook?.usualLine || undefined}>
         <Icons.Repeat size={14} sw={1.8}/> Book again
       </Link>,
     );

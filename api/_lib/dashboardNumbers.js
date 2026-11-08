@@ -14,7 +14,7 @@ export const REBOOK_MIN_COHORT = 5;
 export const REBOOK_WINDOW = { fromDays: 120, toDays: 30 };
 
 export async function keyNumbers(workspaceId, tz = 'UTC') {
-  const [rev, bk, nc, out, rb, ws] = await Promise.all([
+  const [rev, bk, nc, out, rb, ws, rl] = await Promise.all([
     sql`
       WITH b AS (
         SELECT (NOW() AT TIME ZONE ${tz}) AS now_l,
@@ -104,6 +104,15 @@ export async function keyNumbers(workspaceId, tz = 'UTC') {
       SELECT (created_at AT TIME ZONE ${tz}) < date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month' AS full_last_month,
              (created_at AT TIME ZONE ${tz}) < date_trunc('week', NOW() AT TIME ZONE ${tz}) - INTERVAL '7 days' AS full_last_week
         FROM workspaces WHERE id = ${workspaceId}`,
+    // 1.0.6: bookings made this month through a one-tap rebook link
+    // (bookings.booked_via = 'rebook', api/_lib/rebook.js), still standing
+    // and confirmed (a booking request counts once the owner approves it).
+    sql`
+      SELECT COUNT(*)::int AS n FROM bookings
+       WHERE workspace_id = ${workspaceId} AND booked_via = 'rebook' AND cancelled_at IS NULL
+         AND (requested_at IS NULL OR request_decided_at IS NOT NULL)
+         AND created_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}`
+      .catch(() => ({ rows: [{ n: 0 }] })),
   ]);
   const r = rev.rows[0] || {};
   const w = ws.rows[0] || {};
@@ -136,5 +145,6 @@ export async function keyNumbers(workspaceId, tz = 'UTC') {
       cohort, rebooked, minCohort: REBOOK_MIN_COHORT,
     },
     money: { today: n(r.today), week: n(r.week) },
+    rebookedViaLink: n(rl.rows[0]?.n),
   };
 }

@@ -311,7 +311,7 @@ export function renderInvoiceSent({
 }
 
 export function renderInvoicePaidReceipt({
-  clientName, businessName, number, amount, method, branding,
+  clientName, businessName, number, amount, method, branding, rebookServiceName,
 }) {
   const greeting = clientName ? `Hi ${escapeHtml(firstName(clientName))},` : 'Hi,';
   const biz = escapeHtml(businessName || SAMPLE_BRANDING.businessName);
@@ -321,7 +321,8 @@ export function renderInvoicePaidReceipt({
       heading: 'Payment received',
       body: `<p>${greeting}</p>
         <p>Thanks - we received your payment of <strong>${fmtMoney(amount)}</strong> for invoice <strong>${escapeHtml(number || 'INV-1042')}</strong>${method && method !== 'other' ? ` (paid by ${escapeHtml(method)})` : ''}.</p>
-        <p>This email is your receipt.</p>`,
+        <p>This email is your receipt.</p>${rebookServiceName ? `<p style="margin-top:22px;">Ready for your next ${escapeHtml(rebookServiceName)}?
+    <a href="${appUrl()}/book/preview?rebook=PREVIEW_TOKEN_xxxxxxxx" style="color:#4E63C7;font-weight:600;text-decoration:none;">Book again</a></p>` : ''}`,
       footer: `Need anything? Reply to this email to reach ${biz}.`,
       branding: branding || SAMPLE_BRANDING,
     }),
@@ -411,7 +412,11 @@ export function renderReviewRequest({ clientName, businessName, serviceName, bra
       body: `<p>${greeting}</p>
         <p>Thanks for visiting <strong>${biz}</strong>. Would you mind sharing how it went? Tap a rating below.</p>
         <div style="text-align:center;margin:18px 0;">${stars(0)}</div>
-        <p style="color:#93A3A0;font-size:12.5px;">It takes about 10 seconds. Honest feedback helps the business improve and helps other clients pick the right service.</p>`,
+        <p style="color:#93A3A0;font-size:12.5px;">It takes about 10 seconds. Honest feedback helps the business improve and helps other clients pick the right service.</p>
+        <p style="text-align:center;margin:26px 0 0;font-size:14px;color:#85827B;">Ready to come back?</p>
+        <p style="text-align:center;margin:8px 0 0;">
+          <a href="${appUrl()}/book/preview?rebook=PREVIEW_TOKEN_xxxxxxxx" style="display:inline-block;padding:9px 16px;border:1px solid #4E63C7;border-radius:10px;color:#4E63C7;font-weight:600;text-decoration:none;font-size:14px;">Book your next ${svc}</a>
+        </p>`,
       footer: `Reply if you'd rather share feedback privately. — ${biz}`,
       branding: branding || SAMPLE_BRANDING,
     }),

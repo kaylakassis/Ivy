@@ -333,6 +333,12 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         <BookingExtraActions event={event} onBookingChanged={onBookingChanged}/>
       )}
 
+      {/* Once the visit has started (or is marked done): rebooking is for after a visit. */}
+      {!event.cancelledAt && event.clientId
+        && (isOccurrencePast(occurrenceISO, event.startMin) || !!event.completionLog?.[String(occurrenceISO).slice(0, 10)]) && (
+        <RebookLinkRow event={event} masterId={masterId}/>
+      )}
+
       {!event.cancelledAt && !event.noShowAt && (
         <CompletionSection
           event={event}
@@ -473,6 +479,60 @@ function RequestView({ event, svc, onDecide, onClose }) {
         </div>
       )}
     </Drawer>
+  );
+}
+
+// "Send rebook link" (1.0.6): emails (and texts, with consent) the client a
+// one-tap link that opens the booking page on the same service and a
+// suggested day and time (api/_lib/rebook.js). Owner-only; the server rate
+// limits it and says exactly what went out.
+function RebookLinkRow({ event, masterId }) {
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState(null);   // { sent, emailed, texted, emailReason, smsReason, url, suggestion }
+  const [err, setErr] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const hasEmail = !!(event.clientEmail || '').trim();
+  const send = async () => {
+    setBusy(true); setErr(null); setOut(null);
+    try { setOut(await api.post('/calendar/bookings/rebook-link', { id: masterId })); }
+    catch (e) { setErr(e.message || 'Could not send the link'); }
+    finally { setBusy(false); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(out.url); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* no clipboard */ }
+  };
+  const when = out?.suggestion
+    ? `${out.suggestion.weekdayName}, ${parseISO(out.suggestion.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${out.suggestion.startMin != null ? ` at ${minToHM(out.suggestion.startMin)}` : ''}`
+    : null;
+  return (
+    <div style={{ marginTop: 18, padding: 12, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Rebook</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.45 }}>
+            Send {event.clientName ? event.clientName.split(/\s+/)[0] : 'the client'} a one-tap link to book this again. It opens on a suggested day from their own rhythm.
+            {!hasEmail && ' They have no email on file, so this needs their text consent.'}
+          </div>
+        </div>
+        <button type="button" className="btn btn-outline" onClick={send} disabled={busy} style={{ flexShrink: 0 }}>
+          <Icons.Repeat size={13} sw={1.9}/> {busy ? 'Sending…' : 'Send rebook link'}
+        </button>
+      </div>
+      {err && <div role="alert" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
+      {out && (
+        <div role="status" style={{ marginTop: 8, fontSize: 12.5, color: out.sent ? 'var(--ok, #2c8a4a)' : 'var(--danger)', lineHeight: 1.5 }}>
+          {out.sent
+            ? `Sent by ${[out.emailed ? 'email' : null, out.texted ? 'text' : null].filter(Boolean).join(' and ')}. It opens on ${when}${out.suggestion?.usual ? ` (their usual: every ${out.suggestion.weeks === 1 ? 'week' : `${out.suggestion.weeks} weeks`})` : ''}.`
+            : `Nothing went out. Email: ${out.emailReason || 'ok'}. Text: ${out.smsReason || 'ok'}.`}
+          {out.url && (
+            <span> <button type="button" className="btn btn-ghost" onClick={copy} style={{ fontSize: 12, padding: '2px 8px' }}>{copied ? 'Copied' : 'Copy link'}</button></span>
+          )}
+        </div>
+      )}
+      {event.rebookLinkSentAt && !out && (
+        <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--muted)' }}>Last sent {new Date(event.rebookLinkSentAt).toLocaleDateString()}.</div>
+      )}
+    </div>
   );
 }
 

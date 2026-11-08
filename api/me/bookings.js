@@ -6,6 +6,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { myClientIds, ids } from '../_lib/clientPortal.js';
 import { computeBookingPayment, slotEpochMs } from '../_lib/calendar.js';
 import { calendarLinksFor } from '../_lib/calendarLinks.js';
+import { mintRebookLink, computeRebookSuggestion, usualLine } from '../_lib/rebook.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -155,6 +156,11 @@ export default async function handler(req, res) {
       .localeCompare(b.date + String(b.startMin).padStart(4, '0')));
     requested.sort((a, b) => (a.date + String(a.startMin).padStart(4, '0'))
       .localeCompare(b.date + String(b.startMin).padStart(4, '0')));
+    // 1.0.6 (additive): a one-tap rebook link on the most recent past visit
+    // at each business (the one "Book again" uses), with the suggestion the
+    // link will open on. `usual` is true only when the rhythm comes from
+    // this client's own visits (api/_lib/rebook.js). Older portals ignore it.
+    await attachRebook(past, byClient);
     return ok(res, { upcoming, past, cancelled, requested });
   } catch (err) {
     return serverError(res, err);
@@ -163,4 +169,30 @@ export default async function handler(req, res) {
 
 function safeCalendarLinks(row) {
   try { return calendarLinksFor(row); } catch { return null; }
+}
+
+async function attachRebook(past, byClient) {
+  const seen = new Set();
+  for (const item of past) {
+    if (seen.size >= 5) break;
+    const m = byClient.get(item.clientId);
+    if (!m || m.archived || !item.bizSlug || !item.serviceId || seen.has(m.workspaceId)) continue;
+    seen.add(m.workspaceId);
+    try {
+      const link = await mintRebookLink({ workspaceId: m.workspaceId, clientId: item.clientId, serviceId: item.serviceId, slug: item.bizSlug });
+      if (!link) continue;
+      const sug = await computeRebookSuggestion({ workspaceId: m.workspaceId, clientId: item.clientId, serviceId: item.serviceId });
+      if (!sug) continue;
+      item.rebook = {
+        url: link.url,
+        // Same link as a path inside the app (the portal and the iPhone app
+        // route /book/:slug themselves).
+        path: `/book/${encodeURIComponent(link.slug)}?rebook=${encodeURIComponent(link.token)}`,
+        date: sug.date, startMin: sug.startMin, weekdayName: sug.weekdayName, weeks: sug.weeks,
+        usual: sug.usual, usualLine: usualLine(sug),
+      };
+    } catch (e) {
+      console.warn('[me/bookings] rebook suggestion skipped:', e.message);
+    }
+  }
 }

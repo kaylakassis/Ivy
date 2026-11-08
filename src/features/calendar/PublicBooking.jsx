@@ -187,6 +187,13 @@ export default function PublicBooking({ embedded = false }) {
   const [myPackages, setMyPackages] = useState(null);
   const [usePackageId, setUsePackageId] = useState('');
   const [bookedPackage, setBookedPackage] = useState(null);
+  // One-tap rebook link (?rebook=<signed token>, api/_lib/rebook.js): the
+  // server says which service and day (and time, when free) to put first,
+  // and whether that rhythm is this client's own (usualLine) - the page
+  // never works any of that out itself. The token rides on the booking so
+  // the dashboard can count "Rebooked via link".
+  const [rebook, setRebook] = useState(null);
+  const rebookTokenRef = useRef(null);
 
   // Pick a service: reset per-service answers and jump the strip to its
   // first open day so times are on screen straight away.
@@ -315,6 +322,36 @@ export default function PublicBooking({ embedded = false }) {
       const qs = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
     } catch { /* no-op */ }
+  }, [cal]);
+
+  // ?rebook=<token>: ask the server for the suggestion once the calendar is
+  // loaded, then pick the service, open the strip on that day and preselect
+  // the time when it is free. A bad or expired link just shows the page.
+  useEffect(() => {
+    if (!cal) return undefined;
+    let token = null;
+    try { token = new URLSearchParams(window.location.search).get('rebook'); } catch { /* no-op */ }
+    if (!token || rebookTokenRef.current === token) return undefined;
+    rebookTokenRef.current = token;
+    let live = true;
+    api.get(`/calendar/public/rebook?token=${encodeURIComponent(token)}&slug=${encodeURIComponent(slug)}`, { retry: false })
+      .then((r) => {
+        if (!live || !r?.rebook) return;
+        const rb = r.rebook;
+        const s = (cal.services || []).find((x) => x.id === rb.serviceId);
+        if (!s) return;
+        applyService(cal, s);
+        const idx = Math.max(0, Math.round((new Date(rb.date + 'T00:00:00').getTime() - today.getTime()) / 86400000));
+        const lim = stripLimit(cal.settings);
+        setDayCount((c) => Math.max(c, Math.min(lim, idx + 7)));
+        setSelectedDateISO(rb.date);
+        if (rb.startMin != null && rb.endMin != null) setSlot({ dateISO: rb.date, start: rb.startMin, end: rb.endMin });
+        setRebook(rb);
+        setScrollTarget('times');
+      })
+      .catch(() => { rebookTokenRef.current = null; });
+    return () => { live = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cal]);
 
   // Phone back gesture / browser back from the details step returns to the
@@ -518,7 +555,7 @@ export default function PublicBooking({ embedded = false }) {
   };
 
   const chooseService = (s) => {
-    if (s.id !== serviceId) applyService(cal, s);
+    if (s.id !== serviceId) { applyService(cal, s); setRebook(null); }
     setScrollTarget('times');
   };
   const selectDate = (iso) => {
@@ -628,6 +665,8 @@ export default function PublicBooking({ embedded = false }) {
         ...(claim?.token && claim.offer?.state === 'open' ? { waitlistClaimToken: claim.token } : {}),
         ...(shopSlug ? { shopSlug } : {}),
         ...consent.fields(),
+        // Opened from a rebook link: the server checks the token and marks the booking.
+        ...(rebookTokenRef.current ? { rebook: rebookTokenRef.current } : {}),
         // Pay with one session from the signed-in client's package.
         ...(usingPackage && !joinWaitlist ? { clientPackageId: usePackageId } : {}),
       });
@@ -1297,6 +1336,15 @@ export default function PublicBooking({ embedded = false }) {
                 <div className="pb-empty-day">Choose a service above to see open times.</div>
               ) : (
                 <>
+                  {rebook && rebook.serviceId === svc.id && (
+                    <div className="pb-rebook" role="status">
+                      <Icons.Repeat size={14} sw={1.9}/>
+                      <div>
+                        {rebook.usualLine && <b>{rebook.usualLine}.</b>}
+                        {rebook.usualLine ? ' ' : ''}{rebook.pickedLine}
+                      </div>
+                    </div>
+                  )}
                   {!nextAvail && (
                     <div className="pb-empty-day" style={{ marginBottom: 14 }}>
                       No open times in the next {limit} days.
