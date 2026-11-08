@@ -15,7 +15,7 @@ import { fireConfetti, haptic } from '../../lib/celebrate.js';
 function describeAction(a) {
   const c = a.config || {};
   switch (a.type) {
-    case 'create_task':    return `Add a task — "${c.title || 'Follow up'}"`;
+    case 'create_task':    return `Add a task: "${c.title || 'Follow up'}"`;
     case 'send_document':  return 'Send your usual document/contract';
     case 'create_invoice': {
       const rate = Number(c.items?.[0]?.rate);
@@ -23,7 +23,7 @@ function describeAction(a) {
         ? `Draft a $${rate.toLocaleString()} invoice (you review + send)`
         : 'Draft their invoice (you review + send)';
     }
-    case 'send_email':     return `Email them — "${c.subject || 'a message'}"`;
+    case 'send_email':     return `Email them: "${c.subject || 'a message'}"`;
     case 'send_sms':       return 'Text them';
     case 'wait':           return `Wait ${c.days || 0}d ${c.hours || 0}h`;
     default:               return a.type;

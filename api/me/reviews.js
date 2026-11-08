@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     if (!bookingId) return badRequest(res, 'bookingId is required');
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-      return badRequest(res, 'rating must be 1–5');
+      return badRequest(res, 'rating must be 1 to 5');
     }
 
     const memberships = await myClientIds(user);

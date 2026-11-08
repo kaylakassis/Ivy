@@ -123,7 +123,7 @@ export default function WaitlistPage({ inviteError }) {
             </h1>
 
             <p style={{ margin: '0 0 28px', color: 'var(--muted)', fontSize: 17, lineHeight: 1.55 }}>
-              Booking, payments, clients, and an AI copilot — in one place.
+              Booking, payments, clients and an AI copilot, all in one place.
               Join the waitlist and lock in <b style={{ color: 'var(--fg)' }}>20% off your first 12 months</b> 👀
             </p>
 

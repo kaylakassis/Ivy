@@ -131,7 +131,7 @@ export default async function handler(req, res) {
         }
         const discount = Number(body.discount ?? 0);
         if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100)
-          return { status: 400, body: { error: 'taxRate must be 0–100' } };
+          return { status: 400, body: { error: 'taxRate must be 0 to 100' } };
         if (!Number.isFinite(discount) || discount < 0)
           return { status: 400, body: { error: 'discount must be a non-negative number' } };
 

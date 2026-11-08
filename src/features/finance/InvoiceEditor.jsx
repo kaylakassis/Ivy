@@ -384,7 +384,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
             display: 'flex', flexDirection: 'column', gap: 6,
           }}>
             <Row label="Subtotal" value={fmtMoney(totals.subtotal)}/>
-            {discount > 0  && <Row label="Discount" value={'– ' + fmtMoney(discount)}/>}
+            {discount > 0  && <Row label="Discount" value={'− ' + fmtMoney(discount)}/>}
             {taxRate > 0   && <Row label={`Tax (${taxRate}%)`} value={fmtMoney(totals.tax)}/>}
             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
             <Row label="Total" value={fmtMoney(totals.total)} bold/>

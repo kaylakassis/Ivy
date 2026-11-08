@@ -161,7 +161,7 @@ export default async function handler(req, res) {
       if ('handle' in body) {
         const h = body.handle == null ? null : String(body.handle).toLowerCase().trim();
         if (h !== null && !HANDLE_RE.test(h)) {
-          return badRequest(res, 'Invalid handle (lowercase letters, digits, hyphens; 1–40 chars)');
+          return badRequest(res, 'Invalid handle (lowercase letters, digits, hyphens; 1 to 40 characters)');
         }
         patch.handle = h;
       }

@@ -97,7 +97,7 @@ export function cleanRecurringInput(body, { partial = false } = {}) {
   }
   if ('taxRate' in body) {
     const n = Number(body.taxRate);
-    if (!Number.isFinite(n) || n < 0 || n > 100) return { ok: false, error: 'taxRate must be 0–100' };
+    if (!Number.isFinite(n) || n < 0 || n > 100) return { ok: false, error: 'taxRate must be 0 to 100' };
     out.taxRate = n;
   }
   if ('discount' in body) {

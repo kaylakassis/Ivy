@@ -72,7 +72,7 @@ export default function AccountRecoverPage() {
               Restoring your account…
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-              Hang tight — this only takes a second.
+              Hang tight, this only takes a second.
             </p>
           </>
         )}

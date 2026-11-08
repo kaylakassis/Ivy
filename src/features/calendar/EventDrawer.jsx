@@ -123,7 +123,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         : <MissingEmail event={event}/>}
       <InfoRow label="Service" value={svc?.name || '-'}/>
       <InfoRow label="Date"    value={parseISO(occurrenceISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
-      <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
+      <InfoRow label="Time"    value={`${minToHM(event.startMin)} to ${minToHM(event.endMin)}`}/>
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '-'}/>
       <PackageSection event={event} occurrenceISO={occurrenceISO} onBookingChanged={onBookingChanged}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
@@ -424,7 +424,7 @@ function RequestView({ event, svc, onDecide, onClose }) {
       {(event.clientEmail || '').trim() && <InfoRow label="Email" value={event.clientEmail}/>}
       <InfoRow label="Service" value={svc?.name || '-'}/>
       <InfoRow label="Date"    value={parseISO(event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
-      <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
+      <InfoRow label="Time"    value={`${minToHM(event.startMin)} to ${minToHM(event.endMin)}`}/>
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '-'}/>
       {deposit > 0 && <InfoRow label="Deposit" value={`$${deposit.toFixed(2)}, charged only when you approve`}/>}
       {holds && <InfoRow label="Held until" value={holds.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}/>}

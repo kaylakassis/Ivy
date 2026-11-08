@@ -238,7 +238,7 @@ function DayRow({ dayIdx, windows, onChange }) {
           }}/>
         </button>
         <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>
-          {on ? windows.map((w) => `${minToHM(w.start)}–${minToHM(w.end)}`).join(', ') : 'Unavailable'}
+          {on ? windows.map((w) => `${minToHM(w.start)} to ${minToHM(w.end)}`).join(', ') : 'Unavailable'}
         </span>
         {on && (
           <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 8px' }}

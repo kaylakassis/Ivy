@@ -96,7 +96,7 @@ export default async function handler(req, res) {
       const capRaw = s?.capacity ?? 1;
       const capacity = Number.isInteger(capRaw) ? capRaw : Number(capRaw);
       if (!Number.isInteger(capacity) || capacity < 1 || capacity > 1000) {
-        return badRequest(res, `services[${idx}].capacity must be 1–1000`);
+        return badRequest(res, `services[${idx}].capacity must be 1 to 1000`);
       }
 
       const intakeFormTemplateIds = Array.isArray(s?.intakeFormTemplateIds)
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
         return badRequest(res, `services[${idx}].depositAmount must be non-negative`);
       }
       if (depositType === 'percent' && depositAmount > 100) {
-        return badRequest(res, `services[${idx}].depositAmount must be 0–100 when type is percent`);
+        return badRequest(res, `services[${idx}].depositAmount must be 0 to 100 when type is percent`);
       }
 
       // Mobile / on-location service config.
@@ -127,7 +127,7 @@ export default async function handler(req, res) {
         ? s.travelBufferMinutes : Number(s?.travelBufferMinutes ?? 0);
       if (!Number.isInteger(travelBufferMinutes)
           || travelBufferMinutes < 0 || travelBufferMinutes > 240) {
-        return badRequest(res, `services[${idx}].travelBufferMinutes must be 0–240`);
+        return badRequest(res, `services[${idx}].travelBufferMinutes must be 0 to 240`);
       }
       // Free-form venue/address text. 500-char cap matches the
       // location_address column on bookings.
@@ -162,7 +162,7 @@ export default async function handler(req, res) {
         ? s.cancellationWindowHours : Number(s?.cancellationWindowHours ?? 24);
       if (!Number.isInteger(cancellationWindowHours)
           || cancellationWindowHours < 0 || cancellationWindowHours > 720) {
-        return badRequest(res, `services[${idx}].cancellationWindowHours must be 0–720`);
+        return badRequest(res, `services[${idx}].cancellationWindowHours must be 0 to 720`);
       }
       const noShowFeeAmount = Number(s?.noShowFeeAmount ?? 0);
       if (!Number.isFinite(noShowFeeAmount) || noShowFeeAmount < 0) {
@@ -185,7 +185,7 @@ export default async function handler(req, res) {
         }
         const aDur = Number.isInteger(a?.durationMinutes) ? a.durationMinutes : Number(a?.durationMinutes || 0);
         if (!Number.isInteger(aDur) || aDur < 0 || aDur > 480) {
-          return badRequest(res, `services[${idx}].addOns: durationMinutes must be 0–480`);
+          return badRequest(res, `services[${idx}].addOns: durationMinutes must be 0 to 480`);
         }
         addOns.push({
           id: a?.id || `ao_${Math.random().toString(36).slice(2, 10)}`,
@@ -222,7 +222,7 @@ export default async function handler(req, res) {
             const start = Number(w?.start);
             const end = Number(w?.end);
             if (!Number.isInteger(start) || start < 0 || start > 1440) {
-              return badRequest(res, `services[${idx}].availability[${dayKey}] window.start must be 0–1440`);
+              return badRequest(res, `services[${idx}].availability[${dayKey}] window.start must be 0 to 1440`);
             }
             if (!Number.isInteger(end) || end <= start || end > 1440) {
               return badRequest(res, `services[${idx}].availability[${dayKey}] window.end must be > start and ≤ 1440`);

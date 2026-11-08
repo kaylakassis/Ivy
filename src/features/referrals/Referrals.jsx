@@ -284,7 +284,7 @@ export default function Referrals({ embedded = false }) {
         <div className="metric-label" style={{ marginBottom: 14 }}>Referral history</div>
         {list.length === 0 ? (
           <EmptyNote icon="Users" title="No referrals yet"
-            hint="Share your link above — when a friend subscribes, they'll show up here." />
+            hint="Share your link above. When a friend subscribes, they'll show up here." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

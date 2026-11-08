@@ -85,7 +85,7 @@ export default async function handler(req, res) {
       const rating = parseInt(body.rating, 10);
       const text   = (body.text || '').toString().trim().slice(0, 4000) || null;
       if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-        return badRequest(res, 'rating must be 1–5');
+        return badRequest(res, 'rating must be 1 to 5');
       }
 
       // Insert review. Auto-published ('visible') immediately; the owner can

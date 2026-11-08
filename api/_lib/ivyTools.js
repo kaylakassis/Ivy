@@ -3330,7 +3330,7 @@ async function create_recurring_invoice({ workspaceId, args }) {
   // outbound bypass and a contradiction of Ivy's own "recurring invoices are
   // drafts" contract. The owner turns on auto-send from the recurring-invoice
   // UI (a real human action), never Ivy.
-  return { recurring_invoice: rows[0], note: 'Created as a draft — turn on auto-send from Recurring invoices when you are ready.' };
+  return { recurring_invoice: rows[0], note: 'Created as a draft. Turn on auto-send from Recurring invoices when you are ready.' };
 }
 
 async function create_campaign({ workspaceId, args }) {

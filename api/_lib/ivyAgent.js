@@ -53,7 +53,7 @@ export async function detectSuggestions(workspaceId) {
       out.push({
         kind: 'new_review', dedupe_key: `review:${rv.id}`, icon: 'Chat',
         title: `New ${rv.rating}-star review from ${name}`,
-        detail: 'A low rating just came in — want help responding?',
+        detail: 'A low rating just came in. Want help responding?',
         prompt: `Help me write a calm, professional response to ${name}'s ${rv.rating}-star review.`,
       });
     }
@@ -71,7 +71,7 @@ export async function detectSuggestions(workspaceId) {
     out.push({
       kind: 'unreplied_leads', dedupe_key: `leads:${today}`, icon: 'Users',
       title: `${ld.n} lead${ld.n === 1 ? '' : 's'} waiting on a reply`,
-      detail: 'Speed to reply is the #1 close driver — want Ivy to help you follow up?',
+      detail: 'A quick reply helps you win the booking. Want Ivy to help you follow up?',
       prompt: "Help me follow up with the new leads I haven't replied to yet.",
     });
   }
@@ -88,7 +88,7 @@ export async function detectSuggestions(workspaceId) {
   if (Number(cal.active) >= 3 && Number(cal.upcoming) <= 2) {
     out.push({
       kind: 'calendar_gap', dedupe_key: `gap:${today}`, icon: 'Calendar',
-      title: `Next 7 days are quiet — ${cal.upcoming} session${cal.upcoming === 1 ? '' : 's'} booked`,
+      title: `Next 7 days are quiet: ${cal.upcoming} session${cal.upcoming === 1 ? '' : 's'} booked`,
       detail: 'Want Ivy to draft a campaign to fill the gaps with your quiet clients?',
       prompt: "Draft a campaign to fill next week's open slots, targeting my quiet clients.",
     });

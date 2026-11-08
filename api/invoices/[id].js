@@ -101,7 +101,7 @@ export default async function handler(req, res) {
       }
       if ('taxRate' in body) {
         const n = Number(body.taxRate);
-        if (!Number.isFinite(n) || n < 0 || n > 100) return badRequest(res, 'taxRate must be 0–100');
+        if (!Number.isFinite(n) || n < 0 || n > 100) return badRequest(res, 'taxRate must be 0 to 100');
         push('tax_rate', n);
       }
       if ('discount' in body) {

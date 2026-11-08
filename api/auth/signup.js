@@ -67,7 +67,7 @@ export default async function handler(req, res) {
   // onboarding; everyone else is steered to the waitlist landing page.
   if (await getLaunchMode() === 'waitlist' && !(await hasBypassCookie(req))) {
     res.status(403).json({
-      error: 'Signups open at launch — join the waitlist to get notified.',
+      error: 'Signups open at launch. Join the waitlist to get notified.',
       code:  'waitlist_only',
     });
     return;

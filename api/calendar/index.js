@@ -135,7 +135,7 @@ export default async function handler(req, res) {
       if ('slug' in body) {
         const slug = body.slug == null ? null : String(body.slug).toLowerCase().trim();
         if (slug !== null && !VALID_HANDLE.test(slug)) {
-          return badRequest(res, 'Invalid handle (1–40 chars, lowercase letters/digits/hyphens)');
+          return badRequest(res, 'Invalid handle (1 to 40 characters: lowercase letters, digits, hyphens)');
         }
         if (slug) {
           const clash = await sql`
@@ -155,7 +155,7 @@ export default async function handler(req, res) {
       }
       if ('bufferMinutes' in body) {
         const n = Number(body.bufferMinutes);
-        if (!Number.isInteger(n) || n < 0 || n > 240) return badRequest(res, 'bufferMinutes must be 0–240');
+        if (!Number.isInteger(n) || n < 0 || n > 240) return badRequest(res, 'bufferMinutes must be 0 to 240');
         push('buffer_minutes', n);
       }
       if ('packageUseOn' in body) {
@@ -167,14 +167,14 @@ export default async function handler(req, res) {
         // Minimum advance notice before a client can book (0 = allow
         // same-moment booking, still never the past). Cap at 30 days.
         const n = Number(body.minNoticeHours);
-        if (!Number.isInteger(n) || n < 0 || n > 720) return badRequest(res, 'minNoticeHours must be 0–720');
+        if (!Number.isInteger(n) || n < 0 || n > 720) return badRequest(res, 'minNoticeHours must be 0 to 720');
         push('min_notice_hours', n);
       }
       if ('maxAdvanceDays' in body) {
         // How far ahead clients can book on the public page (0 = no limit).
         // Cap at 730 days (2 years).
         const n = Number(body.maxAdvanceDays);
-        if (!Number.isInteger(n) || n < 0 || n > 730) return badRequest(res, 'maxAdvanceDays must be 0–730');
+        if (!Number.isInteger(n) || n < 0 || n > 730) return badRequest(res, 'maxAdvanceDays must be 0 to 730');
         push('max_advance_days', n);
       }
       if ('slotFitService' in body) {

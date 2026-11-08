@@ -313,7 +313,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
     } catch (err) {
       // Surface send failures (offline / 5xx) instead of silently dropping
       // them. The input text is preserved so the user can retry.
-      setSmsNote(err?.message || "Couldn't send — check your connection and try again.");
+      setSmsNote(err?.message || "Couldn't send. Check your connection and try again.");
     } finally {
       setSending(false);
     }

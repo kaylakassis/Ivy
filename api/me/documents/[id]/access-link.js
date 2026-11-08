@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     if (status === 'completed') {
       const finalUrl = docRows.rows[0].final_pdf_url;
       if (finalUrl) return ok(res, { url: docFileUrl(docRows.rows[0].id, 'final'), completed: true });
-      return badRequest(res, 'This document is complete — the signed copy is still being prepared.');
+      return badRequest(res, 'This document is complete. The signed copy is still being prepared.');
     }
 
     // Find the user's signer row, if any. Used to:

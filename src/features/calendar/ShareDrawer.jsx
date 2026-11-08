@@ -154,7 +154,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
           onKeyDown={(e) => { if (e.key === 'Enter') save(); }}/>
       </Field>
 
-      <Field label="Your handle" hint="Lowercase letters, digits, and hyphens. 1–40 characters.">
+      <Field label="Your handle" hint="Lowercase letters, digits, and hyphens. 1 to 40 characters.">
         <div style={{
           display: 'flex', alignItems: 'center',
           border: '1px solid var(--border-strong)', borderRadius: 10, background: 'var(--surface)',
@@ -205,7 +205,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         {leadReply && (
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
-              Custom message <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional — leave blank for the default)</span>
+              Custom message <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional, leave blank for the default)</span>
             </div>
             <textarea value={leadMsg}
               onChange={(e) => setLeadMsg(e.target.value.slice(0, 2000))}

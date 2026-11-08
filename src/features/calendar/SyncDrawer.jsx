@@ -539,7 +539,7 @@ function SetupSteps() {
       <ol style={{ margin: '10px 0 0', paddingLeft: 18, color: 'var(--fg-2)', lineHeight: 1.6 }}>
         <li>
           <strong>Google Cal:</strong> Settings → Add calendar → From URL → paste
-          the HTTPS URL → Add. Updates every ~12–24h on Google's side.
+          the HTTPS URL → Add. Google updates it every 12 to 24 hours.
         </li>
         <li style={{ marginTop: 6 }}>
           <strong>Apple Cal (Mac):</strong> File → New Calendar Subscription → paste

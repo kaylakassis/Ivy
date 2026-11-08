@@ -376,7 +376,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
       {action.type === 'create_invoice' && (
         <>
           <Sub label="Line items"
-               hint="Ivy drafts this invoice for the client — you review + send it from Finance. It never sends on its own. Descriptions support {{clientName}} etc.">
+               hint="Ivy drafts this invoice for the client. You review and send it from Finance. It never sends on its own. Descriptions support {{clientName}} etc.">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {(action.config.items || []).map((it, i) => (
                 <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>

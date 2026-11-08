@@ -331,7 +331,7 @@ function LinkedList({ tab, linked, onOpen, onRemove }) {
 }
 
 function rowTitle(type, r) {
-  if (type === 'bookings') return `${r.date} · ${fmtTime(r.startMin)}–${fmtTime(r.endMin)}`;
+  if (type === 'bookings') return `${r.date} · ${fmtTime(r.startMin)} to ${fmtTime(r.endMin)}`;
   if (type === 'documents') return r.name;
   return r.number;
 }

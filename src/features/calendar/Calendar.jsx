@@ -265,7 +265,7 @@ export default function Calendar() {
     if (view === 'day') return anchor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     if (view === 'week') {
       const start = startOfWeek(anchor);
-      return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} – ${addDays(start, 6).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      return `${start.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} to ${addDays(start, 6).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     }
     return anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   })();
@@ -540,7 +540,7 @@ export default function Calendar() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600 }}>{b.clientName}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                      {svc?.name || 'Session'} · {minToHM(b.startMin)} – {minToHM(b.endMin)} · {b.clientEmail}
+                      {svc?.name || 'Session'} · {minToHM(b.startMin)} to {minToHM(b.endMin)} · {b.clientEmail}
                     </div>
                   </div>
                   <button className="btn btn-ghost" style={{ color: 'var(--danger)', fontSize: 12 }}
@@ -760,7 +760,7 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
                       <span>{b.label || (isBlocking ? 'Blocked' : 'Event')}</span>
                     </div>
                     <div style={{ color: 'var(--muted)', fontSize: 10 }}>
-                      {b.allDay ? 'All day' : `${minToHM(b.startMin)} – ${minToHM(b.endMin)}`}
+                      {b.allDay ? 'All day' : `${minToHM(b.startMin)} to ${minToHM(b.endMin)}`}
                     </div>
                   </div>
                 );

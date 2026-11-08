@@ -374,7 +374,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
         <Field label="When can clients book this?"
           hint={service.availability
             ? "Custom windows are intersected with your general availability - a service can only narrow the bookable hours, never expand them past your business hours."
-            : "Inheriting your general availability. Switch on custom windows to restrict this service to specific hours (e.g. 'Strength training 5–8pm only')."}>
+            : "Inheriting your general availability. Switch on custom windows to restrict this service to specific hours (e.g. 'Strength training 5 to 8pm only')."}>
           <ServiceAvailabilityEditor
             value={service.availability}
             onChange={(availability) => onChange({ availability })}

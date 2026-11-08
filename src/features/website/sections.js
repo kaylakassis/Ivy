@@ -110,7 +110,7 @@ export const SECTION_TYPES = {
     desc: 'Client testimonials',
     category: 'social_proof',
     variants: [
-      { id: 'grid',         label: 'Grid (2–3 cards)' },
+      { id: 'grid',         label: 'Grid (2 to 3 cards)' },
       { id: 'single_large', label: 'Single large quote' },
       { id: 'wall',         label: 'Wall (4+)' },
     ],
@@ -396,7 +396,7 @@ export const SECTION_TYPES = {
     default: () => ({
       headline: 'Frequently asked',
       items: [
-        { id: 'a1', q: 'How long is a typical engagement?', a: '8–12 weeks. We start with a 1-week scoping sprint then settle into a weekly cadence.' },
+        { id: 'a1', q: 'How long is a typical engagement?', a: '8 to 12 weeks. We start with a 1-week scoping sprint then settle into a weekly cadence.' },
         { id: 'a2', q: 'Do you offer payment plans?',       a: 'Yes - split into two or three payments at no extra cost.' },
         { id: 'a3', q: 'What if I need to pause?',          a: 'You can pause anytime with 1 week notice; we hold your slot for up to 60 days.' },
       ],

@@ -89,7 +89,7 @@ export default function AccountPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
       setEmailedNote(j.attached
-        ? `Sent — check ${user?.email || 'your inbox'} for your data as a .json attachment.`
+        ? `Sent. Check ${user?.email || 'your inbox'} for your data as a .json attachment.`
         : `Your export was too large to attach, so we emailed you instructions to download it instead.`);
     } catch (err) {
       setExportErr(err.message || 'Could not email your export');

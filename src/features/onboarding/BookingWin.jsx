@@ -35,7 +35,7 @@ export default function BookingWin({ slug, bizName, onContinue, continueLabel = 
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 15, lineHeight: 1.55, maxWidth: 460, margin: '0 auto 22px' }}>
         {bizName ? <b style={{ color: 'var(--fg)' }}>{bizName}</b> : 'Your business'} has a booking page.
-        Share this link and clients can book you in seconds — no back-and-forth.
+        Share this link and clients can book you in seconds, no back-and-forth.
       </p>
 
       {/* The shareable link card */}

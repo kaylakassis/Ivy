@@ -107,7 +107,7 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
                   <span>{b.label || (isBlocking ? 'Blocked' : 'Event')}</span>
                 </div>
                 <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>
-                  {b.allDay ? 'All day' : `${minToHM(b.startMin)} – ${minToHM(b.endMin)}`}
+                  {b.allDay ? 'All day' : `${minToHM(b.startMin)} to ${minToHM(b.endMin)}`}
                 </div>
               </div>
             );
@@ -132,7 +132,7 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
                 }}>
                 <div style={{ fontWeight: 600 }}>{req ? 'Requested: ' : ''}{b.clientName || 'Client'}</div>
                 <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>
-                  {svc?.name || 'Session'} · {minToHM(b.startMin)} – {minToHM(b.endMin)}
+                  {svc?.name || 'Session'} · {minToHM(b.startMin)} to {minToHM(b.endMin)}
                 </div>
               </div>
             );

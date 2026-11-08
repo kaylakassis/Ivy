@@ -103,7 +103,7 @@ async function notifyNewBookingImpl({ workspaceId, bookingId, source = 'public',
     const shopLine = ctx.shop_name ? `Booked through ${ctx.shop_name}'s page` : null;
     const serviceName  = ctx.service_name || 'Session';
     const dateLabel    = fmtDate(dateISO);
-    const timeLabel    = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
+    const timeLabel    = `${fmtTime(ctx.start_min)} to ${fmtTime(ctx.end_min)}`;
 
     // Branding wraps both client + owner emails. Cheap fetch - single
     // SELECT - done once and shared across all recipients.
@@ -491,7 +491,7 @@ async function notifyBookingCancellationImpl({ workspaceId, bookingId, occurrenc
     const businessName = ctx.biz_name || 'Your business';
     const serviceName = ctx.service_name || 'Session';
     const dateLabel = fmtDate(dateISO);
-    const timeLabel = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
+    const timeLabel = `${fmtTime(ctx.start_min)} to ${fmtTime(ctx.end_min)}`;
     const branding = await fetchBranding(workspaceId);
 
     const tasks = [];
@@ -673,7 +673,7 @@ async function notifyBookingRescheduledImpl({ workspaceId, bookingId, oldDateISO
     const serviceName  = ctx.service_name || 'Session';
     const newDateISO   = ctx.date instanceof Date ? ctx.date.toISOString().slice(0, 10) : ctx.date;
     const newDate      = fmtDate(newDateISO);
-    const newTime      = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
+    const newTime      = `${fmtTime(ctx.start_min)} to ${fmtTime(ctx.end_min)}`;
     const oldDate      = oldDateISO ? fmtDate(oldDateISO) : null;
     const oldTime      = (oldStartMin != null && oldEndMin != null) ? `${fmtTime(oldStartMin)} – ${fmtTime(oldEndMin)}` : null;
     const branding = await fetchBranding(workspaceId);

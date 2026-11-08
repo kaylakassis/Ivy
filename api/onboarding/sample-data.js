@@ -41,7 +41,7 @@ export default async function handler(req, res) {
       const cli = await sql`
         INSERT INTO clients (workspace_id, name, email, phone, stage, source, tags, notes)
         VALUES (${workspaceId}, 'John Doe', ${DEMO_EMAIL}, '+15555550123', 'active', 'demo',
-                ARRAY['sample']::text[], 'Sample record — remove anytime from your dashboard.')
+                ARRAY['sample']::text[], 'Sample record. Remove it anytime from your dashboard.')
         RETURNING id
       `;
       const clientId = cli.rows[0].id;

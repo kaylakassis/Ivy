@@ -58,7 +58,7 @@ export default function SampleDataCard({ empty, onChanged }) {
       </div>
       <div style={{ flex: 1, minWidth: 200 }}>
         <div style={{ fontSize: 14.5, fontWeight: 600 }}>New here? See it in action</div>
-        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Add a sample client, booking &amp; invoice — remove it anytime.</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Add a sample client, booking and invoice. Remove it anytime.</div>
       </div>
       <button type="button" onClick={() => run(true, () => api.post('/onboarding/sample-data'))} disabled={busy}
         className="btn btn-primary" style={{ gap: 8 }}>
