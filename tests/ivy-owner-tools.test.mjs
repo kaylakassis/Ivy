@@ -51,7 +51,7 @@ async function run() {
 
   console.log('[0] registered, gated, compact');
   {
-    const names = ['manage_service', 'reply_to_review', 'unblock_calendar_time', 'update_booking_status', 'manage_task', 'delete_workflow', 'create_coupon'];
+    const names = ['manage_service', 'reply_to_review', 'unblock_calendar_time', 'edit_calendar_event', 'update_booking_status', 'manage_task', 'delete_workflow', 'create_coupon'];
     assert(names.every((n) => SENSITIVE_TOOLS.has(n) && IVY_TOOLS.some((t) => t.name === n)), 'every write tool is registered and approval-gated');
     assert(IVY_TOOLS.some((t) => t.name === 'list_programs') && !SENSITIVE_TOOLS.has('list_programs') && isReadOnlyIvyTool('list_programs'), 'list_programs is a plain read');
     const size = JSON.stringify(IVY_TOOLS.filter((t) => [...names, 'list_programs'].includes(t.name))).length;
@@ -88,6 +88,46 @@ async function run() {
     assert(/Review not found/.test(x.error || ''), 'another workspace cannot reply');
     const bad = await executeIvyTool('reply_to_review', { review_id: 'not-a-uuid', response: 'x' }, ctx);
     assert(/review_id is required/.test(bad.error || ''), 'malformed id refused');
+  }
+
+  console.log('[3a] edit_calendar_event (title, time, color; reminder-only events listed too)');
+  {
+    const ev = (await sql`INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label, blocks_bookings)
+      VALUES (${ws}, CURRENT_DATE + 3, 660, 720, 'Call Tim', FALSE) RETURNING id`).rows[0].id;
+    const av = await executeIvyTool('get_availability', {}, ctx);
+    assert(av.other_events.some((b) => b.id === ev) && !av.blocked_dates.some((b) => b.id === ev), 'reminder-only events are listed separately, with ids');
+    const row = async () => (await sql`SELECT label, start_min, end_min, color, blocks_bookings FROM calendar_blocks WHERE id = ${ev}`).rows[0];
+    const r = await gated('edit_calendar_event', { event_id: ev, color: 'purple', start_min: 690 }, async () => (await row()).color == null, 'recolor and move');
+    assert(/Change "Call Tim" on .*, 11:00 AM to 12:00 PM: time 11:30 AM to 12:00 PM; color purple\./.test(r.held.summary), `card: ${r.held.summary}`);
+    const after = await row();
+    assert(after.color === '#7c3aed' && after.start_min === 690 && after.end_min === 720 && after.label === 'Call Tim' && after.blocks_bookings === false, 'only color and time changed');
+    assert(r.done.color === 'purple', 'result names the color');
+    // Edited in the app while the card waited: the approved change keeps the new title.
+    const held = await executeIvyTool('edit_calendar_event', { event_id: ev, color: 'none' }, ctx);
+    assert(held.needs_confirmation === true, 'clearing the color is held for approval');
+    await sql`UPDATE calendar_blocks SET label = 'Call Tim (moved)' WHERE id = ${ev}`;
+    await runApprovedTool('edit_calendar_event', { event_id: ev, color: 'none' }, ctx);
+    const cleared = await row();
+    assert(cleared.color === null && cleared.label === 'Call Tim (moved)', 'clearing the color leaves a title changed meanwhile alone');
+    const x = await executeIvyTool('edit_calendar_event', { event_id: ev, color: 'red' }, ctxB);
+    assert(/not found/.test(x.error || ''), 'another workspace cannot edit it');
+    const bad = await executeIvyTool('edit_calendar_event', { event_id: ev, color: 'chartreuse' }, ctx);
+    assert(/color must be one of/.test(bad.error || ''), 'unknown color refused');
+    const flip = await executeIvyTool('edit_calendar_event', { event_id: ev, start_min: 730 }, ctx);
+    assert(/start time must be before the end time/.test(flip.error || ''), 'start after end refused');
+    const none = await executeIvyTool('edit_calendar_event', { event_id: ev }, ctx);
+    assert(/Nothing to change/.test(none.error || ''), 'empty edit refused');
+    const nb = await gated('block_calendar_time', { date: '2030-01-02', start_min: 600, end_min: 660, label: 'Dentist', color: 'teal' },
+      async () => (await sql`SELECT 1 FROM calendar_blocks WHERE workspace_id = ${ws} AND label = 'Dentist'`).rows.length === 0, 'block with color');
+    assert(/\(teal\)/.test(nb.held.summary), `card names the color: ${nb.held.summary}`);
+    assert((await sql`SELECT color FROM calendar_blocks WHERE workspace_id = ${ws} AND label = 'Dentist'`).rows[0]?.color === '#0d9488', 'new block saved in teal');
+    await sql`DELETE FROM calendar_blocks WHERE workspace_id = ${ws} AND (id = ${ev} OR label = 'Dentist')`;
+    // Ivy's color names are exactly the app's color picker.
+    const { readFileSync } = await import('node:fs');
+    const drawer = readFileSync(new URL('../src/features/calendar/EventDrawer.jsx', import.meta.url), 'utf8');
+    const appHexes = [...drawer.matchAll(/hex: '(#[0-9a-f]{6})'/gi)].map((m) => m[1].toLowerCase());
+    const { EVENT_COLORS } = await import('../api/_lib/ivyOwnerTools.js');
+    assert(appHexes.length === 8 && appHexes.every((h) => Object.values(EVENT_COLORS).includes(h)) && Object.keys(EVENT_COLORS).length === 8, "Ivy's colors match the app's color picker");
   }
 
   console.log('[3] unblock_calendar_time');

@@ -79,6 +79,7 @@ Code: `api/_lib/ivyWebsiteTools.js`, plus `api/_lib/websiteVersions.js`, which i
 | Charge a no-show or late-cancel fee, tips, collect payment | Owner only: moves real money on the client's card |
 | Change weekly hours, block a date | `adjust_availability`, `set_availability`, `block_calendar_time` (approval) |
 | Remove blocked time | `unblock_calendar_time` (approval) |
+| Edit an event or blocked time (title, date, time, blocks bookings or not, color) | `edit_calendar_event` (approval); `block_calendar_time` also takes a color |
 | Booking rules (notice, how far ahead, spacing, buffer) | `update_booking_rules` (approval) |
 | Services: create | `create_service` |
 | Services: edit price, length, name, description, group size, visibility; delete | `manage_service` (approval) |

@@ -20,7 +20,7 @@ import { invalidateOwnerWorkspace } from './clientPortal.js';
 import { validateAvailability, availabilityFromPreset, validateBookingRules, validateBusinessBasics, AVAILABILITY_PRESETS } from './settingsValidation.js';
 import { sendEmail, emailShell } from './email.js';
 import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction, refuseWebsiteAction, websiteCardSwatches } from './ivyWebsiteTools.js';
-import { OWNER_TOOLS, OWNER_HANDLERS, OWNER_SENSITIVE, OWNER_READ_ONLY, describeOwnerAction, refuseOwnerAction } from './ivyOwnerTools.js';
+import { OWNER_TOOLS, OWNER_HANDLERS, OWNER_SENSITIVE, OWNER_READ_ONLY, describeOwnerAction, refuseOwnerAction, EVENT_COLORS, EVENT_COLOR_NAMES } from './ivyOwnerTools.js';
 import {
   APP_TOOLS, APP_HANDLERS, APP_SENSITIVE, APP_READ_ONLY, APP_WRITE_TOOLS, appCallIsRead, appToolNeedsApproval,
   describeAppAction, refuseAppAction,
@@ -137,7 +137,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'get_availability',
-    description: "Read the owner's current weekly booking hours (per day, in the business time zone) and the time already blocked off on upcoming dates. Call this before proposing any change to their hours or time off, and to check whether a schedule change was actually made.",
+    description: "Read the owner's current weekly booking hours (per day, in the business time zone) the time already blocked off on upcoming dates (blocked_dates), and reminder-only events that leave the time bookable (other_events), each with its id and color. Call this before proposing any change to their hours or time off, and to check whether a schedule change was actually made.",
     input_schema: {
       type: 'object',
       properties: {
@@ -885,7 +885,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'block_calendar_time',
-    description: 'Block off time on ONE date so no one can book during it - a day off, a dentist appointment, a vacation day. Pass a date (YYYY-MM-DD) plus either all_day=true OR start_min/end_min (minutes-since-midnight, 0-1440). For time off that repeats every week (for example every Tuesday 1 to 2 pm) use adjust_availability instead. Never changes the weekly hours. Approval-gated.',
+    description: 'Block off time on ONE date so no one can book during it - a day off, a dentist appointment, a vacation day. Pass a date (YYYY-MM-DD) plus either all_day=true OR start_min/end_min (minutes-since-midnight, 0-1440). For time off that repeats every week (for example every Tuesday 1 to 2 pm) use adjust_availability instead. Never changes the weekly hours. To change an existing event (title, time, color) use edit_calendar_event. Approval-gated.',
     input_schema: {
       type: 'object',
       properties: {
@@ -894,6 +894,7 @@ export const IVY_TOOLS = [
         start_min: { type: 'integer', minimum: 0, maximum: 1440, description: 'Minutes since midnight, e.g. 540 = 9:00 AM.' },
         end_min:   { type: 'integer', minimum: 0, maximum: 1440 },
         label:     { type: 'string', description: 'Short description shown on the calendar tile, e.g. "Out: dentist".' },
+        color:     { type: 'string', enum: EVENT_COLOR_NAMES, description: 'Optional color for the calendar tile, to color-code the calendar.' },
       },
       required: ['date'],
     },
@@ -1323,7 +1324,7 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       const when = a.all_day
         ? `${a.date || '?'} (all day)`
         : `${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
-      return `Block off ${when}${a.label ? `, "${a.label}"` : ''}. Clients can't book this window. Your weekly hours stay the same.`;
+      return `Block off ${when}${a.label ? `, "${a.label}"` : ''}${a.color ? ` (${String(a.color).toLowerCase()})` : ''}. Clients can't book this window. Your weekly hours stay the same.`;
     }
     case 'create_workflow': {
       const acts = Array.isArray(a.actions) ? a.actions : [];
@@ -3737,21 +3738,34 @@ async function get_availability({ workspaceId, args }) {
   const avail = await currentAvailability(workspaceId);
   const tz = await workspaceTimeZone(workspaceId).catch(() => null);
   const blocks = await sql`
-    SELECT id, date, start_min, end_min, all_day, label FROM calendar_blocks
+    SELECT id, date, start_min, end_min, all_day, label, color FROM calendar_blocks
      WHERE workspace_id = ${workspaceId}
        AND date >= CURRENT_DATE - 1 AND date <= CURRENT_DATE + ${days}::int
        AND COALESCE(blocks_bookings, TRUE) = TRUE
      ORDER BY date, start_min
      LIMIT 60`;
+  // Reminder-only events (on the calendar, clients can still book) so
+  // Ivy can find and edit them too. Added field; blocked_dates unchanged.
+  const others = await sql`
+    SELECT id, date, start_min, end_min, all_day, label, color FROM calendar_blocks
+     WHERE workspace_id = ${workspaceId}
+       AND date >= CURRENT_DATE - 1 AND date <= CURRENT_DATE + ${days}::int
+       AND blocks_bookings = FALSE
+     ORDER BY date, start_min
+     LIMIT 60`;
+  const colorOf = (hex) => EVENT_COLOR_NAMES.find((n) => EVENT_COLORS[n] === String(hex || '').toLowerCase()) || (hex ? 'custom' : null);
+  const row = (b) => ({
+    id: b.id,
+    date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10),
+    time: b.all_day ? 'all day' : `${fmtMinAsTime(b.start_min)} to ${fmtMinAsTime(b.end_min)}`,
+    label: b.label || null,
+    color: colorOf(b.color),
+  });
   return {
     time_zone: tz || null,
     weekly_hours: scheduleByDay(avail),
-    blocked_dates: blocks.rows.map((b) => ({
-      id: b.id,
-      date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10),
-      time: b.all_day ? 'all day' : `${fmtMinAsTime(b.start_min)} to ${fmtMinAsTime(b.end_min)}`,
-      label: b.label || null,
-    })),
+    blocked_dates: blocks.rows.map(row),
+    other_events: others.rows.map(row),
   };
 }
 
@@ -3792,10 +3806,15 @@ async function block_calendar_time({ workspaceId, args }) {
     startMin = s; endMin = e;
   }
   const label = args.label ? String(args.label).trim().slice(0, 200) : null;
+  let color = null;
+  if (args.color != null && args.color !== '') {
+    color = EVENT_COLORS[String(args.color).toLowerCase()];
+    if (!color) throw new Error(`color must be one of: ${EVENT_COLOR_NAMES.join(', ')}`);
+  }
   const r = await sql`
-    INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label, all_day)
-    VALUES (${workspaceId}, ${date}::date, ${startMin}, ${endMin}, ${label}, ${allDay})
+    INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label, all_day, color)
+    VALUES (${workspaceId}, ${date}::date, ${startMin}, ${endMin}, ${label}, ${allDay}, ${color})
     RETURNING id
   `;
-  return { ok: true, block_id: r.rows[0].id, date, all_day: allDay, start_min: startMin, end_min: endMin };
+  return { ok: true, block_id: r.rows[0].id, date, all_day: allDay, start_min: startMin, end_min: endMin, ...(color ? { color: String(args.color).toLowerCase() } : {}) };
 }

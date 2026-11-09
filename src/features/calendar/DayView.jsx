@@ -1,9 +1,10 @@
 // Single-day timeline view. Shows the full day at a higher zoom level than
-// the week grid: 7am – 9pm by default, click empty space to add a block,
-// click a block/booking to edit.
+// the week grid: 7am to 9pm by default (stretched to fit anything earlier
+// or later that day), click empty space to add a block, click a
+// block/booking to edit. Overlapping items sit side by side (DayTiles).
 import React from 'react';
-import { Icons } from '../../components/Icons.jsx';
 import { fmtDateISO, minToHM } from './utils.js';
+import DayTiles, { AllDayChips } from './DayTiles.jsx';
 
 const HOURS_START = 7;   // 7am
 const HOURS_END   = 21;  // 9pm
@@ -15,7 +16,15 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
   const todayISO = fmtDateISO(new Date());
   const isToday = dateISO === todayISO;
   const avail   = (cal.settings.availability && cal.settings.availability[String(dayIdx)]) || [];
-  const hours   = Array.from({ length: HOURS_END - HOURS_START + 1 }, (_, i) => i + HOURS_START);
+  // A 6am or 10pm appointment used to be drawn off the grid; stretch the
+  // hours to include everything timed on this day.
+  let startH = HOURS_START, endH = HOURS_END;
+  for (const ev of [...(cal.bookings || []), ...(cal.blocks || [])]) {
+    if (ev.date !== dateISO || ev.allDay) continue;
+    if (Number.isFinite(ev.startMin)) startH = Math.min(startH, Math.max(0, Math.floor(ev.startMin / 60)));
+    if (Number.isFinite(ev.endMin))   endH   = Math.max(endH, Math.min(23, Math.ceil(ev.endMin / 60) - 1));
+  }
+  const hours   = Array.from({ length: endH - startH + 1 }, (_, i) => i + startH);
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
@@ -34,11 +43,20 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
         </div>
         <div style={{ flex: 1 }}/>
         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-          {(cal.bookings || []).filter((b) => b.date === dateISO && !b.isRequest).length} bookings
+          {plural((cal.bookings || []).filter((b) => b.date === dateISO && !b.isRequest).length, 'booking')}
           {' · '}
-          {(cal.blocks || []).filter((b) => b.date === dateISO).length} blocks
+          {plural((cal.blocks || []).filter((b) => b.date === dateISO).length, 'event')}
         </div>
       </div>
+
+      {(cal.blocks || []).some((b) => b.date === dateISO && b.allDay) && (
+        <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ padding: '8px 12px', fontSize: 11, color: 'var(--muted)', textAlign: 'right' }}>All day</div>
+          <div style={{ padding: 6, borderLeft: '1px solid var(--border)' }}>
+            <AllDayChips dateISO={dateISO} cal={cal} onOpenEvent={onOpenEvent}/>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr' }}>
         <div>
@@ -56,7 +74,7 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
             if (e.currentTarget !== e.target) return;
             const rect = e.currentTarget.getBoundingClientRect();
             const y = e.clientY - rect.top;
-            const startMin = HOURS_START * 60 + Math.floor(y / (ROW_H / 2)) * 30;
+            const startMin = startH * 60 + Math.floor(y / (ROW_H / 2)) * 30;
             onPickBlock(dateISO, startMin, startMin + 60);
           }}
         >
@@ -65,7 +83,7 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
           ))}
           {/* availability bands */}
           {avail.map((w, wi) => {
-            const top = ((w.start - HOURS_START * 60) / 60) * ROW_H;
+            const top = ((w.start - startH * 60) / 60) * ROW_H;
             const h   = ((w.end - w.start) / 60) * ROW_H;
             if (h <= 0) return null;
             return (
@@ -78,67 +96,12 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
               }}/>
             );
           })}
-          {/* blocks */}
-          {(cal.blocks || []).filter((b) => b.date === dateISO).map((b) => {
-            const top = ((b.startMin - HOURS_START * 60) / 60) * ROW_H;
-            const h   = ((b.endMin - b.startMin) / 60) * ROW_H;
-            // Render style mirrors Calendar.jsx's day-column tiles
-            // exactly so views look consistent. See that file for the
-            // logic comments.
-            const isBlocking = b.blocksBookings !== false;
-            const baseColor  = b.color || (isBlocking ? null : 'var(--accent)');
-            const bg = isBlocking
-              ? (baseColor
-                  ? `repeating-linear-gradient(-45deg, ${baseColor}22 0 6px, ${baseColor}66 6px 12px)`
-                  : 'repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--border-strong) 6px 12px)')
-              : (baseColor ? `${baseColor}33` : 'var(--accent-soft)');
-            const border = baseColor || 'var(--border-strong)';
-            return (
-              <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'block', ...b }); }}
-                title={isBlocking ? 'Blocks bookings' : 'Reminder only (clients can still book)'}
-                style={{
-                  position: 'absolute', top, height: h, left: 8, right: 8,
-                  background: bg,
-                  border: `1px solid ${border}`, borderRadius: 8,
-                  padding: '8px 12px', fontSize: 12, color: 'var(--fg-2)', cursor: 'pointer', overflow: 'hidden',
-                }}>
-                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {!isBlocking && <span style={{ fontSize: 10, opacity: 0.7 }}>◌</span>}
-                  <span>{b.label || (isBlocking ? 'Blocked' : 'Event')}</span>
-                </div>
-                <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>
-                  {b.allDay ? 'All day' : `${minToHM(b.startMin)} to ${minToHM(b.endMin)}`}
-                </div>
-              </div>
-            );
-          })}
-          {/* bookings */}
-          {(cal.bookings || []).filter((b) => b.date === dateISO).map((b) => {
-            const top = ((b.startMin - HOURS_START * 60) / 60) * ROW_H;
-            const h   = ((b.endMin - b.startMin) / 60) * ROW_H;
-            const svc = cal.services.find((s) => s.id === b.serviceId);
-            const tile = svc?.color || 'var(--accent)';
-            const ink  = svc?.color ? '#fff' : 'var(--accent-ink)';
-            // A booking request: dashed outline, not filled, "Requested".
-            const req = !!b.isRequest;
-            return (
-              <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }}
-                title={req ? 'Booking request: waiting for your approval' : undefined}
-                style={{
-                  position: 'absolute', top, height: h, left: 8, right: 8,
-                  background: req ? 'var(--surface)' : tile, color: req ? 'var(--fg)' : ink,
-                  border: req ? `1.5px dashed ${tile}` : `1px solid ${tile}`, borderRadius: 8,
-                  padding: '8px 12px', fontSize: 12, cursor: 'pointer', overflow: 'hidden',
-                }}>
-                <div style={{ fontWeight: 600 }}>{req ? 'Requested: ' : ''}{b.clientName || 'Client'}</div>
-                <div style={{ fontSize: 11, opacity: 0.85, marginTop: 2 }}>
-                  {svc?.name || 'Session'} · {minToHM(b.startMin)} to {minToHM(b.endMin)}
-                </div>
-              </div>
-            );
-          })}
+          <DayTiles dateISO={dateISO} cal={cal} gridStartMin={startH * 60} rowH={ROW_H}
+            totalH={ROW_H * hours.length} onOpenEvent={onOpenEvent}/>
         </div>
       </div>
     </div>
   );
 }
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;

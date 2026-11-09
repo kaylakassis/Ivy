@@ -19,6 +19,7 @@ import StaffDrawer from './StaffDrawer.jsx';
 import SyncDrawer from './SyncDrawer.jsx';
 import PackagesDrawer from './PackagesDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
+import DayTiles, { AllDayChips } from './DayTiles.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
 import DepositReviews from './DepositReviews.jsx';
 import WaitlistDrawer from './WaitlistDrawer.jsx';
@@ -675,6 +676,9 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
                 fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500,
                 color: isToday ? 'var(--accent)' : 'var(--fg)', marginTop: 2,
               }}>{d.getDate()}</div>
+              <div style={{ marginTop: 4 }}>
+                <AllDayChips dateISO={fmtDateISO(d)} cal={cal} onOpenEvent={onOpenEvent} dense/>
+              </div>
             </div>
           );
         })}
@@ -722,77 +726,10 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
                   }}/>
                 );
               })}
-              {/* blocks (and personal events). Render style depends on
-                  blocksBookings: a hard block keeps the diagonal-stripe
-                  pattern that says "unavailable"; a reminder-only
-                  event renders solid in the chosen color with a small
-                  "no-block" indicator so the owner can tell at a
-                  glance that clients can still book this slot.
-                  When the owner picks a color it overrides the
-                  default in both modes. */}
-              {(cal.blocks || []).filter((b) => b.date === dateISO).map((b) => {
-                const top = ((b.startMin - hours[0] * 60) / 60) * rowH;
-                const h   = ((b.endMin - b.startMin) / 60) * rowH;
-                const isBlocking = b.blocksBookings !== false;
-                const baseColor  = b.color || (isBlocking ? null : 'var(--accent)');
-                const bg = isBlocking
-                  ? (baseColor
-                      ? `repeating-linear-gradient(-45deg, ${baseColor}22 0 6px, ${baseColor}66 6px 12px)`
-                      : 'repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--border-strong) 6px 12px)')
-                  : (baseColor ? `${baseColor}33` : 'var(--accent-soft)');
-                const border = baseColor || 'var(--border-strong)';
-                return (
-                  <div key={b.id}
-                    onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'block', ...b }); }}
-                    title={isBlocking ? 'Blocks bookings' : 'Reminder only (clients can still book)'}
-                    style={{
-                      position: 'absolute', top, height: h, left: 4, right: 4,
-                      background: bg,
-                      border: `1px solid ${border}`, borderRadius: 6,
-                      padding: '4px 6px', fontSize: 11, color: 'var(--fg-2)',
-                      cursor: 'pointer', overflow: 'hidden',
-                    }}>
-                    <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {!isBlocking && (
-                        <span title="Doesn't block bookings"
-                          style={{ fontSize: 9, opacity: 0.7 }}>◌</span>
-                      )}
-                      <span>{b.label || (isBlocking ? 'Blocked' : 'Event')}</span>
-                    </div>
-                    <div style={{ color: 'var(--muted)', fontSize: 10 }}>
-                      {b.allDay ? 'All day' : `${minToHM(b.startMin)} to ${minToHM(b.endMin)}`}
-                    </div>
-                  </div>
-                );
-              })}
-              {/* bookings - use the service's color when set so the
-                  owner can tell apart different service types at a
-                  glance (yoga vs massage vs consultation). Falls back
-                  to the workspace accent for legacy services. */}
-              {(cal.bookings || []).filter((b) => b.date === dateISO).map((b) => {
-                const top = ((b.startMin - hours[0] * 60) / 60) * rowH;
-                const h   = ((b.endMin - b.startMin) / 60) * rowH;
-                const svc = (cal?.services || []).find((s) => s.id === b.serviceId);
-                const tile = svc?.color || 'var(--accent)';
-                const ink  = svc?.color ? '#fff' : 'var(--accent-ink)';
-                // A booking request: dashed outline, not filled, "Requested".
-                const req = !!b.isRequest;
-                return (
-                  <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }}
-                    title={req ? 'Booking request: waiting for your approval' : undefined}
-                    style={{
-                      position: 'absolute', top, height: h, left: 4, right: 4,
-                      background: req ? 'var(--surface)' : tile, color: req ? 'var(--fg)' : ink,
-                      border: req ? `1.5px dashed ${tile}` : `1px solid ${tile}`, borderRadius: 6,
-                      padding: '4px 7px', fontSize: 11, cursor: 'pointer', overflow: 'hidden',
-                    }}>
-                    <div style={{ fontWeight: 600 }}>{req ? 'Requested: ' : ''}{b.clientName || 'Client'}</div>
-                    <div style={{ fontSize: 10, opacity: 0.8 }}>
-                      {svc?.name || 'Session'} · {minToHM(b.startMin)}
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Blocked time, personal events and bookings. Overlapping
+                  items sit side by side; see DayTiles for the styles. */}
+              <DayTiles dateISO={dateISO} cal={cal} gridStartMin={hours[0] * 60} rowH={rowH}
+                totalH={rowH * hours.length} dense onOpenEvent={onOpenEvent}/>
             </div>
           );
         })}

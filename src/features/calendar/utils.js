@@ -272,3 +272,65 @@ export const RECURRENCE_OPTIONS = [
   { value: 'biweekly',  label: 'Every 2 weeks' },
   { value: 'monthly',   label: 'Monthly' },
 ];
+
+// Side-by-side layout for things that overlap in time (like a paper
+// diary): every group of overlapping items shares the column width, so
+// each title stays readable instead of one tile covering the next. An
+// item widens into free columns to its right when nothing there overlaps
+// it. `minMinutes` treats very short items as at least that long, since
+// their tiles are drawn taller than their real length.
+// Returns a Map from each event object to { col, cols, span }.
+export function layoutOverlaps(events, minMinutes = 0) {
+  const items = (events || [])
+    .filter((ev) => ev && !ev.allDay && Number.isFinite(ev.startMin) && Number.isFinite(ev.endMin))
+    .map((ev) => ({ ev, s: ev.startMin, e: Math.max(ev.endMin, ev.startMin + minMinutes) }))
+    .sort((a, b) => a.s - b.s || b.e - a.e);
+  const out = new Map();
+  let group = [];
+  let groupEnd = -Infinity;
+  let cols = [];
+  const flush = () => {
+    const n = cols.length;
+    for (const it of group) {
+      let span = 1;
+      for (let c = it.col + 1; c < n; c++) {
+        if (cols[c].some((o) => o.s < it.e && it.s < o.e)) break;
+        span++;
+      }
+      out.set(it.ev, { col: it.col, cols: n, span });
+    }
+    group = [];
+    cols = [];
+    groupEnd = -Infinity;
+  };
+  for (const it of items) {
+    if (group.length && it.s >= groupEnd) flush();
+    let c = cols.findIndex((col) => col[col.length - 1].e <= it.s);
+    if (c === -1) { c = cols.length; cols.push([]); }
+    cols[c].push(it);
+    it.col = c;
+    group.push(it);
+    groupEnd = Math.max(groupEnd, it.e);
+  }
+  if (group.length) flush();
+  return out;
+}
+
+// Left/width for a tile placed by layoutOverlaps inside a column that
+// keeps `pad` px free on each side and `gap` px between tiles.
+export function tileX(pos, pad = 4, gap = 3) {
+  const { col = 0, cols = 1, span = 1 } = pos || {};
+  if (cols <= 1) return { left: pad, width: `calc(100% - ${pad * 2}px)` };
+  const unit = `(100% - ${pad * 2}px) / ${cols}`;
+  return {
+    left: `calc(${pad}px + ${unit} * ${col})`,
+    width: `calc(${unit} * ${span} - ${col + span < cols ? gap : 0}px)`,
+  };
+}
+
+// #abc -> #aabbcc so an alpha suffix ("#aabbcc33") is always valid CSS.
+export function hex6(c) {
+  if (typeof c !== 'string') return c;
+  const m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(c);
+  return m ? `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}` : c;
+}

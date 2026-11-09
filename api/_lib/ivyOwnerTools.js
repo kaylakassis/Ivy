@@ -16,6 +16,14 @@ import { fetchFinanceSettings } from './finance.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+// The calendar's event colors, same as the color picker in the app
+// (src/features/calendar/EventDrawer.jsx EVENT_PALETTE).
+export const EVENT_COLORS = {
+  slate: '#64748b', blue: '#3b82f6', teal: '#0d9488', green: '#16a34a',
+  amber: '#d97706', red: '#dc2626', pink: '#db2777', purple: '#7c3aed',
+};
+export const EVENT_COLOR_NAMES = Object.keys(EVENT_COLORS);
+const colorName = (hex) => EVENT_COLOR_NAMES.find((n) => EVENT_COLORS[n] === String(hex || '').toLowerCase()) || (hex ? 'custom' : 'none');
 const VISIBILITY_WORDS = { public: 'listed on your booking page', private: 'bookable by link only', only_me: 'hidden from clients' };
 
 // ── tool definitions (compact: sent with every request) ───────────────
@@ -53,6 +61,20 @@ export const OWNER_TOOLS = [
     name: 'unblock_calendar_time',
     description: 'Remove blocked-off time (block_id from get_availability blocked_dates) so clients can book it again.',
     input_schema: { type: 'object', properties: { block_id: { type: 'string' } }, required: ['block_id'] },
+  },
+  {
+    name: 'edit_calendar_event',
+    description: 'Change an event or blocked time on the calendar: its title, date, start/end time (minutes since midnight), whether it blocks bookings, or its color (color-codes the calendar; "none" clears it). event_id from get_availability (blocked_dates or other_events). Only the fields given change.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        event_id: { type: 'string' }, title: { type: 'string' }, date: { type: 'string', description: 'YYYY-MM-DD' },
+        start_min: { type: 'integer', minimum: 0, maximum: 1439 }, end_min: { type: 'integer', minimum: 1, maximum: 1440 },
+        blocks_bookings: { type: 'boolean' },
+        color: { type: 'string', enum: [...EVENT_COLOR_NAMES, 'none'] },
+      },
+      required: ['event_id'],
+    },
   },
   {
     name: 'update_booking_status',
@@ -233,6 +255,70 @@ async function planUnblock(ws, a) {
       const r = await sql`DELETE FROM calendar_blocks WHERE id = ${id} AND workspace_id = ${ws} RETURNING id`;
       if (!r.rows.length) throw new Error('That blocked time was not found');
       return { ok: true, removed: true, date: isoOf(b.date) };
+    },
+  };
+}
+
+async function planEditEvent(ws, a) {
+  const id = needId(a.event_id, 'event_id', 'get_availability');
+  const b = (await sql`SELECT * FROM calendar_blocks WHERE id = ${id} AND workspace_id = ${ws}`).rows[0];
+  if (!b) throw new Error('That calendar event was not found');
+  const next = {};
+  const changes = [];
+  if (a.title !== undefined) {
+    next.label = String(a.title ?? '').trim().slice(0, 120) || null;
+    changes.push(`title "${clip(next.label || 'none', 40)}"`);
+  }
+  if (a.date !== undefined) {
+    if (!ISO_DATE.test(String(a.date))) throw new Error('date must be YYYY-MM-DD');
+    next.date = String(a.date);
+    changes.push(`date ${fmtDay(next.date)}`);
+  }
+  const s = a.start_min !== undefined ? Number(a.start_min) : b.start_min;
+  const e = a.end_min !== undefined ? Number(a.end_min) : b.end_min;
+  if (a.start_min !== undefined || a.end_min !== undefined) {
+    if (b.all_day) throw new Error('That is an all-day event; it has no start or end time');
+    if (!Number.isInteger(s) || !Number.isInteger(e) || s < 0 || e > 24 * 60 || s >= e) throw new Error('The start time must be before the end time, within the day');
+    next.start_min = s;
+    next.end_min = e;
+    changes.push(`time ${fmtMin(s)} to ${fmtMin(e)}`);
+  }
+  if (a.blocks_bookings !== undefined) {
+    next.blocks_bookings = !!a.blocks_bookings;
+    changes.push(next.blocks_bookings ? "clients can't book during it" : 'reminder only, clients can still book');
+  }
+  if (a.color !== undefined) {
+    const c = String(a.color || '').toLowerCase();
+    if (c !== 'none' && !EVENT_COLORS[c]) throw new Error(`color must be one of: ${EVENT_COLOR_NAMES.join(', ')}, or none`);
+    next.color = c === 'none' ? null : EVENT_COLORS[c];
+    changes.push(c === 'none' ? 'no color' : `color ${c}`);
+  }
+  if (!changes.length) throw new Error('Nothing to change: give a title, date, time, blocks_bookings or color');
+  const was = `"${clip(b.label || (b.blocks_bookings === false ? 'Event' : 'Blocked time'), 40)}" on ${fmtDay(b.date)}, ${b.all_day ? 'all day' : `${fmtMin(b.start_min)} to ${fmtMin(b.end_min)}`}`;
+  return {
+    summary: `Change ${was}: ${changes.join('; ')}.`,
+    done: `Updated ${was}`,
+    apply: async () => {
+      // Only the fields on the card change; everything else keeps what is
+      // stored now (the owner may have edited it since the card was shown).
+      const has = (k) => k in next;
+      const r = await sql`
+        UPDATE calendar_blocks SET
+          label = CASE WHEN ${has('label')} THEN ${next.label ?? null}::text ELSE label END,
+          date = CASE WHEN ${has('date')} THEN ${next.date ?? null}::date ELSE date END,
+          start_min = CASE WHEN ${has('start_min')} THEN ${next.start_min ?? null}::int ELSE start_min END,
+          end_min = CASE WHEN ${has('end_min')} THEN ${next.end_min ?? null}::int ELSE end_min END,
+          blocks_bookings = CASE WHEN ${has('blocks_bookings')} THEN ${next.blocks_bookings ?? null}::boolean ELSE blocks_bookings END,
+          color = CASE WHEN ${has('color')} THEN ${next.color ?? null}::text ELSE color END
+         WHERE id = ${id} AND workspace_id = ${ws}
+         RETURNING id, label, date, start_min, end_min, blocks_bookings, color, all_day`;
+      if (!r.rows.length) throw new Error('That calendar event was not found');
+      const x = r.rows[0];
+      return {
+        ok: true, event_id: x.id, title: x.label, date: isoOf(x.date),
+        time: x.all_day ? 'all day' : `${fmtMin(x.start_min)} to ${fmtMin(x.end_min)}`,
+        blocks_bookings: x.blocks_bookings !== false, color: colorName(x.color),
+      };
     },
   };
 }
@@ -431,6 +517,7 @@ const PLANS = {
   manage_service: planService,
   reply_to_review: planReview,
   unblock_calendar_time: planUnblock,
+  edit_calendar_event: planEditEvent,
   update_booking_status: planBookingStatus,
   manage_task: planTask,
   delete_workflow: planDeleteWorkflow,

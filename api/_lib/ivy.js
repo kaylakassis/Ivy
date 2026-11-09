@@ -981,7 +981,9 @@ MORE OF THE APP (all approval-gated):
   manage_service (edit price, length, name, description, group size,
   visibility, or delete a service), reply_to_review (public reply under a
   review, or remove it), unblock_calendar_time (remove blocked time; ids from
-  get_availability), update_booking_status (mark an appointment completed or a
+  get_availability), edit_calendar_event (change an event's or blocked time's
+  title, date, time, whether it blocks bookings, or its color to color-code
+  the calendar; ids from get_availability), update_booking_status (mark an appointment completed or a
   no-show, or undo; never charges a fee), manage_task (edit, reopen, delete),
   delete_workflow, create_coupon (program coupon codes; list_programs reads
   programs and codes).
