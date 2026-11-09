@@ -20,6 +20,9 @@
 set -e
 set -x
 
+# Skip Homebrew's self-update: it adds time and nothing we need.
+export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_ENV_HINTS=1
+
 # Xcode Cloud images ship Homebrew (and CocoaPods), but not Node.
 brew install node@22
 export PATH="$(brew --prefix node@22)/bin:$PATH"
@@ -31,5 +34,18 @@ pod --version
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 npm ci --no-audit --no-fund
 
+# Xcode Cloud leaves git settings on the machine from its own checkout
+# that send github.com through a local proxy (localhost:8088) which is
+# gone by now. Some pods (RevenueCat's PurchasesHybridCommon) are fetched
+# with git clone, so pod install died with "Failed to connect to localhost
+# port 8088" (build 189). Show which settings exist (names only, any
+# login in a URL hidden), then run the sync without them: these pods are
+# public, and everything else on this machine already downloads directly.
+git config --show-origin --name-only --get-regexp '^(url\.|http\.)' 2>/dev/null \
+  | sed -E 's#//[^/@[:space:]]*@#//***@#g' || true
+env | grep -i '_proxy=' | sed -E 's/=.*/=(set)/' || true
+
 # env preflight -> vite build -> copy into ios/ -> pod install
-npm run ios:sync
+env -u http_proxy -u HTTP_PROXY -u https_proxy -u HTTPS_PROXY -u all_proxy -u ALL_PROXY \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+  npm run ios:sync
