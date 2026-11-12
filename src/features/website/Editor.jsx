@@ -15,6 +15,7 @@ import SectionLibrary from './SectionLibrary.jsx';
 import Canvas from './Canvas.jsx';
 import Inspector, { ImageInput } from './Inspector.jsx';
 import AdvancedPanel from './AdvancedPanel.jsx';
+import PagesManager from './PagesManager.jsx';
 import { mkSection, FONT_PAIRS, SECTION_TYPES } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { siteShareUrl } from '../../lib/publicUrl.js';
@@ -27,7 +28,7 @@ export default function Editor({
   site, set, setSection, addSection, removeSection, moveSection, moveSectionTo,
   duplicateSection, moveSectionToPage, copySectionToPage,
   currentPage, currentPageId, setCurrentPageId,
-  addPage, removePage, renamePage, movePage,
+  addPage, removePage, renamePage, movePage, movePageTo,
   reset, publish, saving, saveErr, hasUnpublishedChanges,
   schedulePublish, cancelSchedule, discardChanges, restoreVersion,
   undo, redo, canUndo, canRedo,
@@ -596,7 +597,9 @@ export default function Editor({
             renamePage(pageId, patch);
           }}
           onMove={movePage}
+          onMoveTo={movePageTo}
           onRemove={removePage}
+          mobile={isMobile}
         />
       )}
 
@@ -824,9 +827,23 @@ function DraftStatus({ saving, saveErr, publishErr, published, hasUnpublishedCha
 // PageTabs - pill row above the main editor body. Renders the list of
 // pages for the site, lets the owner switch which page is being edited,
 // rename via prompt, reorder, and delete (with home-page protection).
-function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onRemove }) {
+// A new title also gives the page a matching web address (never for the
+// home page, which always lives at the site's main address).
+function titlePatch(p, title) {
+  const patch = { title: title.trim() };
+  if (p.slug !== '') {
+    patch.slug = title.trim().toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .slice(0, 40);
+  }
+  return patch;
+}
+
+function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onMoveTo, onRemove, mobile }) {
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState('');
+  const [managing, setManaging] = useState(false);
 
   if (!Array.isArray(pages) || pages.length === 0) return null;
 
@@ -835,17 +852,7 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onR
     setDraft(p.title);
   };
   const commitRename = (p) => {
-    if (draft.trim() && draft !== p.title) {
-      // Auto-derive slug from title only if this isn't the home page.
-      const patch = { title: draft.trim() };
-      if (p.slug !== '') {
-        patch.slug = draft.trim().toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .slice(0, 40);
-      }
-      onRename(p.id, patch);
-    }
+    if (draft.trim() && draft !== p.title) onRename(p.id, titlePatch(p, draft));
     setEditingId(null);
   };
 
@@ -935,6 +942,37 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onR
         }}>
         <Icons.Plus size={11} sw={2}/> Page
       </button>
+      {pages.length > 1 && (
+        <button
+          type="button"
+          onClick={() => setManaging(true)}
+          title="Change the order of your pages"
+          style={{
+            padding: '5px 11px', fontSize: 12.5, borderRadius: 999,
+            border: '1px solid var(--border)',
+            background: 'var(--surface-2)', color: 'var(--fg-2)',
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+          }}>
+          <Icons.ArrowUp size={11} sw={2}/><Icons.ArrowDown size={11} sw={2} style={{ marginLeft: -5 }}/> Reorder
+        </button>
+      )}
+      {managing && (
+        <PagesManager
+          pages={pages}
+          currentPageId={currentPageId}
+          mobile={mobile}
+          onSelect={onSelect}
+          onMove={onMove}
+          onMoveTo={onMoveTo}
+          onRemove={onRemove}
+          onRename={(id, patch) => {
+            const p = pages.find((x) => x.id === id);
+            if (!p) return;
+            onRename(id, patch.title != null ? titlePatch(p, patch.title) : patch);
+          }}
+          onClose={() => setManaging(false)}
+        />
+      )}
     </div>
   );
 }

@@ -337,7 +337,9 @@ async function run() {
   r = await request(A, casey, { date: d4 });
   const req4 = r.body.booking.id;
   let sweep = await runBookingRequestSweep();
-  assert(sweep.expiredRequests === 0 && isPendingRequest(await bk(req4)), 'a fresh request is left alone');
+  // The sweep runs over every business in the shared test database, so
+  // judge it by this request only (other suites can leave expired ones).
+  assert(isPendingRequest(await bk(req4)), 'a fresh request is left alone');
   await sql`UPDATE bookings SET request_expires_at = NOW() - INTERVAL '1 minute' WHERE id = ${req4}`;
   sweep = await runBookingRequestSweep();
   row = await bk(req4);
