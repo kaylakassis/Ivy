@@ -322,7 +322,7 @@ function VideoEditor({ data, update }) {
       <Sub data={data} update={update}/>
       <Row label={`Paste a link to your video (${VIDEO_HOSTS_LABEL})`}
         hint={ok ? 'Copy the link from the Share button on the video page. The normal watch link is fine.' : null}>
-        <TextInput type="url" inputMode="url" value={str(data.videoUrl)} placeholder="https://www.youtube.com/watch?v=…"
+        <TextInput type="url" inputMode="url" value={str(data.videoUrl)} placeholder="Paste your video link here"
           onChange={(e) => update({ videoUrl: e.target.value })}
           style={ok ? undefined : { borderColor: 'var(--danger)' }}/>
       </Row>
@@ -635,7 +635,7 @@ function SocialFeedEditor({ data, update }) {
         </Select>
       </Row>
       <Row label="Your username or profile link" hint={`Visitors see a "View on ${p?.label || 'social'}" button that opens your profile.`}>
-        <TextInput value={draft} placeholder={p?.example || 'https://…'}
+        <TextInput value={draft} placeholder="@yourname, or paste your profile link"
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => update({ url: normalizeSocialUrl(platform, draft) })}/>
       </Row>

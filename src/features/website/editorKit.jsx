@@ -10,7 +10,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES } from './sections.js';
-import { sectionAnchors } from '../../lib/siteLinks.js';
+import { sectionAnchors, resolveSiteLink } from '../../lib/siteLinks.js';
 
 // What the editors need to know about the site around them: the pages
 // (for the link picker), the sections on the page being edited (for
@@ -194,11 +194,17 @@ export function Repeater({ items = [], onChange, make, addLabel = 'Add', itemLab
   );
 }
 
-// Image field: upload a photo (Vercel Blob via the existing upload-token
-// endpoint, image-only allowlist enforced server-side) or paste a link.
-export function ImageInput({ value, onChange, placeholder = 'Upload a photo, or paste a link to one' }) {
+// Image field. The owner sees a picture, never a web address: upload a
+// photo and it shows as a thumbnail with Change / Remove. "Use a photo from
+// the web" is tucked behind a small link for the rare owner who has one;
+// once added it is a thumbnail like any other. (Uploads go to Vercel Blob
+// via the existing upload-token endpoint, image-only allowlist enforced
+// server-side.)
+export function ImageInput({ value, onChange, placeholder = "Paste the photo's web address" }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  const [linking, setLinking] = useState(false);
+  const [draft, setDraft] = useState('');
   const { mobile } = useEditorCtx();
   const [inputId] = useState(() => `img-up-${Math.random().toString(36).slice(2, 8)}`);
 
@@ -213,6 +219,7 @@ export function ImageInput({ value, onChange, placeholder = 'Upload a photo, or 
         contentType: file.type,
       });
       onChange(result.url);
+      setLinking(false); setDraft('');
     } catch (e2) {
       setErr(e2.message || 'Upload failed');
     } finally {
@@ -220,40 +227,56 @@ export function ImageInput({ value, onChange, placeholder = 'Upload a photo, or 
       e.target.value = '';  // allow re-picking the same file
     }
   };
+  const addLink = () => {
+    const u = draft.trim();
+    if (!u) return;
+    onChange(u);
+    setLinking(false); setDraft('');
+  };
+  const pickBtn = {
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+    padding: '8px 12px', fontSize: 12.5, fontWeight: 600, minHeight: mobile ? 44 : undefined,
+    border: '1px solid var(--border-strong)', background: 'var(--surface-2)', color: 'var(--fg)',
+    borderRadius: 'var(--radius-sm, 10px)', cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1,
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-      <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
-        <input type="url" value={value || ''}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder} style={{ ...inputS, flex: 1 }}/>
-        <label htmlFor={inputId} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
-          padding: '8px 12px', fontSize: 12, minHeight: mobile ? 44 : undefined,
-          border: '1px solid var(--border-strong)',
-          background: 'var(--surface-2)', color: 'var(--fg)',
-          borderRadius: 'var(--radius-sm, 10px)',
-          cursor: busy ? 'wait' : 'pointer',
-          opacity: busy ? 0.6 : 1,
-        }}>
-          {busy ? '…' : 'Upload'}
-        </label>
-        <input id={inputId} type="file" accept="image/*"
-          onChange={onPick} disabled={busy}
-          style={{ display: 'none' }}/>
-      </div>
-      {value && (
+      {value ? (
         <div style={{ position: 'relative' }}>
-          <div style={{
+          <div role="img" aria-label="Current photo" style={{
             aspectRatio: '16 / 9', borderRadius: 6,
             background: `center/cover no-repeat url("${value}"), var(--surface-2)`,
             border: '1px solid var(--border)',
           }}/>
-          <button type="button" onClick={() => onChange('')} className="btn btn-ghost"
-            title="Remove photo" aria-label="Remove photo"
-            style={{ position: 'absolute', top: 6, right: 6, padding: '4px 8px', fontSize: 11, background: 'rgba(17,18,16,0.7)', color: '#fff', borderRadius: 6 }}>
+        </div>
+      ) : null}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <label htmlFor={inputId} style={{ ...pickBtn, flex: 1 }}>
+          <Icons.Image size={13}/>{busy ? 'Uploading…' : (value ? 'Change photo' : 'Upload a photo')}
+        </label>
+        {value ? (
+          <button type="button" onClick={() => onChange('')} style={{ ...pickBtn, color: 'var(--danger)' }}>
             Remove
           </button>
+        ) : null}
+        <input id={inputId} type="file" accept="image/*"
+          onChange={onPick} disabled={busy}
+          style={{ display: 'none' }}/>
+      </div>
+      {!value && !linking && (
+        <button type="button" onClick={() => setLinking(true)}
+          style={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)', textDecoration: 'underline', alignSelf: 'flex-start', padding: mobile ? '8px 0' : '2px 0' }}>
+          Use a photo from the web instead
+        </button>
+      )}
+      {!value && linking && (
+        <div style={{ display: 'flex', gap: 6, minWidth: 0 }}>
+          <input type="url" inputMode="url" value={draft} autoFocus
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
+            placeholder={placeholder} aria-label="Photo web address" style={{ ...inputS, flex: 1 }}/>
+          <button type="button" onClick={addLink} disabled={!draft.trim()} style={{ ...pickBtn, opacity: draft.trim() ? 1 : 0.5 }}>Add</button>
         </div>
       )}
       {err && <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>}
@@ -380,6 +403,22 @@ const CUSTOM = '__custom';
 const EMAIL = '__email';
 const PHONE = '__phone';
 const NONE = '';
+const DEAD = '__dead';
+
+// Where a leftover "#name" link lands on the live site, as one of the
+// picker's own options (same rules as resolveSiteLink), or null.
+function namedTarget(v, pages, sections, known) {
+  const anchors = sectionAnchors(sections || []);
+  const to = resolveSiteLink(v, {
+    anchors, sections: sections || [], linkBase: '',
+    pages: (pages || []).map((p) => ({ slug: p.slug || '' })),
+  });
+  if (to === '/') return known.has('#home') ? '#home' : null;
+  if (typeof to !== 'string') return null;
+  if (to.startsWith('/') && known.has(`#${to.slice(1)}`)) return `#${to.slice(1)}`;
+  if (to.startsWith('#') && to !== v && known.has(to)) return to;
+  return null;
+}
 
 function sectionOptions(sections) {
   const anchors = sectionAnchors(sections || []);
@@ -404,14 +443,22 @@ export function LinkField({ value, onChange, emptyMeans = 'booking', label = 'Bu
   const pageOpts = pageOptions(pages);
   const secOpts = sectionOptions(sections);
   const known = new Set([BOOK, ...pageOpts.map((o) => o.value), ...secOpts.map((o) => o.value)]);
+  // A "#name" link a template or an older save left behind (like
+  // "#portfolio"): show where it actually goes on the live site, by name.
+  // One that goes nowhere is shown as such, never as raw "#name".
+  const named = v.startsWith('#') && !known.has(v) ? namedTarget(v, pages, sections, known) : null;
+  const dead = v.startsWith('#') && !known.has(v) && !named;
   const derived = v === '' ? NONE
     : known.has(v) ? v
+    : named ? named
+    : dead ? DEAD
     : /^mailto:/i.test(v) ? EMAIL
     : /^tel:/i.test(v) ? PHONE
     : CUSTOM;
   const mode = pick ?? derived;
 
   const choose = (m) => {
+    if (m === DEAD) return;
     if (m === CUSTOM || m === EMAIL || m === PHONE) {
       setPick(m);
       if (derived !== m) onChange('');
@@ -424,6 +471,7 @@ export function LinkField({ value, onChange, emptyMeans = 'booking', label = 'Bu
   return (
     <Row label={label} as="div" hint={hint}>
       <Select value={mode} onChange={choose} aria-label={label}>
+        {mode === DEAD && <option value={DEAD}>Not linked to anything yet. Pick where it goes</option>}
         <option value={NONE}>{defaultLabel}</option>
         {emptyMeans !== 'booking' && <option value={BOOK}>Your booking page</option>}
         {pageOpts.length > 0 && (

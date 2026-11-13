@@ -7,6 +7,7 @@
 // a mouse, a finger and a pen.
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import { usePointerReorder, gripKeyDown } from './usePointerReorder.js';
+import { SECTION_TYPES } from './sections.js';
 import { dropGapToIndex } from './pageTransforms.js';
 import { ActionMenu } from './EditorOverlays.jsx';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
@@ -202,7 +203,7 @@ function SectionFrame({
           borderRadius: 4, letterSpacing: '0.06em', textTransform: 'uppercase',
           transform: unscale !== 1 ? `scale(${unscale})` : undefined, transformOrigin: 'top left',
         }}>
-          {section.type}
+          {SECTION_TYPES[section.type]?.label || 'Section'}
         </div>
       )}
       {showToolbar && (

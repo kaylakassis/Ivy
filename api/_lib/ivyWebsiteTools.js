@@ -27,6 +27,7 @@ import {
   moveSectionToPage, copySectionToPage, moveSectionWithinPage, cloneSection, findSectionPage, uniquePageSlug,
 } from '../../src/features/website/pageTransforms.js';
 import { sanitizeSiteLinks } from './siteLinkSafety.js';
+import { cleanPagesCopy } from '../../src/lib/siteCopy.js';
 import { saveWebsiteVersion, restoreWebsiteVersion } from './websiteVersions.js';
 import { workspaceTimeZone } from './calendar.js';
 import { appUrl } from './tokens.js';
@@ -70,7 +71,7 @@ export const WEBSITE_TOOLS = [
   },
   {
     name: 'edit_website_section',
-    description: "Change sections on the website draft, same as the editor: update (text/fields in `data`, layout `variant`, how it looks with `style`, or one entry of a list with `item_number` + `item`, e.g. step 2 of a Process section), add (`type`, optional `style`), remove, hide, show, move (reorder on its page), duplicate, move_to_page / copy_to_page (to `target_page`, or to a new page named `new_page_title`; buttons that pointed at a moved section are re-pointed). Ids, each section's current lists (steps, items, members, tiers...) and its current look (`style`, in words) come from get_website. Links: '' = the default, '#book' = booking page, '#<page-slug>' = a page, or a full https address.",
+    description: "Change sections on the website draft, same as the editor (all text is plain words: no markdown, asterisks or HTML): update (text/fields in `data`, layout `variant`, how it looks with `style`, or one entry of a list with `item_number` + `item`, e.g. step 2 of a Process section), add (`type`, optional `style`), remove, hide, show, move (reorder on its page), duplicate, move_to_page / copy_to_page (to `target_page`, or to a new page named `new_page_title`; buttons that pointed at a moved section are re-pointed). Ids, each section's current lists (steps, items, members, tiers...) and its current look (`style`, in words) come from get_website. Links: '' = the default, '#book' = booking page, '#<page-slug>' = a page, or a full https address.",
     input_schema: {
       type: 'object',
       properties: {
@@ -189,7 +190,8 @@ function pagesOf(row) {
 // Same write the editor's autosave makes: pages plus the legacy home mirror,
 // with the same link sanitising as PUT /api/website.
 async function savePages(workspaceId, pages) {
-  const clean = sanitizeSiteLinks(pages);
+  // Site copy is plain text; formatting marks would show as symbols.
+  const clean = cleanPagesCopy(sanitizeSiteLinks(pages));
   const home = clean.find((p) => (p.slug || '') === '') || clean[0];
   await sql`
     UPDATE websites SET
@@ -1038,7 +1040,7 @@ function planCreate(row, workspaceId, a) {
     apply: async () => {
       const clash = await sql`SELECT id FROM websites WHERE handle = ${handle} AND workspace_id <> ${workspaceId}`;
       if (clash.rows.length) throw new Error(`The handle "${handle}" is taken; pick another`);
-      const pages = sanitizeSiteLinks(pack.build(biz));
+      const pages = cleanPagesCopy(sanitizeSiteLinks(pack.build(biz)));
       await sql`
         UPDATE websites SET
           business_name = ${biz}, handle = ${handle}, template = ${pack.template || 'clean'},

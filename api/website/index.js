@@ -107,11 +107,11 @@ function refuseNewCodeSections(incoming, row) {
 }
 
 function sanitizePage(p, idx) {
-  if (!p || typeof p !== 'object') throw new Error(`Page ${idx + 1} is malformed`);
+  if (!p || typeof p !== 'object') throw new Error(`Page ${idx + 1} could not be read. Reload and try again.`);
   const id = String(p.id || '').slice(0, 64) || `p_${Date.now().toString(36)}_${idx}`;
   // Empty slug is the home page; otherwise must match SLUG_RE.
   const slug = p.slug === '' ? '' : String(p.slug || '').toLowerCase().slice(0, 40);
-  if (slug !== '' && !SLUG_RE.test(slug)) throw new Error(`Page ${idx + 1}: invalid slug`);
+  if (slug !== '' && !SLUG_RE.test(slug)) throw new Error(`The page "${String(p.title || `number ${idx + 1}`).slice(0, 40)}" needs a simpler name. Rename it using letters or numbers.`);
   const title = String(p.title || 'Untitled').slice(0, 120);
   const sections = Array.isArray(p.sections) ? p.sections : [];
   const out = { id, slug, title, sections, inNav: p.inNav !== false };
@@ -161,7 +161,7 @@ export default async function handler(req, res) {
       if ('handle' in body) {
         const h = body.handle == null ? null : String(body.handle).toLowerCase().trim();
         if (h !== null && !HANDLE_RE.test(h)) {
-          return badRequest(res, 'Invalid handle (lowercase letters, digits, hyphens; 1 to 40 characters)');
+          return badRequest(res, 'Your site address can use lowercase letters, numbers and hyphens, up to 40 characters.');
         }
         patch.handle = h;
       }
@@ -194,7 +194,7 @@ export default async function handler(req, res) {
           // Slug uniqueness across pages.
           const slugs = patch.pages.map((p) => p.slug);
           if (new Set(slugs).size !== slugs.length) {
-            return badRequest(res, 'Page slugs must be unique');
+            return badRequest(res, 'Two of your pages have the same name. Rename one of them.');
           }
         } catch (e) {
           return badRequest(res, e.message);
@@ -258,7 +258,7 @@ export default async function handler(req, res) {
           SELECT id FROM websites
           WHERE handle = ${patch.handle} AND workspace_id <> ${workspaceId}
         `;
-        if (clash.rows.length > 0) return badRequest(res, 'That handle is taken');
+        if (clash.rows.length > 0) return badRequest(res, 'That site address is taken. Try another one.');
       }
 
       // Ensure a row exists, then apply patch.

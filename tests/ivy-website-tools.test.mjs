@@ -58,6 +58,13 @@ async function run() {
   const saved = (await sql`SELECT pages FROM websites WHERE workspace_id = ${a.workspaceId}`).rows[0].pages;
   const savedHero = saved.find((p) => p.slug === '').sections.find((s) => s.id === heroId);
   assert(!('bogus' in savedHero.data), 'unknown fields are dropped');
+  // 1.0.7: website copy is plain words. Formatting marks Ivy might write
+  // are stored as the words they stand for, never as symbols on the site.
+  await gated('edit_website_section', { page_slug: '', action: 'update', section_id: heroId, data: { headline: '**Portraits** with soul.', sub: 'Austin, TX<br>By [appointment](https://example.com)' } });
+  const plain = (await sql`SELECT pages FROM websites WHERE workspace_id = ${a.workspaceId}`).rows[0].pages
+    .find((p) => p.slug === '').sections.find((s) => s.id === heroId).data;
+  assert(plain.headline === 'Portraits with soul.' && plain.sub === 'Austin, TX\nBy appointment', `formatting marks saved as plain words (${JSON.stringify([plain.headline, plain.sub])})`);
+  await gated('edit_website_section', { page_slug: '', action: 'update', section_id: heroId, data: { headline: 'Portraits with soul.', sub: 'Austin, TX' } });
   r = await gated('edit_website_section', { page_slug: '', action: 'add', type: 'faq', position: 1, data: { headline: 'Questions?' } });
   const homeSecs = () => r.pages.find((p) => p.slug === '').sections;
   assert(r.added.type === 'faq' && homeSecs()[1].type === 'faq', 'FAQ added at position 1');

@@ -492,7 +492,10 @@ export function useWebsite({ userId = null } = {}) {
   // ── Page-level helpers ─────────────────────────────────────────────
 
   const addPage = useCallback((init = {}) => {
-    const newPage = mkPage(init);
+    // The address is made here so it can never clash with an existing page
+    // (adding after deleting used to reuse "page-3" and block saving).
+    const slug = init.slug === '' ? '' : uniquePageSlug(init.slug || init.title || 'page', siteRef.current.pages);
+    const newPage = mkPage({ ...init, slug });
     mutate((s) => ({ ...s, pages: [...s.pages, newPage] }));
     setCurrentPageId(newPage.id);
     return newPage;
@@ -517,7 +520,9 @@ export function useWebsite({ userId = null } = {}) {
     updatePage(pageId, (p) => ({
       ...p,
       ...(patch.title != null ? { title: String(patch.title).slice(0, 120) } : {}),
-      ...(patch.slug != null ? { slug: String(patch.slug).toLowerCase().slice(0, 40) } : {}),
+      // The home page keeps the main address; any other page gets a valid
+      // address no other page uses.
+      ...(patch.slug != null && p.slug !== '' ? { slug: uniquePageSlug(patch.slug, siteRef.current.pages, pageId) } : {}),
       ...(patch.inNav != null ? { inNav: !!patch.inNav } : {}),
       // Per-page SEO. Empty string clears the override; the renderer
       // falls through to site-level seoTitle / seoDescription / seoOgImage.

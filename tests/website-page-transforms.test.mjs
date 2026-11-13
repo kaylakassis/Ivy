@@ -126,6 +126,14 @@ function run() {
     assert(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(long), 'long names still give a slug the server accepts');
     const many = [{ slug: 'page' }, { slug: 'page-2' }];
     assert(uniquePageSlug('', many) === 'page-3', 'dedupe keeps counting');
+    // 1.0.7: a rename can never produce an address that blocks saving.
+    const site = [{ id: 'h', slug: '' }, { id: 'a', slug: 'services' }, { id: 'b', slug: 'page-3' }];
+    assert(uniquePageSlug('Services', site, 'a') === 'services', 'renaming a page to its own name keeps its address');
+    assert(uniquePageSlug('Services', site, 'b') === 'services-2', 'renaming to a name another page uses gets its own address');
+    assert(uniquePageSlug('\u2728\u2728', site, 'b') === 'page' && uniquePageSlug('\u5173\u4e8e', site) === 'page', 'emoji or another alphabet falls back to "page", never empty (empty is the home page)');
+    assert(uniquePageSlug('Caf\u00e9 Men\u00fa', site) === 'cafe-menu', 'accents are folded');
+    assert(uniquePageSlug('page-3', site) === 'page-3-2', 'adding a page after deleting one cannot reuse a taken address');
+    assert(/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(uniquePageSlug('-- A  b__c --', site)), 'always matches what the server accepts');
 
     const list = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
     assert(dropGapToIndex(0, 2) === 0 && dropGapToIndex(4, 1) === 3, 'drop gap maps to a moveTo index');

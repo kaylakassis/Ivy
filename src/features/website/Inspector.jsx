@@ -6,6 +6,7 @@ import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES, ANIMATIONS, isLegacyCodeType } from './sections.js';
 import { BG_SWATCHES, HEADLINE_SWATCHES } from './sectionStyle.js';
+import { cleanSectionData } from '../../lib/siteCopy.js';
 import { EDITORS, LegacyCodePanel, NoSettingsEditor } from './sectionEditors.jsx';
 import { EditorContext, FieldBlock, ImageInput, GalleryPhotos, Hint, inputS } from './editorKit.jsx';
 
@@ -99,7 +100,9 @@ export default function Inspector({
                   </select>
                 </FieldBlock>
               )}
-              <Editor data={section.data || {}} update={update} />
+              {/* Fields show clean words even when older copy still holds
+                  formatting marks; editing a field saves the clean text. */}
+              <Editor data={cleanSectionData(section.type, section.data || {})} update={update} />
               <Divider/>
               <StyleControls style={section.style || {}} updateStyle={updateStyle} mobile={mobile}/>
               <Divider/>

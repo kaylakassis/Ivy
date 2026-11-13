@@ -12,6 +12,7 @@
 // The wrapper here applies the style overrides as a thin shell around
 // whatever the per-section renderer outputs - keeps the renderers focused.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { cleanSectionCopy } from '../../lib/siteCopy.js';
 import { resolveSiteLink } from '../../lib/siteLinks.js';
 import { videoEmbedUrl, VIDEO_HOSTS_LABEL, instagramEmbedUrl } from '../../lib/videoEmbed.js';
 import { safeHref } from '../../lib/safeHref.js';
@@ -33,7 +34,11 @@ function useLink() {
   return (href) => resolveSiteLink(href, ctx);
 }
 
-export default function SectionRenderer({ section, handle, editable = false, onUpdate = null }) {
+export default function SectionRenderer({ section: rawSection, handle, editable = false, onUpdate = null }) {
+  // Copy is plain text: stray formatting marks ("**bold**", "<br>") never
+  // reach the page as symbols. Same object back when there is nothing to
+  // clean, so this costs nothing on a normal site.
+  const section = useMemo(() => cleanSectionCopy(rawSection), [rawSection]);
   const linkCtx = useContext(SiteLinkContext);
   const anchor = (linkCtx.anchors || {})[section.id] || undefined;
   const Comp = RENDERERS[section.type] || Fallback;

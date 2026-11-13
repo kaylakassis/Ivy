@@ -261,7 +261,7 @@ function RedirectsTab({ site, set }) {
             </Field>
             {toMode === CUSTOM_TO && (
               <input type="url" value={to} onChange={(e) => update(i, { to: e.target.value })}
-                placeholder="https://example.com/page" aria-label="Web address" style={inputS}/>
+                placeholder="Paste the web address" aria-label="Web address" style={inputS}/>
             )}
           </div>
         );

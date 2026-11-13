@@ -10,7 +10,7 @@
 import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { PagePicker, ConfirmDialog, ActionToast } from './EditorOverlays.jsx';
-import { findSectionPage } from './pageTransforms.js';
+import { findSectionPage, uniquePageSlug } from './pageTransforms.js';
 import SectionLibrary from './SectionLibrary.jsx';
 import Canvas from './Canvas.jsx';
 import Inspector, { ImageInput } from './Inspector.jsx';
@@ -588,6 +588,9 @@ export default function Editor({
             // published under the old slug, add a 301 automatically so
             // inbound links (Instagram bio, business cards) keep working.
             const p = (site.pages || []).find((x) => x.id === pageId);
+            // The address the page will really get (valid, and not one
+            // another page uses), so the redirect points at the right place.
+            if (p && patch.slug != null && p.slug !== '') patch = { ...patch, slug: uniquePageSlug(patch.slug, site.pages, pageId) };
             if (p && patch.slug && patch.slug !== p.slug && p.slug !== '' && site.publishedAt) {
               const existing = site.redirects || [];
               if (!existing.some((r) => r.from === p.slug)) {

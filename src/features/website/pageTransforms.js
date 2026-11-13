@@ -174,9 +174,13 @@ export function dropGapToIndex(gap, srcIdx) {
 
 // A slug for a new page that the server accepts (lowercase letters, digits
 // and inner hyphens, at most 40 characters) and no other page uses.
-export function uniquePageSlug(title, pages) {
-  const used = new Set((pages || []).map((p) => p.slug || ''));
+export function uniquePageSlug(title, pages, selfId = null) {
+  // `selfId`: the page being renamed, so its own address does not count as
+  // taken. Accents are folded ("Café" -> "cafe"); a name with no letters or
+  // digits (an emoji, another alphabet) falls back to "page".
+  const used = new Set((pages || []).filter((p) => p && p.id !== selfId).map((p) => p.slug || ''));
   const base = String(title || '').toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 34).replace(/-+$/g, '') || 'page';
   let slug = base;
   let n = 2;

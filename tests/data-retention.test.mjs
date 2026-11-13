@@ -102,7 +102,10 @@ async function main() {
              WHERE u.id = w.owner_id AND u.email LIKE 'dr-%' AND u.email NOT LIKE ${`%-${S}@example.com`}
                AND w.data_purged_at IS NULL AND w.data_deletion_at <= NOW()`;
   const purged = await purgeDue();
-  assert(purged === 1, `purged exactly one (${purged})`);
+  // Judge this run's business, not a count across the shared test
+  // database: other suites leave businesses that come due as days pass.
+  const purgedRow = (await sql`SELECT data_purged_at FROM workspaces WHERE id = ${P.id}`).rows[0];
+  assert(purged >= 1 && !!purgedRow?.data_purged_at, `the due business was purged (${purged} swept)`);
   const count = async (q) => Number((await q).rows[0].n);
   assert(await count(sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${P.id}`) === 0, 'clients deleted');
   assert(await count(sql`SELECT COUNT(*)::int n FROM tasks WHERE workspace_id = ${P.id}`) === 0, 'tasks deleted');
