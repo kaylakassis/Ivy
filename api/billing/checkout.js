@@ -16,6 +16,7 @@
 // per workspace), and creates carry a short-window idempotency key.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { isOnRiskHold, holdForbidden } from '../_lib/riskHold.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { readBody } from '../_lib/body.js';
 import {
@@ -106,6 +107,9 @@ export default async function handler(req, res) {
     if (!user) return;
     if (await enforce(req, res, [{ key: `billing-checkout:user:${user.id}`, max: 20, windowSeconds: 10 * 60 }])) return;
     const workspaceId = await ensureWorkspace(user.id);
+    // On a risk hold a subscription would not unlock anything, so none is
+    // sold (api/_lib/riskHold.js).
+    if (await isOnRiskHold(workspaceId)) return holdForbidden(res);
 
     const { rows } = await sql`
       SELECT stripe_customer_id, stripe_subscription_id, subscription_status, subscription_source,

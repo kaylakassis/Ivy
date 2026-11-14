@@ -263,7 +263,7 @@ const WS_FROM = `
 const WS_COLS = `
   w.id AS workspace_id, COALESCE(z.name, 'UTC') AS tz, ${LOCAL} AS local_now,
   cs.slug, cs.biz_name, a.kind, a.template, a.channels, a.quiet_days, a.rebook_delay, a.enabled_at,
-  w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until`;
+  w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at`;
 
 // Not a leap year → a Feb 29 birthday is celebrated on Feb 28.
 const BIRTHDAY_TODAY = `(

@@ -163,6 +163,10 @@ export async function fetchAccountSummary(arg) {
     chargesEnabled: !!acct.charges_enabled,
     detailsSubmitted: !!acct.details_submitted,
     payoutsEnabled: !!acct.payouts_enabled,
+    // Why Stripe has the account disabled, in Stripe's words
+    // ("rejected.fraud", "under_review", "requirements.past_due", ...),
+    // or null when it is not disabled. Read by api/_lib/riskHold.js.
+    disabledReason: acct.requirements?.disabled_reason || null,
   };
 }
 

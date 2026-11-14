@@ -98,6 +98,8 @@ export default async function handler(req, res) {
       // Deleted accounts (soft delete), lapsed workspaces, and empty
       // 0-service shells all previously listed here.
       'u.deleted_at IS NULL',
+      // Never list a business on a risk hold (api/_lib/riskHold.js).
+      'w.risk_hold_at IS NULL',
       `(w.comp_until > NOW()
         OR w.subscription_status IN ('active', 'past_due')
         OR (w.subscription_status = 'trialing' AND w.trial_ends_at > NOW()))`,

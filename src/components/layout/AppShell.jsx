@@ -16,6 +16,7 @@ import VerifyEmailBanner from '../VerifyEmailBanner.jsx';
 import MobileBottomNav from './MobileBottomNav.jsx';
 import MobileDrawer from './MobileDrawer.jsx';
 import Paywall from '../../features/billing/Paywall.jsx';
+import AccountOnHold from '../../features/billing/AccountOnHold.jsx';
 import SubscriptionBanner from '../../features/billing/SubscriptionBanner.jsx';
 import Walkthrough from '../../features/onboarding/Walkthrough.jsx';
 import RequiredAnswersSheet from '../../features/onboarding/RequiredAnswersSheet.jsx';
@@ -118,13 +119,18 @@ function AppShellInner() {
   const { user: authUser, impersonating } = useAuth();
   const previewPaywall = !!authUser?.isSuperAdmin
     && new URLSearchParams(location.search).get('previewPaywall') === '1';
-  const needsPaywall = (ctx?.isOwner && !ctx?.subscription?.isActive) || previewPaywall;
+  // On a risk hold: the on-hold screen replaces the paywall (subscribing
+  // would not unlock it).
+  const onHold = !!(ctx?.isOwner && ctx?.subscription?.onHold);
+  const needsPaywall = !onHold && ((ctx?.isOwner && !ctx?.subscription?.isActive) || previewPaywall);
+  // Either wall is up: the first-run overlays, Ivy and pull to refresh wait.
+  const walled = needsPaywall || onHold;
   // Required onboarding answers sheet (RequiredAnswersSheet): after the
   // paywall, never while an admin is viewing as this owner. While it is
   // open the other first-run overlays (tour, tutorial, Ivy bubble, push
   // and review prompts) wait so nothing stacks on top of it.
   const [answersOpen, setAnswersOpen] = useState(false);
-  const answersEnabled = !needsPaywall && !impersonating;
+  const answersEnabled = !walled && !impersonating;
 
   // Auto-launch the in-app walkthrough on first render after signup +
   // onboarding complete. AccountPage's "Replay" button writes
@@ -142,7 +148,7 @@ function AppShellInner() {
   // onboarding (it stacked on top of the new Ivy-led first run and overwhelmed
   // new users). It fires only on an explicit request — AccountPage's "Replay
   // tour" button (?walkthrough=1) or a programmatic override.
-  const showWalkthrough = !needsPaywall
+  const showWalkthrough = !walled
     && !answersOpen
     && subActive
     && walkthroughOverride !== false
@@ -193,10 +199,10 @@ function AppShellInner() {
   // previous escape hatch). The Paywall renders the isClient carve-out
   // itself when applicable, so removing the global toggle is safe.
   useEffect(() => {
-    if (needsPaywall) document.body.classList.add('app-walled');
+    if (walled) document.body.classList.add('app-walled');
     else document.body.classList.remove('app-walled');
     return () => document.body.classList.remove('app-walled');
-  }, [needsPaywall]);
+  }, [walled]);
 
   // Close the drawer on route change so nav-tap-to-page just works.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
@@ -236,7 +242,7 @@ function AppShellInner() {
             isMobile={viewport.isMobile}
             isTablet={viewport.isTablet}
             onMenuClick={() => setDrawerOpen(true)}
-            paywalled={needsPaywall}
+            paywalled={walled}
           />
           {/* Bottom padding reserves space for the floating ViewToggle
               pill (sits at bottom: 18, ~50px tall) so it can never
@@ -272,8 +278,9 @@ function AppShellInner() {
       )}
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}
+      {onHold && <AccountOnHold ctx={ctx}/>}
       <RequiredAnswersSheet enabled={answersEnabled} onOpenChange={setAnswersOpen}/>
-      {!needsPaywall && <PullToRefresh onRefresh={refresh}/>}
+      {!walled && <PullToRefresh onRefresh={refresh}/>}
       <OfflineBanner/>
       <OfflineSync/>
 
@@ -312,17 +319,17 @@ function AppShellInner() {
           (when applicable) the walkthrough overlay isn't covering the
           screen. Otherwise the FAB peeks through the modal scrim. */}
       {/* The floating Ivy bubble is a web affordance; on the phone Ivy is a tab. */}
-      {!needsPaywall && !answersOpen && !showWalkthrough && !native && <IvyDock/>}
+      {!walled && !answersOpen && !showWalkthrough && !native && <IvyDock/>}
       {/* Per-tab tutorial overlay. Reads activeTabId from TutorialProvider;
           renders nothing until a tab is opened (auto-trigger from Topbar
           on first visit, or manual via the (i) button). Gated on the paywall
           (like IvyDock above) so it can never cover the "Start your trial"
           wall — the tutorial appears once the owner is past it. */}
-      {!needsPaywall && !answersOpen && <TutorialOverlay/>}
+      {!walled && !answersOpen && <TutorialOverlay/>}
       {/* iOS: ask to turn on notifications once the owner is through the
           paywall and onboarding. Web asks via the dashboard card instead. */}
-      <NativePushPrompt active={!needsPaywall && !answersOpen && subActive && !!ctx?.owns?.onboardedAt}/>
-      {!needsPaywall && !answersOpen && <ReviewPrompt/>}
+      <NativePushPrompt active={!walled && !answersOpen && subActive && !!ctx?.owns?.onboardedAt}/>
+      {!walled && !answersOpen && <ReviewPrompt/>}
     </div>
   );
 }

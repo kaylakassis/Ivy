@@ -20,6 +20,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { savedCardRowForInvoice, ensureStripeCustomer, chargeInvoiceWithSavedCard } from '../_lib/savedCards.js';
 import { fulfillInvoicePaymentIntent, markInvoiceProcessing } from '../_lib/checkoutFulfillment.js';
 import { appUrl } from '../_lib/tokens.js';
+import { isOnRiskHold } from '../_lib/riskHold.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
@@ -68,6 +69,11 @@ export default async function handler(req, res) {
     `;
     const inv = invRows[0];
     if (!inv) return notFound(res, 'This invoice link is invalid, has expired, or was already paid.');
+
+    // A business on a risk hold cannot take a payment (api/_lib/riskHold.js).
+    if (await isOnRiskHold(inv.workspace_id)) {
+      return res.status(403).json({ error: 'This business is not taking payments on Ivy right now.', code: 'business_archived' });
+    }
 
     // A debit that is still settling must not be paid twice.
     if (inv.payment_processing_at) {

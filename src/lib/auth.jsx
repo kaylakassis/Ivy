@@ -1,6 +1,7 @@
 // Auth context - holds the logged-in user and exposes sign-in / sign-up / sign-out.
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from './api.js';
+import { getFormToken, clearFormToken, HONEYPOT_FIELD } from './formToken.js';
 import { isNative } from './platform.js';
 import { setNativeAuthToken, clearNativeAuthToken } from './nativeAuth.js';
 import { clearMeCache, forgetLanding } from './landing.js';
@@ -147,8 +148,13 @@ export function AuthProvider({ children }) {
   // trail tying the bytes the user actually saw to the row we
   // record.
   const signUp = useCallback(async (email, password, name, mode = 'owner', ref = null, consent = {}) => {
+    // The person check: the signed page-open time, plus the hidden field
+    // nobody fills (src/lib/formToken.js).
+    const formToken = await getFormToken();
     const r = await api.post('/auth/signup', {
       email, password, name, mode, ref,
+      formToken: formToken || undefined,
+      [HONEYPOT_FIELD]: consent.note || '',
       // Email consent boxes on the sign-up form: account and service
       // emails (required) and marketing (optional).
       acceptedAccountEmails: consent.accountEmails === true,
@@ -161,6 +167,7 @@ export function AuthProvider({ children }) {
     });
     // Native shell: cookies do not survive the cross-origin hop, so the
     // server also returns the session token. Keep it on the device.
+    clearFormToken();
     if (isNative() && r?.token) await setNativeAuthToken(r.token);
     // A brand-new account must ALWAYS be eligible for onboarding. The
     // onboarding-skip flag is per-browser, not per-account, so a stale one

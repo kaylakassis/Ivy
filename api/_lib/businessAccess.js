@@ -6,7 +6,9 @@
 // page, the website, the client-portal composer, every public checkout.
 // "Active" is exactly the paywall predicate (isWorkspaceActive), so the
 // owner's wall and the client-facing archive can never disagree, and
-// reactivation flips everything back on its own. This is a STATE read
+// reactivation flips everything back on its own. A business on a risk
+// hold (api/_lib/riskHold.js) is archived the same way until an admin
+// lifts the hold. This is a STATE read
 // off the workspace row - nothing here ever changes data.
 //
 // Endpoints call one of the loaders after they have resolved the
@@ -37,6 +39,7 @@ function shape(row) {
 const SELECT = `
   SELECT w.id, w.name AS workspace_name,
          w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+         w.risk_hold_at,
          cs.biz_name
     FROM workspaces w
     LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id`;

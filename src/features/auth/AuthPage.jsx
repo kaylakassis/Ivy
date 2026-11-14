@@ -4,6 +4,7 @@ import LegalLink from '../../components/LegalLink.jsx';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
+import { primeFormToken, HONEYPOT_FIELD } from '../../lib/formToken.js';
 import AuthShell from './AuthShell.jsx';
 import { FLAGS } from '../../lib/featureFlags.js';
 
@@ -51,8 +52,13 @@ export default function AuthPage({ mode = 'signin' }) {
   // continue button rather than redirecting silently (the old
   // ?emailIssue param was never read anywhere).
   const [emailWarn, setEmailWarn] = useState(null);
+  // The field nobody sees: a person leaves it empty, a form-filling
+  // script does not (src/lib/formToken.js).
+  const [hp, setHp] = useState('');
 
   const isSignUp = mode === 'signup';
+  // Start the person check's clock when the sign-up form appears.
+  useEffect(() => { if (isSignUp) primeFormToken(); }, [isSignUp]);
   const canSubmit = !busy
     && (!isSignUp
       || (name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && password.length >= 8 && acceptedTerms && acceptedEmails));
@@ -83,7 +89,7 @@ export default function AuthPage({ mode = 'signin' }) {
         // instead of redirecting silently.
         const typedRef = refInput.trim() ? refInput.trim().toUpperCase() : null;
         const r = await signUp(email, password, name.trim(), role, refCode || (role === 'owner' ? typedRef : null),
-          { accountEmails: acceptedEmails, marketing: marketingOptIn });
+          { accountEmails: acceptedEmails, marketing: marketingOptIn, note: hp });
         if (r?.emailErrors) {
           setEmailWarn(role === 'client' ? '/me' : '/');
           return;
@@ -127,6 +133,13 @@ export default function AuthPage({ mode = 'signin' }) {
         width: '100%', maxWidth: 420, padding: 32,
         display: 'flex', flexDirection: 'column', gap: 18,
       }}>
+        {isSignUp && (
+          <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
+            <label>Leave this empty
+              <input type="text" name={HONEYPOT_FIELD} tabIndex={-1} autoComplete="off" value={hp} onChange={(e) => setHp(e.target.value)}/>
+            </label>
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 8,

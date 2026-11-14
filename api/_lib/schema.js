@@ -5581,4 +5581,34 @@ ALTER TABLE client_automation_sends ADD COLUMN IF NOT EXISTS booking_id UUID REF
 -- 1.0.6 "We got your request" email to the client (api/_lib/bookingRequests.js):
 -- set when it is claimed, so a request is acknowledged at most once.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS request_ack_sent_at TIMESTAMPTZ;
+
+-- Fraud protection (1.0.7). A "risk hold" takes a business offline for
+-- everyone (public booking / site / shop pages, every checkout, the owner
+-- app) without touching its subscription state, so billing webhooks can
+-- never lift it. Set by Stripe rejecting the connected account, or by an
+-- admin from Admin > Risk. isWorkspaceActive() checks it first.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS risk_hold_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS risk_hold_reason TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS risk_hold_source TEXT;
+-- Admin looked at the flags and is happy: hides it from the risk list
+-- until something new is flagged after this time.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS risk_reviewed_at TIMESTAMPTZ;
+-- Two-letter country the sign-up came from (from the network, when known).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_country TEXT;
+-- Why Stripe has the connected account disabled, as Stripe words it
+-- (requirements.disabled_reason: rejected.fraud, under_review, ...).
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_disabled_reason TEXT;
+-- Things worth a second look, one row each: a failed or blocked card
+-- payment, Stripe rejecting or restricting an account, a hold placed or
+-- lifted. Admin > Risk reads these; nothing else depends on them.
+CREATE TABLE IF NOT EXISTS risk_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_risk_events_ws ON risk_events (workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_events_kind ON risk_events (kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workspaces_risk_hold ON workspaces (risk_hold_at) WHERE risk_hold_at IS NOT NULL;
 `;

@@ -32,6 +32,7 @@ import {
 } from '../_lib/stripe.js';
 import { badRequest, methodNotAllowed, serverError, ok } from '../_lib/json.js';
 import { wantsJson, fromApp, signReturnState, verifyReturnState } from '../_lib/connectReturn.js';
+import { isOnRiskHold, holdForbidden } from '../_lib/riskHold.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -70,6 +71,27 @@ export default async function handler(req, res) {
       step = 'workspace';
       workspaceId = await ensureActiveWorkspace(user, req, res);
       if (!workspaceId) return;
+    }
+
+    // Fraud protection (1.0.7). Taking card payments needs an email address
+    // the owner has confirmed they own, and is never offered to a business
+    // on a risk hold. Checked on every start (new account or resuming).
+    step = 'eligibility';
+    const bounce = (code) => {
+      const base = req.query.from === 'onboarding' ? '/onboarding' : '/finance';
+      res.writeHead(302, { Location: `${base}?stripeError=${code}` });
+      res.end();
+    };
+    const who = (await sql`SELECT email, email_verified_at FROM users WHERE id = ${user.id}`).rows[0];
+    if (await isOnRiskHold(workspaceId)) {
+      if (asJson || appState) return holdForbidden(res);
+      return bounce('on_hold');
+    }
+    if (!who?.email_verified_at) {
+      if (asJson || appState) {
+        return badRequest(res, `Confirm your email address first. We sent a link to ${who?.email || 'your inbox'} when you signed up. Open it, then come back and connect Stripe.`, { code: 'verify_email' });
+      }
+      return bounce('verify_email');
     }
 
     step = 'platform-key';

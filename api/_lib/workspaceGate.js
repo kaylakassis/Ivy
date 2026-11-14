@@ -124,26 +124,25 @@ export async function ensureActiveWorkspace(user, req, res, opts = {}) {
     return null;
   }
 
-  // Sponsored AND beta accounts skip the gate - they're comp'd by the
-  // platform (sponsored = permanent comp, beta = beta-program access).
-  // We never want a billing read to lock them out.
-  if (user.user_type === 'sponsored' || user.user_type === 'beta') {
-    return owned.rows[0]?.id || ensureWorkspace(user.id);
-  }
-
   // ensureWorkspace itself is required for shape (we need the id even
   // on a freshly-created row). If THAT throws, the request can't make
   // any progress anyway, so we surface a 500 by re-throwing - this is
   // not a paywall denial. The row we just read saves the re-SELECT for
   // every existing owner.
   const workspaceId = owned.rows[0]?.id || await ensureWorkspace(user.id);
+  // Sponsored AND beta accounts are comp'd by the platform (sponsored =
+  // permanent comp, beta = beta-program access): they skip the billing
+  // check below, and a failed read never locks them out. A risk hold
+  // still applies to them.
+  const platformComped = user.user_type === 'sponsored' || user.user_type === 'beta';
 
   if (cacheHit(workspaceId)) return workspaceId;
 
   let row;
   try {
     const { rows } = await sql`
-      SELECT subscription_status, trial_ends_at, subscription_period_end, comp_until, onboarded_at
+      SELECT subscription_status, trial_ends_at, subscription_period_end, comp_until, onboarded_at,
+             risk_hold_at
         FROM workspaces
        WHERE id = ${workspaceId}
        LIMIT 1
@@ -154,6 +153,7 @@ export async function ensureActiveWorkspace(user, req, res, opts = {}) {
     // frontend show a retry UI rather than the paywall - paying
     // owners don't see the wrong CTA, but we also don't accidentally
     // grant access during an outage.
+    if (platformComped) return workspaceId;
     // eslint-disable-next-line no-console
     console.error('[workspaceGate] read failed; denying (fail-closed):', err.message);
     return deny(res, {
@@ -170,6 +170,24 @@ export async function ensureActiveWorkspace(user, req, res, opts = {}) {
       status: 'inactive',
       message: 'Your workspace is no longer active.',
     });
+  }
+
+  // Risk hold (api/_lib/riskHold.js): checked before every other pass,
+  // including platform-comped accounts and a business still onboarding.
+  // 402 like the paywall so older app builds stop cleanly; newer ones
+  // read the code and show "on hold, contact us".
+  if (row.risk_hold_at) {
+    return deny(res, {
+      error: 'account-on-hold',
+      code: 'account_on_hold',
+      status: 'on_hold',
+      message: 'This account is on hold while we review it. Email hello@joinivy.ai and we will sort it out.',
+    });
+  }
+
+  if (platformComped) {
+    cacheStore(workspaceId);
+    return workspaceId;
   }
 
   // Onboarding bypass. The funnel design is: signup → onboarding →

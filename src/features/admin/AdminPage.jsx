@@ -21,12 +21,14 @@ import { US_STATE_NAME } from '../../lib/locations.js';
 import { CATEGORIES } from '../../lib/categories.js';
 import UserProfileSheet, { relTime, fmtDateTime } from './UserProfileSheet.jsx';
 import AccountabilityPartnerTab from './AccountabilityPartnerTab.jsx';
+import RiskTab from './RiskTab.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
   { id: 'readiness',  label: 'Readiness',  icon: 'Check' },
   { id: 'partner',    label: 'Accountability partner', icon: 'Bell' },
   { id: 'users',      label: 'Users',      icon: 'Users' },
+  { id: 'risk',       label: 'Risk',       icon: 'Lock' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'referrals',  label: 'Referrals',  icon: 'Users' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
@@ -135,6 +137,7 @@ export default function AdminPage() {
       {tab === 'readiness'  && <ReadinessTab/>}
       {tab === 'partner'    && <AccountabilityPartnerTab/>}
       {tab === 'users'      && <UsersTab/>}
+      {tab === 'risk'       && <RiskTab labels={ONB_LABELS}/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'referrals' && <ReferralsTab/>}
       {tab === 'support'    && <SupportTab/>}

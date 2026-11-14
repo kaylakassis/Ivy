@@ -47,7 +47,7 @@ export async function myClientIds(user) {
     const { rows } = await sql`
       SELECT c.id, c.workspace_id, c.name, c.email,
              w.name AS workspace_name,
-             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at,
              cs.biz_name, cs.slug AS biz_slug, cs.brand_logo_url
       FROM clients c
       JOIN workspaces w ON w.id = c.workspace_id
@@ -145,7 +145,7 @@ async function ownsWorkspaceFromDb(userId) {
   try {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,
-             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at,
              w.subscription_source, w.cancel_at_period_end, w.data_deletion_at,
              w.stripe_customer_id,
              cs.biz_name, cs.slug
@@ -210,6 +210,11 @@ async function ownsWorkspaceFromDb(userId) {
 // a half-broken app.
 export function isWorkspaceActive(row) {
   if (!row) return false;
+  // A risk hold (api/_lib/riskHold.js) beats everything, comp included:
+  // the business is offline until an admin lifts it. Callers that should
+  // honour holds select w.risk_hold_at; the data-retention sweep
+  // deliberately does not, so a held business's data is never purged.
+  if (row.risk_hold_at) return false;
   const now = Date.now();
   // Complimentary access (comp invites) trumps subscription state -
   // no card, no Stripe object, granted/revoked from Admin → Comps.
@@ -271,6 +276,9 @@ function deriveSubscription(row) {
     // Complimentary access (Admin → Comps). The paywall never shows for
     // comped workspaces; the Account page can label the plan accordingly.
     comped: !!(row.comp_until && new Date(row.comp_until).getTime() > now),
+    // On a risk hold: the app shows "on hold, contact us" instead of the
+    // paywall (subscribing would not unlock it).
+    onHold: !!row.risk_hold_at,
   };
 }
 
@@ -289,7 +297,8 @@ export async function userContext(user) {
   // the admin endpoint.
   const isCompd = user.user_type === 'sponsored' || user.user_type === 'beta';
   let subscription = workspace?.subscription || null;
-  if (isCompd && workspace) {
+  // (A risk hold still applies to them: no synthetic unlock.)
+  if (isCompd && workspace && !workspace.subscription?.onHold) {
     subscription = {
       status: 'active',
       isActive: true,

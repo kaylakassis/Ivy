@@ -42,7 +42,10 @@ export function decideLanding(r, user) {
   let skipUntil = 0;
   try { skipUntil = Number(localStorage.getItem('ivy_skip_onboarding_until')) || 0; } catch { /* private mode */ }
   const skipping = skipUntil > Date.now();
-  if (r?.isOwner && !r.onboardedAt && !skipping) return 'onboarding';
+  // A business on a risk hold goes straight to the business shell, which
+  // shows the on-hold screen (the wizard would only hit refusals).
+  const onHold = !!r?.subscription?.onHold;
+  if (r?.isOwner && !r.onboardedAt && !skipping && !onHold) return 'onboarding';
   // Super-admins always land in the business shell so /admin is reachable.
   const isSuperAdmin = !!(user?.isSuperAdmin || r?.isSuperAdmin);
   if (r?.isOwner || isSuperAdmin) return 'business';

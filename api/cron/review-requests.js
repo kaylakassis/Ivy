@@ -70,7 +70,7 @@ export async function selectDueReviewRequests({ now = null } = {}) {
            b.service_id, b.date, b.start_min,
            s.name AS service_name,
            cs.biz_name, cs.slug,
-           w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+           w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at,
            (SELECT MAX(k::date)
               FROM jsonb_object_keys(b.completion_log) AS k, ref
              WHERE (k::date::timestamp + make_interval(mins => b.end_min)) AT TIME ZONE COALESCE(cs.timezone, 'UTC')

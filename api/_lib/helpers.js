@@ -119,7 +119,7 @@ async function helperMembershipsFromDb(userId) {
     const { rows } = await sql`
       SELECT sm.id AS staff_id, sm.name AS staff_name, sm.workspace_id, sm.permissions,
              (sm.user_id = ${userId}) AS is_live, sm.revoked_at,
-             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at,
              w.owner_id,
              u.user_type AS owner_user_type, u.deleted_at AS owner_deleted_at,
              cs.biz_name, w.name AS workspace_name
@@ -140,7 +140,7 @@ async function helperMembershipsFromDb(userId) {
       status:       r.is_live ? 'active' : 'revoked',
       revokedAt:    r.is_live ? null : r.revoked_at,
       permissions:  normalizePermissions(r.permissions),
-      active:       !!r.is_live && !r.owner_deleted_at && (
+      active:       !!r.is_live && !r.owner_deleted_at && !r.risk_hold_at && (
         r.owner_user_type === 'sponsored' || r.owner_user_type === 'beta' || isWorkspaceActive(r)
       ),
     }));

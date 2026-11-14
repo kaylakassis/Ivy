@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import ResendVerifyLink from '../../components/ResendVerifyLink.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useInvoices } from './state.js';
@@ -864,6 +865,15 @@ const STRIPE_ERRORS = {
     title: 'Stripe rejected the account country',
     body: 'Ivy currently only supports US accounts. If you\'re outside the US, email hello@joinivy.ai and we\'ll enable your region.',
   },
+  verify_email: {
+    title: 'Confirm your email first',
+    body: 'Before you can take card payments, we need to know your email address is yours. Open the link we emailed you when you signed up, then come back and connect Stripe.',
+    resend: true,
+  },
+  on_hold: {
+    title: 'This account is on hold',
+    body: 'Card payments cannot be set up while your account is being reviewed. Email hello@joinivy.ai and we will sort it out.',
+  },
   unknown: {
     title: 'Couldn\'t start the Stripe connection',
     body: null, // raw message from stripeMsg shown
@@ -898,6 +908,7 @@ function StripeErrorBanner({ search, navigate }) {
             {info.body}
           </div>
         )}
+        {info.resend && <ResendVerifyLink/>}
         {raw && (
           <details style={{ marginTop: 6, fontSize: 12, color: 'var(--muted)' }}>
             <summary style={{ cursor: 'pointer' }}>Technical detail</summary>

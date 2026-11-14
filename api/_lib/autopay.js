@@ -728,6 +728,10 @@ export async function chargeInvoiceAutopay({ workspaceId, invoiceId, retry = fal
   if (!inv || !inv.recurring_invoice_id || !inv.client_id) return { outcome: 'no_consent' };
   // Paid, refunded, void or archived: never charged, and nothing to say.
   if (!['draft', 'sent', 'overdue'].includes(inv.status) || inv.archived_at) return { outcome: 'not_open' };
+  // A business on a risk hold never charges anyone (api/_lib/riskHold.js).
+  // Left exactly as it is, so it runs normally if the hold is lifted.
+  const heldR = await sql`SELECT risk_hold_at FROM workspaces WHERE id = ${workspaceId}`;
+  if (heldR.rows[0]?.risk_hold_at) return { outcome: 'on_hold' };
 
   const agR = await sql`
     SELECT * FROM autopay_agreements

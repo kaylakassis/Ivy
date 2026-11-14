@@ -96,7 +96,8 @@ async function handler(req, res) {
               try { reportError(apErr); } catch { /* ignore */ }
               ap = { outcome: 'error' };
             }
-            if (['succeeded', 'processing', 'failed', 'unknown', 'claimed_elsewhere'].includes(ap.outcome)) {
+            // 'on_hold': the business is on a risk hold; nothing is charged or sent.
+            if (['succeeded', 'processing', 'failed', 'unknown', 'claimed_elsewhere', 'on_hold'].includes(ap.outcome)) {
               if (ap.outcome === 'succeeded' || ap.outcome === 'processing') charged++;
               if (ap.outcome === 'failed') { chargeFailed++; if (ap.emailed) sent++; }
               continue;

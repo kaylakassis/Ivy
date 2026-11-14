@@ -20,6 +20,16 @@ import {
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { checkHuman } from '../_lib/humanCheck.js';
+import { isDisposableEmail, DISPOSABLE_EMAIL_MESSAGE } from '../_lib/disposableEmail.js';
+
+// Two-letter country of the request, from the hosting network's header
+// (Vercel sets x-vercel-ip-country; Cloudflare cf-ipcountry). null when
+// unknown. Never trusted for access decisions, only shown to the operator.
+function signupCountryOf(req) {
+  const raw = String(req.headers?.['x-vercel-ip-country'] || req.headers?.['cf-ipcountry'] || '').trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(raw) && raw !== 'XX' ? raw : null;
+}
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate, getLaunchMode, hasBypassCookie } from '../_lib/earlyAccess.js';
 import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
@@ -112,6 +122,20 @@ export default async function handler(req, res) {
     // signing up to view their bookings/invoices/messages from businesses
     // that already added them to a workspace as a client record.
     const role = mode === 'client' ? 'client' : 'owner';
+
+    // Sign-up hardening (1.0.7, fraud protection).
+    // A script filling the form: refuse before any rate-limit budget or
+    // database work is spent on it.
+    const human = checkHuman(req, body);
+    if (!human.ok) return badRequest(res, human.message, { code: human.code });
+    // A business account needs an address its owner keeps. Clients are a
+    // business's own customers and are left alone.
+    if (role === 'owner' && isDisposableEmail(emailKey)) {
+      return badRequest(res, DISPOSABLE_EMAIL_MESSAGE, { code: 'disposable_email' });
+    }
+    // Where the sign-up came from, as the network reports it (two-letter
+    // country). Admin > Risk flags businesses that start outside the US.
+    const signupCountry = signupCountryOf(req);
     // Affiliate code: only honored if it matches an active affiliates row.
     // Stored on affiliate_uses by id so a later code rotation doesn't
     // detach attribution.
@@ -167,13 +191,13 @@ export default async function handler(req, res) {
           email, password_hash, name,
           terms_version, terms_accepted_at,
           privacy_version, privacy_accepted_at,
-          last_login_at, last_active_at
+          last_login_at, last_active_at, signup_country
         )
         VALUES (
           ${emailKey}, ${password_hash}, ${cleanName},
           ${CURRENT_TERMS_VERSION}, NOW(),
           ${privacyVersionAccepted}, NOW(),
-          NOW(), NOW()
+          NOW(), NOW(), ${signupCountry}
         )
         RETURNING id, email, name, created_at, email_verified_at
       `;

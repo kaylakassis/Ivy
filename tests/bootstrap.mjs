@@ -24,3 +24,7 @@ process.env.EMAIL_FROM ||= 'Ivy <test@example.com>';
 // tests see the state they just wrote. The cache's own unit test
 // (tests/hot-cache.test.mjs) clears this flag to exercise the primitives.
 process.env.IVY_DISABLE_HOTCACHE ||= '1';
+// The sign-up form's person check (api/_lib/humanCheck.js) needs a token
+// the page fetches first. Suites that call the sign-up handler directly
+// run with it off; tests/fraud-protection.test.mjs turns it on.
+process.env.SIGNUP_HUMAN_CHECK ||= 'off';

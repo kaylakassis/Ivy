@@ -301,7 +301,7 @@ const MEMBER_SELECT = `
          cs.timezone, cs.availability, cs.slot_minutes, cs.slot_fit_service, cs.buffer_minutes,
          cs.min_notice_hours, cs.max_advance_days, cs.category, cs.address_label, cs.tagline,
          u.name AS pro_name,
-         w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
+         w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at
     FROM shop_members sm
     LEFT JOIN workspaces w ON w.id = sm.workspace_id
     LEFT JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
@@ -934,13 +934,13 @@ export async function loadPublicShop(slug, { previewWorkspaceId = null } = {}) {
   if (!validShopSlug(s)) return null;
   const { rows } = previewWorkspaceId
     ? await sql`
-      SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, u.deleted_at AS owner_deleted_at
+      SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at, u.deleted_at AS owner_deleted_at
         FROM shops s
         JOIN workspaces w ON w.id = s.owner_workspace_id
         JOIN users u ON u.id = w.owner_id
        WHERE s.slug = ${s} AND s.owner_workspace_id = ${previewWorkspaceId} LIMIT 1`
     : await sql`
-      SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, u.deleted_at AS owner_deleted_at
+      SELECT s.*, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at, u.deleted_at AS owner_deleted_at
         FROM shops s
         JOIN workspaces w ON w.id = s.owner_workspace_id
         JOIN users u ON u.id = w.owner_id
@@ -1070,7 +1070,7 @@ export async function shopsForBookingPage(workspaceId) {
   if (!workspaceId) return [];
   try {
     const { rows } = await sql`
-      SELECT s.slug, s.name, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
+      SELECT s.slug, s.name, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at
         FROM shop_members sm
         JOIN shops s ON s.id = sm.shop_id AND s.status = 'published'
         JOIN workspaces w ON w.id = s.owner_workspace_id
@@ -1107,7 +1107,7 @@ export async function discoverShops({ q = null, limit = 24 } = {}) {
   const pattern = q ? `%${String(q).slice(0, 80).replace(/[%_]/g, (c) => '\\' + c)}%` : null;
   const { rows } = await sql.query(
     `SELECT s.id, s.slug, s.name, s.tagline, s.address_label, s.city, s.region, s.photos, s.lat, s.lng,
-            w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
+            w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at
        FROM shops s JOIN workspaces w ON w.id = s.owner_workspace_id JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
       WHERE s.status = 'published'
         AND ($1::text IS NULL OR s.name ILIKE $1 OR COALESCE(s.tagline, '') ILIKE $1 OR COALESCE(s.city, '') ILIKE $1
@@ -1124,7 +1124,7 @@ export async function discoverShops({ q = null, limit = 24 } = {}) {
   if (live.length) {
     const { rows: mem } = await sql.query(
       `SELECT sm.shop_id, sm.display_order, sm.featured, sm.role, cs.biz_name, cs.brand_logo_url, u.name AS pro_name,
-              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
+              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at
          FROM shop_members sm
          JOIN workspaces w ON w.id = sm.workspace_id
          JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
@@ -1151,7 +1151,7 @@ export async function discoverShops({ q = null, limit = 24 } = {}) {
 // Sitemap: every published shop whose owner is active.
 export async function publishedShopSlugs() {
   const { rows } = await sql`
-    SELECT s.slug, s.updated_at, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until
+    SELECT s.slug, s.updated_at, w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at
       FROM shops s JOIN workspaces w ON w.id = s.owner_workspace_id JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
      WHERE s.status = 'published' ORDER BY s.updated_at DESC LIMIT 5000`;
   return rows.filter(isWorkspaceActive).map((r) => ({ slug: r.slug, updatedAt: r.updated_at }));

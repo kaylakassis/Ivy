@@ -8,12 +8,16 @@
 //                     waitlist screen can offer a "beta access code" field
 //   bypassed        - this session carries a valid bypass cookie, so even
 //                     in waitlist mode it should see the normal app/signup
+//   formToken       - signed page-open time for the sign-up form's
+//                     person check (never cached: see Cache-Control)
 import { getGateSettings, isGateUnlocked, getLaunchMode, hasBypassCookie } from '../_lib/earlyAccess.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { issueFormToken } from '../_lib/humanCheck.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
+    res.setHeader?.('Cache-Control', 'no-store');
     const [settings, launchMode, bypassed] = await Promise.all([
       getGateSettings(),
       getLaunchMode(),
@@ -26,6 +30,8 @@ export default async function handler(req, res) {
       launchMode,
       hasBetaPassword: settings.hasPassword,
       bypassed,
+      // Signed timestamp the sign-up form sends back (api/_lib/humanCheck.js).
+      formToken: issueFormToken(),
     });
   } catch (err) {
     return serverError(res, err);

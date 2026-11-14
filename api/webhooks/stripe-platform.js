@@ -34,6 +34,7 @@ import { applyStripeChargeRefundToInvoice } from '../_lib/invoiceRefundSync.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { applyStripeAccountStatus, recordRiskEvent } from '../_lib/riskHold.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
 
 export const config = { api: { bodyParser: false } };
@@ -120,12 +121,43 @@ export default async function handler(req, res) {
               stripe_onboarding_status = ${status}
             WHERE workspace_id = ${workspaceId}
           `;
+          // Fraud protection: a rejected account takes the business
+          // offline and tells the operator; a review or restriction is
+          // flagged in Admin > Risk (api/_lib/riskHold.js).
+          await applyStripeAccountStatus({
+            workspaceId, accountId: acctId, disabledReason: summary.disabledReason,
+          });
         }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[stripe-platform] account.updated refresh failed:', err.message);
       }
       return ok(res, { received: true, applied: 'account-status' });
+    }
+
+    // A card payment that failed or that Stripe blocked, on a connected
+    // account. Several in a short time is the pattern of someone testing
+    // stolen cards through a fake business; Admin > Risk counts these.
+    // (Arrives only if these event types are ticked on the Connect
+    // webhook in Stripe; harmless when they are not.)
+    if (event.type === 'charge.failed' || event.type === 'payment_intent.payment_failed') {
+      const o = event.data?.object || {};
+      const outcome = o.outcome || o.last_payment_error || {};
+      const blocked = outcome.type === 'blocked';
+      // One failed attempt sends both event types; count it once, by charge.
+      const chargeId = String((event.type === 'charge.failed' ? o.id : (o.latest_charge?.id || o.latest_charge)) || o.id || '').slice(0, 40) || null;
+      const seen = chargeId
+        ? await sql`SELECT 1 FROM risk_events WHERE workspace_id = ${workspaceId} AND kind IN ('payment_failed', 'payment_blocked') AND detail->>'stripe_id' = ${chargeId} LIMIT 1`
+        : { rows: [] };
+      if (seen.rows.length === 0) {
+        await recordRiskEvent(workspaceId, blocked ? 'payment_blocked' : 'payment_failed', {
+          amount_cents: Number(o.amount) || null,
+          currency: o.currency || null,
+          reason: String(outcome.reason || outcome.code || o.failure_code || '').slice(0, 60) || null,
+          stripe_id: chargeId,
+        });
+      }
+      return ok(res, { received: true, applied: 'risk-event' });
     }
 
     // Membership subscription lifecycle. customer.subscription.* events

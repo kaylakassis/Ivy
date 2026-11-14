@@ -34,6 +34,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { listStripeSubscriptions } from '../_lib/stripe.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
 import { cronAuthorized } from '../_lib/cronAuth.js';
+import { syncStripeAccountStatuses } from '../_lib/riskHold.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
@@ -72,6 +73,16 @@ async function handler(req, res) {
   try {
     const { shard, shards } = shardFromReq(req);
     const shardFilter = shardClause({ shard, shards }, 'workspace_id');
+
+    // Fraud protection: ask Stripe whether it has rejected or restricted
+    // any connected account, in case that webhook never arrived. A
+    // rejection takes the business offline (api/_lib/riskHold.js). Runs
+    // on the first shard only, bounded, and never fails the reconcile.
+    let accountStatus = null;
+    if (!shard) {
+      try { accountStatus = await syncStripeAccountStatuses({ limit: 500, deadlineMs: 25000 }); }
+      catch (e) { accountStatus = { ok: false, reason: String(e?.message || e).slice(0, 120) }; }
+    }
 
     let workspaces = 0, scanned = 0, applied = 0, created = 0,
         retiered = 0, skipped = 0, errors = 0, rateLimited = 0, batches = 0;
@@ -176,6 +187,7 @@ async function handler(req, res) {
     return ok(res, {
       shard, shards, batches,
       workspaces, scanned, applied, created, retiered, skipped, errors, rateLimited,
+      accountStatus,
       terminatedBy,
     });
   } catch (err) {

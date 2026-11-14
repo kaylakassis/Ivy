@@ -36,6 +36,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { browserTimeZone } from '../../lib/timezones.js';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import ResendVerifyLink from '../../components/ResendVerifyLink.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -2027,6 +2028,8 @@ const STRIPE_BOUNCE_MSGS = {
   connect_not_enabled: { tone: 'err', title: 'Stripe Connect isn\'t enabled', body: 'Visit dashboard.stripe.com/connect/accounts/overview and click "Get started", then come back. Skip for now if you want.' },
   wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Finance after onboarding to disconnect + reconnect.' },
   unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy currently only supports US Stripe accounts. Email hello@joinivy.ai to enable your region.' },
+  verify_email: { tone: 'warn', title: 'Confirm your email first', body: 'Before you can take card payments, we need to know your email address is yours. Open the link we emailed you when you signed up, then connect Stripe. You can keep setting up in the meantime.', resend: true },
+  on_hold:    { tone: 'err',  title: 'This account is on hold', body: 'Card payments cannot be set up while your account is being reviewed. Email hello@joinivy.ai and we will sort it out.' },
   error:      { tone: 'err',  title: 'Couldn\'t finish the Stripe step', body: 'Something went wrong. You can skip this and try again from Finance once you\'re in.' },
 };
 function StripeBounceBanner({ search, nav }) {
@@ -2055,6 +2058,7 @@ function StripeBounceBanner({ search, nav }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--fg)' }}>{info.title}</div>
         <div style={{ marginTop: 2, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>{info.body}</div>
+        {info.resend && <ResendVerifyLink/>}
         {detail && (
           <details style={{ marginTop: 4, fontSize: 11.5, color: 'var(--muted)' }}>
             <summary style={{ cursor: 'pointer' }}>Technical detail</summary>

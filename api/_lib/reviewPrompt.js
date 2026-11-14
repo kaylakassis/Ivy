@@ -40,7 +40,7 @@ export const PUSH_PAYLOAD = {
 export async function dueForReviewPrompt({ limit = 500 } = {}) {
   const { rows } = await sql.query(`
     SELECT u.id AS user_id, w.id AS workspace_id, w.subscription_status, w.trial_ends_at,
-           w.subscription_period_end, w.comp_until
+           w.subscription_period_end, w.comp_until, w.risk_hold_at
       FROM users u
       JOIN workspaces w ON w.owner_id = u.id
      WHERE u.deleted_at IS NULL
