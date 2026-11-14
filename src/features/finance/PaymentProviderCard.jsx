@@ -263,6 +263,18 @@ function ProviderRow({
           )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{description}</div>
+        {/* New business: card payments are capped until Stripe finishes
+            verifying the account. Says what the caps are and that they
+            lift on their own. */}
+        {provider?.limits?.active && (
+          <div role="note" style={{
+            marginTop: 8, padding: '8px 10px', borderRadius: 8, fontSize: 12, lineHeight: 1.5, color: 'var(--fg-2)',
+            background: 'color-mix(in srgb, var(--warn, #c98500) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--warn, #c98500) 35%, transparent)',
+          }}>
+            <strong>Card payments are limited for now.</strong> {provider.limits.text}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

@@ -94,7 +94,7 @@ function formEncode(params, prefix = '') {
   return out.filter(Boolean).join('&');
 }
 
-export async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, body, idempotencyKey }) {
+export async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, body, idempotencyKey, knownAmountCents = null }) {
   if (!secretKey || typeof secretKey !== 'string') {
     throw new Error('Stripe secret key is required');
   }
@@ -110,6 +110,22 @@ export async function stripeFetch(path, { method = 'GET', secretKey, stripeAccou
   // Stripe charged but before we recorded it), passing the same key makes
   // Stripe return the ORIGINAL result instead of charging again.
   if (idempotencyKey) headers['Idempotency-Key'] = String(idempotencyKey);
+  // Fraud protection: a business Stripe has not verified yet has capped
+  // card payments (api/_lib/newBusinessLimits.js). Checked here so every
+  // payment path is covered. Only calls that start a payment on a
+  // connected account are looked at; everything else passes straight
+  // through. Loaded on demand: that module needs the database, this one
+  // otherwise does not.
+  if (method === 'POST' && stripeAccount && (path === '/payment_intents' || path === '/checkout/sessions')) {
+    const { stripeCallAmount, enforceNewBusinessPayment } = await import('./newBusinessLimits.js');
+    // knownAmountCents: for a subscription sold on a saved Stripe price,
+    // where the request itself carries no amount.
+    const read = stripeCallAmount(path, body);
+    const amountCents = read === 0 && Number(knownAmountCents) > 0 ? Math.round(Number(knownAmountCents)) : read;
+    if (amountCents != null) {
+      await enforceNewBusinessPayment({ stripeAccount, amountCents, kind: path === '/payment_intents' ? 'saved_card' : 'checkout' });
+    }
+  }
   let payload;
   if (body) {
     payload = formEncode(body);
@@ -167,6 +183,10 @@ export async function fetchAccountSummary(arg) {
     // ("rejected.fraud", "under_review", "requirements.past_due", ...),
     // or null when it is not disabled. Read by api/_lib/riskHold.js.
     disabledReason: acct.requirements?.disabled_reason || null,
+    // How many things Stripe is waiting on right now (overdue or due).
+    // Zero, with payments and payouts on, is what "verified" means for
+    // the new-business limits (api/_lib/newBusinessLimits.js).
+    requirementsDue: (acct.requirements?.currently_due?.length || 0) + (acct.requirements?.past_due?.length || 0),
   };
 }
 
@@ -665,6 +685,9 @@ export async function createMembershipCheckoutSession({
   secretKey, stripeAccount, priceId, customerId, customerEmail,
   workspaceId, membershipId, clientId,
   successUrl, cancelUrl,
+  // What one billing period costs, so the new-business payment limits
+  // can judge it (the Stripe request only names the saved price).
+  amountCents = null,
 }) {
   const body = {
     mode: 'subscription',
@@ -686,7 +709,7 @@ export async function createMembershipCheckoutSession({
   if (customerId) body.customer = customerId;
   else if (customerEmail) body.customer_email = customerEmail;
   const session = await stripeFetch('/checkout/sessions', {
-    method: 'POST', secretKey, stripeAccount, body,
+    method: 'POST', secretKey, stripeAccount, body, knownAmountCents: amountCents,
   });
   return { id: session.id, url: session.url, customer: session.customer };
 }

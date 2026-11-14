@@ -26,6 +26,7 @@ import { isUuid } from '../_lib/programs.js';
 import { findValidCoupon, ensureStripeCoupon, trialEligible, pickCohort, bundleFor, INVALID_CODE } from '../_lib/programCommerce.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
+import { answeredLimitRefusal } from '../_lib/newBusinessLimits.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -142,5 +143,8 @@ export default async function handler(req, res) {
       trialApplied: !!trial, trialUsed: wantsTrial && !trial, trialDays: trial ? Number(p.trial_days) : null,
       couponApplied: !!coupon, addOn: !!addOn, cohortId: cohort?.id || null,
     });
-  } catch (err) { return serverError(res, err); }
+  } catch (err) {
+    if (answeredLimitRefusal(res, err)) return undefined;
+    return serverError(res, err);
+  }
 }

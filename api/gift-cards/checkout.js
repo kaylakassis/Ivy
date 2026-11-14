@@ -14,6 +14,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
+import { enforceNewBusinessPayment, stripeCallAmount, answeredLimitRefusal } from '../_lib/newBusinessLimits.js';
 
 async function stripeCheckout({ secretKey, stripeAccount }, body) {
   const params = new URLSearchParams();
@@ -23,6 +24,11 @@ async function stripeCheckout({ secretKey, stripeAccount }, body) {
     'Content-Type': 'application/x-www-form-urlencoded',
   };
   if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
+  // This checkout talks to Stripe directly, so the new-business payment
+  // limits are applied here (everything else gets them in stripeFetch).
+  if (stripeAccount) {
+    await enforceNewBusinessPayment({ stripeAccount, amountCents: stripeCallAmount('/checkout/sessions', body), kind: 'gift_card' });
+  }
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
     headers,
@@ -115,6 +121,7 @@ export default async function handler(req, res) {
     });
     return ok(res, { url: session.url });
   } catch (err) {
+    if (answeredLimitRefusal(res, err)) return undefined;
     return serverError(res, err);
   }
 }

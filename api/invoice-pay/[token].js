@@ -21,6 +21,7 @@ import { savedCardRowForInvoice, ensureStripeCustomer, chargeInvoiceWithSavedCar
 import { fulfillInvoicePaymentIntent, markInvoiceProcessing } from '../_lib/checkoutFulfillment.js';
 import { appUrl } from '../_lib/tokens.js';
 import { isOnRiskHold } from '../_lib/riskHold.js';
+import { answeredLimitRefusal } from '../_lib/newBusinessLimits.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
@@ -211,6 +212,7 @@ export default async function handler(req, res) {
         await expireStripeCheckout(inv.workspace_id, replaced);
       }
     } catch (e) {
+      if (answeredLimitRefusal(res, e)) return undefined;
       return badRequest(res, e.message || 'Online payment is not enabled for this invoice.');
     }
 

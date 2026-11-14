@@ -153,8 +153,16 @@ async function notifyAdminOfHold({ row, reason }) {
 // platform webhook (account.updated), the daily reconcile and "Check
 // Stripe now". Stores the reason; a rejection places a hold; a review or
 // restriction is flagged once per change.
-export async function applyStripeAccountStatus({ workspaceId, accountId, disabledReason }) {
+export async function applyStripeAccountStatus({ workspaceId, accountId, disabledReason, summary = null }) {
   if (!workspaceId) return { changed: false };
+  // New-business payment limits follow the same answer from Stripe: they
+  // lift the moment the account is verified (api/_lib/newBusinessLimits.js).
+  if (summary) {
+    try {
+      const { applyIdentityState } = await import('./newBusinessLimits.js');
+      await applyIdentityState({ workspaceId, summary });
+    } catch { /* limits stay as they were */ }
+  }
   const reason = disabledReason ? String(disabledReason).slice(0, 80) : null;
   const prev = (await sql`SELECT stripe_disabled_reason FROM finance_settings WHERE workspace_id = ${workspaceId}`).rows[0];
   const before = prev?.stripe_disabled_reason || null;
@@ -194,7 +202,7 @@ export async function syncStripeAccountStatuses({ limit = 300, deadlineMs = 2000
       // eslint-disable-next-line no-await-in-loop
       const summary = await fetchAccountSummary({ secretKey: key, stripeAccount: r.stripe_connect_user_id });
       // eslint-disable-next-line no-await-in-loop
-      const out = await applyStripeAccountStatus({ workspaceId: r.workspace_id, accountId: r.stripe_connect_user_id, disabledReason: summary.disabledReason });
+      const out = await applyStripeAccountStatus({ workspaceId: r.workspace_id, accountId: r.stripe_connect_user_id, disabledReason: summary.disabledReason, summary });
       checked++;
       if (out.held) held++;
     } catch {
@@ -218,24 +226,34 @@ export async function listRiskAccounts({ limit = 200 } = {}) {
        WHERE kind IN ('payment_failed', 'payment_blocked')
          AND created_at > NOW() - (${FAILED_WINDOW_HOURS}::int * INTERVAL '1 hour')
        GROUP BY workspace_id
+    ),
+    capped AS (
+      SELECT workspace_id, COUNT(*)::int AS n, MAX(created_at) AS last_at
+        FROM risk_events
+       WHERE kind = 'limit_blocked'
+         AND created_at > NOW() - (${FAILED_WINDOW_HOURS}::int * INTERVAL '1 hour')
+       GROUP BY workspace_id
     )
     SELECT w.id AS workspace_id, w.name AS workspace_name, w.created_at, w.subscription_status,
            w.risk_hold_at, w.risk_hold_reason, w.risk_hold_source, w.risk_reviewed_at,
            u.id AS owner_id, u.email, u.name AS owner_name, u.email_verified_at, u.signup_country, u.user_type,
            cs.biz_name, cs.slug,
-           fs.stripe_connect_user_id, fs.stripe_onboarding_status, fs.stripe_disabled_reason,
-           COALESCE(f.n, 0) AS failed_payments, f.last_at AS failed_last_at
+           fs.stripe_connect_user_id, fs.stripe_onboarding_status, fs.stripe_disabled_reason, fs.stripe_identity_state,
+           COALESCE(f.n, 0) AS failed_payments, f.last_at AS failed_last_at,
+           COALESCE(c.n, 0) AS capped_payments, c.last_at AS capped_last_at
       FROM workspaces w
       JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
       LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
       LEFT JOIN finance_settings fs ON fs.workspace_id = w.id
       LEFT JOIN fails f ON f.workspace_id = w.id
+      LEFT JOIN capped c ON c.workspace_id = w.id
      WHERE COALESCE(u.user_type, '') <> 'super_admin'
        AND (
             w.risk_hold_at IS NOT NULL
          OR (u.signup_country IS NOT NULL AND u.signup_country <> 'US')
          OR split_part(lower(u.email), '@', 2) = ANY(${DISPOSABLE_EMAIL_DOMAINS})
          OR COALESCE(f.n, 0) >= ${FAILED_THRESHOLD}
+         OR COALESCE(c.n, 0) >= 1
          OR fs.stripe_disabled_reason LIKE 'rejected.%'
          OR fs.stripe_disabled_reason IN ('under_review', 'listed', 'platform_paused')
          OR (fs.stripe_connect_user_id IS NOT NULL AND u.email_verified_at IS NULL
@@ -252,6 +270,7 @@ export async function listRiskAccounts({ limit = 200 } = {}) {
     const add = (id, label, at) => flags.push({ id, label, fresh: !reviewed || (at ? new Date(at).getTime() > reviewed : created > reviewed) });
     if (isStripeRejection(r.stripe_disabled_reason) || isStripeConcern(r.stripe_disabled_reason)) add('stripe', stripeReasonLabel(r.stripe_disabled_reason), null);
     if (r.failed_payments >= FAILED_THRESHOLD) add('failed_payments', `${r.failed_payments} failed or blocked card payments in the last ${FAILED_WINDOW_HOURS} hours`, r.failed_last_at);
+    if (r.capped_payments >= 1) add('over_limit', `Tried ${r.capped_payments} card ${r.capped_payments === 1 ? 'payment' : 'payments'} over the new-business limits in the last ${FAILED_WINDOW_HOURS} hours`, r.capped_last_at);
     if (r.signup_country && r.signup_country !== 'US') add('outside_us', `Signed up from outside the US (${r.signup_country})`, null);
     if (DISPOSABLE_EMAIL_DOMAINS.includes(String(r.email || '').toLowerCase().split('@')[1] || '')) add('throwaway_email', 'Uses a throwaway email address', null);
     // Only for recent sign-ups: plenty of long-standing honest businesses
@@ -276,6 +295,8 @@ export async function listRiskAccounts({ limit = 200 } = {}) {
       bookingSlug: r.slug || null,
       stripeConnected: !!r.stripe_connect_user_id,
       stripeStatus: r.stripe_disabled_reason ? stripeReasonLabel(r.stripe_disabled_reason) : (r.stripe_connect_user_id ? (r.stripe_onboarding_status === 'complete' ? 'Payments on' : 'Not finished setting up') : null),
+      // Card payments capped until Stripe verifies the account.
+      paymentsLimited: r.stripe_identity_state === 'unverified',
       held,
       holdAt: r.risk_hold_at || null,
       holdReason: r.risk_hold_reason || null,

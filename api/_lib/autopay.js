@@ -35,6 +35,7 @@ import { resolveMergedClientId } from './clientResolve.js';
 import { computeTotals, fetchFinanceSettings } from './finance.js';
 import { invoiceMoney } from '../../src/lib/invoiceRules.js';
 import { loadStripeCreds } from './stripeCreds.js';
+import { previewNewBusinessPayment } from './newBusinessLimits.js';
 import {
   chargeOffSession, fetchCheckoutSession, fetchPaymentMethod, stripeFetch,
   setDefaultPaymentMethod, findOrCreateCustomer, createSetupCheckoutSession,
@@ -779,6 +780,11 @@ export async function chargeInvoiceAutopay({ workspaceId, invoiceId, retry = fal
   const due0 = balanceDueCents(inv);
   if (due0 <= 0) return skip('nothing_due');
   if (due0 > Number(ag.max_amount_cents)) return skip('over_approved_amount');
+  // A business Stripe has not verified yet has capped card payments
+  // (api/_lib/newBusinessLimits.js). Say so plainly instead of letting
+  // the charge be refused and read as a declined card.
+  const limit = await previewNewBusinessPayment({ workspaceId, amountCents: due0 });
+  if (!limit.ok) return skip('new_business_limit');
 
   // Claim the invoice BEFORE talking to Stripe. Exactly one caller wins
   // each attempt; the attempt number is part of the idempotency key.

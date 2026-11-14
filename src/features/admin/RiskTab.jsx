@@ -26,8 +26,10 @@ export default function RiskTab({ labels }) {
   const [note, setNote] = useState(null);
   const [checking, setChecking] = useState(false);
 
+  const [limits, setLimits] = useState(null);
+
   const load = () => api.get('/admin/risk')
-    .then((r) => { setAccounts(r.accounts || []); setErr(null); })
+    .then((r) => { setAccounts(r.accounts || []); setLimits(r.limits || null); setErr(null); })
     .catch((e) => setErr(e.message || 'Could not load the risk list.'));
   useEffect(() => { load(); }, []);
 
@@ -74,6 +76,8 @@ export default function RiskTab({ labels }) {
         </button>
       </div>
 
+      {limits && <LimitsCard limits={limits} onSaved={setLimits} act={act}/>}
+
       {err && <div role="alert" className="card" style={{ padding: 12, fontSize: 13, color: 'var(--danger)', borderColor: 'var(--danger)' }}>{err}</div>}
       {note && <div role="status" className="card" style={{ padding: 12, fontSize: 13, color: 'var(--fg-2)' }}>{note}</div>}
 
@@ -87,6 +91,84 @@ export default function RiskTab({ labels }) {
           <Group title="Worth a second look" count={flagged.length} empty="Nothing is flagged right now.">
             {flagged.map((a) => <AccountCard key={a.workspaceId} a={a} act={act} labels={labels}/>)}
           </Group>
+        </>
+      )}
+    </div>
+  );
+}
+
+// The card payment limits for a business Stripe has not verified yet.
+// Amounts are typed in dollars; the server keeps cents.
+function LimitsCard({ limits, onSaved, act }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState(null);
+  const usd = (cents) => `$${(Number(cents || 0) / 100).toLocaleString('en-US')}`;
+  const start = () => {
+    setForm({ enabled: limits.enabled, pay: String(limits.maxPaymentCents / 100), count: String(limits.maxDailyCount), total: String(limits.maxDailyCents / 100) });
+    setEditing(true);
+  };
+  const num = (v) => Number(String(v).replace(/[^0-9.]/g, ''));
+  const valid = form && num(form.pay) >= 1 && num(form.count) >= 1 && num(form.total) >= num(form.pay);
+  const save = async () => {
+    setBusy(true);
+    const r = await act({
+      action: 'limits',
+      limits: {
+        enabled: form.enabled,
+        maxPaymentCents: Math.round(num(form.pay) * 100),
+        maxDailyCount: Math.round(num(form.count)),
+        maxDailyCents: Math.round(num(form.total) * 100),
+      },
+    });
+    setBusy(false);
+    if (r?.limits) { onSaved(r.limits); setEditing(false); }
+  };
+  const field = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--muted)', flex: '1 1 150px', minWidth: 0 };
+  return (
+    <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Limits for new businesses</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.55 }}>
+            Until Stripe has finished verifying a new business, its card payments are capped. The caps lift on their own the moment Stripe verifies the account, and never come back for that business.
+          </div>
+          {!editing && (
+            <div style={{ fontSize: 13.5, marginTop: 10, lineHeight: 1.6 }}>
+              {limits.enabled ? (
+                <>
+                  <strong>On.</strong> Up to <strong>{usd(limits.maxPaymentCents)}</strong> per card payment, <strong>{limits.maxDailyCount}</strong> card payments in 24 hours, and <strong>{usd(limits.maxDailyCents)}</strong> in total in 24 hours.
+                </>
+              ) : (
+                <><strong>Off.</strong> New businesses can take card payments of any size.</>
+              )}
+            </div>
+          )}
+        </div>
+        {!editing && <button type="button" className="btn btn-outline" onClick={start} style={{ minHeight: 40 }}><Icons.Edit size={13}/> Change</button>}
+      </div>
+      {editing && (
+        <>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })}/>
+            Limit card payments until Stripe verifies a new business
+          </label>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', opacity: form.enabled ? 1 : 0.5 }}>
+            <label style={field}>Largest single payment ($)
+              <input className="input" inputMode="decimal" value={form.pay} disabled={!form.enabled} onChange={(e) => setForm({ ...form, pay: e.target.value })}/>
+            </label>
+            <label style={field}>Card payments in 24 hours
+              <input className="input" inputMode="numeric" value={form.count} disabled={!form.enabled} onChange={(e) => setForm({ ...form, count: e.target.value })}/>
+            </label>
+            <label style={field}>Total in 24 hours ($)
+              <input className="input" inputMode="decimal" value={form.total} disabled={!form.enabled} onChange={(e) => setForm({ ...form, total: e.target.value })}/>
+            </label>
+          </div>
+          {!valid && <div style={{ fontSize: 12, color: 'var(--danger)' }}>Each number must be at least 1, and the 24 hour total cannot be less than the largest single payment.</div>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" className="btn btn-primary" disabled={busy || !valid} onClick={save} style={{ minHeight: 40, opacity: busy || !valid ? 0.6 : 1 }}>{busy ? 'Saving…' : 'Save limits'}</button>
+            <button type="button" className="btn btn-outline" disabled={busy} onClick={() => setEditing(false)} style={{ minHeight: 40 }}>Cancel</button>
+          </div>
         </>
       )}
     </div>
@@ -144,6 +226,7 @@ function AccountCard({ a, act, labels }) {
             {a.signupCountry ? ` · from ${a.signupCountry}` : ''}
             {' · '}{a.emailVerified ? 'email confirmed' : 'email not confirmed'}
             {a.stripeStatus ? ` · Stripe: ${a.stripeStatus}` : ' · no Stripe account'}
+            {a.paymentsLimited ? ' · card payments limited until Stripe verifies them' : ''}
           </div>
         </div>
         {a.held && <Chip tone="bad"><Icons.Lock size={12}/> On hold</Chip>}
@@ -158,7 +241,7 @@ function AccountCard({ a, act, labels }) {
 
       {a.flags.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {a.flags.map((f) => <Chip key={f.id} tone={f.id === 'stripe' || f.id === 'failed_payments' ? 'bad' : 'warn'}>{f.label}</Chip>)}
+          {a.flags.map((f) => <Chip key={f.id} tone={f.id === 'stripe' || f.id === 'failed_payments' || f.id === 'over_limit' ? 'bad' : 'warn'}>{f.label}</Chip>)}
         </div>
       )}
 

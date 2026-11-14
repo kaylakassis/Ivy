@@ -13,6 +13,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { appUrl } from '../_lib/tokens.js';
 import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
+import { applyStripeAccountStatus } from '../_lib/riskHold.js';
 import { methodNotAllowed } from '../_lib/json.js';
 import { verifyReturnState, connectedPageUrl } from '../_lib/connectReturn.js';
 
@@ -91,6 +92,10 @@ export default async function handler(req, res) {
         stripe_onboarding_status = ${status}
       WHERE workspace_id = ${workspaceId}
     `;
+    // Verified already? Then the new-business payment limits lift right
+    // away; a rejection takes the business offline (api/_lib/riskHold.js).
+    await applyStripeAccountStatus({ workspaceId, accountId: summary.id, disabledReason: summary.disabledReason, summary })
+      .catch((e) => console.warn('[stripe-oauth-callback] status not applied:', e.message));
 
     return safeRedirect({
       stripe: status === 'complete' ? 'connected' : 'pending',

@@ -14,6 +14,7 @@ import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../../_lib/businessAccess.js';
+import { enforceNewBusinessPayment, stripeCallAmount, answeredLimitRefusal } from '../../_lib/newBusinessLimits.js';
 
 function fetchTimeout(url, opts, ms) {
   const c = new AbortController();
@@ -163,6 +164,11 @@ export default async function handler(req, res) {
       'Content-Type': 'application/x-www-form-urlencoded',
     };
     if (creds.stripeAccount) headers['Stripe-Account'] = creds.stripeAccount;
+    // This checkout talks to Stripe directly, so the new-business payment
+    // limits are applied here (everything else gets them in stripeFetch).
+    if (creds.stripeAccount) {
+      await enforceNewBusinessPayment({ stripeAccount: creds.stripeAccount, amountCents: stripeCallAmount('/checkout/sessions', stripeBody), kind: 'shop_order' });
+    }
     const payload = new URLSearchParams(stripeBody).toString();
     const resp = await fetchTimeout('https://api.stripe.com/v1/checkout/sessions',
       { method: 'POST', headers, body: payload }, 8000);
@@ -176,6 +182,7 @@ export default async function handler(req, res) {
     await sql`UPDATE orders SET stripe_session_id = ${json.id} WHERE id = ${orderId}`;
     return ok(res, { url: json.url });
   } catch (err) {
+    if (answeredLimitRefusal(res, err)) return undefined;
     return serverError(res, err);
   }
 }

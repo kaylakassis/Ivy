@@ -16,6 +16,7 @@ import { findOrCreateCustomer, createMembershipCheckoutSession } from '../_lib/s
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
+import { answeredLimitRefusal } from '../_lib/newBusinessLimits.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
 
       stripeAccount: creds.stripeAccount,
       priceId: tier.stripe_price_id,
+      amountCents: Number(tier.price_cents) || null,
       customerId: stripeCustomerId,
       workspaceId,
       membershipId: tier.id,
@@ -122,6 +124,7 @@ export default async function handler(req, res) {
     });
     return ok(res, { url: session.url });
   } catch (err) {
+    if (answeredLimitRefusal(res, err)) return undefined;
     return serverError(res, err);
   }
 }

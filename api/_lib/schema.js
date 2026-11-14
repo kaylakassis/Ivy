@@ -5611,4 +5611,14 @@ CREATE TABLE IF NOT EXISTS risk_events (
 CREATE INDEX IF NOT EXISTS idx_risk_events_ws ON risk_events (workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_risk_events_kind ON risk_events (kind, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_workspaces_risk_hold ON workspaces (risk_hold_at) WHERE risk_hold_at IS NOT NULL;
+
+-- Fraud protection 5 (1.0.7): card payment limits until Stripe verifies a
+-- new business (api/_lib/newBusinessLimits.js).
+-- 'unverified' = limits apply; 'verified' = lifted for good; NULL = an
+-- account from before this rule that Stripe has not been asked about yet
+-- (not limited).
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_identity_state TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_verified_at TIMESTAMPTZ;
+-- The limits themselves, set in Admin > Risk. NULL = the built-in defaults.
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS new_business_limits JSONB;
 `;

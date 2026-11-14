@@ -14,6 +14,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
 import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { applyStripeAccountStatus } from '../_lib/riskHold.js';
 
 export default async function handler(req, res) {
   if (req.method === 'GET')  return handleGet(req, res);
@@ -74,6 +75,9 @@ async function handlePost(req, res) {
           stripe_connected_at      = COALESCE(stripe_connected_at, NOW())
         WHERE workspace_id = ${workspaceId}
       `;
+      // Same follow-through as the webhook: a verified account has its
+      // new-business limits lifted now; a rejected one goes on hold.
+      await applyStripeAccountStatus({ workspaceId, accountId: acctId, disabledReason: summary.disabledReason, summary });
     } catch (err) {
       // Stripe rejected the lookup - most often the acct id is from a
       // different mode (test vs live key). Surface so the UI can show

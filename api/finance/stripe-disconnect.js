@@ -30,7 +30,10 @@ export default async function handler(req, res) {
         stripe_connected_at             = NULL,
         stripe_connect_user_id          = NULL,
         stripe_connect_livemode         = NULL,
-        stripe_onboarding_status        = NULL
+        stripe_onboarding_status        = NULL,
+        stripe_identity_state           = NULL,
+        stripe_verified_at              = NULL,
+        stripe_disabled_reason          = NULL
       WHERE workspace_id = ${workspaceId}
     `;
     return ok(res, { connected: false });

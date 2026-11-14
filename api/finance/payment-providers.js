@@ -18,6 +18,7 @@ import * as stripe from '../_lib/payments/stripe.js';
 import * as square from '../_lib/payments/square.js';
 import * as paypal from '../_lib/payments/paypal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { ownerLimitNotice } from '../_lib/newBusinessLimits.js';
 
 const VALID = new Set(['stripe', 'square', 'paypal']);
 
@@ -44,7 +45,9 @@ export default async function handler(req, res) {
       return ok(res, {
         active: settings?.paymentProvider || 'stripe',
         providers: {
-          stripe: { connected: stripeConn, ...(stripeInfo || {}) },
+          // limits: set while Stripe has not verified a new account yet and
+          // card payments are capped (api/_lib/newBusinessLimits.js).
+          stripe: { connected: stripeConn, ...(stripeInfo || {}), limits: await ownerLimitNotice(workspaceId).catch(() => null) },
           square: { connected: squareConn, ...(squareInfo || {}) },
           paypal: { connected: paypalConn, ...(paypalInfo || {}) },
         },

@@ -347,6 +347,8 @@ async function run() {
 async function cleanup() {
   await sql`UPDATE workspaces SET risk_hold_at = NULL, risk_hold_reason = NULL, risk_hold_source = NULL
              WHERE id IN (SELECT w.id FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE u.email LIKE ${`fraud-%-${S}@%`})`.catch(() => {});
+  // ...and remove this run's test accounts, so the local risk list stays readable.
+  await sql`DELETE FROM users WHERE email LIKE ${`fraud-%-${S}@%`} OR email = ${process.env.SUPER_ADMIN_EMAIL}`.catch(() => {});
 }
 
 run().finally(cleanup).then(() => {

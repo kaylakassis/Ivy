@@ -125,7 +125,7 @@ export default async function handler(req, res) {
           // offline and tells the operator; a review or restriction is
           // flagged in Admin > Risk (api/_lib/riskHold.js).
           await applyStripeAccountStatus({
-            workspaceId, accountId: acctId, disabledReason: summary.disabledReason,
+            workspaceId, accountId: acctId, disabledReason: summary.disabledReason, summary,
           });
         }
       } catch (err) {

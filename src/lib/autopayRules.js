@@ -96,6 +96,7 @@ const SKIP_WORDS = {
   card_changed: 'the client changed their saved card and needs to authorize the new one',
   card_removed: 'the client removed their saved card',
   over_approved_amount: 'the amount is higher than the client approved',
+  new_business_limit: 'card payments are limited until Stripe finishes verifying your account',
   currency_changed: 'the currency is different from what the client approved',
   provider_changed: 'Stripe is no longer the payment provider',
   stripe_changed: 'the Stripe account changed since the client approved',

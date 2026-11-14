@@ -8,6 +8,8 @@
 //          reviewed  "looks fine": hide until something new is flagged
 //          sync      ask Stripe about every connected account now and
 //                    apply the answers (a rejection places a hold)
+//          limits    change the card payment limits for businesses
+//                    Stripe has not verified yet ({ limits: {...} })
 //
 // Every action is written to the audit log with who did it.
 import { requireSameOrigin } from '../_lib/security.js';
@@ -18,6 +20,7 @@ import { sql } from '../_lib/db.js';
 import {
   listRiskAccounts, placeRiskHold, releaseRiskHold, markRiskReviewed, syncStripeAccountStatuses,
 } from '../_lib/riskHold.js';
+import { getLimits, setLimits, describeLimits } from '../_lib/newBusinessLimits.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -29,7 +32,8 @@ export default async function handler(req, res) {
   try {
     res.setHeader?.('Cache-Control', 'no-store');
     if (req.method === 'GET') {
-      return ok(res, { accounts: await listRiskAccounts() });
+      const limits = await getLimits();
+      return ok(res, { accounts: await listRiskAccounts(), limits, limitsText: describeLimits(limits) });
     }
 
     const body = await readBody(req);
@@ -41,6 +45,14 @@ export default async function handler(req, res) {
       const out = await syncStripeAccountStatuses({ limit: 300, deadlineMs: 20000 });
       await recordAudit(req, { actor, action: 'risk.sync', meta: out });
       return ok(res, { ...out, accounts: await listRiskAccounts() });
+    }
+
+    // The new-business payment limits (api/_lib/newBusinessLimits.js).
+    if (action === 'limits') {
+      const before = await getLimits();
+      const limits = await setLimits(body.limits);
+      await recordAudit(req, { actor, action: 'risk.limits', meta: { before, after: limits } });
+      return ok(res, { ok: true, limits, limitsText: describeLimits(limits) });
     }
 
     const workspaceId = String(body.workspaceId || '');

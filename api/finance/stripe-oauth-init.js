@@ -134,11 +134,15 @@ export default async function handler(req, res) {
       // onboarding doesn't orphan the acct on Stripe's side.
       await sql`
         INSERT INTO finance_settings (
-          workspace_id, stripe_connect_user_id, stripe_onboarding_status
-        ) VALUES (${workspaceId}, ${accountId}, 'pending')
+          workspace_id, stripe_connect_user_id, stripe_onboarding_status, stripe_identity_state
+        ) VALUES (${workspaceId}, ${accountId}, 'pending', 'unverified')
         ON CONFLICT (workspace_id) DO UPDATE SET
           stripe_connect_user_id   = EXCLUDED.stripe_connect_user_id,
-          stripe_onboarding_status = 'pending'
+          stripe_onboarding_status = 'pending',
+          -- A brand-new Stripe account starts with capped card payments
+          -- until Stripe verifies it (api/_lib/newBusinessLimits.js).
+          stripe_identity_state    = 'unverified',
+          stripe_verified_at       = NULL
       `;
     }
 
