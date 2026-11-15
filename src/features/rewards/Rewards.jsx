@@ -165,7 +165,7 @@ function RewardsManager({ r }) {
       </div>
 
       {/* KPIs */}
-      <div className="grid-auto">
+      <div className="grid-auto stat-grid">
         <Kpi label="Active members"      value={r.kpis.activeMembers} sub="Clients with at least one redemption"/>
         <Kpi label="Rewards redeemed"    value={r.kpis.rewardsRedeemed} sub="All time"/>
         <Kpi label="Repeat revenue"      value={fmtMoney(r.kpis.repeatRevenue)} sub="From clients with 2+ paid invoices" tone="accent"/>

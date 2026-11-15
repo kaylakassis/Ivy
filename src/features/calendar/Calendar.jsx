@@ -373,10 +373,10 @@ export default function Calendar() {
         // DESKTOP / TABLET: original wrapping single row.
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
           <button className="btn btn-outline" onClick={goToday}>Today</button>
-          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(-1)}>
+          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(-1)} aria-label="Previous" title="Previous">
             <Icons.Arrow size={14} style={{ transform: 'rotate(180deg)' }}/>
           </button>
-          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(1)}>
+          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(1)} aria-label="Next" title="Next">
             <Icons.Arrow size={14}/>
           </button>
           <h3 className="page-title" style={{ margin: 0, fontSize: 22 }}>{rangeLabel}</h3>

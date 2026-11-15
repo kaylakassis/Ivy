@@ -319,7 +319,9 @@ function AppShellInner() {
           (when applicable) the walkthrough overlay isn't covering the
           screen. Otherwise the FAB peeks through the modal scrim. */}
       {/* The floating Ivy bubble is a web affordance; on the phone Ivy is a tab. */}
-      {!walled && !answersOpen && !showWalkthrough && !native && <IvyDock/>}
+      {/* Not on phones: the bottom bar has an Ivy tab, and the floating
+          button covered buttons and text at that width. */}
+      {!walled && !answersOpen && !showWalkthrough && !native && !viewport.isMobile && <IvyDock/>}
       {/* Per-tab tutorial overlay. Reads activeTabId from TutorialProvider;
           renders nothing until a tab is opened (auto-trigger from Topbar
           on first visit, or manual via the (i) button). Gated on the paywall

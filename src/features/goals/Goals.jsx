@@ -163,7 +163,7 @@ function TasksPane({ tasks, highlightId = null, onCreate, onToggle, onUpdate, on
           ))}
         </div>
         {!adding && (
-          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setAdding(true)} title="Add task">
+          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setAdding(true)} title="Add task" aria-label="Add task">
             <Icons.Plus size={14} sw={2}/>
           </button>
         )}
@@ -243,7 +243,8 @@ function TaskRow({ task, highlight = false, onToggle, onUpdate, onRemove }) {
       border: '1px solid ' + (task.done ? 'transparent' : 'var(--border)'),
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={() => onToggle(task)}
+        <button onClick={() => onToggle(task)} role="checkbox" aria-checked={!!task.done}
+          aria-label={`${task.done ? 'Mark as not done' : 'Mark as done'}: ${task.title || 'task'}`}
           title={readyToTick ? 'Ready - tap to mark done' : ''}
           style={{
             width: 20, height: 20, flexShrink: 0,
@@ -288,7 +289,8 @@ function TaskRow({ task, highlight = false, onToggle, onUpdate, onRemove }) {
             fontWeight: isOverdue ? 600 : 400, whiteSpace: 'nowrap',
           }}>{dueLabel}</span>
         )}
-        <button className="btn btn-ghost" onClick={() => onRemove(task.id)} style={{ padding: 4, color: 'var(--muted)' }}>
+        <button className="btn btn-ghost" onClick={() => onRemove(task.id)} style={{ padding: 4, color: 'var(--muted)' }}
+          aria-label={`Delete task: ${task.title || 'task'}`} title="Delete task">
           <Icons.X size={12}/>
         </button>
       </div>
@@ -333,7 +335,7 @@ function GoalsPane({ goals, onCreate, onUpdate, onRemove }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div className="metric-label" style={{ flex: 1 }}>Goals</div>
         {!adding && (
-          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setAdding(true)} title="Add goal">
+          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setAdding(true)} title="Add goal" aria-label="Add goal">
             <Icons.Plus size={14} sw={2}/>
           </button>
         )}
@@ -473,7 +475,8 @@ function GoalCard({ goal, onUpdate, onRemove }) {
             {meta.label}{goal.deadline ? ' · by ' + new Date(goal.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
           </div>
         </div>
-        <button className="btn btn-ghost" onClick={() => onRemove(goal.id)} style={{ padding: 4, color: 'var(--muted)' }}>
+        <button className="btn btn-ghost" onClick={() => onRemove(goal.id)} style={{ padding: 4, color: 'var(--muted)' }}
+          aria-label={`Delete goal: ${goal.title || 'goal'}`} title="Delete goal">
           <Icons.X size={12}/>
         </button>
       </div>

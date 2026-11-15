@@ -337,7 +337,7 @@ export default function Clients() {
       )}
 
       {/* Analytics */}
-      <div className="grid-auto">
+      <div className="grid-auto stat-grid">
         <AnalyticCard label="Total clients" value={counts.active + counts.paused}
           sub={`${counts.active} active · ${counts.paused} paused`} icon={<Icons.Users size={16} sw={1.8}/>}/>
         <AnalyticCard
@@ -601,8 +601,10 @@ function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolde
 //   2. monthly payment - recurring revenue context
 //   3. due date        - what needs collecting / billing next
 //   4. 30d revenue     - momentum
-function ClientMetricsChips({ metrics }) {
-  if (!metrics) return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>-</div>;
+// `quiet`: render nothing when there is nothing to show (the phone card),
+// instead of the dash the desktop table column needs.
+function ClientMetricsChips({ metrics, quiet = false }) {
+  if (!metrics) return quiet ? null : <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>-</div>;
   const chips = [];
   if (metrics.sessionsLeft > 0) {
     chips.push({
@@ -651,7 +653,7 @@ function ClientMetricsChips({ metrics }) {
     });
   }
   if (chips.length === 0) {
-    return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>-</div>;
+    return quiet ? null : <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>-</div>;
   }
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
@@ -723,7 +725,7 @@ function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, 
         </div>
         {metrics && (
           <div style={{ marginTop: 6 }}>
-            <ClientMetricsChips metrics={metrics}/>
+            <ClientMetricsChips metrics={metrics} quiet/>
           </div>
         )}
       </div>
@@ -799,7 +801,8 @@ function RowMenu({ client, onStage, onOpen, onMerge, onDelete }) {
 
   return (
     <>
-      <button ref={btnRef} onClick={toggle} className="btn btn-ghost" style={{ padding: 6 }}>
+      <button ref={btnRef} onClick={toggle} className="btn btn-ghost" style={{ padding: 6 }}
+        aria-label={`More actions for ${client.name || 'this client'}`} title="More actions">
         <Icons.More size={14}/>
       </button>
       {open && createPortal(

@@ -121,7 +121,10 @@ function DirectMessages() {
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: isMobile ? '1fr' : '320px 1fr',
+      // minmax(0, ...): a plain 1fr column grows to fit its longest unbroken
+      // line, so one long message preview pushed the whole list (and the
+      // New message button) off the right edge of a phone.
+      gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : '320px minmax(0, 1fr)',
       flex: 1, minHeight: 0,
       borderTop: '1px solid var(--border)',
       // The app frame already clears the fixed bottom nav (global.css
@@ -134,12 +137,12 @@ function DirectMessages() {
       {showList && <div style={{
         borderRight: isMobile ? 'none' : '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',
-        background: 'var(--surface)', minHeight: 0,
+        background: 'var(--surface)', minHeight: 0, minWidth: 0,
       }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>Conversations</div>
-          <button className="btn btn-ghost" style={{ padding: 6 }}
-            onClick={() => setNewOpen(true)} title="New message">
+          <button className="btn btn-ghost" style={{ padding: 6, minWidth: 40, minHeight: 40, justifyContent: 'center' }}
+            onClick={() => setNewOpen(true)} title="New message" aria-label="New message">
             <Icons.Plus size={15} sw={2}/>
           </button>
         </div>

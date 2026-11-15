@@ -1234,3 +1234,50 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
     text-align: center;
   }
 }
+
+/* ── Touch targets ─────────────────────────────────────────────────────
+   On a touch screen every button gets a tap area of at least 44px tall
+   and 40px wide, without changing how it looks or the layout around it:
+   an invisible ::after box centred on the control grows it only where it
+   is smaller than that (the min() keeps it at 0 for anything already big
+   enough). Filter chips, tab pills, switches and icon buttons across the
+   app are 22 to 30px tall by design; this is what makes them comfortable
+   to hit with a thumb.
+
+   The box is positioned against the button itself, so the button must be
+   positioned: anything not already positioned inline is made relative
+   (zero specificity via :where, so a class that sets absolute / fixed /
+   sticky still wins and still works as the anchor). */
+@media (pointer: coarse) {
+  :where(button, [role="button"], a.btn, summary):where(:not([style^="position:"]):not([style*="; position:"])) {
+    position: relative;
+  }
+  :where(button, [role="button"], a.btn, summary)::after {
+    content: '';
+    position: absolute;
+    top: min(0px, calc((100% - 44px) / 2));
+    bottom: min(0px, calc((100% - 44px) / 2));
+    left: min(0px, calc((100% - 40px) / 2));
+    right: min(0px, calc((100% - 40px) / 2));
+  }
+  /* Stand-alone text links (not ones inside a sentence): taller tap area. */
+  :where(a[href]:not(.btn)):where(:not(:where(p, li, span, label, td, h1, h2, h3) a)) {
+    position: relative;
+  }
+  :where(a[href]:not(.btn)):where(:not(:where(p, li, span, label, td, h1, h2, h3) a))::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    top: min(0px, calc((100% - 40px) / 2));
+    bottom: min(0px, calc((100% - 40px) / 2));
+  }
+}
+
+/* Summary cards on a phone: two to a row and tighter, so the list the
+   page is really about is not pushed a full screen down. */
+@media (max-width: 520px) {
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .stat-grid > .card { padding: 12px !important; gap: 4px !important; }
+  .stat-grid .metric-value { font-size: 22px !important; }
+  .stat-grid .metric-label { white-space: normal !important; font-size: 10.5px; line-height: 1.25; }
+}
