@@ -218,7 +218,12 @@ const FAILED_THRESHOLD = 3;
 
 // Businesses on hold, plus businesses with at least one flag that has not
 // been reviewed since. Newest first within each group.
-export async function listRiskAccounts({ limit = 200 } = {}) {
+export async function listRiskAccounts({ limit = 200, search = null } = {}) {
+  // `search`: look a business up by owner email, owner or business name,
+  // or its Stripe account id (what "Copy ID" gives in Stripe), whether or
+  // not anything is flagged. Without it: the flagged list.
+  const q = String(search || '').trim().toLowerCase().slice(0, 120);
+  const like = q ? `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
   const { rows } = await sql`
     WITH fails AS (
       SELECT workspace_id, COUNT(*)::int AS n, MAX(created_at) AS last_at
@@ -248,7 +253,11 @@ export async function listRiskAccounts({ limit = 200 } = {}) {
       LEFT JOIN fails f ON f.workspace_id = w.id
       LEFT JOIN capped c ON c.workspace_id = w.id
      WHERE COALESCE(u.user_type, '') <> 'super_admin'
-       AND (
+       AND ((${like}::text IS NOT NULL AND (
+                 lower(u.email) LIKE ${like} OR lower(COALESCE(u.name, '')) LIKE ${like}
+              OR lower(COALESCE(cs.biz_name, '')) LIKE ${like} OR lower(COALESCE(w.name, '')) LIKE ${like}
+              OR lower(COALESCE(fs.stripe_connect_user_id, '')) = ${q}))
+        OR (${like}::text IS NULL AND (
             w.risk_hold_at IS NOT NULL
          OR (u.signup_country IS NOT NULL AND u.signup_country <> 'US')
          OR split_part(lower(u.email), '@', 2) = ANY(${DISPOSABLE_EMAIL_DOMAINS})
@@ -258,7 +267,7 @@ export async function listRiskAccounts({ limit = 200 } = {}) {
          OR fs.stripe_disabled_reason IN ('under_review', 'listed', 'platform_paused')
          OR (fs.stripe_connect_user_id IS NOT NULL AND u.email_verified_at IS NULL
              AND w.created_at > NOW() - INTERVAL '60 days')
-       )
+       )))
      ORDER BY (w.risk_hold_at IS NOT NULL) DESC, w.created_at DESC
      LIMIT ${Math.max(1, Math.min(500, Number(limit) || 200))}`;
   const out = [];
@@ -281,7 +290,7 @@ export async function listRiskAccounts({ limit = 200 } = {}) {
     // is hidden once reviewed.
     const stripeFlag = flags.find((f) => f.id === 'stripe');
     const visible = held || flags.some((f) => f.fresh) || (stripeFlag && isStripeRejection(r.stripe_disabled_reason));
-    if (!visible) continue;
+    if (!visible && !like) continue;
     out.push({
       workspaceId: r.workspace_id,
       ownerId: r.owner_id,

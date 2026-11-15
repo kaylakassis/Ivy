@@ -2,6 +2,8 @@
 //
 //   GET  → { accounts: [...] } businesses on hold, plus businesses with a
 //          flag nobody has reviewed yet (api/_lib/riskHold.js).
+//   GET ?q= → { results: [...] } any business matching an owner email,
+//          a name, or a Stripe account id, flagged or not.
 //   POST → { action, workspaceId?, reason? }
 //          hold      take a business offline (reason required)
 //          release   lift a hold
@@ -32,6 +34,13 @@ export default async function handler(req, res) {
   try {
     res.setHeader?.('Cache-Control', 'no-store');
     if (req.method === 'GET') {
+      // ?q=: look up any business (by email, name or Stripe account id),
+      // flagged or not, so it can be taken offline from here.
+      const q = String(req.query?.q || '').trim();
+      if (q) {
+        if (q.length < 3) return badRequest(res, 'Type at least 3 characters.');
+        return ok(res, { results: await listRiskAccounts({ search: q, limit: 20 }) });
+      }
       const limits = await getLimits();
       return ok(res, { accounts: await listRiskAccounts(), limits, limitsText: describeLimits(limits) });
     }

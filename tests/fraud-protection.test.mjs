@@ -337,6 +337,28 @@ async function run() {
   assert(r.statusCode === 200 && r.body.ok === true && typeof r.body.checked === 'number' && Array.isArray(r.body.accounts), `"Check Stripe now" reports what it did (${r.body.checked} checked)`);
   const audit = (await sql`SELECT action FROM audit_events WHERE actor_user_id = ${ops}`).rows.map((x) => x.action);
   assert(['risk.hold', 'risk.release', 'risk.reviewed', 'risk.sync'].every((a) => audit.includes(a)), 'every action is in the audit log with who did it');
+  // Find any business, flagged or not: by email, by name, by Stripe account id.
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: other.email } }));
+  assert(r.statusCode === 200 && r.body.results.length === 1 && r.body.results[0].workspaceId === other.wid && r.body.results[0].flags.length === 0 && !r.body.results[0].held, 'an unflagged business can be looked up by its owner email');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: other.acctId.toUpperCase() } }));
+  assert(r.body.results.length === 1 && r.body.results[0].workspaceId === other.wid, '...or by the Stripe account id copied from Stripe');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: `OTHER studio` } }));
+  assert(r.body.results.some((a) => a.workspaceId === other.wid), '...or by business name, any capitals');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: `fraud-admin-${S}` } }));
+  assert(r.body.results.length === 0, 'operator accounts never come up');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: 'ab' } }));
+  assert(r.statusCode === 400, 'a one or two letter search is refused');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: '%_%' } }));
+  assert(r.statusCode === 200 && r.body.results.length === 0, 'search wildcards are treated as plain text');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: 'acct_does_not_exist_anywhere' } }));
+  assert(r.statusCode === 200 && r.body.results.length === 0, 'a Stripe account no Ivy business uses finds nothing');
+  r = await call(riskHandler, req({ cookie: stranger.cookie, query: { q: other.email } }));
+  assert(r.statusCode === 403 || r.statusCode === 401, 'only the operator can search');
+  r = await call(riskHandler, req({ method: 'POST', cookie: opsCookie, body: { action: 'hold', workspaceId: other.wid, reason: 'Stripe flagged this account' } }));
+  assert(r.statusCode === 200 && await isOnRiskHold(other.wid) && (await gate(other)).out === null, 'a business found that way can be taken offline');
+  r = await call(riskHandler, req({ cookie: opsCookie, query: { q: other.email } }));
+  assert(r.body.results[0].held === true && r.body.results[0].holdReason === 'Stripe flagged this account', '...and the search shows it on hold');
+
   r = await call(riskHandler, req({ method: 'POST', cookie: opsCookie, body: { action: 'nuke', workspaceId: tester.wid } }));
   assert(r.statusCode === 400, 'an unknown action is refused');
 

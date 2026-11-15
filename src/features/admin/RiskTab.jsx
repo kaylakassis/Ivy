@@ -76,6 +76,8 @@ export default function RiskTab({ labels }) {
         </button>
       </div>
 
+      <FindBusiness act={act} labels={labels} version={accounts}/>
+
       {limits && <LimitsCard limits={limits} onSaved={setLimits} act={act}/>}
 
       {err && <div role="alert" className="card" style={{ padding: 12, fontSize: 13, color: 'var(--danger)', borderColor: 'var(--danger)' }}>{err}</div>}
@@ -92,6 +94,61 @@ export default function RiskTab({ labels }) {
             {flagged.map((a) => <AccountCard key={a.workspaceId} a={a} act={act} labels={labels}/>)}
           </Group>
         </>
+      )}
+    </div>
+  );
+}
+
+// Look up any business, flagged or not, to take it offline. Matches the
+// owner's email, the owner's or business's name, or the Stripe account id
+// (in Stripe: open the connected account and press "Copy ID").
+function FindBusiness({ act, labels, version }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const search = async (e) => {
+    e?.preventDefault();
+    const term = q.trim();
+    if (term.length < 3) { setErr('Type at least 3 characters.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.get(`/admin/risk?q=${encodeURIComponent(term)}`);
+      setResults(r.results || []);
+    } catch (ex) {
+      setErr(ex.message || 'Could not search right now.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  // After an action (hold, lift, looks fine) refresh what is shown.
+  useEffect(() => { if (results && q.trim().length >= 3) search(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [version]);
+  return (
+    <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>Find a business</div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.55 }}>
+          Look up any business to take it offline, even if nothing is flagged. Search by the owner's email, a name, or the Stripe account ID (in Stripe, open the connected account and press Copy ID).
+        </div>
+      </div>
+      <form onSubmit={search} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Email, name or Stripe account ID"
+          aria-label="Find a business" autoCapitalize="none" autoCorrect="off" spellCheck={false} style={{ flex: '1 1 240px', minWidth: 0 }}/>
+        <button type="submit" className="btn btn-outline" disabled={busy} style={{ minHeight: 40 }}>
+          <Icons.Search size={14}/> {busy ? 'Searching…' : 'Search'}
+        </button>
+        {results && <button type="button" className="btn btn-ghost" onClick={() => { setResults(null); setQ(''); setErr(null); }} style={{ minHeight: 40 }}>Clear</button>}
+      </form>
+      {err && <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
+      {results && results.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
+          No Ivy business matches that. A Stripe account can outlive the business that made it (the owner disconnected it or deleted their Ivy account); there is then nothing in Ivy to take offline.
+        </div>
+      )}
+      {results && results.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {results.map((a) => <AccountCard key={a.workspaceId} a={a} act={act} labels={labels} found/>)}
+        </div>
       )}
     </div>
   );
@@ -200,7 +257,7 @@ function Chip({ children, tone = 'warn' }) {
   );
 }
 
-function AccountCard({ a, act, labels }) {
+function AccountCard({ a, act, labels, found = false }) {
   const [mode, setMode] = useState(null); // 'hold' | 'release' | null
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -293,9 +350,11 @@ function AccountCard({ a, act, labels }) {
               <button type="button" className="btn btn-outline" onClick={() => setMode('hold')} style={{ minHeight: 40, color: 'var(--danger)' }}>
                 <Icons.Lock size={13}/> Take offline
               </button>
-              <button type="button" className="btn btn-outline" disabled={busy} onClick={() => run({ action: 'reviewed' })} style={{ minHeight: 40 }}>
-                <Icons.Check size={13}/> Looks fine
-              </button>
+              {!(found && a.flags.length === 0) && (
+                <button type="button" className="btn btn-outline" disabled={busy} onClick={() => run({ action: 'reviewed' })} style={{ minHeight: 40 }}>
+                  <Icons.Check size={13}/> Looks fine
+                </button>
+              )}
             </>
           )}
           <button type="button" className="btn btn-ghost" onClick={() => setOpen((v) => !v)} style={{ minHeight: 40 }}>
