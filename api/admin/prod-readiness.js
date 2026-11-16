@@ -371,6 +371,7 @@ export default async function handler(req, res) {
                SUM(request_count)::bigint AS msgs, COUNT(DISTINCT workspace_id)::int AS ws
           FROM ivy_usage WHERE day > CURRENT_DATE - 30 GROUP BY model`;
       let cost = 0, msgs = 0, unknown = [];
+      const parts = { reload: 0, reread: 0, fresh: 0, reply: 0 };
       const wsSet = new Set();
       for (const r of u.rows) {
         const key = Object.keys(PRICE).find((k) => String(r.model || '').startsWith(k));
@@ -378,12 +379,23 @@ export default async function handler(req, res) {
         if (!key) { unknown.push(r.model); continue; }
         const [pi, po, pcr, pcw] = PRICE[key];
         cost += (Number(r.inp) * pi + Number(r.outp) * po + Number(r.cr) * pcr + Number(r.cw) * pcw) / 1e6;
+        parts.reload += Number(r.cw) * pcw / 1e6;
+        parts.reread += Number(r.cr) * pcr / 1e6;
+        parts.fresh  += Number(r.inp) * pi / 1e6;
+        parts.reply  += Number(r.outp) * po / 1e6;
       }
+      // Where the money went. "Reloading" is the one-off charge to load Ivy's
+      // instructions after nobody has used her for an hour; it shrinks as a
+      // share when more people use her, because one load then serves everyone.
+      const pct = (x) => (cost > 0 ? Math.round((x / cost) * 100) : 0);
+      const where = cost > 0
+        ? ` Where it went: ${pct(parts.reload)}% reloading Ivy's instructions after a quiet hour, ${pct(parts.reread)}% reusing them, ${pct(parts.fresh)}% new input, ${pct(parts.reply)}% replies.`
+        : '';
       const wsCount = Number((await sql`SELECT COUNT(DISTINCT workspace_id)::int AS n FROM ivy_usage WHERE day > CURRENT_DATE - 30`).rows[0]?.n || 0);
       const perMsg = msgs ? cost / msgs : 0;
       checks.push(check('ai_cost', 'Ivy cost (30 days)', 'ok',
         msgs === 0 ? 'No Ivy messages in the last 30 days.'
-          : `$${cost.toFixed(2)} for ${msgs} messages across ${wsCount} workspace${wsCount === 1 ? '' : 's'} = $${perMsg.toFixed(4)} per message, $${(wsCount ? cost / wsCount : 0).toFixed(2)} per workspace.${unknown.length ? ` Unpriced model(s): ${unknown.join(', ')}.` : ''}`));
+          : `$${cost.toFixed(2)} for ${msgs} messages across ${wsCount} workspace${wsCount === 1 ? '' : 's'} = $${perMsg.toFixed(4)} per message, $${(wsCount ? cost / wsCount : 0).toFixed(2)} per workspace.${where}${unknown.length ? ` Unpriced model(s): ${unknown.join(', ')}.` : ''}`));
     } catch (e) {
       checks.push(check('ai_cost', 'Ivy cost (30 days)', 'warn', `could not compute: ${e.message}`));
     }
