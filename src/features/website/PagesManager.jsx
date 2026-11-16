@@ -106,7 +106,7 @@ export default function PagesManager({ pages, currentPageId, onSelect, onMove, o
                         className="input" style={{ width: '100%', fontSize: 14 }}/>
                     ) : (
                       <button type="button" onClick={() => { onSelect(p.id); }}
-                        style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--fg)', maxWidth: '100%' }}>
+                        style={{ all: 'unset', position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: 'var(--fg)', maxWidth: '100%' }}>
                         {isHome && <Icons.Home size={12} sw={1.7}/>}
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</span>
                       </button>

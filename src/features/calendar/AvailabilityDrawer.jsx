@@ -254,7 +254,7 @@ function DayRow({ dayIdx, windows, onChange }) {
               <TimeInput minutes={w.end} onChange={(v) => onChange(windows.map((x, j) => j === i ? { ...x, end: v } : x))}/>
               {windows.length > 1 && (
                 <button className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }}
-                  onClick={() => onChange(windows.filter((_, j) => j !== i))}>
+                  onClick={() => onChange(windows.filter((_, j) => j !== i))} aria-label="Remove">
                   <Icons.X size={14}/>
                 </button>
               )}

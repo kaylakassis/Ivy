@@ -139,7 +139,7 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
               )}
             </div>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -472,7 +472,7 @@ function Tags({ client, onSave }) {
             display: 'inline-flex', alignItems: 'center', gap: 6,
           }}>
             {t}
-            <button onClick={() => removeTag(t)} className="btn btn-ghost" style={{ padding: 0, color: 'var(--muted)' }}>
+            <button onClick={() => removeTag(t)} className="btn btn-ghost" style={{ padding: 0, color: 'var(--muted)' }} aria-label="Remove">
               <Icons.X size={10}/>
             </button>
           </span>

@@ -251,7 +251,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
               {quote?.resultingInvoiceId && ' · invoice drafted'}
             </div>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -330,7 +330,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
                     </div>
                     {!isLocked && (
                       <button className="btn btn-ghost" onClick={() => removeItem(i)}
-                        style={{ padding: 4, color: 'var(--danger)' }}>
+                        style={{ padding: 4, color: 'var(--danger)' }} aria-label="Remove">
                         <Icons.X size={13}/>
                       </button>
                     )}

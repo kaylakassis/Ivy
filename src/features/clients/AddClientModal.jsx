@@ -124,7 +124,7 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}><Icons.Users size={16} sw={1.8}/></div>
           <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, flex: 1 }}>Add a client</h3>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -174,8 +174,8 @@ export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
           </Field>
           <button type="button" className="btn btn-ghost" onClick={() => setMoreOpen((v) => !v)}
             aria-expanded={moreOpen}
-            style={{ padding: '6px 4px', fontSize: 13, color: 'var(--accent)', alignSelf: 'flex-start' }}>
-            {moreOpen ? <Icons.ArrowUp size={12}/> : <Icons.ArrowDown size={12}/>}
+            style={{ padding: '6px 4px', fontSize: 13, color: 'var(--accent)', alignSelf: 'flex-start', whiteSpace: 'normal', textAlign: 'left', lineHeight: 1.4, maxWidth: '100%' }}>
+            {moreOpen ? <Icons.ArrowUp size={12} style={{ flexShrink: 0 }}/> : <Icons.ArrowDown size={12} style={{ flexShrink: 0 }}/>}
             {moreOpen ? 'Fewer details' : 'More details: notes, address, birthday, emergency contact'}
           </button>
           {moreOpen && (

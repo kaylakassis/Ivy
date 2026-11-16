@@ -177,7 +177,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}><Icons.Calendar size={16} sw={1.8}/></div>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>New booking</h3>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

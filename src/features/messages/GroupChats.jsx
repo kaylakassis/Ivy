@@ -344,7 +344,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
         display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)',
       }}>
         {isMobile && (
-          <button className="btn btn-ghost" onClick={onBack} style={{ padding: 4 }}>
+          <button className="btn btn-ghost" onClick={onBack} style={{ padding: 4 }} aria-label="Back">
             <Icons.Arrow size={16} stroke="var(--fg)" style={{ transform: 'rotate(180deg)' }}/>
           </button>
         )}
@@ -416,7 +416,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
           </span>
           <button onClick={() => setReplyingTo(null)}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-              color: 'var(--muted)', padding: 0 }}>
+              color: 'var(--muted)', padding: 0 }} aria-label="Close">
             <Icons.X size={14}/>
           </button>
         </div>
@@ -435,7 +435,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
                 whiteSpace: 'nowrap' }}>{f.name}</span>
               <button onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: 0, color: 'var(--muted)' }}>
+                  padding: 0, color: 'var(--muted)' }} aria-label="Remove">
                 <Icons.X size={12}/>
               </button>
             </div>
@@ -870,7 +870,7 @@ function ModalShell({ title, onClose, children }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
           <div style={{ flex: 1, fontSize: 16, fontWeight: 700 }}>{title}</div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 4 }} aria-label="Close">
             <Icons.X size={16} sw={2}/>
           </button>
         </div>

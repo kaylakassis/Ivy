@@ -56,6 +56,8 @@ export default function Canvas({
   useEffect(() => {
     if (!wrapRef.current || !innerRef.current) return;
     const update = () => {
+      // The observer can fire once more after the builder has closed.
+      if (!wrapRef.current || !innerRef.current) return;
       const avail = wrapRef.current.clientWidth - 48;
       const s = Math.min(1, avail / width);
       setScale(s);

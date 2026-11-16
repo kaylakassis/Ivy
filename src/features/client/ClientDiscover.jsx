@@ -7,7 +7,7 @@
 //
 // State lives in URL search params so links are shareable / bookmarkable
 // and the back button rewinds the filter, not the route.
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -459,10 +459,20 @@ function NumberField({ placeholder, value, onChange }) {
 }
 
 function Popover({ children }) {
+  // Opens under its button, lined up with the button's left edge. If that
+  // would run off the right of the screen (the last filter in the row), it
+  // lines up with the button's right edge instead.
+  const ref = useRef(null);
+  const [flip, setFlip] = useState(false);
+  useLayoutEffect(() => {
+    const r = ref.current?.getBoundingClientRect();
+    if (r && r.right > window.innerWidth - 8) setFlip(true);
+  }, []);
   return (
-    <div className="card" style={{
-      position: 'absolute', top: 'calc(100% + 6px)', left: 0,
-      minWidth: 220, padding: 12, zIndex: 30,
+    <div ref={ref} className="card" style={{
+      position: 'absolute', top: 'calc(100% + 6px)',
+      ...(flip ? { right: 0 } : { left: 0 }),
+      minWidth: 220, maxWidth: 'calc(100vw - 24px)', padding: 12, zIndex: 30,
       boxShadow: 'var(--shadow)',
     }}>{children}</div>
   );

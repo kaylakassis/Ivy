@@ -82,7 +82,7 @@ export default function ReportBugModal({ onClose }) {
               fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em',
             }}>Report a bug</h2>
           </div>
-          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }}>
+          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

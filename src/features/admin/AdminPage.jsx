@@ -2717,7 +2717,7 @@ function Modal({ title, onClose, children, wide = false }) {
         style={{ width: '100%', maxWidth: wide ? 680 : 520, maxHeight: '100%', overflowY: 'auto', padding: wide ? 18 : 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{title}</h3>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }}>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={14}/>
           </button>
         </div>
@@ -2782,7 +2782,7 @@ function SortTh({ label, keys, sort, onSort }) {
     <th aria-sort={on ? (isAsc ? 'ascending' : 'descending') : 'none'}
       style={{ padding: '10px 12px', fontSize: 11.5, fontWeight: 600, color: on ? 'var(--fg)' : 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
       <button type="button" onClick={() => onSort(next)}
-        style={{ all: 'unset', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        style={{ all: 'unset', position: 'relative', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {label}<span aria-hidden="true" style={{ opacity: on ? 1 : 0.35 }}>{on ? (isAsc ? '▲' : '▼') : '▾'}</span>
       </button>
     </th>

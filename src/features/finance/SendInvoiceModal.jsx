@@ -57,7 +57,7 @@ export default function SendInvoiceModal({ invoice, onSend, onClose }) {
               {invoice.number} · ${invoice.total?.toFixed(2)}
             </h3>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         {invoice.clientName && invoice.clientEmail && (

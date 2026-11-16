@@ -115,7 +115,7 @@ export default function WorkflowEditor({ workflow, isNew: isNewProp, onClose, on
           <div style={{ flex: 1, fontSize: 17, fontWeight: 600 }}>
             {isNew ? 'New workflow' : 'Edit workflow'}
           </div>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 8 }}>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -288,11 +288,11 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
         </strong>
         <div style={{ flex: 1 }}/>
         <button type="button" onClick={() => onMove(-1)} disabled={!canMoveUp}
-          style={iconBtn}><Icons.ArrowUp size={12}/></button>
+          style={iconBtn} aria-label="Move up"><Icons.ArrowUp size={12}/></button>
         <button type="button" onClick={() => onMove(1)} disabled={!canMoveDown}
-          style={iconBtn}><Icons.ArrowDown size={12}/></button>
+          style={iconBtn} aria-label="Move down"><Icons.ArrowDown size={12}/></button>
         <button type="button" onClick={onRemove}
-          style={{ ...iconBtn, color: 'var(--danger)' }}><Icons.X size={12}/></button>
+          style={{ ...iconBtn, color: 'var(--danger)' }} aria-label="Remove"><Icons.X size={12}/></button>
       </div>
 
       {action.type === 'send_email' && (
@@ -401,7 +401,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
                     }}/>
                   <button type="button" style={{ ...iconBtn, color: 'var(--danger)' }}
                     disabled={(action.config.items || []).length <= 1}
-                    onClick={() => onUpdate({ items: (action.config.items || []).filter((_, j) => j !== i) })}>
+                    onClick={() => onUpdate({ items: (action.config.items || []).filter((_, j) => j !== i) })} aria-label="Remove">
                     <Icons.X size={12}/>
                   </button>
                 </div>

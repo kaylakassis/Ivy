@@ -100,6 +100,7 @@ export default function CommandPalette() {
   };
 
   if (!open) return null;
+  const touch = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 
   return (
     <div role="dialog" aria-modal="true" aria-label="Search"
@@ -118,19 +119,20 @@ export default function CommandPalette() {
         background: 'var(--surface)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-          <Icons.Spark size={16} sw={1.6} stroke="var(--muted)"/>
+          <span aria-hidden="true" style={{ display: 'inline-flex', flexShrink: 0 }}><Icons.Spark size={16} sw={1.6} stroke="var(--muted)"/></span>
           <input ref={inputRef} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onKeyDown}
             placeholder="Search clients, invoices, bookings, pages…"
             style={{
-              flex: 1, padding: 0, border: 0, outline: 'none',
+              flex: 1, minWidth: 0, padding: 0, border: 0, outline: 'none',
               background: 'transparent', color: 'var(--fg)',
               fontSize: 15, fontWeight: 500,
             }}/>
-          <span style={{
-            fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-            padding: '2px 7px', borderRadius: 6,
-            background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)',
-          }}>esc</span>
+          {/* A real button: on a phone there is no Esc key, so it says Close. */}
+          <button type="button" onClick={() => setOpen(false)} aria-label="Close search" style={{
+            fontSize: touch ? 13 : 10.5, fontWeight: 600, letterSpacing: touch ? 0 : '0.06em', textTransform: touch ? 'none' : 'uppercase',
+            padding: touch ? '6px 10px' : '2px 7px', borderRadius: 6, cursor: 'pointer',
+            background: 'var(--surface-2)', color: touch ? 'var(--fg-2)' : 'var(--muted)', border: '1px solid var(--border)',
+          }}>{touch ? 'Close' : 'esc'}</button>
         </div>
 
         <div style={{ maxHeight: 'min(520px, 60vh)', overflowY: 'auto' }}>
@@ -147,7 +149,7 @@ export default function CommandPalette() {
           {!loading && !q.trim() && (
             <div style={{ padding: 18 }}>
               <Group label="Jump to" items={visibleNavFor({ isSuperAdmin: user?.isSuperAdmin, hiddenNav: user?.ui_prefs?.hiddenNav })
-                .map((n) => ({ id: 'page:' + n.id, title: n.label, subtitle: n.to, url: n.to, icon: n.icon }))}
+                .map((n) => ({ id: 'page:' + n.id, title: n.label, url: n.to, icon: n.icon }))}
                 go={go} flatStart={0} active={active}/>
             </div>
           )}
@@ -168,6 +170,8 @@ export default function CommandPalette() {
           )}
         </div>
 
+        {/* Keyboard tips only where there is a keyboard. */}
+        {!touch && (
         <div style={{
           padding: '8px 14px', borderTop: '1px solid var(--border)',
           display: 'flex', gap: 14, fontSize: 11, color: 'var(--muted)',
@@ -180,6 +184,7 @@ export default function CommandPalette() {
             <kbd style={kbd}>K</kbd>
           </span>
         </div>
+        )}
       </div>
     </div>
   );
@@ -255,7 +260,6 @@ function localNavGroup(q, isSuperAdmin, hiddenNav) {
     items: matches.map((n) => ({
       id: 'page:' + n.id,
       title: n.label,
-      subtitle: n.to,
       url: n.to,
       icon: n.icon,
     })),

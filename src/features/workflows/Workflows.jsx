@@ -194,7 +194,7 @@ function WorkflowCard({ workflow, onToggle, onEdit, onDelete }) {
             Edit
           </button>
           <button onClick={onDelete} className="btn btn-ghost"
-            style={{ padding: '5px 8px', fontSize: 12, color: 'var(--danger)' }}>
+            style={{ padding: '5px 8px', fontSize: 12, color: 'var(--danger)' }} aria-label="Delete">
             <Icons.Trash size={12}/>
           </button>
         </div>

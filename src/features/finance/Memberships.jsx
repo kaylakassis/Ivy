@@ -380,7 +380,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
                 fontFamily: 'inherit',
               }}/>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

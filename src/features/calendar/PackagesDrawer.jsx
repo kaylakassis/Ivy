@@ -276,7 +276,7 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
     <form onSubmit={submit}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
         <button type="button" onClick={onCancel}
-          className="btn btn-ghost" style={{ padding: 6 }}>
+          className="btn btn-ghost" style={{ padding: 6 }} aria-label="Back">
           <Icons.Arrow size={14} sw={2} style={{ transform: 'rotate(180deg)' }}/>
         </button>
         <span style={{ fontSize: 13.5, fontWeight: 600 }}>

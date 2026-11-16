@@ -243,7 +243,7 @@ export default function IvyPro() {
               <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
               <button className="btn btn-primary" onClick={() => submit()}
                 disabled={(!draft.trim() && !photoAttach.pieces.length) || thinking || photoAttach.busy}
-                style={{ padding: '8px 12px' }}>
+                style={{ padding: '8px 12px' }} aria-label="Send">
                 <Icons.Arrow size={13} sw={2.4}/>
               </button>
             </div>

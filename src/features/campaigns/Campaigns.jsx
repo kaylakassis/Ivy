@@ -154,7 +154,7 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>
             {sent ? 'Campaign' : 'Edit campaign'}
           </h3>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={16}/></button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={16}/></button>
         </div>
 
         {sent && (

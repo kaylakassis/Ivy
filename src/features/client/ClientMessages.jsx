@@ -552,6 +552,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
                 <MicButton onClick={startVoiceMemo} disabled={sending}/>
               )}
               <button type="submit" className="btn btn-primary" disabled={sending || !input.trim()}
+                aria-label="Send message" title="Send"
                 style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
                 {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
               </button>

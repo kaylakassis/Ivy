@@ -279,13 +279,21 @@ export default function Editor({
             {TEMPLATES[site.template]?.name || 'Template'}
             <Icons.ArrowDown size={12} />
           </button>
+          {/* Click anywhere else to close the list. */}
+          {showTemplateMenu && (
+            <div onClick={() => setShowTemplateMenu(false)} aria-hidden="true"
+              style={{ position: 'fixed', inset: 0, zIndex: 49 }}/>
+          )}
           {showTemplateMenu && (
             <div style={{
               position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 50,
               minWidth: 240, padding: 6,
               background: 'var(--surface)', border: '1px solid var(--border-strong)',
               borderRadius: 10, boxShadow: 'var(--shadow)',
-            }}>
+              // The list is longer than a laptop screen: it scrolls, so the
+              // last styles can be reached.
+              maxHeight: 'min(560px, calc(100vh - 190px))', overflowY: 'auto',
+            }} className="scroll">
               {TEMPLATE_LIST.map((t) => (
                 <button key={t.id}
                   onClick={() => { set({ template: t.id }); setShowTemplateMenu(false); }}

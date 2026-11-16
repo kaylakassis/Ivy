@@ -602,6 +602,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
             <button className="btn btn-primary"
               type="submit" disabled={sending || !input.trim()}
               title={smsMode ? 'Send as SMS' : 'Send'}
+              aria-label={smsMode ? 'Send as a text message' : 'Send message'}
               style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
               {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
             </button>

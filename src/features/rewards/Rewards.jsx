@@ -391,7 +391,7 @@ function ConfirmRewardModal({ entry, onClose, onSubmit }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}><Icons.Gift size={16} sw={1.8}/></div>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>Confirm reward</h3>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         <div style={{
@@ -475,7 +475,7 @@ function RuleRow({ rule, first, onToggle, onEdit, onDelete }) {
       </button>
       <button className="btn btn-ghost" onClick={onEdit} style={{ padding: 6 }} title="Edit"><Icons.Edit size={13}/></button>
       <button className="btn btn-ghost" onClick={() => { if (confirm('Delete rule?')) onDelete(); }}
-        style={{ padding: 6, color: 'var(--danger)' }}><Icons.Trash size={13}/></button>
+        style={{ padding: 6, color: 'var(--danger)' }} aria-label="Delete"><Icons.Trash size={13}/></button>
     </div>
   );
 }
@@ -543,7 +543,7 @@ function RedemptionRow({ redemption, rule, first, onDelete, onMarkUsed, onUnmark
         </button>
       )}
       <button className="btn btn-ghost" onClick={() => { if (confirm('Remove this redemption record?')) onDelete(); }}
-        style={{ padding: 6, color: 'var(--muted)' }}><Icons.X size={13}/></button>
+        style={{ padding: 6, color: 'var(--muted)' }} aria-label="Remove"><Icons.X size={13}/></button>
     </div>
   );
 }
@@ -579,7 +579,7 @@ function RuleEditor({ rule, onClose, onSave }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}><Icons.Gift size={16} sw={1.8}/></div>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>{rule.id ? 'Edit rule' : 'New rule'}</h3>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         <Field label="Name">
@@ -663,7 +663,7 @@ function LogRedemptionModal({ rules, onSubmit, onClose }) {
         className="card" style={{ padding: 24, width: '100%', maxWidth: 480 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>Log a redemption</h3>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         <Field label="Client">

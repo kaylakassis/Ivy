@@ -424,7 +424,7 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
               {description || 'Untitled entry'}
             </h3>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

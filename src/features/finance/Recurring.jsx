@@ -390,7 +390,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
                 fontFamily: 'inherit',
               }}/>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -487,7 +487,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
                   fontSize: 13, fontWeight: 600, color: 'var(--fg)',
                   textAlign: 'right', alignSelf: 'center',
                 }}>{fmtMoney((Number(it.quantity) || 0) * (Number(it.rate) || 0))}</div>
-                <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: '8px 10px', minHeight: 36, color: 'var(--danger)' }}>
+                <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: '8px 10px', minHeight: 36, color: 'var(--danger)' }} aria-label="Remove">
                   <Icons.X size={13}/>
                 </button>
               </div>

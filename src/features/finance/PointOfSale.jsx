@@ -174,7 +174,7 @@ export default function PointOfSale() {
               <button className="btn btn-ghost" style={{ padding: 4 }} onClick={() => setLine(x.key, { qty: x.qty + 1 })}>+</button>
             </div>
             <span style={{ width: 64, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{money((Number(x.rate) || 0) * x.qty)}</span>
-            <button className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }} onClick={() => removeLine(x.key)}><Icons.X size={13}/></button>
+            <button className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }} onClick={() => removeLine(x.key)} aria-label="Remove"><Icons.X size={13}/></button>
           </div>
         ))}
 

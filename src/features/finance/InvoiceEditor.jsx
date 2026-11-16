@@ -11,6 +11,8 @@ import { fireConfetti } from '../../lib/celebrate.js';
 import InvoicePreviewModal from './InvoicePreviewModal.jsx';
 import { invoiceMoney, invoiceActions, invoiceStatusLine } from '../../lib/invoiceRules.js';
 import { invoiceAutopayLine } from '../../lib/autopayRules.js';
+import InvoiceClientPicker from './InvoiceClientPicker.jsx';
+import { useViewport } from '../../lib/viewport.js';
 
 // Labels for paid_method / payment_claimed_method values. Mirrors
 // PAID_METHOD_LABELS in api/_lib/finance.js.
@@ -38,6 +40,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
   // Esc → close the editor, but only when no inner sub-modal owns the
   // keypress (CollectInPersonModal has its own Esc handler).
   useEscapeKey(onClose, !collectOpen);
+  const { isMobile } = useViewport();
   // Currency-aware formatter pinned to this invoice. Falls back to
   // USD on legacy rows.
   const fmtMoney = (n) => fmtMoneyShared(n, invoice.currency || 'USD');
@@ -121,7 +124,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
         display: 'flex', flexDirection: 'column',
       }}>
         <div style={{
-          padding: '20px 24px', borderBottom: '1px solid var(--border)',
+          padding: isMobile ? '14px 16px' : '20px 24px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'center', gap: 14,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -130,10 +133,15 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
               {invoice.clientName || 'No client yet'}
             </div>
             {invoice.clientEmail && (
-              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.clientEmail}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', overflowWrap: 'anywhere' }}>{invoice.clientEmail}</div>
+            )}
+            {/* A draft can be given a client (or a different one) right here. */}
+            {invoice.status === 'draft' && (
+              <InvoiceClientPicker invoice={invoice} mobile={isMobile} onPick={(patch) => onSave(patch)}/>
             )}
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}><Icons.X size={15}/></button>
+          <button className="btn btn-ghost" onClick={onClose} aria-label="Close" title="Close"
+            style={{ padding: 8, alignSelf: 'flex-start', minWidth: 40, minHeight: 40, justifyContent: 'center' }}><Icons.X size={15}/></button>
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -316,6 +324,46 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                 color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
               }}>No line items yet.</div>
             ) : (
+              isMobile ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {items.map((it, i) => (
+                    <div key={it.id} style={{
+                      display: 'flex', flexDirection: 'column', gap: 8,
+                      padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)',
+                    }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <input value={it.description}
+                          onChange={(e) => updateItem(i, { description: e.target.value })}
+                          placeholder="Service or item" aria-label={`Line ${i + 1} description`}
+                          disabled={isLocked} style={{ ...inputS, flex: 1, minWidth: 0 }}/>
+                        {!isLocked && (
+                          <button className="btn btn-ghost" onClick={() => removeItem(i)} aria-label={`Remove line ${i + 1}`}
+                            style={{ padding: 8, minWidth: 40, minHeight: 40, justifyContent: 'center', color: 'var(--danger)' }}>
+                            <Icons.X size={14}/>
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr)', gap: 8, alignItems: 'end' }}>
+                        <label style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>Qty
+                          <input type="number" inputMode="decimal" min={0} step={0.5} value={it.quantity}
+                            onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
+                            disabled={isLocked} style={{ ...inputS, textAlign: 'right' }}/>
+                        </label>
+                        <label style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>Rate
+                          <input type="number" inputMode="decimal" min={0} step={1} value={it.rate}
+                            onChange={(e) => updateItem(i, { rate: Number(e.target.value) })}
+                            disabled={isLocked} style={{ ...inputS, textAlign: 'right' }}/>
+                        </label>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'right' }}>Amount
+                          <div className="mono-num" style={{ fontSize: 15, fontWeight: 600, color: 'var(--fg)', padding: '9px 0' }}>
+                            ${(Number(it.quantity || 0) * Number(it.rate || 0)).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <div className="table-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{
                   display: 'grid', gridTemplateColumns: '1fr 80px 100px 100px 30px',
@@ -353,13 +401,14 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                       ${(Number(it.quantity || 0) * Number(it.rate || 0)).toFixed(2)}
                     </div>
                     {!isLocked ? (
-                      <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: '8px 10px', minHeight: 36, color: 'var(--danger)' }}>
+                      <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: '8px 10px', minHeight: 36, color: 'var(--danger)' }} aria-label="Remove">
                         <Icons.X size={13}/>
                       </button>
                     ) : <div/>}
                   </div>
                 ))}
               </div>
+              )
             )}
           </div>
 

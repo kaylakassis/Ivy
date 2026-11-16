@@ -290,7 +290,7 @@ function ServiceCard({ service, onEdit, onRemove }) {
         </div>
       </div>
       <button className="btn btn-ghost" style={{ padding: 6, color: 'var(--danger)', alignSelf: 'flex-start' }}
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}>
+        onClick={(e) => { e.stopPropagation(); onRemove(); }} aria-label="Delete">
         <Icons.Trash size={14}/>
       </button>
     </div>
@@ -316,7 +316,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>Edit service</h3>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         <Field label="Name">
@@ -698,7 +698,7 @@ function ReminderEditor({ values, onChange }) {
               border: '1px solid var(--accent-tint)',
             }}>
               {reminderLabel(m)}
-              <button onClick={() => toggle(m)} className="btn btn-ghost" style={{ padding: 0, color: 'var(--accent)' }}>
+              <button onClick={() => toggle(m)} className="btn btn-ghost" style={{ padding: 0, color: 'var(--accent)' }} aria-label="Close">
                 <Icons.X size={11}/>
               </button>
             </span>
@@ -1544,7 +1544,7 @@ function CustomFieldEditor({ value, onChange }) {
               Required
             </label>
             <button type="button" onClick={() => remove(i)}
-              className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }}>
+              className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }} aria-label="Remove">
               <Icons.X size={13}/>
             </button>
           </div>

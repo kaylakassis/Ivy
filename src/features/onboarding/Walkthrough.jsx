@@ -593,7 +593,7 @@ function IvyHello({ onDismiss, onBack }) {
             }}/>
           <button onClick={send} disabled={busy || !input.trim()}
             className="btn btn-primary"
-            style={{ padding: '8px 14px' }}>
+            style={{ padding: '8px 14px' }} aria-label="Send">
             <Icons.Arrow size={13} sw={2}/>
           </button>
         </div>

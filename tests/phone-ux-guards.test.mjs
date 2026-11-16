@@ -11,7 +11,7 @@ const touch = css.slice(css.indexOf('Touch targets'));
 assert(/@media \(pointer: coarse\)/.test(touch), 'touch targets apply on touch screens only (nothing changes with a mouse)');
 assert(/calc\(\(100% - 44px\) \/ 2\)/.test(touch) && /calc\(\(100% - 40px\) \/ 2\)/.test(touch), 'small buttons get a tap area of at least 44px tall and 40px wide');
 assert(/min\(0px,/.test(touch), 'the tap area never shrinks or moves a control that is already big enough');
-assert(/:where\(button, \[role="button"\], a\.btn, summary\)::after/.test(touch), 'buttons, button-like elements and button links are all covered');
+assert(/:where\(button, \[role="button"\], a\.btn, summary\):where\(:not\(\[style\*="all:"\]\)[^{]*::after/.test(touch), 'buttons, button-like elements and button links are all covered');
 assert(/:not\(\[style\^="position:"\]\):not\(\[style\*="; position:"\]\)/.test(touch) && /position: relative/.test(touch),
   'every such control is positioned, so the tap area is anchored to the control itself and can never cover a whole panel');
 

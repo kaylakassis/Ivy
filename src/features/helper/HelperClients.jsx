@@ -160,7 +160,7 @@ function ClientSheet({ client, onClose: onCloseNow, onSaved }) {
             {busy ? 'Saving…' : client ? 'Save changes' : 'Add client'}
           </button>
           {client && !confirmDelete && (
-            <button className="btn btn-outline" disabled={busy} onClick={() => setConfirmDelete(true)} style={{ color: 'var(--danger)' }}>
+            <button className="btn btn-outline" disabled={busy} onClick={() => setConfirmDelete(true)} style={{ color: 'var(--danger)' }} aria-label="Delete">
               <Icons.Trash size={13}/>
             </button>
           )}

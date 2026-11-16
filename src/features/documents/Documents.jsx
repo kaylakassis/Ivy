@@ -479,7 +479,7 @@ function CreateDocumentModal({ onCreate, onCreateFromPdf, myTemplates = [], onUs
               Start from a vetted template or build your own.
             </div>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

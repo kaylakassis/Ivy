@@ -387,25 +387,25 @@ export default function Calendar() {
           {/* Services + Packages moved to Finance → Services / Packages.
               The drawer code remains so the ?service= deep-link below
               still resolves (now redirected to /finance). */}
-          <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
+          <button className="btn btn-outline" onClick={() => setDrawer('availability')} aria-label="Availability" title="Availability">
             <Icons.Clock size={14}/> {!isTablet && 'Availability'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('reminders')} aria-label="Reminders">
             <Icons.Bell size={14}/> {!isTablet && 'Reminders'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('share')}
-            data-tour="calendar-share">
+            data-tour="calendar-share" aria-label="Share" title="Share your booking link">
             <Icons.Globe size={14}/> {!isTablet && 'Share'}
           </button>
           {CALENDAR_SYNC_ENABLED && (
-            <button className="btn btn-outline" onClick={() => setDrawer('sync')}>
+            <button className="btn btn-outline" onClick={() => setDrawer('sync')} aria-label="Sync" title="Sync">
               <Icons.Arrow size={14}/> {!isTablet && 'Sync'}
             </button>
           )}
           {/* Staff intentionally LAST of the secondary buttons: Ivy is a
               solo-first product - leading the toolbar with team features
               read wrong to businesses of one. */}
-          <button className="btn btn-outline" onClick={() => setDrawer('staff')}>
+          <button className="btn btn-outline" onClick={() => setDrawer('staff')} aria-label="Staff" title="Staff">
             <Icons.Users size={14}/> {!isTablet && 'Staff'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('waitlist')} aria-label="Waitlist">
@@ -418,7 +418,7 @@ export default function Calendar() {
             // compatibility with the old "Block time" button.
             setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '', blocksBookings: true });
             setDrawer('event');
-          }}>
+          }} aria-label="Add event" title="Add event">
             <Icons.Clock size={14}/> {!isTablet && 'Add event'}
           </button>
           <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}

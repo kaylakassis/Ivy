@@ -1249,10 +1249,16 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
    (zero specificity via :where, so a class that sets absolute / fixed /
    sticky still wins and still works as the anchor). */
 @media (pointer: coarse) {
-  :where(button, [role="button"], a.btn, summary):where(:not([style^="position:"]):not([style*="; position:"])) {
+  /* A control that resets its own styles inline ("all: unset") or pins
+     itself to "position: static" is left alone: it would not be the anchor
+     for the tap area below, and the area would land on a parent and cover
+     its neighbours. Those controls set their own size. (Browsers write
+     "all: unset" back out either as-is or as every property spelled out,
+     "position: unset" included, so both spellings are matched.) */
+  :where(button, [role="button"], a.btn, summary):where(:not([style^="position:"]):not([style*="; position:"]):not([style*="all:"])) {
     position: relative;
   }
-  :where(button, [role="button"], a.btn, summary)::after {
+  :where(button, [role="button"], a.btn, summary):where(:not([style*="all:"]):not([style*="position: unset"]):not([style*="position: static"]):not([style*="position: initial"]))::after {
     content: '';
     position: absolute;
     top: min(0px, calc((100% - 44px) / 2));

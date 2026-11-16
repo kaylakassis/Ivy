@@ -90,7 +90,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>Collect in person</h3>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

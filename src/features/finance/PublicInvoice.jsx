@@ -287,6 +287,9 @@ export default function PublicInvoice() {
           <EmptyNote icon="Dollar"
             title="This invoice link isn't active"
             hint={error?.message || 'It may have been voided, paid, or expired.'}/>
+          <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
+            Need a new one? Ask the business that sent it to send the invoice again.
+          </p>
         </div>
       </PageWrap>
     );

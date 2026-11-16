@@ -200,6 +200,9 @@ export default function SignPage() {
           <EmptyNote icon="Doc"
             title="This signing link isn't active"
             hint={error.message || 'It may have expired, been voided, or already been signed.'}/>
+          <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
+            Need a new one? Ask the business that sent it to send the document again.
+          </p>
         </div>
       </PageWrap>
     );

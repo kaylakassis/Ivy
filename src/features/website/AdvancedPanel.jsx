@@ -46,7 +46,7 @@ export default function AdvancedPanel({ site, set, onClose, restoreVersion }) {
         }}>
           <div style={{ fontSize: 15, fontWeight: 600 }}>Advanced</div>
           <div style={{ flex: 1 }}/>
-          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }}>
+          <button onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={14}/>
           </button>
         </div>
@@ -181,7 +181,7 @@ function FormsTab({ site, set }) {
               <option value="webhook">Another app</option>
             </select>
             <div style={{ flex: 1 }}/>
-            <button onClick={() => remove(i)} className="btn btn-ghost" style={{ padding: 6 }}>
+            <button onClick={() => remove(i)} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Delete">
               <Icons.Trash size={12}/>
             </button>
           </div>

@@ -20,6 +20,7 @@ import { useParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { useAuth } from '../../lib/auth.jsx';
 import { safeHref } from '../../lib/safeHref.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
@@ -53,6 +54,7 @@ function prefersReducedMotion() {
 
 export default function PublicBooking({ embedded = false }) {
   const { slug } = useParams();
+  const { user: signedIn, loading: authLoading } = useAuth();
   const [tweaks] = useTweaks();
   // Auto-resize the iframe when running inside the embed route. No-op
   // when the page is loaded standalone (the hook checks window.parent).
@@ -262,10 +264,11 @@ export default function PublicBooking({ embedded = false }) {
   useEffect(() => load(), [slug]);
 
   // Signed-in client? Load their packages for this business so they can
-  // book with one. Anonymous visitors get a 401 here, which just means no
-  // package choice. Never on the embed (someone else's website).
+  // book with one. A visitor who is not signed in has none, so we do not
+  // ask (it used to ask anyway and log a "not signed in" error on every
+  // visit). Never on the embed (someone else's website).
   const loadMyPackages = () => {
-    if (embedded) return;
+    if (embedded || authLoading || !signedIn) return;
     api.get('/me/packages?include=recent', { retry: false })
       .then((r) => {
         const mine = (r.packages || []).filter((p) => !p.archived
@@ -275,7 +278,7 @@ export default function PublicBooking({ embedded = false }) {
       .catch(() => setMyPackages(null));
   };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadMyPackages(); }, [slug, embedded]);
+  useEffect(() => { loadMyPackages(); }, [slug, embedded, authLoading, signedIn?.id]);
 
   // A waitlist claim link: look the offer up, then land the visitor on the
   // details step with the offered time and their details filled in.
@@ -1657,7 +1660,7 @@ function JoinMembershipModal({ slug, membership, bizName, onClose }) {
               {bizName ? ` · ${bizName}` : ''}
             </div>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -1752,7 +1755,7 @@ function BuyPackageModal({ slug, pkg, bizName, onClose, defaultName = '', defaul
               {bizName ? ` · ${bizName}` : ''}
             </div>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -1855,7 +1858,7 @@ function BuyGiftCardModal({ slug, bizName, onClose }) {
               {bizName ? `For use at ${bizName}.` : 'Redeemable on this booking page.'}
             </div>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -1997,7 +2000,7 @@ function ContactModal({ slug, bizName, onClose }) {
               </div>
             )}
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

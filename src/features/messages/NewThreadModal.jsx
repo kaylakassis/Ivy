@@ -44,7 +44,7 @@ export default function NewThreadModal({ existingClientIds, onPick, onClose }) {
       }}>
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>New conversation</h3>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>

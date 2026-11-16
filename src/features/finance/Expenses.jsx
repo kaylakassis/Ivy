@@ -247,7 +247,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>
             {isNew ? 'Log expense' : 'Edit expense'}
           </h3>
-          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }}>
+          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>

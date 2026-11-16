@@ -128,7 +128,7 @@ export default function SendDocumentModal({ documentName, fields = [], onSend, o
             <div className="metric-label">Send for signing</div>
             <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 600 }}>{documentName}</h3>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         {/* Picked signers, in order */}
@@ -171,15 +171,15 @@ export default function SendDocumentModal({ documentName, fields = [], onSend, o
                     })()}
                   </div>
                   <button onClick={() => moveUp(i)} disabled={i === 0}
-                    className="btn btn-ghost" style={{ padding: 4, opacity: i === 0 ? 0.3 : 1 }}>
+                    className="btn btn-ghost" style={{ padding: 4, opacity: i === 0 ? 0.3 : 1 }} aria-label="Move up">
                     <Icons.ArrowDown size={12} sw={2} style={{ transform: 'rotate(180deg)' }}/>
                   </button>
                   <button onClick={() => moveDown(i)} disabled={i === picked.length - 1}
-                    className="btn btn-ghost" style={{ padding: 4, opacity: i === picked.length - 1 ? 0.3 : 1 }}>
+                    className="btn btn-ghost" style={{ padding: 4, opacity: i === picked.length - 1 ? 0.3 : 1 }} aria-label="Move down">
                     <Icons.ArrowDown size={12} sw={2}/>
                   </button>
                   <button onClick={() => remove(c.id)} className="btn btn-ghost"
-                    style={{ padding: 4, color: 'var(--danger)' }}>
+                    style={{ padding: 4, color: 'var(--danger)' }} aria-label="Remove">
                     <Icons.X size={12} sw={2}/>
                   </button>
                 </div>

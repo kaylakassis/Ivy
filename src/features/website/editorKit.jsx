@@ -266,7 +266,7 @@ export function ImageInput({ value, onChange, placeholder = "Paste the photo's w
       </div>
       {!value && !linking && (
         <button type="button" onClick={() => setLinking(true)}
-          style={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)', textDecoration: 'underline', alignSelf: 'flex-start', padding: mobile ? '8px 0' : '2px 0' }}>
+          style={{ all: 'unset', position: 'relative', cursor: 'pointer', fontSize: 11.5, color: 'var(--muted)', textDecoration: 'underline', alignSelf: 'flex-start', padding: mobile ? '8px 0' : '2px 0' }}>
           Use a photo from the web instead
         </button>
       )}

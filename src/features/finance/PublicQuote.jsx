@@ -84,6 +84,9 @@ export default function PublicQuote() {
         <div className="card" style={{ padding: 36 }}>
           <EmptyNote icon="Receipt" title="This estimate isn't active"
             hint={error.message || 'It may have expired or already been answered.'}/>
+          <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
+            Need a new one? Ask the business that sent it to send the estimate again.
+          </p>
         </div>
       </Wrap>
     );

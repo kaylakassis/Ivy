@@ -1078,7 +1078,7 @@ function ServicesStep({ services, setServices, draft, setDraft, category }) {
               <div style={{ flex: 1, fontSize: 13.5, fontWeight: 550 }}>{s.name}</div>
               <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.durationMinutes}m · ${Number(s.price).toFixed(0)}</div>
               <button onClick={() => removeService(s.id)} className="btn btn-ghost"
-                style={{ padding: 4, color: 'var(--danger)' }}>
+                style={{ padding: 4, color: 'var(--danger)' }} aria-label="Remove">
                 <Icons.X size={12}/>
               </button>
             </div>

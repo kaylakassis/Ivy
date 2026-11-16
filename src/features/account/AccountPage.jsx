@@ -273,7 +273,7 @@ function DeleteAccountModal({ email, onCancel, onConfirmed }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}><Icons.Trash size={16}/></div>
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>Delete account?</h3>
-          <button type="button" onClick={onCancel} className="btn btn-ghost" style={{ padding: 6 }}><Icons.X size={15}/></button>
+          <button type="button" onClick={onCancel} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close"><Icons.X size={15}/></button>
         </div>
 
         <p style={{ margin: '4px 0 14px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
@@ -1309,7 +1309,7 @@ function SupportCard() {
                 color: 'var(--fg)', fontSize: 13.5, outline: 'none',
               }}/>
             <button onClick={send} disabled={busy || !text.trim()}
-              className="btn btn-primary" style={{ padding: '8px 14px' }}>
+              className="btn btn-primary" style={{ padding: '8px 14px' }} aria-label="Send">
               <Icons.Arrow size={13} sw={2}/>
             </button>
           </div>

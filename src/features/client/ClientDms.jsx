@@ -275,7 +275,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
         display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)',
       }}>
         {isMobile && (
-          <button className="btn btn-ghost" onClick={onBack} style={{ padding: 4 }}>
+          <button className="btn btn-ghost" onClick={onBack} style={{ padding: 4 }} aria-label="Back">
             <Icons.Arrow size={16} stroke="var(--fg)" style={{ transform: 'rotate(180deg)' }}/>
           </button>
         )}
@@ -324,7 +324,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
           </span>
           <button onClick={() => setReplyingTo(null)} style={{
             background: 'transparent', border: 'none', cursor: 'pointer',
-            color: 'var(--muted)', padding: 0 }}>
+            color: 'var(--muted)', padding: 0 }} aria-label="Close">
             <Icons.X size={14}/>
           </button>
         </div>
@@ -350,7 +350,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
                     whiteSpace: 'nowrap' }}>{f.name}</span>
                   <button onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
                     style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-                      padding: 0, color: 'var(--muted)' }}>
+                      padding: 0, color: 'var(--muted)' }} aria-label="Remove">
                     <Icons.X size={12}/>
                   </button>
                 </div>

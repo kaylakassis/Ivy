@@ -2,8 +2,13 @@
 // then "+N more"). Click a day to drill into Day view.
 import React from 'react';
 import { addDays, fmtDateISO, minToHM, parseISO, WEEKDAYS_SHORT } from './utils.js';
+import { useViewport } from '../../lib/viewport.js';
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
+  const { isMobile } = useViewport();
   // Anchor is any date in the target month; compute the first day to render
   // (Monday on or before the 1st of the month).
   const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
@@ -34,10 +39,85 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
     arr.sort((a, b) => a.startMin - b.startMin);
   }
 
+  // Phone: the whole month fits the screen. Each day shows its number and
+  // a dot per booking (the service's color); tapping a day opens that day.
+  // The wide grid below needed sideways scrolling to reach Friday to Sunday.
+  if (isMobile) {
+    return (
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
+          background: 'var(--surface-2)', borderBottom: '1px solid var(--border)',
+        }}>
+          {[1, 2, 3, 4, 5, 6, 0].map((d, i) => (
+            <div key={i} style={{
+              padding: '8px 0', fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', textAlign: 'center',
+              textTransform: 'uppercase', letterSpacing: '0.04em',
+            }}>{WEEKDAYS_SHORT[d]}</div>
+          ))}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
+          {cells.map((d, i) => {
+            const dateISO = fmtDateISO(d);
+            const inMonth = d.getMonth() === monthIdx;
+            const isToday = dateISO === todayISO;
+            const events = byDate.get(dateISO) || [];
+            const bookings = events.filter((ev) => ev.kind === 'booking');
+            const others = events.length - bookings.length;
+            const dots = events.slice(0, 4);
+            const said = [
+              `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`,
+              bookings.length ? `${bookings.length} ${bookings.length === 1 ? 'booking' : 'bookings'}` : null,
+              others ? `${others} other ${others === 1 ? 'event' : 'events'}` : null,
+              !events.length ? 'nothing scheduled' : null,
+            ].filter(Boolean).join(', ');
+            return (
+              <button key={i} type="button" onClick={() => onPickDay(d)} aria-label={said}
+                style={{
+                  all: 'unset', position: 'relative', boxSizing: 'border-box', cursor: 'pointer',
+                  minHeight: 58, padding: '7px 2px 6px',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                  borderTop: i >= 7 ? '1px solid var(--border)' : 'none',
+                  borderLeft: (i % 7) > 0 ? '1px solid var(--border)' : 'none',
+                  background: isToday ? 'var(--accent-soft)' : 'transparent',
+                  opacity: inMonth ? 1 : 0.4,
+                }}>
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: isToday ? 600 : 500,
+                  color: isToday ? 'var(--accent)' : 'var(--fg)',
+                }}>{d.getDate()}</span>
+                <span aria-hidden="true" style={{ display: 'flex', gap: 3, alignItems: 'center', minHeight: 7 }}>
+                  {dots.map((ev, j) => {
+                    const svc = ev.kind === 'booking' ? (cal.services || []).find((x) => x.id === ev.serviceId) : null;
+                    const color = ev.kind === 'booking' ? (svc?.color || 'var(--accent)') : (ev.color || 'var(--muted)');
+                    const hollow = ev.kind === 'booking' ? !!ev.isRequest : ev.blocksBookings !== false && !ev.color;
+                    return (
+                      <span key={j} style={{
+                        width: 6, height: 6, borderRadius: 99, boxSizing: 'border-box',
+                        background: hollow ? 'transparent' : color,
+                        border: hollow ? `1.5px solid ${color}` : 0,
+                      }}/>
+                    );
+                  })}
+                </span>
+                {events.length > 4 && (
+                  <span aria-hidden="true" style={{ fontSize: 9.5, color: 'var(--muted)', lineHeight: 1, marginTop: -2 }}>+{events.length - 4}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', fontSize: 11.5, color: 'var(--muted)' }}>
+          Tap a day to see it.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      {/* Horizontal scroll on small screens so the 7-column grid doesn't
-          crush to unreadable ~50px columns on a phone (matches WeekGrid). */}
+      {/* Wider screens that are still narrower than the grid (a small
+          tablet) scroll sideways rather than crush the columns. */}
       <div className="table-scroll">
         <div style={{ minWidth: 680 }}>
       {/* Header row - weekday labels */}

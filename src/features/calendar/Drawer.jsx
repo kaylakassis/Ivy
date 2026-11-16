@@ -63,7 +63,7 @@ export default function Drawer({ title, subtitle, onClose: onCloseNow, children,
             </div>
             {subtitle && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{subtitle}</div>}
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={16}/></button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={16}/></button>
         </div>
         <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 20 }}>
           {children}
