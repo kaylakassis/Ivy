@@ -1,12 +1,19 @@
 // /api/cron/owner-weekly-recap - weekly digest to business owners.
 //
-// Every Monday at 08:00 UTC, sweeps every active workspace and emails the
+// Every Monday from 08:00 UTC, sweeps every active workspace and emails the
 // owner "Your week with Ivy": bookings taken, sessions completed, money
 // collected and outstanding, what Ivy did (invoices, messages,
 // automations, reminders, signed documents) with a labelled time-saved
 // estimate, and the week ahead. Honors the owner's 'reports' email
 // preference (opt-out via Account → Notifications). A workspace where
 // nothing happened in the window gets no email that week.
+//
+// It runs four times, an hour apart (08:00 to 11:00 UTC, see vercel.json).
+// One run sends about 1,800 emails before its time limit; measured against
+// 2,000 businesses, a single run left the last ones without that week's
+// email. A later run picks up only owners who have not had it yet
+// (weekly_recap_last_sent_at), so nobody gets it twice, and a run with
+// nothing left to do ends at once.
 //
 // Eligibility:
 //   • workspace must be ACTIVE per isWorkspaceActive (trialing, paid,

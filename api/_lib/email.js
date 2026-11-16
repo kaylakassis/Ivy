@@ -35,6 +35,10 @@ const RESEND_URL = 'https://api.resend.com/emails';
 // the crons that drive heavy volume are the only callers issuing tight
 // loops and they run one at a time.
 const MIN_INTERVAL_MS = 125;
+// How often, and for how long at most, a send waits when the provider
+// answers 429 (see sendEmail).
+const RATE_LIMIT_RETRIES = 2;
+const RATE_LIMIT_MAX_WAIT_MS = 2500;
 let lastSendAt = 0;
 async function throttle() {
   const now = Date.now();
@@ -171,27 +175,41 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   // surrounding serverless function over its budget. Resend usually
   // responds in 200-1500ms; 8s is generous and still well below the
   // signup function's 30s ceiling.
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res;
-  try {
-    res = await fetch(RESEND_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
-  } catch (err) {
-    clearTimeout(t);
-    if (err.name === 'AbortError') {
-      throw new Error(`Resend timed out after ${timeoutMs}ms - request never completed.`);
+  const post = async () => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(RESEND_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error(`Resend timed out after ${timeoutMs}ms - request never completed.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(t);
     }
-    throw err;
+  };
+  // "Too many requests" (429) means the provider did not take the email at
+  // all, so sending it again cannot duplicate it. The spacing above keeps
+  // ONE job under the provider's per-second limit, but the limit is for the
+  // whole account: a reminder batch, a weekly batch and people using the app
+  // can overlap. Wait as long as the provider asks (capped) and try again,
+  // twice, before giving up - otherwise that email is simply lost.
+  let res = await post();
+  for (let attempt = 1; res.status === 429 && attempt <= RATE_LIMIT_RETRIES; attempt++) {
+    const asked = Number(res.headers?.get?.('retry-after'));
+    const waitMs = Math.min(RATE_LIMIT_MAX_WAIT_MS, Number.isFinite(asked) && asked > 0 ? asked * 1000 : 600 * attempt);
+    await new Promise((r) => setTimeout(r, waitMs));
+    res = await post();
   }
-  clearTimeout(t);
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

@@ -231,9 +231,16 @@ export async function computeRebookSuggestion({ workspaceId, clientId, serviceId
     if (preferred != null && fits(preferred) && await free(dateISO, preferred)) return { start: preferred, same: true };
     const candidates = candidateStarts({ windows, duration, step, preferredStart: preferred })
       .filter((x) => x !== preferred).slice(0, perDay);
-    for (const c of candidates) {
+    // Checked a handful at a time instead of one by one. The answer is the
+    // same (the first free time in order), but a busy day no longer means
+    // dozens of database round trips in a row before the page can load.
+    const AT_ONCE = 6;
+    for (let i = 0; i < candidates.length; i += AT_ONCE) {
       if (checks >= MAX_CHECKS) return null;
-      if (await free(dateISO, c)) return { start: c, same: false };
+      const group = candidates.slice(i, i + AT_ONCE).slice(0, MAX_CHECKS - checks);
+      const results = await Promise.all(group.map((c) => free(dateISO, c)));
+      const hit = results.indexOf(true);
+      if (hit >= 0) return { start: group[hit], same: false };
     }
     return null;
   };

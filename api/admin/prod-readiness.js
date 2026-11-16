@@ -35,6 +35,18 @@ function isDefaultish(v) {
   return DEFAULT_PLACEHOLDERS.has(String(v).toLowerCase().trim());
 }
 
+// "Neon, us-east-2" from the connection address: only the provider and the
+// region, never the address itself.
+export function databaseLocation(url) {
+  let host = '';
+  try { host = new URL(String(url).replace(/^postgres(ql)?:\/\//, 'http://')).hostname; } catch { return 'address not readable'; }
+  const neon = host.match(/\.([a-z]{2}-[a-z]+-\d)\.(aws|azure|gcp)\.neon\.tech$/) || host.match(/\.([a-z0-9-]+)\.(aws|azure|gcp)\.neon\.tech$/);
+  if (neon) return `Neon, region ${neon[1]} (${neon[2].toUpperCase()})`;
+  if (/neon\.tech$/.test(host)) return 'Neon (region not in the address)';
+  if (/^(localhost|127\.0\.0\.1)$/.test(host)) return 'this machine';
+  return 'not a Neon address';
+}
+
 function check(key, label, level, detail) {
   return { key, label, level, detail };
 }
@@ -398,6 +410,27 @@ export default async function handler(req, res) {
           : `$${cost.toFixed(2)} for ${msgs} messages across ${wsCount} workspace${wsCount === 1 ? '' : 's'} = $${perMsg.toFixed(4)} per message, $${(wsCount ? cost / wsCount : 0).toFixed(2)} per workspace.${where}${unknown.length ? ` Unpriced model(s): ${unknown.join(', ')}.` : ''}`));
     } catch (e) {
       checks.push(check('ai_cost', 'Ivy cost (30 days)', 'warn', `could not compute: ${e.message}`));
+    }
+    // How far this server is from the database. Every query is its own
+    // round trip, and a screen makes many (the dashboard about 78), so a
+    // server on another continent makes every screen slow. The load test
+    // measured 0.1s for a booking page with the database next door and 1.5s
+    // with it 80ms away. Shows where the database is, which server answered,
+    // and what one round trip actually costs from here.
+    try {
+      const where = databaseLocation(process.env.DATABASE_URL || process.env.POSTGRES_URL || '');
+      const times = [];
+      for (let i = 0; i < 5; i++) { const t0 = Date.now(); await sql`SELECT 1`; times.push(Date.now() - t0); }
+      times.sort((x, y) => x - y);
+      const ms = times[2];
+      const served = process.env.VERCEL_REGION || 'this machine';
+      checks.push(check('db_distance', 'Database distance', ms > 40 ? 'warn' : 'ok',
+        `Database: ${where}. This request was answered by the server in ${served}, and one round trip to the database took ${ms} ms (the middle of 5 tries). `
+        + (ms > 40
+          ? 'That is far: people served from this region wait for every query to cross that distance. Run the servers in the region next to the database (the "regions" list in vercel.json).'
+          : 'That is close, which is what you want. A different result when you open this page from another part of the world means some servers are far from the database.')));
+    } catch (e) {
+      checks.push(check('db_distance', 'Database distance', 'warn', `could not measure: ${e.message}`));
     }
     // The platform-wide daily ceiling on Ivy. When it is reached Ivy stops
     // answering for EVERYONE until the next day (UTC), so the operator needs

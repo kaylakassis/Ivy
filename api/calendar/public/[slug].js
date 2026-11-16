@@ -106,67 +106,120 @@ async function getCalendar(req, res) {
     const access = await loadWorkspaceAccess(s.workspace_id);
     if (!access.active) return ok(res, archivedPayload(access));
 
-    // Pull the workspace's business_type + website handle so the
-    // public booking page can render a "Visit our shop" CTA when the
-    // owner doesn't take appointments. Best-effort - defaults keep the
-    // booking page working even if the column or website row is absent.
-    let businessType = 'both';
-    let websiteHandle = null;
-    try {
-      const ws = await sql`
+    // Everything below is independent of everything else, so it is asked for
+    // in one go. Asked one after another, a visitor waited for about sixteen
+    // database round trips in a row; that is slow whenever the database is
+    // not right next to the server (measured: about 1.5s per visit at 80ms
+    // a round trip, against about 0.4s this way).
+    const wsId = s.workspace_id;
+    const soft = (promise, label) => promise.catch((e) => {
+      if (label) console.error(`[calendar/public] ${label}:`, e.message);
+      return null;
+    });
+    const [ws, services, blocks, bookings, external, agg, recent, mships, pkgs, progs, fsRow, cancellationPolicy, shops] = await Promise.all([
+      // The workspace's business_type + website handle, so the page can show
+      // a "Visit our shop" button when the owner doesn't take appointments.
+      // Best-effort: defaults keep the page working if this read fails.
+      soft(sql`
         SELECT w.business_type, web.handle
           FROM workspaces w
           LEFT JOIN websites web ON web.workspace_id = w.id
-         WHERE w.id = ${s.workspace_id} LIMIT 1
-      `;
-      if (ws.rows[0]) {
-        businessType = ws.rows[0].business_type || 'both';
-        websiteHandle = ws.rows[0].handle || null;
-      }
-    } catch { /* column may be pre-migration - fall back to defaults */ }
-
-    // Public booking page hides 'only_me' services entirely (they're
-    // drafts the owner doesn't want anyone to see) but keeps 'private'
-    // ones - clients with a direct link/share can still book those.
-    const services = await sql`
-      SELECT * FROM services
-      WHERE workspace_id = ${s.workspace_id}
-        AND visibility != 'only_me'
-      ORDER BY display_order, created_at
-    `;
-    // Only fetch blocks that ACTUALLY gate bookings. Informational
-    // personal events (blocks_bookings = FALSE) are owner-private -
-    // they never appear on the public slot picker.
-    const blocks = await sql`
-      SELECT * FROM calendar_blocks
-      WHERE workspace_id = ${s.workspace_id}
-        AND blocks_bookings = TRUE
-      ORDER BY date, start_min
-    `;
-    // Only what the slot grid can still use: from yesterday on, plus
-    // recurring masters whose series is still running (their first
-    // occurrence may be long past). History never leaves the server.
-    const bookings = await sql`
-      SELECT id, service_id, staff_id, date, start_min, end_min, cancelled_at,
-             recurrence_rule, recurrence_until, cancelled_occurrences
-        FROM bookings
-       WHERE workspace_id = ${s.workspace_id} AND cancelled_at IS NULL
-         AND (
-           date >= CURRENT_DATE - 1
-           OR (recurrence_rule IS NOT NULL AND (recurrence_until IS NULL OR recurrence_until >= CURRENT_DATE - 1))
-         )
-       ORDER BY date, start_min
-    `;
-    // External busy times (e.g. Google Cal personal events) are merged
-    // into the blocks list with a label of "Busy" so the slot picker
-    // greys them out without leaking the real event title. Server-side
-    // hasConflict() already checks external_busy_blocks, so the UI
-    // rendering is just for honesty in the slot grid.
-    const external = await sql`
-      SELECT id, date, start_min, end_min FROM external_busy_blocks
-      WHERE workspace_id = ${s.workspace_id} AND date >= CURRENT_DATE
-      ORDER BY date, start_min
-    `;
+         WHERE w.id = ${wsId} LIMIT 1
+      `),
+      // Public booking page hides 'only_me' services entirely (they're
+      // drafts the owner doesn't want anyone to see) but keeps 'private'
+      // ones - clients with a direct link/share can still book those.
+      sql`
+        SELECT * FROM services
+        WHERE workspace_id = ${wsId}
+          AND visibility != 'only_me'
+        ORDER BY display_order, created_at
+      `,
+      // Only blocks that ACTUALLY gate bookings. Informational personal
+      // events (blocks_bookings = FALSE) are owner-private - they never
+      // appear on the public slot picker.
+      sql`
+        SELECT * FROM calendar_blocks
+        WHERE workspace_id = ${wsId}
+          AND blocks_bookings = TRUE
+        ORDER BY date, start_min
+      `,
+      // Only what the slot grid can still use: from yesterday on, plus
+      // recurring masters whose series is still running (their first
+      // occurrence may be long past). History never leaves the server.
+      sql`
+        SELECT id, service_id, staff_id, date, start_min, end_min, cancelled_at,
+               recurrence_rule, recurrence_until, cancelled_occurrences
+          FROM bookings
+         WHERE workspace_id = ${wsId} AND cancelled_at IS NULL
+           AND (
+             date >= CURRENT_DATE - 1
+             OR (recurrence_rule IS NOT NULL AND (recurrence_until IS NULL OR recurrence_until >= CURRENT_DATE - 1))
+           )
+         ORDER BY date, start_min
+      `,
+      // External busy times (e.g. Google Cal personal events) are merged
+      // into the blocks list with a label of "Busy" so the slot picker
+      // greys them out without leaking the real event title. Server-side
+      // hasConflict() already checks external_busy_blocks, so the UI
+      // rendering is just for honesty in the slot grid.
+      sql`
+        SELECT id, date, start_min, end_min FROM external_busy_blocks
+        WHERE workspace_id = ${wsId} AND date >= CURRENT_DATE
+        ORDER BY date, start_min
+      `,
+      // Reviews - the on-page social proof + the JSON-LD structured data we
+      // inject for SEO. The aggregate covers every visible review; "recent"
+      // caps at 12 so the payload stays small.
+      sql`SELECT COUNT(*)::int AS n,
+                 ROUND(AVG(rating)::numeric, 2)::float AS avg
+            FROM reviews
+            WHERE workspace_id = ${wsId} AND status = 'visible'`,
+      sql`SELECT id, reviewer_name, rating, text, owner_response, created_at
+            FROM reviews
+            WHERE workspace_id = ${wsId} AND status = 'visible'
+            ORDER BY created_at DESC LIMIT 12`,
+      // Active membership tiers visitors can join. Only active rows with a
+      // Stripe price (genuinely buyable) - a tier without one is still the
+      // owner's draft.
+      sql`
+        SELECT id, name, description, price_cents, interval, perks, display_order
+          FROM memberships
+         WHERE workspace_id = ${wsId}
+           AND active = TRUE
+           AND stripe_price_id IS NOT NULL
+         ORDER BY display_order ASC, created_at ASC
+      `,
+      // Active public packages. 'private'/'only_me' are owner-sold flows
+      // (assigned client-by-client). No pre-provisioned Stripe price is
+      // needed - a one-time price is minted at checkout.
+      sql`
+        SELECT id, name, description, service_ids, session_count, price, expiry_days
+          FROM packages
+         WHERE workspace_id = ${wsId}
+           AND active = TRUE
+           AND visibility = 'public'
+         ORDER BY created_at ASC
+      `,
+      // Published programs (courses, plans, paid communities) - bought from
+      // the booking page too; checkout is /api/programs/checkout.
+      soft(sql`
+        SELECT id, title, description, price_cents, billing, access_days, community_enabled,
+               (SELECT COUNT(*)::int FROM program_items i WHERE i.program_id = p.id AND i.deleted_at IS NULL) AS items
+          FROM programs p WHERE workspace_id = ${wsId} AND status = 'published' ORDER BY created_at ASC`, 'programs skipped'),
+      // Gift cards are sold through the business's connected card processor.
+      // Only offer "Buy a gift card" when the business can take the payment.
+      soft(sql`
+        SELECT stripe_connect_user_id, stripe_secret_encrypted
+          FROM finance_settings WHERE workspace_id = ${wsId} LIMIT 1
+      `, 'gift card availability skipped'),
+      // The owner's cancellation policy, always the latest version.
+      publicPolicy(wsId).catch(() => null),
+      // Published shop pages this business is listed on.
+      shopsForBookingPage(wsId),
+    ]);
+    const businessType = ws?.rows[0]?.business_type || 'both';
+    const websiteHandle = ws?.rows[0]?.handle || null;
     // publicView: redacts the owner-private fields (label/notes/color)
     // and forces every block's display label to "Busy". Even if the
     // owner accidentally named a block "Dentist 3pm", the public
@@ -182,20 +235,6 @@ async function getCalendar(req, res) {
       });
     }
 
-    // Reviews block - drives the on-page social proof + the JSON-LD
-    // structured data we inject for SEO. Aggregate is computed across
-    // every visible review; "recent" caps at 12 so the payload stays
-    // small and the page renders quickly.
-    const [agg, recent] = await Promise.all([
-      sql`SELECT COUNT(*)::int AS n,
-                 ROUND(AVG(rating)::numeric, 2)::float AS avg
-            FROM reviews
-            WHERE workspace_id = ${s.workspace_id} AND status = 'visible'`,
-      sql`SELECT id, reviewer_name, rating, text, owner_response, created_at
-            FROM reviews
-            WHERE workspace_id = ${s.workspace_id} AND status = 'visible'
-            ORDER BY created_at DESC LIMIT 12`,
-    ]);
     const reviewSummary = {
       count: agg.rows[0]?.n || 0,
       avg:   agg.rows[0]?.avg || null,
@@ -209,18 +248,6 @@ async function getCalendar(req, res) {
       })),
     };
 
-    // Active membership tiers, surfaced on the public booking page so
-    // visitors can join. Only active rows with a Stripe price (i.e.
-    // genuinely buyable) - stripe_price_id null tiers are still in
-    // the owner's draft state and shouldn't be shown to the public.
-    const mships = await sql`
-      SELECT id, name, description, price_cents, interval, perks, display_order
-        FROM memberships
-       WHERE workspace_id = ${s.workspace_id}
-         AND active = TRUE
-         AND stripe_price_id IS NOT NULL
-       ORDER BY display_order ASC, created_at ASC
-    `;
     const membershipsOut = mships.rows.map((r) => ({
       id:          r.id,
       name:        r.name,
@@ -230,20 +257,6 @@ async function getCalendar(req, res) {
       perks:       r.perks || [],
     }));
 
-    // Active public packages, surfaced on the public booking page so
-    // visitors can buy a bundle of sessions up-front. Only active rows
-    // marked visibility='public' show; 'private'/'only_me' are owner-
-    // sold flows (assigned client-by-client). Unlike memberships, no
-    // pre-provisioned Stripe price is needed - we mint a one-time
-    // price inline at checkout, so the gating is just active+public.
-    const pkgs = await sql`
-      SELECT id, name, description, service_ids, session_count, price, expiry_days
-        FROM packages
-       WHERE workspace_id = ${s.workspace_id}
-         AND active = TRUE
-         AND visibility = 'public'
-       ORDER BY created_at ASC
-    `;
     const packagesOut = pkgs.rows.map((r) => ({
       id:           r.id,
       name:         r.name,
@@ -254,29 +267,8 @@ async function getCalendar(req, res) {
       expiryDays:   r.expiry_days == null ? null : Number(r.expiry_days),
     }));
 
-    // Published programs (courses, plans, paid communities) - bought from
-    // the booking page too; checkout is /api/programs/checkout.
-    let programsOut = [];
-    try {
-      const progs = await sql`
-        SELECT id, title, description, price_cents, billing, access_days, community_enabled,
-               (SELECT COUNT(*)::int FROM program_items i WHERE i.program_id = p.id AND i.deleted_at IS NULL) AS items
-          FROM programs p WHERE workspace_id = ${s.workspace_id} AND status = 'published' ORDER BY created_at ASC`;
-      programsOut = progs.rows.map((r) => ({ id: r.id, title: r.title, description: r.description || '', priceCents: Number(r.price_cents) || 0, billing: r.billing, accessDays: r.access_days == null ? null : Number(r.access_days), communityEnabled: !!r.community_enabled, items: r.items }));
-    } catch (e) { console.error('[calendar/public] programs skipped:', e.message); }
-
-    // Gift cards are sold through the business's connected card
-    // processor. Only offer the "Buy a gift card" button when the
-    // business can actually take the payment, so a visitor never fills
-    // in the form just to be told it cannot go through.
-    let giftCardsAvailable = false;
-    try {
-      const fs = await sql`
-        SELECT stripe_connect_user_id, stripe_secret_encrypted
-          FROM finance_settings WHERE workspace_id = ${s.workspace_id} LIMIT 1
-      `;
-      giftCardsAvailable = !!(fs.rows[0]?.stripe_connect_user_id || fs.rows[0]?.stripe_secret_encrypted);
-    } catch (e) { console.error('[calendar/public] gift card availability skipped:', e.message); }
+    const programsOut = progs ? progs.rows.map((r) => ({ id: r.id, title: r.title, description: r.description || '', priceCents: Number(r.price_cents) || 0, billing: r.billing, accessDays: r.access_days == null ? null : Number(r.access_days), communityEnabled: !!r.community_enabled, items: r.items })) : [];
+    const giftCardsAvailable = !!(fsRow?.rows[0]?.stripe_connect_user_id || fsRow?.rows[0]?.stripe_secret_encrypted);
 
     return ok(res, {
       calendar: {
@@ -303,10 +295,10 @@ async function getCalendar(req, res) {
         contactPhone: null,
         // The owner's cancellation policy (1.0.5+ pages; older pages ignore
         // it). Always the latest version. null = none written yet.
-        cancellationPolicy: await publicPolicy(s.workspace_id).catch(() => null),
+        cancellationPolicy,
         // Published shop pages this business is listed on (1.0.6+ pages show
         // "Part of {Shop}"; older pages ignore it).
-        shops: await shopsForBookingPage(s.workspace_id),
+        shops,
       },
     });
   } catch (err) {

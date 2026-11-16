@@ -125,36 +125,34 @@ export default async function handler(req, res) {
       .slice(0, 8)
       .map((a) => ({ ...a, ts: a.ts instanceof Date ? a.ts.toISOString() : a.ts }));
 
-    // Advance the daily-return streak (the dashboard is the canonical daily
-    // surface). Idempotent within a day; never blocks the load.
-    const streak = await touchStreak(workspaceId);
+    // The rest of the home screen. Each piece is independent, so they all
+    // run side by side instead of one after another: asked in sequence, the
+    // dashboard waited for about fourteen database round trips in a row,
+    // which is slow whenever the database is not right next to the server.
+    // The one real dependency is kept: the "Today with Ivy" briefing waits
+    // for the streak and the goals, which it reuses.
 
-    // "Ivy noticed a pattern" — suggest automating a repeated new-client
-    // follow-up. Best-effort; skips ones the owner has dismissed.
-    const workflowSuggestion = await detectWorkflowSuggestion(workspaceId, {
+    // Advance the daily-return streak (the dashboard is the canonical daily
+    // surface). Idempotent within a day.
+    const streakP = touchStreak(workspaceId);
+    // Goal momentum on the home surface.
+    const goalsP = listGoalsWithProgress(workspaceId, { limit: 3 });
+    // "Today with Ivy": the same deterministic briefing items that live in
+    // the Ivy dock. Best-effort: a briefing hiccup must never break the dashboard.
+    const briefingP = Promise.all([streakP, goalsP]).then(async ([st, gs]) => {
+      const b = await buildBriefing(workspaceId, { goals: gs, streak: st });
+      return b?.items?.length ? { items: b.items } : null;
+    }).catch(() => null);
+    // "Ivy noticed a pattern": suggest automating a repeated new-client
+    // follow-up. Skips ones the owner has dismissed.
+    const workflowP = detectWorkflowSuggestion(workspaceId, {
       dismissed: user.ui_prefs?.dismissedWorkflowSuggestions || [],
     });
-
-    // Goal momentum on the home surface — the highest-intent retention object,
-    // which otherwise only lived on /goals. Best-effort; [] on any hiccup.
-    const goals = await listGoalsWithProgress(workspaceId, { limit: 3 });
-
-    // "Today with Ivy" — surface the same deterministic briefing items (today's
-    // sessions / unpaid invoices / quiet clients, each a tap-to-act Ivy prompt)
-    // that live in the Ivy dock, on the highest-traffic surface. Reuse the goals
-    // we just fetched + the streak from touchStreak so buildBriefing doesn't
-    // re-read them. Best-effort: a briefing hiccup must never break the dashboard.
-    let briefing = null;
-    try {
-      const b = await buildBriefing(workspaceId, { goals, streak });
-      if (b?.items?.length) briefing = { items: b.items };
-    } catch { /* no "today" card this load */ }
-
     // "This week": the same numbers the Monday recap email carries (last 7
     // days, rolling), so the card and the email never disagree. null when
     // nothing happened, which hides the card. Best-effort.
-    let week = null;
-    try {
+    const weekP = (async () => {
+      let week = null;
       const to = new Date();
       const from = new Date(Date.now() - 7 * 86400000);
       const stats = await buildWeekStats({ workspaceId, from, to });
@@ -175,18 +173,15 @@ export default async function handler(req, res) {
           overdueInvoiceTotal: stats.overdueInvoiceTotal,
         };
       }
-    } catch { /* no "this week" card this load */ }
-
-    // First win: whether to show the "Your business is ready" cards (a new
-    // owner's first dashboard visit) and any one-time first-booking /
-    // first-payment moment waiting to be shown. Never throws.
-    const firstWin = await firstWinForDashboard(workspaceId);
-
+      return week;
+    })().catch(() => null);
+    // First win: whether to show the "Your business is ready" cards and any
+    // one-time first-booking / first-payment moment. Never throws.
+    const firstWinP = firstWinForDashboard(workspaceId);
     // Upcoming appointments (next 7 days, business time zone) whose client
     // has no email: those clients get no reminder. Counted per client so
     // the dashboard can say "3 clients" and link to the Missing email list.
-    let missingEmail = { clients: 0, appointments: 0 };
-    try {
+    const missingEmailP = (async () => {
       const me = await sql`
         SELECT COUNT(DISTINCT b.client_id)::int AS clients, COUNT(*)::int AS appointments
           FROM bookings b JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
@@ -194,14 +189,13 @@ export default async function handler(req, res) {
            AND (c.email IS NULL OR c.email = '')
            AND b.date >= (NOW() AT TIME ZONE ${tz})::date
            AND b.date <  (NOW() AT TIME ZONE ${tz})::date + 7`;
-      missingEmail = { clients: me.rows[0]?.clients || 0, appointments: me.rows[0]?.appointments || 0 };
-    } catch { /* card simply does not show */ }
-
+      return { clients: me.rows[0]?.clients || 0, appointments: me.rows[0]?.appointments || 0 };
+    })().catch(() => ({ clients: 0, appointments: 0 }));
     // "Turn on 2-step verification" nudge: once the owner has used Ivy for a
     // few days or connected card payments, until they turn it on or dismiss
     // it (ui_prefs.twoStepPromptDismissedAt, per user).
-    let twoStepPrompt = false;
-    try {
+    const twoStepP = (async () => {
+      let twoStepPrompt = false;
       if (!user.totp_enrolled_at && !user.mfa_email_enabled_at && !user.ui_prefs?.twoStepPromptDismissedAt) {
         const ageDays = (Date.now() - new Date(user.created_at).getTime()) / 86400000;
         if (ageDays >= TWO_STEP_PROMPT_AFTER_DAYS) twoStepPrompt = true;
@@ -214,13 +208,12 @@ export default async function handler(req, res) {
             || (!!f.stripe_connect_user_id && f.stripe_onboarding_status === 'complete');
         }
       }
-    } catch { /* no nudge this load */ }
-
+      return twoStepPrompt;
+    })().catch(() => false);
     // "Switching from another app?" card: a new-looking book (fewer than 3
     // real clients, no bookings at all, sample data ignored) gets a nudge to
     // bring their clients over. Dismissed on the device. Best-effort.
-    let switchPrompt = false;
-    try {
+    const switchP = (async () => {
       const sp = await sql`
         SELECT
           (SELECT COUNT(*)::int FROM (
@@ -233,8 +226,12 @@ export default async function handler(req, res) {
              WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL
                AND c.source IS DISTINCT FROM 'demo') AS has_bookings`;
       const row = sp.rows[0] || {};
-      switchPrompt = (row.clients || 0) < 3 && !row.has_bookings;
-    } catch { /* no card this load */ }
+      return (row.clients || 0) < 3 && !row.has_bookings;
+    })().catch(() => false);
+
+    const [streak, goals, briefing, workflowSuggestion, week, firstWin, missingEmail, twoStepPrompt, switchPrompt] = await Promise.all([
+      streakP, goalsP, briefingP, workflowP, weekP, firstWinP, missingEmailP, twoStepP, switchP,
+    ]);
 
     // 1.0.6: the accountability partner's "Needs your attention" list (the
     // same signals its messages use), the key numbers with honest

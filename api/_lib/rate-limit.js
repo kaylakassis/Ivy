@@ -1,22 +1,33 @@
 // Postgres-backed sliding-window rate limiter.
 // Counts recent attempts for a key; if under the limit, records a new attempt.
-// Cheap to operate at our scale (single SELECT count + single INSERT per request).
+// Cheap to operate at our scale (one statement per limited request).
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { sql } from './db.js';
 
 export async function rateLimit({ key, max, windowSeconds }) {
   const since = new Date(Date.now() - windowSeconds * 1000).toISOString();
   try {
+    // One statement: count the recent attempts and, only when under the
+    // limit, record this one. It used to be two round trips to the database
+    // on every limited request (a count, then an insert); one statement
+    // halves that and leaves no gap between the count and the insert.
     const { rows } = await sql`
-      SELECT COUNT(*)::int AS n
-      FROM rate_limits
-      WHERE key = ${key} AND attempted_at > ${since}
+      WITH recent AS (
+        SELECT COUNT(*)::int AS n
+          FROM rate_limits
+         WHERE key = ${key}::text AND attempted_at > ${since}::timestamptz
+      ), added AS (
+        INSERT INTO rate_limits (key, attempted_at)
+        SELECT ${key}::text, NOW()
+         WHERE (SELECT n FROM recent) < ${max}::int
+        RETURNING 1
+      )
+      SELECT (SELECT n FROM recent) AS n, (SELECT COUNT(*)::int FROM added) AS added
     `;
     const n = rows[0].n;
     if (n >= max) {
       return { allowed: false, count: n, retryAfterSeconds: windowSeconds };
     }
-    await sql`INSERT INTO rate_limits (key, attempted_at) VALUES (${key}, NOW())`;
     return { allowed: true, count: n + 1 };
   } catch (err) {
     // The DB-backed limiter must NEVER fail open: a DB blip during a traffic
