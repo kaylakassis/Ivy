@@ -344,6 +344,16 @@ body.app-walled .view-toggle { display: none; }
   [role="dialog"] {
     padding: 12px !important;
   }
+  /* Full-screen overlays keep their panel clear of the iPhone clock and
+     home bar. Both insets are 0 in a normal browser, so nothing moves there. */
+  [role="dialog"][style*="inset: 0"] {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+  }
+  /* The overlay owns both insets, so its panel fits between them and does
+     not add the home-bar gap a second time. Overlays that scroll themselves
+     are left alone: their panel is allowed to be taller than the screen. */
+  [role="dialog"][style*="inset: 0"]:not([style*="overflow"]) > * { max-height: 100% !important; margin-bottom: 0 !important; }
 
   /* Auth-card padding on mobile - desktop uses 32, mobile would waste
      half the screen. */

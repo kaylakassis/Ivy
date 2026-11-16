@@ -33,5 +33,11 @@ assert((cal.match(/onClick=\{\(\) => nav\(-1\)\}[^>]*aria-label="Previous"/g) ||
 const goals = src('src/features/goals/Goals.jsx');
 assert(/role="checkbox" aria-checked=\{!!task\.done\}/.test(goals) && /aria-label=\{`Delete task:/.test(goals) && /aria-label="Add task"/.test(goals), 'Tasks: tick, delete and add all have names');
 
+// iPhone app: full-screen pop-ups stay between the clock and the home bar.
+assert(/\[role="dialog"\]\[style\*="inset: 0"\] \{\s*padding-top: calc\(env\(safe-area-inset-top, 0px\) \+ 12px\) !important;\s*padding-bottom: calc\(env\(safe-area-inset-bottom, 0px\) \+ 12px\) !important;/.test(css),
+  'full-screen pop-ups keep their panel below the iPhone clock and above the home bar');
+assert(/\[role="dialog"\]\[style\*="inset: 0"\]:not\(\[style\*="overflow"\]\) > \* \{ max-height: 100% !important; margin-bottom: 0 !important; \}/.test(css),
+  'a tall pop-up panel fits inside that space instead of sliding under the clock');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
