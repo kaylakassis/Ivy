@@ -20,7 +20,7 @@ import { MODEL_PRICES } from '../_lib/ivyPricing.js';
 import { buildProviderJwt } from '../_lib/apns.js';
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
-import { probeProvider } from '../_lib/ivy.js';
+import { probeProvider, globalIvyCeiling } from '../_lib/ivy.js';
 import { appleConfigMissing, appleEnvironment, mintToken } from '../_lib/appStoreServer.js';
 import { OPS_ALERT_CRON, opsAlertRecipient } from '../_lib/opsAlerts.js';
 
@@ -398,6 +398,41 @@ export default async function handler(req, res) {
           : `$${cost.toFixed(2)} for ${msgs} messages across ${wsCount} workspace${wsCount === 1 ? '' : 's'} = $${perMsg.toFixed(4)} per message, $${(wsCount ? cost / wsCount : 0).toFixed(2)} per workspace.${where}${unknown.length ? ` Unpriced model(s): ${unknown.join(', ')}.` : ''}`));
     } catch (e) {
       checks.push(check('ai_cost', 'Ivy cost (30 days)', 'warn', `could not compute: ${e.message}`));
+    }
+    // The platform-wide daily ceiling on Ivy. When it is reached Ivy stops
+    // answering for EVERYONE until the next day (UTC), so the operator needs
+    // to see how close a normal day and the busiest recent day come to it.
+    // It counts new input plus replies (not the reused instructions).
+    try {
+      const c = await globalIvyCeiling();
+      const d = await sql`
+        SELECT COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens,
+               COALESCE(SUM(request_count), 0)::bigint AS msgs
+          FROM ivy_usage WHERE day > CURRENT_DATE - 30`;
+      const peak = await sql`
+        SELECT day::text AS day, SUM(input_tokens + output_tokens)::bigint AS tokens, SUM(request_count)::bigint AS msgs
+          FROM ivy_usage WHERE day > CURRENT_DATE - 30
+         GROUP BY day ORDER BY SUM(input_tokens + output_tokens) DESC LIMIT 1`;
+      const n = (x) => Number(x || 0).toLocaleString('en-US');
+      const share = (used, cap) => (cap > 0 ? Math.round((Number(used) / cap) * 100) : 0);
+      const perMsg = Number(d.rows[0]?.msgs) > 0 ? Number(d.rows[0].tokens) / Number(d.rows[0].msgs) : 0;
+      const room = c.tokenCap > 0 && perMsg > 0 ? Math.floor(c.tokenCap / perMsg) : null;
+      const limit = (cap, isSet, name) => (cap > 0
+        ? `${n(cap)} (${isSet ? `set in Vercel as ${name}` : `the built-in default; add ${name} in Vercel to change it`})`
+        : `off (${name} is set to 0)`);
+      const todayPct = Math.max(share(c.usage.tokens, c.tokenCap), share(c.usage.requests, c.requestCap));
+      const p = peak.rows[0];
+      const peakPct = p ? Math.max(share(p.tokens, c.tokenCap), share(p.msgs, c.requestCap)) : 0;
+      const detail = [
+        `Today: ${n(c.usage.requests)} messages and ${n(c.usage.tokens)} counted tokens (${todayPct}% of the ceiling).`,
+        p ? `Busiest day in the last 30: ${n(p.msgs)} messages (${peakPct}%).` : null,
+        room != null ? `At the recent average of ${n(Math.round(perMsg))} counted tokens a message, the ceiling allows about ${n(Math.min(room, c.requestCap > 0 ? c.requestCap : room))} messages a day across all businesses.` : null,
+        `Token limit: ${limit(c.tokenCap, c.tokenCapSet, 'IVY_GLOBAL_DAILY_TOKEN_CAP')}. Message limit: ${limit(c.requestCap, c.requestCapSet, 'IVY_GLOBAL_DAILY_REQUEST_CAP')}.`,
+        'When it is reached, Ivy stops answering for everyone until midnight UTC.',
+      ].filter(Boolean).join(' ');
+      checks.push(check('ai_ceiling', 'Ivy daily ceiling', Math.max(todayPct, peakPct) >= 70 ? 'warn' : 'ok', detail));
+    } catch (e) {
+      checks.push(check('ai_ceiling', 'Ivy daily ceiling', 'warn', `could not compute: ${e.message}`));
     }
     // iPhone push: config + a provider token we can mint + whether any phone
     // has actually registered. TestFlight and App Store builds use Apple's

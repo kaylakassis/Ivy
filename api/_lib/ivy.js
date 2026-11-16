@@ -205,6 +205,19 @@ async function globalDailyIvyUsage() {
   return _globalUsageCache;
 }
 
+// The ceiling as the operator needs to see it (Admin > Readiness): the two
+// limits, whether each is the built-in default or set in the environment,
+// and today's usage against them.
+export async function globalIvyCeiling() {
+  const caps = globalIvyCaps();
+  const set = (k) => process.env[k] != null && String(process.env[k]).trim() !== '';
+  return {
+    tokenCap: caps.token, requestCap: caps.request,
+    tokenCapSet: set('IVY_GLOBAL_DAILY_TOKEN_CAP'), requestCapSet: set('IVY_GLOBAL_DAILY_REQUEST_CAP'),
+    usage: await globalDailyIvyUsage(),
+  };
+}
+
 // Whether the platform-wide ceiling is currently tripped. Exported for testing
 // (the generateReply path early-returns a mock when there's no API key, so the
 // cap logic is validated here against seeded ivy_usage instead).
