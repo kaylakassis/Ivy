@@ -265,6 +265,26 @@ export function AuthProvider({ children }) {
     };
   }, [user?.id, user?.email_verified_at, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A request came back "not signed in" while someone is signed in here:
+  // the session ran out or was ended elsewhere. Check with the server, and
+  // if it agrees, sign out here too (RequireAuth then shows the sign-in
+  // page, which sends the person back to where they were) and leave a note
+  // for that page to explain what happened.
+  useEffect(() => {
+    if (!user) return undefined;
+    let checking = false;
+    const onUnauthorized = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const still = await refresh();
+        if (!still) { try { sessionStorage.setItem('ivy_signed_out_note', '1'); } catch { /* private mode */ } }
+      } finally { checking = false; }
+    };
+    window.addEventListener('ivy:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('ivy:unauthorized', onUnauthorized);
+  }, [user?.id, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Records the user's acceptance of the current Terms version.
   // Server gates by version, then writes both an immutable
   // legal_acceptances row and the denormalized users.terms_version

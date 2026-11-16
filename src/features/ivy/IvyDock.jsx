@@ -335,7 +335,8 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
       send(t, { photos: photoAttach.photos.length, pieces: photoAttach.pieces });
       photoAttach.clear();
     } else {
-      send(t);
+      // Not sent (offline, or Ivy could not be reached): put the words back.
+      Promise.resolve(send(t)).then((r) => { if (r && r.ok === false && r.retryText) setDraft((d) => d || r.retryText); }).catch(() => {});
     }
   }, [draft, thinking, send, photoAttach]);
 

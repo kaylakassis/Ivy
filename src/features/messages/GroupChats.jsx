@@ -13,6 +13,7 @@ import { useVoiceMemo } from '../../lib/speech.js';
 import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';
+import { confirmAction, showNotice } from '../../lib/confirm.js';
 
 export default function GroupChats({ initialId = null }) {
   const [groups, setGroups]         = useState([]);
@@ -127,7 +128,7 @@ export default function GroupChats({ initialId = null }) {
             onBack={() => isMobile && setSelectedId(null)}
             onAddMembers={() => setAddOpen(true)}
             onArchive={async () => {
-              if (!window.confirm('Archive this group? Members keep their history.')) return;
+              if (!(await confirmAction({ title: 'Archive this group?', body: 'Members keep their history.', confirmLabel: 'Archive', danger: true }))) return;
               await api.del('/messages/groups/' + encodeURIComponent(selected.id));
               setSelectedId(null);
               refresh();
@@ -260,7 +261,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
         });
         setPendingFiles((p) => [...p, { url: uploaded.url, type: f.type, name: f.name }]);
       } catch (err) {
-        window.alert(`Couldn't upload ${f.name}: ${err.message}`);
+        showNotice(`Couldn't upload ${f.name}: ${err.message}`);
       }
     }
   };
@@ -303,7 +304,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
       setReplyingTo(null);
     } catch (err) {
       // eslint-disable-next-line no-alert
-      window.alert(err.message || 'Send failed.');
+      showNotice(err.message || 'Your message did not send. Please try again.');
     } finally { setSending(false); }
   };
 
@@ -328,7 +329,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
         return { ...m, reactions: next };
       }));
     } catch (err) {
-      window.alert(err.message || 'Failed.');
+      showNotice(err.message || 'That did not work. Please try again.');
     }
   };
 

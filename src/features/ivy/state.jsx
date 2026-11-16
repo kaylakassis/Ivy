@@ -163,6 +163,9 @@ function useIvyState({ enabled = true } = {}) {
     // grows from there; gone once the real message replaces it.
     const live = liveBubble(setMessages);
     const startedAt = Date.now();
+    // What the chat box needs to know afterwards: when the message was
+    // definitely not sent, the box puts the words back so nothing is retyped.
+    let outcome = { ok: true };
 
     try {
       let result;
@@ -211,8 +214,13 @@ function useIvyState({ enabled = true } = {}) {
       // do the work twice, so first reload the chat and show what was saved.
       // A 4xx was refused before anything ran, so there is nothing to find.
       const status = Number(e?.status) || 0;
-      if (!(status >= 400 && status < 500)) {
-        const rec = await recoverTurn({ api, sessionId: activeId, text: optimisticText, startedAt });
+      const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      // A failure that came straight back (not a slow timeout, not a reply
+      // cut off part way) almost never finished on the server: look briefly
+      // instead of keeping the owner waiting half a minute.
+      const quick = !e?.textArrived && !e?.cutOff && (Date.now() - startedAt) < 10000;
+      if (!(status >= 400 && status < 500) && !offline) {
+        const rec = await recoverTurn({ api, sessionId: activeId, text: optimisticText, startedAt, ...(quick ? { tries: 2, waitMs: 1500 } : {}) });
         if (rec) {
           setMessages(rec.messages);
           msgCacheRef.current.set(rec.sessionId, rec.messages);
@@ -229,9 +237,13 @@ function useIvyState({ enabled = true } = {}) {
       // "504 FUNCTION_INVOCATION_TIMEOUT") or a network abort should read as a
       // calm "try again", not a scary deployment error dumped into the chat.
       const serverOrTimeout = e?.status === 0 || (e?.status >= 500 && e?.status < 600);
-      setError(serverOrTimeout
-        ? new Error('Ivy took too long to answer that one. Please try again.')
-        : e);
+      const back = t ? ' Your message is back in the box, so you can send it again.' : ' Please try again.';
+      setError(offline
+        ? new Error(`You are offline, so that was not sent.${t ? ' Your message is back in the box: send it again when you are connected.' : ''}`)
+        : serverOrTimeout
+          ? new Error(quick ? `Ivy could not answer just now.${back}` : `Ivy took too long to answer that one.${back}`)
+          : e);
+      outcome = { ok: false, retryText: t };
       // Drop the optimistic bubble (and any partial reply) so the user can
       // retry. The server may have saved the turn anyway, so the next open
       // of this session reloads it instead of trusting the cache.
@@ -241,6 +253,7 @@ function useIvyState({ enabled = true } = {}) {
     } finally {
       setThinking(false);
     }
+    return outcome;
   }, [activeId, thinking]);
 
   const removeSession = useCallback(async (id) => {
@@ -297,6 +310,11 @@ function useIvyState({ enabled = true } = {}) {
                 msgCacheRef.current.set(activeId, r.messages);
                 setMessages(r.messages);
                 reloaded = true;
+                // Still waiting for approval after the reload: it did not
+                // run. Say so, or the card simply reappearing reads as a glitch.
+                if (r.messages.some((m) => (m.pendingActions || []).some((x) => x.id === id))) {
+                  setError(new Error('That did not go through, so nothing was changed. You can approve it again.'));
+                }
               }
             } catch { /* still offline: fall through to the error */ }
           }

@@ -56,7 +56,7 @@ function ProfileCard() {
     <Card title="You" hint={helps.length ? `Helping at ${helps.map((h) => h.businessName).join(', ')}.` : null}>
       <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>Name</label>
       <div style={{ display: 'flex', gap: 8 }}>
-        <input value={name} onChange={(e) => setName(e.target.value)} className="input" style={{ flex: 1, fontSize: 14 }}/>
+        <input value={name} onChange={(e) => setName(e.target.value)} className="input" aria-label="Your name" autoComplete="name" style={{ flex: 1, minWidth: 0, fontSize: 14 }}/>
         <button className="btn btn-primary" disabled={busy || name.trim() === (user?.name || '')} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>Signed in as {user?.email}</div>

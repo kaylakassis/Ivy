@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useCampaigns } from './state.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 const STATUS = {
   draft:   { label: 'Draft',   color: 'var(--muted)' },
@@ -80,9 +81,19 @@ export default function Campaigns() {
         <CampaignEditor
           key={open.id}
           campaign={open}
-          onClose={() => setOpenId(null)}
+          onClose={(info) => {
+            const c = open;
+            setOpenId(null);
+            // A draft closed with nothing written is not kept in the list.
+            if (info?.discardBlank && c && c.status !== 'sent') remove(c.id).catch(() => {});
+          }}
           onSave={(patch) => update(open.id, patch)}
-          onDelete={async () => { await remove(open.id); setOpenId(null); }}
+          onDelete={async () => {
+            if (!(await confirmAction(open.status === 'sent'
+              ? { title: 'Delete this sent campaign?', body: 'It comes off your list. The emails already delivered stay where they are.', confirmLabel: 'Delete', danger: true }
+              : { title: 'Delete this draft?', body: 'What you have written will be lost.', confirmLabel: 'Delete draft', danger: true }))) return;
+            await remove(open.id); setOpenId(null);
+          }}
           onSend={() => send(open.id)}
           onTest={() => sendTest(open.id)}
           previewCount={previewCount}
@@ -121,6 +132,21 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
     return () => { live = false; };
   }, [audience, audType, tag, previewCount]);
 
+  // Closing never loses what was written: unsaved text is saved first, and
+  // a draft with nothing in it is thrown away rather than left in the list.
+  const close = async () => {
+    if (busy) return;
+    if (sent) { onClose(); return; }
+    if (!subject.trim() && !body.trim()) { onClose({ discardBlank: true }); return; }
+    const dirty = subject !== (campaign.subject || '') || body !== (campaign.body || '') || audience !== (campaign.audience || 'all-clients');
+    if (dirty) {
+      setBusy('save'); setMsg(null);
+      try { await onSave({ subject, body, audience }); }
+      catch (e) { setMsg(`${e.message || 'Your draft did not save.'} It is still here: check your connection and press Save.`); setBusy(null); return; }
+      setBusy(null);
+    }
+    onClose();
+  };
   const save = async () => {
     setBusy('save'); setMsg(null);
     try { await onSave({ subject, body, audience }); setMsg('Saved'); }
@@ -135,7 +161,7 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
   };
   const doSend = async () => {
     if (!subject.trim()) { setMsg('Add a subject first'); return; }
-    if (!confirm(`Send “${subject}” to ${count ?? 'your'} recipient(s)? This can’t be undone.`)) return;
+    if (!(await confirmAction({ title: `Send "${subject}" to ${count == null ? 'your recipients' : count === 1 ? '1 recipient' : `${count} recipients`}?`, body: 'Once it is sent it cannot be called back.', confirmLabel: 'Send' }))) return;
     setBusy('send'); setMsg(null);
     try { await onSave({ subject, body, audience }); await onSend(); setMsg('Sent!'); }
     catch (e) { setMsg(e.message || 'Send failed'); }
@@ -143,7 +169,7 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.4)',
       display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflowY: 'auto',
     }}>
@@ -154,7 +180,7 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>
             {sent ? 'Campaign' : 'Edit campaign'}
           </h3>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }} aria-label="Close"><Icons.X size={16}/></button>
+          <button className="btn btn-ghost" onClick={close} style={{ padding: 6 }} aria-label="Close"><Icons.X size={16}/></button>
         </div>
 
         {sent && (

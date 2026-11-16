@@ -33,7 +33,7 @@
 // shape and allowlists, so older app builds that never send the newer
 // answers keep saving fine.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { browserTimeZone } from '../../lib/timezones.js';
+import { browserTimeZone, tzDisplay } from '../../lib/timezones.js';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import ResendVerifyLink from '../../components/ResendVerifyLink.jsx';
@@ -829,7 +829,7 @@ export default function OnboardingPage() {
             390px the no-wrap row stretched the layout viewport and
             clipped the primary CTA off-screen. Wrapping keeps every
             button tappable on a phone. */}
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+        <div className="onb-actions" style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
           {stepIdx > 0 && stepIdx < steps.length - 1 && (
             <button onClick={goBack} className="btn btn-ghost" disabled={busy}>
               <Icons.ArrowLeft size={13}/> Back
@@ -1204,7 +1204,7 @@ function AvailabilityStep({ availability, setAvailability }) {
   return (
     <>
       <StepHeader title="When are you available?"
-        subtitle={`Pick the days you take bookings and your working window.${browserTimeZone() ? ` Times are in ${browserTimeZone().replace(/_/g, ' ')} (detected from your device).` : ''} You can override individual days from Calendar → Availability later.`}/>
+        subtitle={`Pick the days you take bookings and your working window.${browserTimeZone() ? ` Times are in ${tzDisplay(browserTimeZone()) || browserTimeZone().replace(/_/g, ' ')}, the time zone your device is set to.` : ''} You can override individual days from Calendar → Availability later.`}/>
 
       {/* Quick-set presets */}
       <div style={{
@@ -1717,7 +1717,7 @@ function PrimaryCTA({ currentStep, onContinue, busy }) {
               : currentStep === 'switch'  ? 'Continue'
               : 'Save & continue';
   return (
-    <button onClick={onContinue} className="btn btn-primary" disabled={busy}>
+    <button onClick={onContinue} className="btn btn-primary onb-primary" disabled={busy}>
       {busy ? 'Saving…' : label}
       {!busy && <Icons.Arrow size={13} sw={1.8}/>}
     </button>

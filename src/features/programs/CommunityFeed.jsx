@@ -12,6 +12,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { MoreMenu, ReportModal } from '../../components/Moderation.jsx';
 import { Avatar, ImageGrid, ago, uploadProgramImage, IMAGE_TYPES } from './communityUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export const REACTIONS = [
   { id: 'heart', emoji: '❤️', label: 'Love' },
@@ -152,12 +153,12 @@ function PostRow({ post, ctx, top = false, onReply }) {
   const feedTop = top && !ctx.lesson;
   const call = async (fn) => { try { await fn(); } catch (e) { ctx.setErr(e.message); } };
   const remove = () => call(async () => {
-    if (!window.confirm(post.parentId ? 'Remove this reply?' : 'Remove this post and its replies?')) return;
+    if (!(await confirmAction({ title: post.parentId ? 'Remove this reply?' : 'Remove this post and its replies?', confirmLabel: 'Remove', danger: true }))) return;
     await api.del(`/programs/${ctx.programId}/posts?postId=${post.id}`); ctx.removeLocal(post.id);
   });
   const pin = (on) => call(async () => { await api.patch(`/programs/${ctx.programId}/posts`, { postId: post.id, pinned: on }); await ctx.reload(); });
   const announce = () => call(async () => {
-    if (!window.confirm('Make this an announcement? Every member gets an email and a notification.')) return;
+    if (!(await confirmAction({ title: 'Make this an announcement?', body: 'Every member gets an email and a notification.', confirmLabel: 'Announce' }))) return;
     const r = await api.patch(`/programs/${ctx.programId}/posts`, { postId: post.id, announce: true }); ctx.upsert(r.post);
   });
   const authorMuted = post.authorKey && ctx.mutedKeys.has(post.authorKey);

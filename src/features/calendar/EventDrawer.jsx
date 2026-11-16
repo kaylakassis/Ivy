@@ -9,6 +9,7 @@ import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from '../finance/CollectInPersonModal.jsx';
 import { BookingPolicyStatus } from '../clients/PolicyAcceptances.jsx';
 import BookingMoneyNotes, { useKeepDeposit } from './BookingMoneyNotes.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function EventDrawer({
   event, services,
@@ -1111,6 +1112,11 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
 
   const remove = async () => {
     if (!event.id) { onClose(); return; }
+    if (!(await confirmAction({
+      title: event.blocksBookings === false ? 'Delete this event?' : 'Delete this blocked time?',
+      body: event.blocksBookings === false ? undefined : 'Clients will be able to book this time again.',
+      confirmLabel: 'Delete', danger: true,
+    }))) return;
     setBusy(true);
     try { await onDelete(event); onClose(); } finally { setBusy(false); }
   };

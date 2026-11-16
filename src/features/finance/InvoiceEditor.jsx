@@ -1,6 +1,6 @@
 // Side drawer to edit an invoice (line items, dates, tax, discount, notes).
 // Locked when status='paid' or 'voided'.
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from './CollectInPersonModal.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
@@ -24,7 +24,13 @@ const methodLabel = (m) => METHOD_LABELS[m] || m || 'another method';
 
 export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund, onClearClaim, onArchive, onOpenRecurring }) {
   // Slide out (140ms) before the parent unmounts us.
-  const { closing, close: onClose } = useAnimatedClose(onCloseNow);
+  const { closing, close: animateClose } = useAnimatedClose(onCloseNow);
+  // Closing a draft never loses work: unsaved changes are saved first, and
+  // a draft that was never filled in is thrown away instead of being left
+  // in the list as an empty invoice. The real work is in closeRef (set
+  // below, once the form state exists).
+  const closeRef = useRef(null);
+  const onClose = useCallback(() => closeRef.current?.(), []);
   // "Save draft" pulses green once when the save lands.
   const [saveFlash, flashSaved] = useSuccessFlash();
   const [collectOpen, setCollectOpen] = useState(false);
@@ -111,6 +117,37 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
       flashSaved();
     } catch (e) { setErr(e.message || 'Save failed'); }
     finally { setBusy(false); }
+  };
+
+  closeRef.current = async () => {
+    if (busy) return;
+    if (invoice.status === 'draft') {
+      const shape = (xs) => JSON.stringify((xs || []).map((it) => [String(it.description || ''), Number(it.quantity || 0), Number(it.rate || 0)]));
+      const blank = !invoice.clientId && !invoice.clientName && !String(notes || '').trim()
+        && items.every((it) => !String(it.description || '').trim() && !Number(it.rate));
+      if (blank) { animateClose({ discardBlank: true }); return; }
+      const dirty = shape(items) !== shape(invoice.items)
+        || Number(taxRate || 0) !== Number(invoice.taxRate ?? 0)
+        || Number(discount || 0) !== Number(invoice.discount ?? 0)
+        || (issueDate || '') !== (invoice.issueDate || '')
+        || (dueDate || '') !== (invoice.dueDate || '')
+        || (notes || '') !== (invoice.notes || '');
+      if (dirty) {
+        setBusy(true); setErr(null);
+        try {
+          await onSave({
+            items, taxRate: Number(taxRate), discount: Number(discount),
+            issueDate, dueDate: dueDate || null, notes,
+          });
+        } catch (e) {
+          setErr(`${e.message || 'Your changes did not save.'} They are still here: check your connection and press Save draft.`);
+          setBusy(false);
+          return;
+        }
+        setBusy(false);
+      }
+    }
+    animateClose();
   };
 
   return (

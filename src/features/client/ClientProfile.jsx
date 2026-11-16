@@ -24,6 +24,7 @@ import { BlockedCard, ReportsCard, clientModeration } from '../../components/Mod
 import TwoFactor from '../account/TwoFactor.jsx';
 import { useClientPortal } from './clientContext.jsx';
 import { SectionTitle, Sheet, ErrorNote, actionBtn } from './portalUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const SUPPORT_EMAIL = 'support@joinivy.ai';
 
@@ -278,7 +279,7 @@ function PhotoField({ userId, photoUrl, name, onSaved }) {
   };
 
   const remove = async () => {
-    if (!window.confirm('Remove your photo?')) return;
+    if (!(await confirmAction({ title: 'Remove your photo?', confirmLabel: 'Remove', danger: true }))) return;
     setBusy(true); setErr(null);
     try { await savePhotoUrl(null); } catch (e) { setErr(e.message || 'Could not remove it'); } finally { setBusy(false); }
   };
@@ -536,7 +537,7 @@ export function PaymentMethodsCard() {
   useEffect(() => { load(); }, []);
 
   const remove = async (c) => {
-    if (!window.confirm(`Remove the ${capitalize(c.brand) || 'card'} ending in ${c.last4} saved with ${c.businessName}?`)) return;
+    if (!(await confirmAction({ title: `Remove the ${capitalize(c.brand) || 'card'} ending in ${c.last4}?`, body: `It is saved with ${c.businessName}.`, confirmLabel: 'Remove card', danger: true }))) return;
     setBusy(c.clientId); setErr(null);
     try {
       await api.del('/me/payment-methods/' + encodeURIComponent(c.clientId));

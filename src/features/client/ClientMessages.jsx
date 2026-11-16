@@ -24,6 +24,7 @@ import {
 import { MoreMenu, ReportModal, BlockedNotice, clientModeration } from '../../components/Moderation.jsx';
 import { ArchivedNotice, ArchivedBadge } from '../../components/ArchivedBusiness.jsx';
 import { haptic } from '../../lib/celebrate.js';
+import { confirmAction, showNotice } from '../../lib/confirm.js';
 
 export default function ClientMessagesPage() {
   // Deep links pick the right tab: accepting a group invite lands on
@@ -362,9 +363,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
     });
   };
   const blockBusiness = async () => {
-    const okay = window.confirm(
-      `Block ${thread?.businessName || 'this business'}? They won't be able to message you and you won't be able to message them. You can unblock any time from your profile.`,
-    );
+    const okay = (await confirmAction({ title: `Block ${thread?.businessName || 'this business'}?`, body: 'They will not be able to message you and you will not be able to message them. You can unblock any time from your profile.', confirmLabel: 'Block', danger: true }));
     if (!okay) return;
     setBlockBusy(true); setBlockErr(null);
     try { await clientModeration.block(workspaceId); await refreshThread(); }
@@ -419,7 +418,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
     } catch (err) {
       // A silently-swallowed failure looked like the message sent when it
       // never did - surface it like the DM pane does.
-      window.alert(`Couldn't send your message: ${err.message || 'try again in a moment'}`);
+      showNotice(`Couldn't send your message: ${err.message || 'try again in a moment'}`);
     } finally { setSending(false); }
   };
 

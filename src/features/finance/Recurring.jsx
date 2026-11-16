@@ -11,6 +11,8 @@ import { api } from '../../lib/api.js';
 import { fmtDateOnly, localISODate } from '../../lib/dateOnly.js';
 import { useRecurring } from './recurringState.js';
 import { seriesAutopayLabel, fmtAmount, fmtDay, cardShort } from '../../lib/autopayRules.js';
+import { confirmAction } from '../../lib/confirm.js';
+import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
 const CADENCE_LABEL = {
   weekly:    'Weekly',
@@ -231,10 +233,10 @@ function AutopayField({ schedule, isNew, wantNew, setWantNew, onAutopay }) {
     } catch (e) { setErr(e.message || 'Something went wrong'); }
     finally { setBusy(false); }
   };
-  const toggle = () => {
+  const toggle = async () => {
     if (isNew) { setWantNew(!wantNew); return; }
     if (on) {
-      if (ap.state === 'on' && !window.confirm('Turn off autopay? Your client will be told, and the next invoices will be emailed for them to pay.')) return;
+      if (ap.state === 'on' && !(await confirmAction({ title: 'Turn off autopay?', body: 'Your client will be told, and the next invoices will be emailed for them to pay.', confirmLabel: 'Turn off', danger: true }))) return;
       act('off');
     } else {
       act('request');
@@ -325,6 +327,9 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
   const [err, setErr]   = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
   const [wantAutopay, setWantAutopay] = useState(false);
+  // Closing with unsaved changes asks first instead of quietly dropping them.
+  const guard = useDiscardGuard({ name, clientId, items, taxRate, discount, notes, cadence, nextRunAt, endDate, autoSend, status });
+  const close = () => { if (!busy) guard.close(onClose); };
 
   const [clients, setClients] = useState([]);
   useEffect(() => {
@@ -361,13 +366,13 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
         endDate: endDate || null,
         autoSend,
         ...(isNew ? {} : { status }),
-      }, { autopay: isNew && wantAutopay });
+      }, { autopay: isNew && wantAutopay }); guard.markSaved();
     } catch (e) { setErr(e.message || 'Save failed'); }
     finally { setBusy(false); }
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
@@ -390,7 +395,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
                 fontFamily: 'inherit',
               }}/>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
+          <button className="btn btn-ghost" onClick={close} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -548,7 +553,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete, onAutopay }) {
               )}
               <div style={{ flex: 1 }}/>
               {err && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</span>}
-              <button className="btn btn-outline" onClick={onClose} disabled={busy}>Cancel</button>
+              <button className="btn btn-outline" onClick={close} disabled={busy}>Cancel</button>
               <button className="btn btn-primary" onClick={submit} disabled={busy}>
                 {busy ? 'Saving…' : (isNew ? 'Create schedule' : 'Save')}
               </button>

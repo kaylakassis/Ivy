@@ -13,6 +13,7 @@ import ClientGallery from './ClientGallery.jsx';
 import PolicyAcceptances from './PolicyAcceptances.jsx';
 import ClientReminders from './ClientReminders.jsx';
 import ClientDetails from './ClientDetails.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder, onMergeWith }) {
   // Slide out (140ms) before the parent unmounts us; every close path in
@@ -603,7 +604,7 @@ function ClientPackages({ client }) {
   };
 
   const cancel = async (cpId) => {
-    if (!window.confirm('Cancel this package? Outstanding credits will be lost.')) return;
+    if (!(await confirmAction({ title: 'Cancel this package?', body: 'Outstanding credits will be lost.', confirmLabel: 'Cancel package', cancelLabel: 'Keep package', danger: true }))) return;
     try {
       await api.del(`/clients/${client.id}/packages/${cpId}`);
       await load();

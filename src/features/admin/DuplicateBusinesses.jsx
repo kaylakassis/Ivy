@@ -6,6 +6,7 @@
 // explicit second confirmation.
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 const fmt = (d) => (d ? new Date(d).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 const prettyTable = (t) => t.replace(/_/g, ' ');
@@ -22,10 +23,7 @@ export default function DuplicateBusinesses({ userId, onChanged }) {
   useEffect(() => { load(); }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = async (w) => {
-    const what = w.dataRows > 0
-      ? `This business holds ${w.dataRows} records. Removing it deletes them for good. Remove it anyway?`
-      : 'Remove this empty business record? This cannot be undone.';
-    if (!window.confirm(what)) return;
+    if (!(await confirmAction({ title: w.dataRows > 0 ? 'Remove this business and everything in it?' : 'Remove this empty business record?', body: w.dataRows > 0 ? `It holds ${w.dataRows} records. Removing it deletes them for good.` : 'This cannot be undone.', confirmLabel: 'Remove', danger: true }))) return;
     setBusy(w.id); setErr(null); setDone(null);
     try {
       const r = await api.post(`/admin/users/${userId}/workspaces`, { removeWorkspaceId: w.id, allowData: w.dataRows > 0 });

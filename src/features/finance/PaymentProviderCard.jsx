@@ -18,6 +18,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isNative } from '../../lib/platform.js';
 import { FLAGS } from '../../lib/featureFlags.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function PaymentProviderCard() {
   const [data, setData] = useState(null);
@@ -222,7 +223,7 @@ function ProviderRow({
   const [disconnecting, setDisconnecting] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const disconnect = async () => {
-    if (!confirm(`Disconnect ${label}?`)) return;
+    if (!(await confirmAction({ title: `Disconnect ${label}?`, confirmLabel: 'Disconnect', danger: true }))) return;
     setDisconnecting(true);
     try { await api.post(disconnectPath); await onChanged(); }
     finally { setDisconnecting(false); }

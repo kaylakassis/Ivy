@@ -646,8 +646,10 @@ body.app-walled .view-toggle { display: none; }
   .doc-editor-panes      { flex-direction: column !important; }
   .doc-editor-pane-left  { max-width: 100% !important; border-right: 0 !important;
                             border-bottom: 1px solid var(--border); }
-  .doc-editor-pane-left[data-mobile-tab="preview"]  { display: none; }
-  .doc-editor-pane-right[data-mobile-tab="edit"]    { display: none; }
+  /* !important: both panes set display inline, which used to win, so the
+     Edit and Preview tabs did nothing and both showed at half height. */
+  .doc-editor-pane-left[data-mobile-tab="preview"]  { display: none !important; }
+  .doc-editor-pane-right[data-mobile-tab="edit"]    { display: none !important; }
   .doc-preview-shell     { padding: 14px !important; max-height: none !important; }
   .doc-preview-page      { padding: 28px 24px 36px !important; }
 }
@@ -1286,4 +1288,25 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
   .stat-grid > .card { padding: 12px !important; gap: 4px !important; }
   .stat-grid .metric-value { font-size: 22px !important; }
   .stat-grid .metric-label { white-space: normal !important; font-size: 10.5px; line-height: 1.25; }
+}
+
+/* Onboarding footer on a phone: the main button gets its own full-width
+   row under Back / Skip / Save & exit, instead of wrapping to wherever
+   there happened to be room. */
+@media (max-width: 520px) {
+  .onb-actions .onb-primary { flex: 1 0 100%; justify-content: center; min-height: 48px; }
+}
+
+/* Invoice design pop-up on a phone: the options and the sample invoice
+   stack (options first, sample underneath) and scroll as one. Side by side
+   left the sample as a 36px sliver on the right edge. */
+@media (max-width: 760px) {
+  .inv-design-body { display: block !important; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .inv-design-body > div { overflow: visible !important; border-right: 0 !important; }
+}
+
+/* Summary cards between a phone and a small laptop (an iPad held upright):
+   two to a row. Auto-fit made three and an orphan, with the labels cut off. */
+@media (min-width: 521px) and (max-width: 1023px) {
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

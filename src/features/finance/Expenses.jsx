@@ -6,6 +6,8 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { localISODate } from '../../lib/dateOnly.js';
 import { useViewport } from '../../lib/viewport.js';
+import { confirmAction } from '../../lib/confirm.js';
+import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
 // Mirror api/_lib/expenses.js. Kept in sync by hand - small + stable.
 const CATEGORIES = [
@@ -57,7 +59,7 @@ export default function Expenses() {
   useEffect(() => { load(); }, [filterCat]);
 
   const remove = async (id) => {
-    if (!window.confirm('Delete this expense?')) return;
+    if (!(await confirmAction({ title: 'Delete this expense?', confirmLabel: 'Delete', danger: true }))) return;
     await api.del(`/expenses/${id}`);
     await load();
   };
@@ -216,6 +218,9 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
   const [isDeductible, setIsDeductible]   = useState(expense.isDeductible !== false);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  // Closing with unsaved changes asks first instead of quietly dropping them.
+  const guard = useDiscardGuard({ amount, date, category, vendor, notes, paymentMethod, isDeductible });
+  const close = () => { if (!busy) guard.close(onClose); };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -229,6 +234,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
       };
       if (isNew) await api.post('/expenses', body);
       else       await api.patch(`/expenses/${expense.id}`, body);
+      guard.markSaved();
       onSaved();
     } catch (e2) {
       setErr(e2.message || 'Could not save');
@@ -237,7 +243,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
   };
 
   return (
-    <div onClick={() => !busy && onClose()} role="dialog" style={{
+    <div onClick={close} role="dialog" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 130,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
@@ -247,7 +253,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
           <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>
             {isNew ? 'Log expense' : 'Edit expense'}
           </h3>
-          <button type="button" onClick={onClose} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close">
+          <button type="button" onClick={close} className="btn btn-ghost" style={{ padding: 6 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -306,7 +312,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
         )}
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button type="button" onClick={onClose} className="btn btn-outline"
+          <button type="button" onClick={close} className="btn btn-outline"
             style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={busy}
             style={{ flex: 2, justifyContent: 'center' }}>

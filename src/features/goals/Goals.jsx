@@ -7,6 +7,7 @@ import SuccessToast from '../../components/SuccessToast.jsx';
 import { fireConfetti } from '../../lib/celebrate.js';
 import { useGoals } from './state.js';
 import { api } from '../../lib/api.js';
+import { confirmAction } from '../../lib/confirm.js';
 import { localISODate } from '../../lib/dateOnly.js';
 
 const GOAL_TYPES = [
@@ -289,7 +290,7 @@ function TaskRow({ task, highlight = false, onToggle, onUpdate, onRemove }) {
             fontWeight: isOverdue ? 600 : 400, whiteSpace: 'nowrap',
           }}>{dueLabel}</span>
         )}
-        <button className="btn btn-ghost" onClick={() => onRemove(task.id)} style={{ padding: 4, color: 'var(--muted)' }}
+        <button className="btn btn-ghost" onClick={async () => { if (await confirmAction({ title: 'Delete this task?', body: task.title || undefined, confirmLabel: 'Delete', danger: true })) onRemove(task.id); }} style={{ padding: 4, color: 'var(--muted)' }}
           aria-label={`Delete task: ${task.title || 'task'}`} title="Delete task">
           <Icons.X size={12}/>
         </button>
@@ -475,7 +476,7 @@ function GoalCard({ goal, onUpdate, onRemove }) {
             {meta.label}{goal.deadline ? ' · by ' + new Date(goal.deadline).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
           </div>
         </div>
-        <button className="btn btn-ghost" onClick={() => onRemove(goal.id)} style={{ padding: 4, color: 'var(--muted)' }}
+        <button className="btn btn-ghost" onClick={async () => { if (await confirmAction({ title: 'Delete this goal?', body: goal.title ? `"${goal.title}" and its progress will be removed.` : 'The goal and its progress will be removed.', confirmLabel: 'Delete goal', danger: true })) onRemove(goal.id); }} style={{ padding: 4, color: 'var(--muted)' }}
           aria-label={`Delete goal: ${goal.title || 'goal'}`} title="Delete goal">
           <Icons.X size={12}/>
         </button>

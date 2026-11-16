@@ -11,6 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import { api } from '../../lib/api.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 const COLORS = [
   '#8E826A', '#A78BFA', '#60A5FA', '#F472B6', '#FB923C',
@@ -134,8 +135,8 @@ export default function StaffDrawer({ onClose, onChanged }) {
   };
   const resend  = (s) => helperAction(s, () => api.post(`/staff/${encodeURIComponent(s.id)}/invite`), `A fresh invite went to ${s.email}. The earlier link no longer works.`);
   const cancelInvite = (s) => helperAction(s, () => api.del(`/staff/${encodeURIComponent(s.id)}/invite`), 'Invite cancelled.');
-  const revoke  = (s) => {
-    if (!window.confirm(`Remove ${s.name}'s sign-in? They lose access right away. Their record and past bookings stay.`)) return;
+  const revoke  = async (s) => {
+    if (!(await confirmAction({ title: `Remove ${s.name}'s sign-in?`, body: 'They lose access right away. Their record and past bookings stay.', confirmLabel: 'Remove sign-in', danger: true }))) return;
     return helperAction(s, () => api.post(`/staff/${encodeURIComponent(s.id)}/revoke`), `${s.name} no longer has access.`);
   };
 

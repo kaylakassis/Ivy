@@ -23,6 +23,7 @@ import {
   fmtDay, fmtLongDay, fmtTimeRange, fmtMoney, relativeDay, bookHref, plural,
   BusinessAvatar, SectionTitle, MenuButton, AddToCalendarMenu, EmptyCard, actionBtn, actionRow,
 } from './portalUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function ClientHome() {
   const { data, loading, error, refresh } = useClientPortal();
@@ -329,7 +330,7 @@ function Attention({ summary, extra }) {
 function Businesses({ memberships, extra }) {
   const [err, setErr] = useState(null);
   const hide = async (m) => {
-    if (!window.confirm(`Hide ${m.businessName} from your portal? Their bookings, invoices and messages will stop showing here. Nothing changes on their side.`)) return;
+    if (!(await confirmAction({ title: `Hide ${m.businessName} from your portal?`, body: 'Their bookings, invoices and messages will stop showing here. Nothing changes on their side.', confirmLabel: 'Hide' }))) return;
     try {
       await api.post('/me/businesses/hide', { clientId: m.clientId });
       window.location.reload();

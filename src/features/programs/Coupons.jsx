@@ -6,6 +6,7 @@ import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import { Sheet, Field } from './communityUi.jsx';
 import { fmtPrice } from './ProgramContent.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const label = (c) => (c.kind === 'percent' ? `${c.percentOff}% off` : `${fmtPrice(c.amountOffCents)} off`);
 
@@ -14,7 +15,7 @@ export default function CouponsSheet({ programs, onClose }) {
   const [adding, setAdding] = useState(false);
   useEffect(() => { api.get('/programs/coupons').then((r) => setList(r.coupons || [])).catch((e) => { setErr(e.message); setList([]); }); }, []);
   const off = async (c) => {
-    if (!window.confirm(`Switch off ${c.code}? It stops working right away. Subscriptions already using it keep their discount.`)) return;
+    if (!(await confirmAction({ title: `Switch off ${c.code}?`, body: 'It stops working right away. Subscriptions already using it keep their discount.', confirmLabel: 'Switch off', danger: true }))) return;
     try { const r = await api.patch('/programs/coupons', { couponId: c.id, active: false }); setList(r.coupons); } catch (e) { setErr(e.message); }
   };
   return (

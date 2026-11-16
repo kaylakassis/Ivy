@@ -23,6 +23,7 @@ import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { hapticTap, hapticSuccess } from '../../lib/haptics.js';
 import { useRatingWin } from '../../lib/ratingPrompt.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function Editor({
   site, set, setSection, addSection, removeSection, moveSection, moveSectionTo,
@@ -469,8 +470,8 @@ export default function Editor({
             for the Advanced-settings cog next to it. */}
         {showSecondary && <button className="btn btn-ghost" title="Start over (clears all draft content)"
           style={{ color: 'var(--danger)' }}
-          onClick={() => {
-            if (confirm('Start over? This clears ALL pages and sections from your draft.\n\nYour published version history is kept (Advanced → History), but the current draft cannot be recovered.')) reset();
+          onClick={async () => {
+            if ((await confirmAction({ title: 'Start over?', body: 'This clears all pages and sections from your draft. Your published version history is kept (Advanced, then History), but the current draft cannot be recovered.', confirmLabel: 'Start over', danger: true }))) reset();
           }}>
           <Icons.Trash size={14} />
         </button>}
@@ -926,8 +927,8 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onM
             </button>
             {!isHome && (
               <button
-                onClick={() => {
-                  if (window.confirm(`Delete page "${p.title}"? The sections on it will be removed.`)) {
+                onClick={async () => {
+                  if ((await confirmAction({ title: `Delete the page "${p.title}"?`, body: 'The sections on it will be removed.', confirmLabel: 'Delete page', danger: true }))) {
                     onRemove(p.id);
                   }
                 }}

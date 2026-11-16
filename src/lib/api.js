@@ -135,6 +135,8 @@ export async function apiFetch(method, path, body, opts = {}) {
   }
 }
 
+export const SIGNED_OUT_MESSAGE = 'You have been signed out. Please sign in again.';
+
 async function req(method, path, body, opts = {}) {
   const headers = await buildHeaders(body, opts);
   const url = `${API_BASE}/api${path}`;
@@ -162,7 +164,18 @@ async function req(method, path, body, opts = {}) {
     }
     noteNetworkSuccess();
 
-    if (!res.ok) throw await httpError(res);
+    if (!res.ok) {
+      const err = await httpError(res);
+      // Signed out behind the scenes (the session ran out, or the account
+      // was signed out elsewhere). Say that, instead of the bare word
+      // "Unauthorized", and let the app send the person to sign in again.
+      if (res.status === 401 && !/^\/auth\//.test(path)) {
+        err.signedOut = true;
+        if (/^(unauthori[sz]ed|authentication required|not authenticated|not signed in|sign in required)\.?$/i.test(err.message)) err.message = SIGNED_OUT_MESSAGE;
+        try { window.dispatchEvent(new CustomEvent('ivy:unauthorized', { detail: { path } })); } catch { /* not in a browser */ }
+      }
+      throw err;
+    }
     if (res.status === 204) return null;
     return res.json();
   };
@@ -174,11 +187,14 @@ async function req(method, path, body, opts = {}) {
   try {
     return await doFetch();
   } catch (e) {
+    // Which kind of request failed: lets the last-resort notice
+    // (uncaughtNotice.js) speak up for a failed change, never for a load.
+    try { e.method = method; } catch { /* frozen error */ }
     const transient = e.status === 0 || (e.status >= 500 && e.status < 600);
     if (canRetry && transient && !(wasOffline && e.status === 0)) {
       await new Promise((r) => setTimeout(r, 600));
       try { return await doFetch(); }
-      catch (e2) { if (e2.offline) noteOfflineRequest(); throw e2; }
+      catch (e2) { try { e2.method = method; } catch { /* frozen */ } if (e2.offline) noteOfflineRequest(); throw e2; }
     }
     if (e.offline) noteOfflineRequest();
     throw e;

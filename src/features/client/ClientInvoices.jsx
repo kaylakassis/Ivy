@@ -22,6 +22,7 @@ import { invoiceAutopayClientLine } from '../../lib/autopayRules.js';
 import {
   fmtDay, fmtDate, fmtMoney, SectionTitle, BusinessAvatar, ErrorNote, SkelCards, EmptyCard, actionBtn,
 } from './portalUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 function intervalLabel(i) {
   return ({ week: 'a week', month: 'a month', quarter: 'every 3 months', year: 'a year' })[i] || 'a month';
@@ -123,8 +124,8 @@ export default function ClientInvoices() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!state, autopayParam, setupParam]);
 
-  const turnOffAutopay = (a) => {
-    if (!window.confirm(`Turn off automatic payments for ${a.seriesName} with ${a.businessName}? Future invoices will be emailed for you to pay.`)) return;
+  const turnOffAutopay = async (a) => {
+    if (!(await confirmAction({ title: `Turn off automatic payments for ${a.seriesName}?`, body: `Future invoices from ${a.businessName} will be emailed for you to pay.`, confirmLabel: 'Turn off', danger: true }))) return;
     run(async () => {
       const r = await api.post('/me/autopay', { action: 'turn-off', agreementId: a.id });
       setState((st) => ({ ...st, autopay: r.agreements || [] }));
@@ -152,12 +153,12 @@ export default function ClientInvoices() {
     const r = await api.post('/me/payment-methods', { clientId });
     window.location.href = r.url;
   });
-  const removeCard = (c) => {
-    if (!window.confirm(`Remove the ${capitalize(c.brand) || 'card'} ending in ${c.last4} saved with ${c.businessName}?`)) return;
+  const removeCard = async (c) => {
+    if (!(await confirmAction({ title: `Remove the ${capitalize(c.brand) || 'card'} ending in ${c.last4}?`, body: `It is saved with ${c.businessName}.`, confirmLabel: 'Remove card', danger: true }))) return;
     run(async () => { await api.del('/me/payment-methods/' + encodeURIComponent(c.clientId)); await load(); });
   };
-  const cancelMembership = (m) => {
-    if (!window.confirm(`Cancel your ${m.membershipName} membership with ${m.businessName}? You keep access until the end of the time you have paid for.`)) return;
+  const cancelMembership = async (m) => {
+    if (!(await confirmAction({ title: `Cancel your ${m.membershipName} membership with ${m.businessName}?`, body: 'You keep access until the end of the time you have paid for.', confirmLabel: 'Cancel membership', cancelLabel: 'Keep membership', danger: true }))) return;
     run(async () => { await api.del('/me/memberships/' + encodeURIComponent(m.id)); await load(); });
   };
 

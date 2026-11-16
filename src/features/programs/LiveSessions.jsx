@@ -9,6 +9,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { MoreMenu } from '../../components/Moderation.jsx';
 import { Sheet, Field, Toggle } from './communityUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const LOCATION_LABEL = { video: 'Video call', in_person: 'In person', link: 'Online link' };
 const fmtDay = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -81,7 +82,7 @@ function EventCard({ ev, programId, isOwner, onChange, onEdit, reload, setErr })
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
   const cancel = async () => {
-    if (!window.confirm('Cancel this session? Members who said they are going get a note.')) return;
+    if (!(await confirmAction({ title: 'Cancel this session?', body: 'Members who said they are going get a note.', confirmLabel: 'Cancel session', cancelLabel: 'Keep session', danger: true }))) return;
     try { await api.del(`/programs/${programId}/events?eventId=${ev.id}`); reload(); } catch (e) { setErr(e.message); }
   };
   const download = async () => {

@@ -31,6 +31,7 @@ import FinanceServices from './Services.jsx';
 import FinancePackages from './Packages.jsx';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { invoiceMoney, invoiceActions } from '../../lib/invoiceRules.js';
+import { askText, showNotice } from '../../lib/confirm.js';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -63,13 +64,13 @@ export default function Finance() {
   // Prompt for year and trigger a CSV download. Used for the Schedule-C
   // summary AND the QuickBooks/Xero importable exports - all three share
   // the year-pick UX, only the URL differs.
-  const downloadCSV = (path) => {
+  const downloadCSV = async (path) => {
     const year = new Date().getFullYear();
-    const input = window.prompt('Which year?', year);
+    const input = await askText({ title: 'Which year?', defaultValue: String(year), inputMode: 'numeric', maxLength: 4, confirmLabel: 'Download' });
     if (!input) return;
     const y = parseInt(input, 10);
     if (!Number.isInteger(y) || y < 2000 || y > 2100) {
-      window.alert('Year must be a 4-digit number.');
+      showNotice('Year must be a 4-digit number.');
       return;
     }
     setExportMenuOpen(false);
@@ -347,7 +348,10 @@ function InvoicesSection({
 }) {
   // On phones the 7-column invoice grid forces sideways scrolling to see
   // status/total. Below this width we render each invoice as a stacked card.
-  const { isMobile } = useViewport();
+  const { isMobile, isTablet } = useViewport();
+  // The invoice table needs about 900px; an iPad held upright gets the
+  // card list instead of a row whose last button runs off the edge.
+  const cardList = isMobile || isTablet;
   // Bulk archive: "Select" turns on checkboxes for the rows that can be
   // archived (paid, refunded, void) or, on the Archived tab, brought back.
   const [selecting, setSelecting] = useState(false);
@@ -477,9 +481,9 @@ function InvoicesSection({
       {/* Table (desktop) / stacked cards (mobile) */}
       {/* table-scroll forces a 760px minimum on phones (for real tables);
           the stacked cards don't want it - it made the page scroll sideways. */}
-      <div className={isMobile ? 'card' : 'card table-scroll'} style={{ overflow: isMobile ? 'visible' : 'auto' }}>
+      <div className={cardList ? 'card' : 'card table-scroll'} style={{ overflow: cardList ? 'visible' : 'auto' }}>
         <div className="stagger">
-          {!isMobile && (
+          {!cardList && (
             <div style={{
               display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 104px 40px',
               padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -505,7 +509,7 @@ function InvoicesSection({
               />
             </div>
           ) : rows.map((i, idx) => (
-            <InvoiceRow key={i.id} invoice={i} first={idx === 0} index={idx} isMobile={isMobile}
+            <InvoiceRow key={i.id} invoice={i} first={idx === 0} index={idx} isMobile={cardList}
               onOpen={() => (selecting ? (canPick(i) && toggle(i.id)) : setOpenId(i.id))}
               onMarkPaid={(method) => markPaid(i.id, method)}
               selecting={selecting} selectable={canPick(i)} selected={selected.has(i.id)}/>
@@ -531,7 +535,13 @@ function InvoicesSection({
       {openInv && (
         <InvoiceEditor
           invoice={openInv}
-          onClose={() => setOpenId(null)}
+          onClose={(info) => {
+            const inv = openInv;
+            setOpenId(null);
+            // A draft that was opened and closed without anything being
+            // filled in is not kept as an empty invoice in the list.
+            if (info?.discardBlank && inv?.status === 'draft') remove(inv.id).catch(() => {});
+          }}
           onSave={(patch) => update(openInv.id, patch)}
           onDelete={async () => { await remove(openInv.id); setOpenId(null); }}
           onSend={() => setSending(openInv.id)}

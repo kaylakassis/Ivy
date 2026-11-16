@@ -11,6 +11,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer from './Drawer.jsx';
 import { api } from '../../lib/api.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function SyncDrawer({ onClose }) {
   const [status, setStatus]     = useState(null); // null = loading
@@ -49,6 +50,7 @@ export default function SyncDrawer({ onClose }) {
   };
 
   const revoke = async () => {
+    if (!(await confirmAction({ title: 'Turn off calendar sync?', body: 'Any calendar that follows this link stops updating. You can turn sync on again later, with a new link.', confirmLabel: 'Turn off sync', danger: true }))) return;
     setBusy('revoke'); setErr(null);
     try {
       await api.del('/calendar/feed-token');

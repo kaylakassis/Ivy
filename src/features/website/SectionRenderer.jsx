@@ -24,6 +24,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
 import { safeBackground, safeHeadlineGradient, safePadding, safeTextAlign, normalizeAnimate } from './sectionStyle.js';
 import CancellationPolicySection, { PolicyFooterLink } from './CancellationPolicySection.jsx';
+import { showNotice } from '../../lib/confirm.js';
 
 // Link context for the public site: section anchors on this page, the
 // site's pages and the link base. The editor renders without a provider,
@@ -1485,7 +1486,7 @@ function Shop({ data, handle }) {
     const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim());
     if (!customerName.trim() || !validEmail) {
       // eslint-disable-next-line no-alert
-      window.alert('Name and a valid email are required.');
+      showNotice('Name and a valid email are required.');
       return;
     }
     setBusy(true);
@@ -1506,7 +1507,7 @@ function Shop({ data, handle }) {
       window.location.assign(j.url);
     } catch (e) {
       // eslint-disable-next-line no-alert
-      window.alert(e.message || 'Checkout failed.');
+      showNotice({ title: 'Checkout did not start', body: e.message || 'Please try again.' });
     } finally { setBusy(false); }
   };
 

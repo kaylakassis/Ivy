@@ -15,6 +15,7 @@ import { useWorkflows } from './state.js';
 import WorkflowEditor from './WorkflowEditor.jsx';
 import WorkflowTemplatePicker from './WorkflowTemplatePicker.jsx';
 import ClientAutomations from './ClientAutomations.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const TRIGGER_LABELS = {
   lead_created:      'When a lead fills out the contact form',
@@ -118,7 +119,7 @@ export default function Workflows() {
               onToggle={(enabled) => update(w.id, { enabled })}
               onEdit={() => setEditing(w)}
               onDelete={async () => {
-                if (window.confirm(`Delete workflow "${w.name}"? Runs already logged stay.`)) {
+                if ((await confirmAction({ title: `Delete workflow "${w.name}"?`, body: 'Runs already logged stay.', confirmLabel: 'Delete', danger: true }))) {
                   await remove(w.id);
                 }
               }}/>

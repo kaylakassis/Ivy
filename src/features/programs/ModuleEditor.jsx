@@ -7,6 +7,7 @@ import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import { groupLessons } from './CourseOutline.jsx';
 import { Sheet, Field, lessonMeta, uploadProgramFile, UPLOAD_LIMITS, fmtSize } from './courseUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const small = { padding: 6, color: 'var(--muted)', fontSize: 12.5, minWidth: 30, minHeight: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
 
@@ -23,8 +24,8 @@ export default function ModuleEditor({ programId, program, items, modules, activ
     [order[i], order[j]] = [order[j], order[i]];
     await api.patch(`/programs/${programId}/modules`, { order });
   });
-  const removeModule = (m) => {
-    if (!window.confirm(`Delete the module "${m.title}"? Its lessons are kept and move to the top of the program.`)) return;
+  const removeModule = async (m) => {
+    if (!(await confirmAction({ title: `Delete the module "${m.title}"?`, body: 'Its lessons are kept and move to the top of the program.', confirmLabel: 'Delete module', danger: true }))) return;
     run(() => api.del(`/programs/${programId}/modules?moduleId=${m.id}`));
   };
   const moveLesson = (group, it, dir) => run(async () => {
@@ -34,8 +35,8 @@ export default function ModuleEditor({ programId, program, items, modules, activ
     await api.patch(`/programs/${programId}/items`, { order, moduleId: group.module ? group.module.id : null });
   });
   const toModule = (it, moduleId) => run(() => api.patch(`/programs/${programId}/items`, { itemId: it.id, moduleId: moduleId || null }));
-  const removeLesson = (it) => {
-    if (!window.confirm(`Remove "${it.title}"? Members keep their access; only this lesson goes away.`)) return;
+  const removeLesson = async (it) => {
+    if (!(await confirmAction({ title: `Remove "${it.title}"?`, body: 'Members keep their access. Only this lesson goes away.', confirmLabel: 'Remove lesson', danger: true }))) return;
     run(() => api.del(`/programs/${programId}/items?itemId=${it.id}`));
   };
 

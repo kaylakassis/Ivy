@@ -47,6 +47,11 @@ export default function AuthPage({ mode = 'signin' }) {
   // ?mfa=1: a password reset on a 2FA account lands here for the code step.
   const [mfaStep, setMfaStep] = useState(params.get('mfa') === '1');
   const [err,  setErr]    = useState(null);
+  // Set by the app when a session ran out mid-use (src/lib/auth.jsx).
+  const [signedOutNote] = useState(() => {
+    try { const v = sessionStorage.getItem('ivy_signed_out_note') === '1'; sessionStorage.removeItem('ivy_signed_out_note'); return v; }
+    catch { return false; }
+  });
   // When signup succeeds but the welcome / verification email failed to
   // send, we hold the user on this screen with an explicit notice +
   // continue button rather than redirecting silently (the old
@@ -224,6 +229,14 @@ export default function AuthPage({ mode = 'signin' }) {
               <span style={{ color: 'var(--muted)' }}>(Optional)</span>
             </ConsentBox>
           </div>
+        )}
+
+        {signedOutNote && mode === 'signin' && !err && (
+          <div role="status" style={{
+            padding: '8px 12px', borderRadius: 8,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+            color: 'var(--fg-2)', fontSize: 12.5, lineHeight: 1.45,
+          }}>You were signed out. Sign in again to pick up where you left off.</div>
         )}
 
         {err && (

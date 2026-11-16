@@ -9,6 +9,7 @@ import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { Sheet, Field, Toggle, ago, uploadProgramImage, IMAGE_TYPES } from './communityUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TYPES = [
@@ -199,7 +200,7 @@ export function OwnerCheckins({ programId }) {
     api.get(`/programs/${programId}/checkins?view=trend&clientId=${filter.clientId}`).then((r) => setTrend(r.series || [])).catch(() => setTrend([]));
   }, [programId, filter.clientId]);
   const archive = async (f) => {
-    if (!window.confirm(`Stop the "${f.title}" check-in? Answers already given are kept.`)) return;
+    if (!(await confirmAction({ title: `Stop the "${f.title}" check-in?`, body: 'Answers already given are kept.', confirmLabel: 'Stop check-in', danger: true }))) return;
     try { await api.del(`/programs/${programId}/checkins?formId=${f.id}`); load(); } catch (e) { setErr(e.message); }
   };
   if (!data) return <div style={{ color: 'var(--muted)', fontSize: 13 }}>{err || 'Loading…'}</div>;

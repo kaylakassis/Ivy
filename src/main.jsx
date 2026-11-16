@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './lib/auth.jsx';
+import ConfirmHost from './components/ConfirmHost.jsx';
+import { uncaughtNotice } from './lib/uncaughtNotice.js';
 import { initMonitoring, ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { registerServiceWorker } from './lib/pwa.js';
@@ -36,6 +38,8 @@ if (typeof window !== 'undefined') {
   });
   window.addEventListener('unhandledrejection', (e) => {
     if (tryStaleChunkRecovery(e?.reason)) return;
+    // A change that failed with nobody listening: tell the person.
+    uncaughtNotice(e?.reason);
     // eslint-disable-next-line no-console
     console.error('[unhandledrejection]', e?.reason?.message || '', e?.reason);
   });
@@ -119,6 +123,7 @@ function mount() {
         </BrowserRouter>
       </ErrorBoundary>
       <PrerenderHandoff/>
+      <ConfirmHost/>
     </React.StrictMode>,
   );
 

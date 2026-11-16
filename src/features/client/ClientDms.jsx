@@ -13,6 +13,7 @@ import { useVoiceMemo } from '../../lib/speech.js';
 import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';
+import { askText, confirmAction, showNotice } from '../../lib/confirm.js';
 
 function fmtTime(iso) {
   if (!iso) return '';
@@ -122,7 +123,7 @@ export default function ClientDms() {
             onBack={() => isMobile && setSelectedId(null)}
             onChanged={refresh}
             onLeave={async () => {
-              if (!window.confirm('Hide this conversation? You can come back if they message you again.')) return;
+              if (!(await confirmAction({ title: 'Hide this conversation?', body: 'You can come back if they message you again.', confirmLabel: 'Hide' }))) return;
               await api.del('/me/dms/' + encodeURIComponent(selected.id));
               setSelectedId(null);
               refresh();
@@ -195,7 +196,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
           contentType: f.type || 'application/octet-stream',
         });
         setPendingFiles((p) => [...p, { url: uploaded.url, type: f.type, name: f.name }]);
-      } catch (err) { window.alert(`Couldn't upload ${f.name}: ${err.message}`); }
+      } catch (err) { showNotice(`Couldn't upload ${f.name}: ${err.message}`); }
     }
   };
 
@@ -210,7 +211,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
       setData((d) => d ? ({ ...d, messages: [...d.messages, r.message] }) : d);
       setText(''); setPendingFiles([]); setReplyingTo(null);
     } catch (err) {
-      window.alert(err.message || 'Send failed.');
+      showNotice(err.message || 'Your message did not send. Please try again.');
     } finally { setSending(false); }
   };
 
@@ -244,24 +245,25 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
       if (data.dm.blockedByMe) await api.del('/me/dms/' + encodeURIComponent(dmId) + '/block');
       else await api.post('/me/dms/' + encodeURIComponent(dmId) + '/block', {});
       await refresh(); onChanged?.();
-    } catch (e) { window.alert(e.message || 'Failed.'); }
+    } catch (e) { showNotice(e.message || 'That did not work. Please try again.'); }
   };
   const toggleMute = async () => {
     try {
       if (data.dm.mutedByMe) await api.del('/me/dms/' + encodeURIComponent(dmId) + '/mute');
       else await api.post('/me/dms/' + encodeURIComponent(dmId) + '/mute', {});
       await refresh(); onChanged?.();
-    } catch (e) { window.alert(e.message || 'Failed.'); }
+    } catch (e) { showNotice(e.message || 'That did not work. Please try again.'); }
   };
 
   const reportMessage = async (msg) => {
-    const reason = window.prompt('What\'s the issue? (optional)') ?? '';
+    const reason = await askText({ title: 'Report this message?', body: 'Tell us what is wrong if you like. Our team will review it.', placeholder: 'What is the issue? (optional)', confirmLabel: 'Report', danger: true });
+    if (reason === null) return;   // Cancel means cancel
     try {
       await api.post('/me/dms/' + encodeURIComponent(dmId)
         + '/messages/' + encodeURIComponent(msg.id) + '/report', { reason });
-      window.alert('Reported. Our team will review.');
+      showNotice({ title: 'Reported', body: 'Our team will review it.' });
       await refresh();
-    } catch (e) { window.alert(e.message || 'Could not report.'); }
+    } catch (e) { showNotice(e.message || 'Could not send the report. Please try again.'); }
   };
 
   if (!data) return <div style={{ flex: 1, padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;

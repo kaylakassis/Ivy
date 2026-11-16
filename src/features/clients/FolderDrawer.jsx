@@ -11,6 +11,7 @@ import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { FOLDER_STATUS } from './folders.js';
 import PolicyAcceptances from './PolicyAcceptances.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const TABS = [
   ['bookings',  'Bookings'],
@@ -203,8 +204,8 @@ export default function FolderDrawer({ folder, clients, onClose: onCloseNow, onU
           </div>
 
           <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-            <button onClick={() => {
-                if (window.confirm('Delete this folder? Everything inside stays where it is; it just won\'t be grouped any more.')) onDelete();
+            <button onClick={async () => {
+                if ((await confirmAction({ title: 'Delete this folder?', body: 'Everything inside stays where it is. It just will not be grouped any more.', confirmLabel: 'Delete folder', danger: true }))) onDelete();
               }}
               style={{ fontSize: 12, color: 'var(--danger)', background: 'transparent', padding: '6px 0', border: 0, cursor: 'pointer' }}>
               Delete folder

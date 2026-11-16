@@ -20,6 +20,7 @@ import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { isNative } from '../../lib/platform.js';
 import { useOffline, useSnapshot } from '../../lib/useOffline.js';
 import OfflineMessages from '../../components/offline/OfflineMessages.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function Messages() {
   // ?group=<id> (group-chat push notifications, api/_lib/groupChat.js)
@@ -387,9 +388,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
     if (r?.thread) onPatchThread?.(thread.id, { blocked: !!r.thread.blocked, blockedByMe: !!r.thread.blockedByMe });
   };
   const blockClient = async () => {
-    const okay = window.confirm(
-      `Block ${thread.clientName}? They won't be able to message you and you won't be able to message them. You can unblock any time in Account → Blocked.`,
-    );
+    const okay = (await confirmAction({ title: `Block ${thread.clientName}?`, body: 'They will not be able to message you and you will not be able to message them. You can unblock any time in Account, under Blocked.', confirmLabel: 'Block', danger: true }));
     if (!okay) return;
     setBlockBusy(true);
     try { await ownerModeration.block(thread.clientId); await syncBlockFlags(); }

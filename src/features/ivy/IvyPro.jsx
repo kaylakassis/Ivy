@@ -17,6 +17,7 @@ import { stagger } from '../../components/motion/stagger.jsx';
 import { usePhotoAttach, PhotoButton, PhotoTray } from './PhotoAttach.jsx';
 import { preparePhotosForIvy } from '../../lib/ivyImage.js';
 import DictationButton from '../../components/DictationButton.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function IvyPro() {
   const [tweaks] = useTweaks();
@@ -107,7 +108,8 @@ export default function IvyPro() {
       send(t, { photos: photoAttach.photos.length, pieces: photoAttach.pieces });
       photoAttach.clear();
     } else {
-      send(t);
+      // Not sent (offline, or Ivy could not be reached): put the words back.
+      Promise.resolve(send(t)).then((r) => { if (r && r.ok === false && r.retryText) setDraft((d) => d || r.retryText); }).catch(() => {});
     }
   };
 
@@ -390,7 +392,8 @@ function SessionRow({ session, active, onOpen, onRemove }) {
         flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
       }}>{session.title}</div>
-      <button onClick={(e) => { e.stopPropagation(); onRemove(); }}
+      <button onClick={async (e) => { e.stopPropagation(); if (await confirmAction({ title: 'Delete this chat?', body: 'The conversation is removed for good. Anything Ivy already did for you stays done.', confirmLabel: 'Delete chat', danger: true })) onRemove(); }}
+        aria-label={`Delete chat: ${session.title || 'chat'}`}
         style={{ color: 'var(--muted)', opacity: 0.7, padding: 2, display: 'inline-flex' }}
         title="Delete chat">
         <Icons.X size={11}/>

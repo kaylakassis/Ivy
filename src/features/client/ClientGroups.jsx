@@ -13,6 +13,7 @@ import { useVoiceMemo } from '../../lib/speech.js';
 import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';
+import { confirmAction, showNotice } from '../../lib/confirm.js';
 
 function fmtTime(iso) {
   if (!iso) return '';
@@ -117,7 +118,7 @@ export default function ClientGroups() {
             groupId={selected.id}
             onBack={() => isMobile && setSelectedId(null)}
             onLeave={async () => {
-              if (!window.confirm('Leave this group?')) return;
+              if (!(await confirmAction({ title: 'Leave this group?', confirmLabel: 'Leave', danger: true }))) return;
               await api.post('/me/groups/' + encodeURIComponent(selected.id) + '/leave', {});
               setSelectedId(null);
               refresh();
@@ -152,7 +153,7 @@ function GroupView({ groupId, onBack, onLeave }) {
       // consumes the param and opens the new conversation.
       navigate(`/me/messages?dm=${r.dm.id}`);
     } catch (err) {
-      window.alert(err.message || 'Could not start DM.');
+      showNotice(err.message || 'Could not start the conversation. Please try again.');
     }
   };
 
@@ -207,7 +208,7 @@ function GroupView({ groupId, onBack, onLeave }) {
         });
         setPendingFiles((p) => [...p, { url: uploaded.url, type: f.type, name: f.name }]);
       } catch (err) {
-        window.alert(`Couldn't upload ${f.name}: ${err.message}`);
+        showNotice(`Couldn't upload ${f.name}: ${err.message}`);
       }
     }
   };
@@ -250,7 +251,7 @@ function GroupView({ groupId, onBack, onLeave }) {
       setPendingFiles([]);
       setReplyingTo(null);
     } catch (err) {
-      window.alert(err.message || 'Send failed.');
+      showNotice(err.message || 'Your message did not send. Please try again.');
     } finally { setSending(false); }
   };
 
@@ -277,7 +278,7 @@ function GroupView({ groupId, onBack, onLeave }) {
         }),
       }) : d);
     } catch (err) {
-      window.alert(err.message || 'Failed.');
+      showNotice(err.message || 'That did not work. Please try again.');
     }
   };
 
@@ -318,7 +319,7 @@ function GroupView({ groupId, onBack, onLeave }) {
               await api.post('/me/groups/' + encodeURIComponent(groupId) + '/mute', {});
             }
             await refresh();
-          } catch (err) { window.alert(err.message || 'Failed.'); }
+          } catch (err) { showNotice(err.message || 'That did not work. Please try again.'); }
         }} style={{ padding: '6px 10px', fontSize: 12 }}>
           {group.muted ? 'Unmute' : 'Mute'}
         </button>

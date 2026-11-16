@@ -9,6 +9,7 @@ import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { minToHM, parseISO } from './utils.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 const OFFER_OPTIONS = [
   { v: 1, label: '1 hour' },
@@ -41,6 +42,7 @@ export default function WaitlistDrawer({ services, settings, onPatchSettings, on
     try { await onPatchSettings(p); } catch (e) { setErr(e.message || 'Could not save'); } finally { setSavingSetting(false); }
   };
   const remove = async (e) => {
+    if (!(await confirmAction({ title: `Take ${e.clientName || 'this person'} off the waitlist?`, body: 'They will not be offered a time unless they join again.', confirmLabel: 'Remove', danger: true }))) return;
     setErr(null);
     try { await api.del('/waitlist/' + e.id); setNotice(`${e.clientName} was taken off the list.`); await load(); }
     catch (x) { setErr(x.message || 'Could not remove'); }

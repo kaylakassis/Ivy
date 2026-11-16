@@ -21,6 +21,7 @@ import { TimeInput } from '../calendar/Drawer.jsx';
 import { slugify, WEEKDAYS_LONG, minToHM } from '../calendar/utils.js';
 import { WhatIsShared } from './AcceptShopInvite.jsx';
 import { hoursLines } from './shopHelpers.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 const sectionTitle = { fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)', margin: '0 0 10px' };
 const lbl = { display: 'block', fontSize: 12.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 };
@@ -539,8 +540,7 @@ function TeamPanel({ shop, members, meta, reload }) {
     catch (ex) { setErr(ex.message || 'Could not update the team'); }
   };
   const remove = async (m) => {
-    const what = m.status === 'invited' ? `Cancel the invite for ${m.inviteEmail || m.businessName}?` : `Remove ${m.businessName} from ${shop.name}? Their listing comes off right away and they are told. Their own booking page is unchanged.`;
-    if (!window.confirm(what)) return;
+    if (!(await confirmAction((m.status === 'invited' ? { title: `Cancel the invite for ${m.inviteEmail || m.businessName}?`, confirmLabel: 'Cancel invite', cancelLabel: 'Keep invite', danger: true } : { title: `Remove ${m.businessName} from ${shop.name}?`, body: 'Their listing comes off right away and they are told. Their own booking page is unchanged.', confirmLabel: 'Remove', danger: true })))) return;
     setErr(null);
     try { await api.del(`/shops/${encodeURIComponent(shop.id)}/members`, { memberId: m.id }); reload(); }
     catch (ex) { setErr(ex.message || 'Could not remove them'); }
@@ -652,7 +652,7 @@ function SharePanel({ shop, onChange, onDeleted }) {
     finally { setBusy(false); }
   };
   const del = async () => {
-    if (!window.confirm(`Delete the shop page "${shop.name}"? The page goes away for good. Every pro keeps their own booking page.`)) return;
+    if (!(await confirmAction({ title: `Delete the shop page "${shop.name}"?`, body: 'The page goes away for good. Every pro keeps their own booking page.', confirmLabel: 'Delete shop page', danger: true }))) return;
     setBusy(true); setErr(null);
     try { await api.del(`/shops/${encodeURIComponent(shop.id)}`); onDeleted(); }
     catch (e) { setErr(e.message || 'Could not delete'); setBusy(false); }
@@ -726,7 +726,7 @@ function MyListing({ entry, meta, onBack }) {
     finally { setBusy(false); }
   };
   const leave = async () => {
-    if (!window.confirm(`Leave ${shop.name}? Your listing comes off their page right away and nothing of yours stays on it. Your own booking page is unchanged.`)) return;
+    if (!(await confirmAction({ title: `Leave ${shop.name}?`, body: 'Your listing comes off their page right away and nothing of yours stays on it. Your own booking page is unchanged.', confirmLabel: 'Leave', danger: true }))) return;
     setBusy(true); setErr(null);
     try { await api.del(`/shops/${encodeURIComponent(shop.id)}/listing`); onBack(); }
     catch (ex) { setErr(ex.message || 'Could not leave'); setBusy(false); }

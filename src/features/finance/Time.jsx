@@ -7,6 +7,8 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useTimeEntries } from './timeState.js';
+import { showNotice } from '../../lib/confirm.js';
+import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
 const STATUS_META = {
   running: { label: 'Running', color: 'var(--accent)' },
@@ -68,11 +70,11 @@ export default function Time() {
     if (selStats.count === 0) return;
     let clientId = selStats.clientIds[0] || null;
     if (selStats.clientIds.length > 1) {
-      window.alert('Pick entries for a single client at a time, or assign them to clients first.');
+      showNotice('Pick entries for a single client at a time, or assign them to clients first.');
       return;
     }
     if (!clientId) {
-      window.alert('These entries don\'t have a client. Set one before billing.');
+      showNotice('These entries don\'t have a client. Set one before billing.');
       return;
     }
     try {
@@ -82,9 +84,9 @@ export default function Time() {
       }), clientId);
       clearSel();
       nav('/finance');
-      window.alert(`Created invoice ${inv.number} from ${selStats.count} entr${selStats.count === 1 ? 'y' : 'ies'}.`);
+      showNotice(`Created invoice ${inv.number} from ${selStats.count} entr${selStats.count === 1 ? 'y' : 'ies'}.`);
     } catch (ex) {
-      window.alert(ex.message || 'Could not bill');
+      showNotice(ex.message || 'Could not create the invoice. Please try again.');
     }
   };
 
@@ -227,7 +229,7 @@ function Timer({ running, defaultRate, onStart, onStop }) {
         hourlyRate: Number(hourlyRate) || defaultRate || 0,
       });
     } catch (ex) {
-      window.alert(ex.message || 'Could not start');
+      showNotice(ex.message || 'Could not start the timer. Please try again.');
     } finally { setBusy(false); }
   };
   const stop = async () => {
@@ -377,6 +379,9 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
   const [hours, setHours]       = useState(((entry.durationSeconds || 0) / 3600).toFixed(2));
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  // Closing with unsaved changes asks first instead of quietly dropping them.
+  const guard = useDiscardGuard({ description, clientId, serviceId, hourlyRate, billable, hours });
+  const close = () => { if (!busy) guard.close(onClose); };
   const [clients, setClients] = useState([]);
   const [services, setServices] = useState([]);
 
@@ -396,16 +401,16 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
         hourlyRate: Number(hourlyRate) || 0,
         billable,
         durationSeconds: seconds,
-      });
+      }); guard.markSaved();
     } catch (ex) {
-      window.alert(ex.message || 'Save failed');
+      showNotice(ex.message || 'That did not save. Please try again.');
     } finally { setBusy(false); }
   };
 
   const isLocked = entry.status === 'billed';
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
@@ -424,7 +429,7 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
               {description || 'Untitled entry'}
             </h3>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
+          <button className="btn btn-ghost" onClick={close} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -499,7 +504,7 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
                 </button>
               )}
               <div style={{ flex: 1 }}/>
-              <button className="btn btn-outline" onClick={onClose} disabled={busy}>Close</button>
+              <button className="btn btn-outline" onClick={close} disabled={busy}>Close</button>
               {!isLocked && (
                 <button className="btn btn-primary" onClick={submit} disabled={busy}>
                   {busy ? 'Saving…' : 'Save'}

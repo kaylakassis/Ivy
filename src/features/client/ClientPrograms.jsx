@@ -11,6 +11,7 @@ import { ProgressBar } from '../programs/courseUi.jsx';
 import { useProgramExtras, memberTabs, TabBar, ProgramTabBody } from '../programs/ProgramTabs.jsx';
 import { BadgeCelebration, EngagementStrip, useEngagement } from '../programs/Engagement.jsx';
 import { SkelCards, EmptyCard } from './portalUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 // "Access until <date>" for a fixed window or a subscription the member has
 // already cancelled, "Renews <date>" while a subscription is still live,
@@ -70,7 +71,7 @@ export function ClientProgram() {
   useEffect(() => { api.get('/me/programs').then((r) => setMine((r.programs || []).find((p) => p.id === id) || null)).catch(() => {}); }, [id]);
   const openLesson = (itemId) => navigate(`/me/programs/${id}/lessons/${itemId}`);
   const cancel = async () => {
-    if (!window.confirm('Cancel this subscription? You keep access until the end of the period you already paid for.')) return;
+    if (!(await confirmAction({ title: 'Cancel this subscription?', body: 'You keep access until the end of the period you already paid for.', confirmLabel: 'Cancel subscription', cancelLabel: 'Keep subscription', danger: true }))) return;
     try {
       const r = await api.del(`/me/programs/${id}/subscription`);
       setCancelMsg(`Cancelled. Access continues until ${r.accessUntil ? new Date(r.accessUntil).toLocaleDateString() : 'the end of the current period'}.`);

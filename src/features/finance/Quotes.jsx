@@ -8,6 +8,8 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { fmtDateOnly, localISODate } from '../../lib/dateOnly.js';
+import { confirmAction } from '../../lib/confirm.js';
+import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -174,6 +176,11 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
     api.get('/clients').then((r) => setClients(r.clients || [])).catch(() => {});
   }, []);
 
+  // Closing with unsaved changes asks first (a new estimate is not stored
+  // anywhere until Save, so closing used to throw the whole thing away).
+  const guard = useDiscardGuard({ clientId, items, taxRate, discount, notes, issueDate, expiryDate });
+  const close = () => { if (!busy) guard.close(onClose); };
+
   // Count only items included by default (required + default-selected
   // options) so the owner's total preview matches the client's starting view.
   const subtotal = useMemo(() => items
@@ -197,9 +204,11 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
       };
       if (isNew) {
         const r = await api.post('/quotes', payload);
+        guard.markSaved();
         if (afterSave) await afterSave(r.quote);
       } else {
         const r = await api.patch('/quotes/' + quote.id, payload);
+        guard.markSaved();
         if (afterSave) await afterSave(r.quote);
       }
       await onChanged();
@@ -221,7 +230,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
 
   const remove = async () => {
     if (!quote) return;
-    if (!window.confirm('Delete this draft estimate?')) return;
+    if (!(await confirmAction({ title: 'Delete this draft estimate?', confirmLabel: 'Delete', danger: true }))) return;
     setBusy(true);
     try {
       await api.del('/quotes/' + quote.id);
@@ -233,7 +242,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
   const canSend = !isLocked && (!quote || quote.status === 'draft' || quote.status === 'sent');
 
   return (
-    <div onClick={busy ? null : onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
@@ -251,7 +260,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
               {quote?.resultingInvoiceId && ' · invoice drafted'}
             </div>
           </div>
-          <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
+          <button className="btn btn-ghost" onClick={close} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -406,7 +415,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
             </button>
           )}
           <div style={{ flex: 1 }}/>
-          <button className="btn btn-outline" onClick={onClose} disabled={busy}>Close</button>
+          <button className="btn btn-outline" onClick={close} disabled={busy}>Close</button>
           {!isLocked && (
             <button className="btn btn-outline" onClick={() => save()} disabled={busy}>
               {busy ? 'Saving…' : 'Save draft'}

@@ -14,6 +14,7 @@ import { Leaderboard } from './Engagement.jsx';
 import { OwnerCheckins } from './Checkins.jsx';
 import { CohortsPanel, CohortSelect, useCohorts } from './Cohorts.jsx';
 import CouponsSheet from './Coupons.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function ProgramsPage() {
   return <Builder/>;
@@ -174,7 +175,7 @@ function ProgramDetail({ id, onBack }) {
   const { program, items, members } = data;
   const publicUrl = `${window.location.origin}/p/${program.id}`;
   const toggle = async () => { try { await api.patch(`/programs/${id}`, { status: program.status === 'published' ? 'draft' : 'published' }); load(); } catch (e) { setErr(e.message); } };
-  const archive = async () => { if (!window.confirm('Archive this program? It stops being sold. Current members keep their access.')) return; try { await api.del(`/programs/${id}`); onBack(); } catch (e) { setErr(e.message); } };
+  const archive = async () => { if (!(await confirmAction({ title: 'Archive this program?', body: 'It stops being sold. Current members keep their access.', confirmLabel: 'Archive', danger: true }))) return; try { await api.del(`/programs/${id}`); onBack(); } catch (e) { setErr(e.message); } };
   const startRefund = (m) => { setRefunding(m.id); setRefundAmount(''); setRefundReason(''); setErr(null); setRefundNote(null); };
   const refund = async (m) => {
     setRefundBusy(true); setErr(null);
@@ -189,10 +190,8 @@ function ProgramDetail({ id, onBack }) {
   };
   const revoke = async (m) => {
     const who = m.clientName || m.clientEmail;
-    const q = m.stripeSubscriptionId && !m.cancelAtPeriodEnd
-      ? `Remove ${who}'s access? This also cancels their subscription right away, so they are not charged again.`
-      : `Remove ${who}'s access?`;
-    if (!window.confirm(q)) return;
+    const cancelsSub = !!m.stripeSubscriptionId && !m.cancelAtPeriodEnd;
+    if (!(await confirmAction({ title: `Remove ${who}'s access?`, body: cancelsSub ? 'This also cancels their subscription right away, so they are not charged again.' : undefined, confirmLabel: 'Remove access', danger: true }))) return;
     try { await api.del(`/programs/${id}/members?enrollmentId=${m.id}`); load(); } catch (e) { setErr(e.message); }
   };
   const copy = async () => { try { await navigator.clipboard.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { window.prompt('Copy this link', publicUrl); } };

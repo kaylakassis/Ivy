@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import { Sheet, Field } from './communityUi.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const fmt = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
 
@@ -19,7 +20,7 @@ export function CohortsPanel({ programId, data, reload, onChanged }) {
   const [err, setErr] = useState(null);
   if (!data) return null;
   const remove = async (c) => {
-    if (!window.confirm(`Remove the ${c.name} cohort?`)) return;
+    if (!(await confirmAction({ title: `Remove the ${c.name} cohort?`, confirmLabel: 'Remove', danger: true }))) return;
     setErr(null);
     try { await api.del(`/programs/${programId}/cohorts?cohortId=${c.id}`); reload(); } catch (e) { setErr(e.message); }
   };

@@ -22,6 +22,7 @@ import { CATEGORIES } from '../../lib/categories.js';
 import UserProfileSheet, { relTime, fmtDateTime } from './UserProfileSheet.jsx';
 import AccountabilityPartnerTab from './AccountabilityPartnerTab.jsx';
 import RiskTab from './RiskTab.jsx';
+import { confirmAction, showNotice } from '../../lib/confirm.js';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
@@ -1896,7 +1897,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
           </button>
           <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
             onClick={async () => {
-              if (!confirm(`Sign in as ${user.email}? You'll see the app exactly as they do, with a banner up top to stop.`)) return;
+              if (!(await confirmAction({ title: `Sign in as ${user.email}?`, body: 'You will see the app exactly as they do, with a banner up top to stop.', confirmLabel: 'Sign in as them' }))) return;
               setBusy('Impersonating'); setErr(null);
               try {
                 await api.post('/admin/impersonate', { userId: user.id });
@@ -1929,7 +1930,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
             <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12, color: 'var(--danger)' }}
               title="Remove free access - they return to the normal trial/paywall."
               onClick={async () => {
-                if (!confirm(`Revoke free access for ${user.email}?`)) return;
+                if (!(await confirmAction({ title: `Revoke free access for ${user.email}?`, body: 'They return to the normal trial and paywall.', confirmLabel: 'Revoke', danger: true }))) return;
                 await action('Free access revoked',
                   () => api.del('/admin/comp-invites?email=' + encodeURIComponent(user.email)));
               }}>
@@ -1942,7 +1943,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
                 const m = prompt('Free access for how many months? Leave blank for permanent.');
                 if (m === null) return;
                 const months = m.trim() ? Number(m.trim()) : null;
-                if (m.trim() && (!Number.isFinite(months) || months <= 0)) { alert('Enter a positive number of months, or leave blank.'); return; }
+                if (m.trim() && (!Number.isFinite(months) || months <= 0)) { showNotice('Enter a positive number of months, or leave blank.'); return; }
                 await action('Free access granted',
                   () => api.post('/admin/comp-invites', { email: user.email, months, note: 'Granted from Users tab' }));
               }}>
@@ -2245,7 +2246,7 @@ function EditAffiliateModal({ a, onClose, onChanged }) {
     } catch (e) { setErr(e.message); setBusy(false); }
   };
   const remove = async () => {
-    if (!confirm(`Delete affiliate ${a.code}? Past attribution rows will also be removed.`)) return;
+    if (!(await confirmAction({ title: `Delete affiliate ${a.code}?`, body: 'Past attribution rows will also be removed.', confirmLabel: 'Delete', danger: true }))) return;
     setBusy(true); setErr(null);
     try { await api.del(`/admin/affiliates/${a.id}`); onChanged(); }
     catch (e) { setErr(e.message); setBusy(false); }
@@ -2540,7 +2541,7 @@ function BlastTab() {
     finally { setBusy(false); }
   };
   const send = async () => {
-    if (!confirm(`Send to every "${BLAST_SEGMENTS.find((s) => s.id === segment)?.label}" recipient?`)) return;
+    if (!(await confirmAction({ title: `Send to every "${BLAST_SEGMENTS.find((s) => s.id === segment)?.label}" recipient?`, body: 'Once it is sent it cannot be called back.', confirmLabel: 'Send' }))) return;
     setBusy(true); setErr(null); setResult(null);
     try {
       const r = await api.post('/admin/email-blast', { segment, purpose, subject, html, heading });

@@ -530,6 +530,17 @@ function CreateDocumentModal({ onCreate, onCreateFromPdf, myTemplates = [], onUs
             <Icons.Arrow size={13} stroke="var(--muted)"/>
           </button>
 
+          {/* Shown here, at the top, where the owner is looking. It used to
+              sit under the whole template list, off the bottom of the
+              screen, so a failed upload looked like nothing had happened. */}
+          {err && (
+            <div role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} style={{
+              marginBottom: 12, padding: '10px 12px', borderRadius: 8,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              color: 'var(--danger)', fontSize: 13, lineHeight: 1.45,
+            }}>{err}</div>
+          )}
+
           {myTemplates.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div className="metric-label" style={{ marginBottom: 8 }}>Your templates</div>
@@ -695,13 +706,6 @@ function CreateDocumentModal({ onCreate, onCreateFromPdf, myTemplates = [], onUs
             </div>
           )}
 
-          {err && (
-            <div style={{
-              marginTop: 14, padding: '8px 12px', borderRadius: 8,
-              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-              color: 'var(--danger)', fontSize: 12.5,
-            }}>{err}</div>
-          )}
         </div>
       </div>
     </div>

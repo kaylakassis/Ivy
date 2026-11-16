@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import { Icons } from '../../components/Icons.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function ClientGallery({ client, onSave }) {
   const photos = Array.isArray(client.galleryPhotos) ? client.galleryPhotos : [];
@@ -85,7 +86,7 @@ export default function ClientGallery({ client, onSave }) {
   };
 
   const removePhoto = useCallback(async (id) => {
-    if (!confirm('Remove this photo?')) return;
+    if (!(await confirmAction({ title: 'Remove this photo?', confirmLabel: 'Remove', danger: true }))) return;
     const next = photos.filter((p) => p.id !== id);
     await onSave({ galleryPhotos: next });
     setLightboxIdx(null);

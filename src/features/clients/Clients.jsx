@@ -76,7 +76,10 @@ export default function Clients() {
     const t = setTimeout(() => setAddNotice(null), 8000);
     return () => clearTimeout(t);
   }, [addNotice]);
-  const { isMobile } = useViewport();
+  const { isMobile, isTablet } = useViewport();
+  // The client table needs about 900px. On an iPad held upright it squeezed
+  // names down to two letters, so that width gets the card list too.
+  const cardList = isMobile || isTablet;
 
   // Folders (stored as projects). Any client can become a folder: their
   // bookings, invoices, quotes and documents in one place. The list
@@ -396,7 +399,7 @@ export default function Clients() {
           to a stacked card list since six fixed-width columns can't fit
           a phone viewport without horizontal scroll. */}
       <div className="card stagger" style={{ overflow: 'hidden' }}>
-        {!isMobile && (
+        {!cardList && (
           <div style={{
             display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
             padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -421,7 +424,7 @@ export default function Clients() {
             />
           </div>
         ) : rows.map((c, i) => (
-          <GrowIn key={c.id} fresh={freshIds.has(c.id)}>{isMobile ? (
+          <GrowIn key={c.id} fresh={freshIds.has(c.id)}>{cardList ? (
             <ClientCardMobile client={c} first={i === 0} index={i}
               metrics={metricsById[c.id]}
               folders={foldersByClient[c.id]} folderBusy={makingFolderFor === c.id}

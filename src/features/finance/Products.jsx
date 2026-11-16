@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useProducts } from './posState.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 const LOW_STOCK = 3;
 const blank = { name: '', sku: '', price: '', cost: '', category: '', trackStock: true, stockQty: '0' };
@@ -56,7 +57,7 @@ export default function Products() {
                 ) : <span style={{ fontSize: 12, color: 'var(--muted)' }}>untracked</span>}
               </div>
               <button className="btn btn-ghost" onClick={() => setEditing(p.id)} style={{ padding: 6 }} aria-label="Edit"><Icons.Edit size={14}/></button>
-              <button className="btn btn-ghost" onClick={() => { if (confirm(`Archive ${p.name}?`)) remove(p.id); }} style={{ padding: 6, color: 'var(--danger)' }} aria-label="Delete"><Icons.Trash size={14}/></button>
+              <button className="btn btn-ghost" onClick={async () => { if ((await confirmAction({ title: `Archive ${p.name}?`, confirmLabel: 'Archive', danger: true }))) remove(p.id); }} style={{ padding: 6, color: 'var(--danger)' }} aria-label="Delete"><Icons.Trash size={14}/></button>
             </div>
           ))}
           {archived.length > 0 && (

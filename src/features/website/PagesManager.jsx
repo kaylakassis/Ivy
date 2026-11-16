@@ -6,6 +6,7 @@
 import React, { useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { usePointerReorder, gripKeyDown } from './usePointerReorder.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function PagesManager({ pages, currentPageId, onSelect, onMove, onMoveTo, onRename, onRemove, onClose, mobile }) {
   const listRef = useRef(null);
@@ -71,7 +72,7 @@ export default function PagesManager({ pages, currentPageId, onSelect, onMove, o
                 )}
                 {!isHome && (
                   <IconBtn label={`Delete ${p.title}`} text={mobile ? 'Delete' : null} danger size={tap}
-                    onClick={() => { if (window.confirm(`Delete page "${p.title}"? The sections on it will be removed.`)) onRemove(p.id); }}>
+                    onClick={async () => { if ((await confirmAction({ title: `Delete the page "${p.title}"?`, body: 'The sections on it will be removed.', confirmLabel: 'Delete page', danger: true }))) onRemove(p.id); }}>
                     <Icons.Trash size={13}/>
                   </IconBtn>
                 )}

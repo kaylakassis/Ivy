@@ -16,6 +16,7 @@ import DocumentPreview from './DocumentPreview.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { FIELD_TYPES } from './fieldTypes.js';
+import { confirmAction } from '../../lib/confirm.js';
 
 export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf, onVoid, onSelfSign, onSaveTemplate, onSendTemplate }) {
   const { ctx } = useUserContext();
@@ -35,9 +36,28 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
   const [note, setNote] = useState(null);
   const fileInputRef = useRef(null);
 
-  useEscapeKey(onClose);
-
   const isEditable = doc.status === 'draft' || doc.status === 'voided';
+  // Closing never loses work: a draft with unsaved changes is saved first.
+  // If the save fails the editor stays open and says so.
+  const close = async () => {
+    if (busy) return;
+    const startFields = doc.fields?.length ? doc.fields : defaultFields(doc.kind);
+    const dirty = isEditable && (
+      name !== doc.name || body !== (doc.contentHtml || '') || JSON.stringify(fields) !== JSON.stringify(startFields));
+    if (dirty) {
+      setBusy(true); setErr(null);
+      try { await onSave({ name: name.trim() || 'Untitled', contentHtml: body, fields }); }
+      catch (e) {
+        setErr(`${e.message || 'Your changes did not save.'} They are still here: check your connection and press Save draft.`);
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
+    onClose();
+  };
+  useEscapeKey(close);
+
   const isPdf = doc.kind === 'pdf' && !!doc.fileUrl;
   // The owner is a signer and it's their turn right now.
   const myTurn = doc.status === 'sent'
@@ -85,7 +105,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
   });
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 110,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
@@ -128,7 +148,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
               </MobileTabBtn>
             </div>
           )}
-          <button className="btn btn-ghost" onClick={onClose}
+          <button className="btn btn-ghost" onClick={close}
             aria-label="Close" style={{ padding: 8 }}>
             <Icons.X size={15}/>
           </button>
@@ -401,7 +421,16 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
               {(doc.status === 'sent' || doc.status === 'declined') && onVoid && (
                 <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} disabled={busy}
                   title="Void this document so you can edit it and send a fresh draft"
-                  onClick={async () => { setBusy(true); try { await onVoid(); } finally { setBusy(false); } }}>
+                  onClick={async () => {
+                    if (!(await confirmAction({
+                      title: 'Void this document?',
+                      body: doc.status === 'declined'
+                        ? 'It goes back to a draft so you can edit it and send it again.'
+                        : 'The signing link you sent stops working, and the document goes back to a draft so you can edit it and send it again.',
+                      confirmLabel: 'Void', danger: true,
+                    }))) return;
+                    setBusy(true); try { await onVoid(); } finally { setBusy(false); }
+                  }}>
                   Void {doc.status === 'declined' ? '& edit' : ''}
                 </button>
               )}

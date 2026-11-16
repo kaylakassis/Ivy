@@ -449,7 +449,7 @@ function BookingSheet({ o, client, workspaceId, full, staff, onClose: onCloseNow
                     <Icons.Check size={14} sw={2.2}/> {busy ? 'Saving…' : 'Mark complete'}
                   </button>
                   {!showNotes && (
-                    <button className="btn btn-outline" disabled={busy} onClick={() => setShowNotes(true)} title="Add a note">
+                    <button className="btn btn-outline" disabled={busy} onClick={() => setShowNotes(true)} title="Add a note" aria-label="Add a note">
                       <Icons.Edit size={14}/>
                     </button>
                   )}

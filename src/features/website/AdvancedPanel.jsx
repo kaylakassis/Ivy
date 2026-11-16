@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { EditorContext, LinkField } from './editorKit.jsx';
+import { confirmAction } from '../../lib/confirm.js';
 
 const TABS = [
   { id: 'domain',    label: 'Domain',    icon: 'Globe' },
@@ -335,7 +336,7 @@ function HistoryTab({ restoreVersion }) {
   };
   useEffect(() => { reload(); }, []);
   const restore = async (id) => {
-    if (!confirm('Roll back to this version? Your current state will be saved as a new version so you can undo.')) return;
+    if (!(await confirmAction({ title: 'Roll back to this version?', body: 'Your current state will be saved as a new version so you can undo.', confirmLabel: 'Roll back' }))) return;
     setBusy(true);
     try {
       // Through the editor so it picks up the restored site (and no pending

@@ -8,6 +8,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { confirmAction } from '../../lib/confirm.js';
+import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
 function fmtMoney(cents) {
   return '$' + (Number(cents || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -75,7 +77,7 @@ export default function Memberships() {
     } finally { setBusy(false); }
   };
   const archive = async (id) => {
-    if (!window.confirm("Archive this tier? Existing members keep their subscriptions until they cancel.")) return;
+    if (!(await confirmAction({ title: 'Archive this tier?', body: 'Existing members keep their subscriptions until they cancel.', confirmLabel: 'Archive', danger: true }))) return;
     setBusy(true); setError(null);
     try {
       await api.del('/memberships/' + id);
@@ -330,6 +332,9 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
   const [perks, setPerks] = useState((tier?.perks || []).join('\n'));
   const [active, setActive] = useState(tier ? !!tier.active : true);
   const [err, setErr] = useState(null);
+  // Closing with unsaved changes asks first instead of quietly dropping them.
+  const guard = useDiscardGuard({ name, description, priceDollars, interval, perks, active });
+  const close = () => { if (!busy) guard.close(onClose); };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -356,7 +361,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
   };
 
   return (
-    <div onClick={busy ? null : onClose} style={{
+    <div onClick={close} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
@@ -380,7 +385,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
                 fontFamily: 'inherit',
               }}/>
           </div>
-          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }} aria-label="Close">
+          <button type="button" className="btn btn-ghost" onClick={close} style={{ padding: 8 }} aria-label="Close">
             <Icons.X size={15}/>
           </button>
         </div>
@@ -459,7 +464,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
             </button>
           )}
           <div style={{ flex: 1 }}/>
-          <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="btn btn-outline" onClick={close} disabled={busy}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? 'Saving…' : (isNew ? 'Create tier' : 'Save')}
           </button>

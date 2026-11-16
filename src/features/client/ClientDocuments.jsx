@@ -8,6 +8,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 import { api } from '../../lib/api.js';
+import { showNotice } from '../../lib/confirm.js';
 
 const STATUS_META = {
   sent:      { label: 'Awaiting your signature', color: 'var(--warn)' },
@@ -45,7 +46,7 @@ export default function ClientDocuments() {
       const r = await api.post('/me/documents/' + id + '/access-link');
       window.open(r.url, '_blank', 'noopener');
     } catch (err) {
-      alert('Could not open document: ' + (err.message || 'unknown error'));
+      showNotice({ title: 'Could not open the document', body: err.message || 'Please try again.' });
     } finally {
       setOpening(null);
     }

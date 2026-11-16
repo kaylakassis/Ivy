@@ -4,6 +4,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useRewards } from './state.js';
 import { api } from '../../lib/api.js';
+import { confirmAction, showNotice } from '../../lib/confirm.js';
 
 const RULE_TYPE_LABELS = {
   visit:    'Visit-based',
@@ -194,9 +195,9 @@ function RewardsManager({ r }) {
             <PendingRow key={`${p.rule.id}:${p.clientId}`} entry={p} first={i === 0}
               onConfirm={() => setConfirmTarget(p)}
               onDismiss={async () => {
-                if (confirm(`Dismiss this reward for ${p.clientName}? They won't be notified, and the same milestone won't fire again.`)) {
+                if ((await confirmAction({ title: `Dismiss this reward for ${p.clientName}?`, body: 'They will not be notified, and the same milestone will not fire again.', confirmLabel: 'Dismiss', danger: true }))) {
                   try { await r.dismissPending({ ruleId: p.rule.id, clientId: p.clientId }); }
-                  catch (e) { alert('Could not dismiss: ' + (e.message || 'unknown error')); }
+                  catch (e) { showNotice({ title: 'Could not dismiss this reward', body: e.message || 'Please try again.' }); }
                 }
               }}/>
           ))}
@@ -273,7 +274,7 @@ function RewardsManager({ r }) {
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
         <button className="btn btn-ghost" style={{ fontSize: 11.5, color: 'var(--muted)' }}
-          onClick={() => { if (confirm('Pause the rewards program? Rules and redemptions are kept.')) r.setLaunched(false); }}>
+          onClick={async () => { if ((await confirmAction({ title: 'Pause the rewards program?', body: 'Rules and redemptions are kept.', confirmLabel: 'Pause' }))) r.setLaunched(false); }}>
           Pause program
         </button>
       </div>
@@ -474,7 +475,7 @@ function RuleRow({ rule, first, onToggle, onEdit, onDelete }) {
         }}/>
       </button>
       <button className="btn btn-ghost" onClick={onEdit} style={{ padding: 6 }} title="Edit"><Icons.Edit size={13}/></button>
-      <button className="btn btn-ghost" onClick={() => { if (confirm('Delete rule?')) onDelete(); }}
+      <button className="btn btn-ghost" onClick={async () => { if ((await confirmAction({ title: 'Delete this rule?', confirmLabel: 'Delete', danger: true }))) onDelete(); }}
         style={{ padding: 6, color: 'var(--danger)' }} aria-label="Delete"><Icons.Trash size={13}/></button>
     </div>
   );
@@ -542,7 +543,7 @@ function RedemptionRow({ redemption, rule, first, onDelete, onMarkUsed, onUnmark
           Undo
         </button>
       )}
-      <button className="btn btn-ghost" onClick={() => { if (confirm('Remove this redemption record?')) onDelete(); }}
+      <button className="btn btn-ghost" onClick={async () => { if ((await confirmAction({ title: 'Remove this redemption record?', confirmLabel: 'Remove', danger: true }))) onDelete(); }}
         style={{ padding: 6, color: 'var(--muted)' }} aria-label="Remove"><Icons.X size={13}/></button>
     </div>
   );
