@@ -65,7 +65,10 @@ export function cleanMailingAddress(v) {
   return String(v == null ? '' : v).replace(/[\r\n]+/g, ', ').replace(/\s+/g, ' ').replace(/(,\s*)+/g, ', ').replace(/^[,\s]+|[,\s]+$/g, '').slice(0, 300);
 }
 
-export const MAILING_ADDRESS_REQUIRED = 'Add your business mailing address before sending. Marketing emails have to show one. You can add it in Account, under Brand.';
+// The wording covers iPhone app versions built before the field existed:
+// they show this message as is, and can still add the address on the web
+// or through Ivy.
+export const MAILING_ADDRESS_REQUIRED = 'Add your business mailing address before sending. Marketing emails have to show one. Add it in Account under Brand (on joinivy.ai if you do not see it in the app yet), or ask Ivy to save it for you.';
 
 // Thrown (and answered as code mailing_address_required) when a marketing
 // send is attempted without one.
