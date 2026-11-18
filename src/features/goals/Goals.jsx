@@ -271,12 +271,11 @@ function TaskRow({ task, highlight = false, onToggle, onUpdate, onRemove }) {
             }}
             role={task.done ? undefined : 'button'}
             tabIndex={task.done ? undefined : 0}
-            aria-label={task.done ? undefined : 'Edit task'}
+            aria-label={task.done ? undefined : `Edit task: ${task.title}`}
             style={{
               flex: 1, fontSize: 13.5, cursor: task.done ? 'default' : 'text',
               textDecoration: task.done ? 'line-through' : 'none',
               color: task.done ? 'var(--muted)' : 'var(--fg)',
-              outline: 'none',
             }}>
             {task.title}
             {task.completedAuto && <span style={chipS} title="Auto-completed by app activity">auto</span>}

@@ -5,6 +5,7 @@
 // List-Unsubscribe header is attached (CAN-SPAM hygiene).
 import { sql } from './db.js';
 import { sendEmailToClientByAddress, emailShell } from './email.js';
+import { requireMailingAddress } from './branding.js';
 import { fetchBranding } from './branding.js';
 
 export const VALID_AUDIENCE = (a) =>
@@ -83,6 +84,7 @@ function renderCampaignHtml({ subject, body, branding }) {
     heading: subject,
     body: `<div style="white-space:normal;line-height:1.6">${html}</div>`,
     branding,
+    showMailingAddress: true,
   });
 }
 
@@ -120,6 +122,8 @@ async function runPool(items, concurrency, fn) {
 // sent, skipped, failed}. Marketing type → opt-outs honored (skipped),
 // unsubscribe header attached.
 export async function sendCampaign({ workspaceId, campaign }) {
+  // The one place every campaign send passes through (the app and Ivy).
+  await requireMailingAddress(workspaceId);
   const audience = (await resolveAudience(workspaceId, campaign.audience)).slice(0, MAX_RECIPIENTS);
   const { subject, html } = await buildCampaignEmail({ workspaceId, campaign });
   const counts = await runPool(audience, 5, (r) => sendEmailToClientByAddress({

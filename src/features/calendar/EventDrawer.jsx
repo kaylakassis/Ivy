@@ -11,6 +11,7 @@ import { BookingPolicyStatus } from '../clients/PolicyAcceptances.jsx';
 import BookingMoneyNotes, { useKeepDeposit } from './BookingMoneyNotes.jsx';
 import { confirmAction } from '../../lib/confirm.js';
 
+import { labelled } from '../../lib/labelled.js';
 export default function EventDrawer({
   event, services,
   onSaveBlock, onUpdateBooking, onDecideRequest, onCancelOccurrence,
@@ -1286,7 +1287,7 @@ function Field({ label, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
     </div>
   );
 }

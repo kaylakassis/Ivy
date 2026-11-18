@@ -11,6 +11,7 @@ import { useParams } from 'react-router-dom';
 import { useEmbedResize } from '../../lib/embedResize.js';
 import ArchivedBusinessCard from '../../components/ArchivedBusiness.jsx';
 
+import PrivacyNote from '../../components/PrivacyNote.jsx';
 export default function EmbedContact() {
   const { slug } = useParams();
   useEmbedResize(slug);
@@ -108,6 +109,7 @@ export default function EmbedContact() {
                 fontFamily: 'inherit', outline: 'none',
               }}/>
           </Field>
+          <PrivacyNote/>
           {err && (
             <div style={{ fontSize: 12.5, color: 'var(--danger, #9B2C2C)', padding: '4px 2px' }}>
               {err}

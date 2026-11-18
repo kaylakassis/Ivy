@@ -14,6 +14,7 @@ import { seriesAutopayLabel, fmtAmount, fmtDay, cardShort } from '../../lib/auto
 import { confirmAction } from '../../lib/confirm.js';
 import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
+import { labelled } from '../../lib/labelled.js';
 const CADENCE_LABEL = {
   weekly:    'Weekly',
   biweekly:  'Every 2 weeks',
@@ -586,7 +587,7 @@ function Field({ label, hint, children }) {
   return (
     <div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

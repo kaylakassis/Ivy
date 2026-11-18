@@ -11,6 +11,7 @@ import { fmtDateOnly, localISODate } from '../../lib/dateOnly.js';
 import { confirmAction } from '../../lib/confirm.js';
 import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
+import { labelled } from '../../lib/labelled.js';
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
   sent:     { label: 'Sent',     color: 'var(--warn)' },
@@ -451,7 +452,7 @@ function Field({ label, children }) {
   return (
     <div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
     </div>
   );
 }

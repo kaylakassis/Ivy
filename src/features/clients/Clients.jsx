@@ -384,12 +384,13 @@ export default function Clients() {
           ))}
         </div>
         <div style={{ flex: 1 }}/>
-        <div style={{
+        <div className="focus-within-ring" style={{
           display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px',
           borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
         }}>
           <Icons.Search size={13} sw={1.8} stroke="var(--muted)"/>
           <input value={query} onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search clients"
             placeholder="Search by name, email, or tag"
             style={{ border: 0, outline: 0, background: 'transparent', fontSize: 13, width: 200, color: 'var(--fg)' }}/>
         </div>

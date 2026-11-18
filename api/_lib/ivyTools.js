@@ -820,6 +820,7 @@ export const IVY_TOOLS = [
         accent_color:         { type: 'string', description: 'Hex color, e.g. #2E3168.' },
         logo_url:             { type: 'string', description: 'Public https URL of the logo image.' },
         email_signature:      { type: 'string', description: 'Plain-text signature appended to outbound emails.' },
+        mailing_address:      { type: 'string', description: "The business's postal mailing address, on one line. Printed at the bottom of marketing emails; a campaign cannot be sent without one. Never invent it: ask the owner." },
         lead_instant_reply_enabled: { type: 'boolean' },
         lead_instant_reply_message: { type: 'string' },
       },
@@ -1266,6 +1267,7 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       // The signature goes on every email to clients and the lead reply to
       // every new lead on its own: show every word, as the tool saves it.
       if (a.email_signature != null) parts.push(`email signature → "${String(a.email_signature).trim().slice(0, 2000)}"`);
+      if (a.mailing_address != null) parts.push(`mailing address → "${String(a.mailing_address).trim().slice(0, 300)}"`);
       if (a.lead_instant_reply_enabled != null) parts.push(`instant lead reply → ${a.lead_instant_reply_enabled ? 'on' : 'off'}`);
       if (a.lead_instant_reply_message != null) parts.push(`automatic reply to new leads → "${String(a.lead_instant_reply_message).trim().slice(0, 2000)}"`);
       return `Update settings: ${parts.length ? parts.join('; ') : '(no fields supplied)'}`;
@@ -3429,6 +3431,9 @@ async function send_campaign({ workspaceId, args }) {
   if (c.rows.length === 0) throw new Error('Campaign not found');
   const row = c.rows[0];
   if (row.status === 'sent' || row.status === 'sending') throw new Error('Campaign already sent');
+  // Checked first so the refusal reads as an instruction, not a failed send.
+  const { requireMailingAddress } = await import('./branding.js');
+  await requireMailingAddress(workspaceId);
   const campaign = serializeCampaign(row);
   const result = await sendCampaign({ workspaceId, campaign });
   // The emails have gone out. Failing to record that must not read as "the
@@ -3666,6 +3671,9 @@ async function update_settings({ workspaceId, args }) {
   }
   if (typeof args.email_signature === 'string') {
     patch.brand_email_signature = args.email_signature.trim().slice(0, 2000) || null;
+  }
+  if (typeof args.mailing_address === 'string') {
+    patch.biz_mailing_address = args.mailing_address.replace(/[\r\n]+/g, ', ').replace(/\s+/g, ' ').trim().slice(0, 300) || null;
   }
   if (typeof args.lead_instant_reply_enabled === 'boolean') {
     patch.lead_instant_reply_enabled = args.lead_instant_reply_enabled;

@@ -7,6 +7,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useCampaigns } from './state.js';
 import { confirmAction } from '../../lib/confirm.js';
+import { api } from '../../lib/api.js';
 
 const STATUS = {
   draft:   { label: 'Draft',   color: 'var(--muted)' },
@@ -122,6 +123,26 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
   const [busy, setBusy] = useState(null); // 'save' | 'test' | 'send'
   const [msg, setMsg] = useState(null);
   const sent = campaign.status === 'sent';
+  // The business's mailing address goes at the bottom of every marketing
+  // email (email law requires it), so a campaign cannot go out without one.
+  // null = still loading; '' = none saved yet.
+  const [mailAddr, setMailAddr] = useState(null);
+  const [savedAddr, setSavedAddr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api.get('/account/branding')
+      .then((r) => { if (!live) return; const a = r?.branding?.mailingAddress || ''; setMailAddr(a); setSavedAddr(a); })
+      .catch(() => { if (live) { setMailAddr(''); setSavedAddr(''); } });
+    return () => { live = false; };
+  }, []);
+  const saveAddr = async () => {
+    const v = (mailAddr || '').trim();
+    if (v === (savedAddr || '')) return v;
+    const r = await api.patch('/account/branding', { mailingAddress: v });
+    const a = r?.branding?.mailingAddress ?? v;
+    setMailAddr(a); setSavedAddr(a);
+    return a;
+  };
 
   const audience = audType === 'tag' ? `tag:${tag.trim()}` : audType;
 
@@ -161,6 +182,8 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
   };
   const doSend = async () => {
     if (!subject.trim()) { setMsg('Add a subject first'); return; }
+    if (!(mailAddr || '').trim()) { setMsg('Add your business mailing address first. It goes at the bottom of the email.'); return; }
+    try { await saveAddr(); } catch (e) { setMsg(e.message || 'Could not save your mailing address'); return; }
     if (!(await confirmAction({ title: `Send "${subject}" to ${count == null ? 'your recipients' : count === 1 ? '1 recipient' : `${count} recipients`}?`, body: 'Once it is sent it cannot be called back.', confirmLabel: 'Send' }))) return;
     setBusy('send'); setMsg(null);
     try { await onSave({ subject, body, audience }); await onSend(); setMsg('Sent!'); }
@@ -217,6 +240,19 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -6, marginBottom: 12 }}>
           We wrap this in your branded email template and add an unsubscribe link automatically.
         </div>
+
+        {!sent && mailAddr !== null && (
+          <>
+            <label style={lbl} htmlFor="campaign-mailing-address">Your business mailing address</label>
+            <input id="campaign-mailing-address" value={mailAddr} onChange={(e) => setMailAddr(e.target.value)}
+              onBlur={() => { saveAddr().catch(() => {}); }}
+              maxLength={300} autoComplete="street-address"
+              placeholder="Street or PO box, city, state, ZIP" style={inp}/>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -6, marginBottom: 12 }}>
+              Shown at the bottom of your marketing emails. Email law requires a postal address on them; a PO box is fine. Saved for next time.
+            </div>
+          </>
+        )}
 
         {msg && <div style={{ fontSize: 12.5, color: 'var(--accent)', marginBottom: 12 }}>{msg}</div>}
 

@@ -495,7 +495,7 @@ export const ANIMATIONS = {
 // Font-pair presets - owners can override the template's defaults.
 // Each preset names the display + body fonts; the renderer maps them
 // into the --site-font-display / --site-font-body CSS variables.
-// All presets pull from Google Fonts; the public renderer injects the
+// All presets use the self-hosted families (public/fonts/families.css); the public renderer injects the
 // CSS @import for the chosen pair (added via siteHtml.js).
 export const FONT_PAIRS = {
   fraunces_inter:     { label: 'Fraunces + Inter (classic serif + clean sans)',  display: "'Fraunces', Georgia, serif",        body: "'Inter', -apple-system, sans-serif" },

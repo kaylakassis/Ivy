@@ -41,6 +41,7 @@ Ivy is made for solo service businesses: massage therapists, coaches, hair styli
 - [Privacy Policy](https://www.joinivy.ai/privacy)
 - [Terms of Service](https://www.joinivy.ai/terms)
 - [Do Not Sell or Share My Personal Information](https://www.joinivy.ai/do-not-sell)
+- [Accessibility](https://www.joinivy.ai/accessibility)
 
 ## Ivy for specific businesses
 

@@ -1,8 +1,9 @@
 // Invoice design catalog, shared by the browser (document renderer, design
 // editor) and the server (validation, email font stacks). Pure data.
 
-// Fonts an owner can pick for invoices. `css` is the web stack, `google` the
-// Google Fonts family to load for it, `email` a safe stack for mail clients
+// Fonts an owner can pick for invoices. `css` is the web stack, `google`
+// marks a web font (served from our own /fonts/families.css; the name is
+// historical), `email` a safe stack for mail clients
 // (most never load web fonts, so each maps to a matching system family).
 export const INVOICE_FONTS = {
   system:     { label: 'Clean',          sample: 'Modern and neutral',   css: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", google: null, email: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
@@ -30,16 +31,20 @@ export function isInvoiceLayout(k) { return typeof k === 'string' && Object.prot
 export function fontCss(key) { return (INVOICE_FONTS[key] || INVOICE_FONTS.system).css; }
 export function fontEmailStack(key) { return (INVOICE_FONTS[key] || INVOICE_FONTS.system).email; }
 
-// Load the Google family for a font once (browser only). No-op for system.
+// Load the web font for an invoice once (browser only). No-op for system.
 const loaded = new Set();
 export function loadInvoiceFont(key) {
   if (typeof document === 'undefined') return;
   const f = INVOICE_FONTS[key];
   if (!f?.google || loaded.has(key)) return;
   loaded.add(key);
+  // Every invoice font is in the one self-hosted stylesheet the website
+  // builder uses; the browser only downloads the family actually shown.
+  if (document.querySelector('link[data-builder-fonts]')) return;
   const l = document.createElement('link');
   l.rel = 'stylesheet';
-  l.href = `https://fonts.googleapis.com/css2?family=${f.google}&display=swap`;
+  l.href = '/fonts/families.css';
+  l.setAttribute('data-builder-fonts', '1');
   document.head.appendChild(l);
 }
 

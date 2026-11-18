@@ -77,7 +77,7 @@ export function SiteFooter() {
         <div className="foot-cols">
           <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
           <div className="foot-col"><h5>Who it's for</h5>{FOOTER_VERTICALS.map(([slug, label]) => <a key={slug} href={`/for/${slug}`}>{label}</a>)}<a href="/features#who">All businesses</a></div>
-          <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
+          <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a><a href="/accessibility">Accessibility</a></div>
           <div className="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><SignupCta>Get started</SignupCta><a href="/me">Client portal</a></div>
         </div>
       </div>
@@ -159,13 +159,13 @@ export const BASE_CSS = `
 @media(max-width:900px){.site-root .nav-links{display:none}.site-root .nav-badge{display:none}.site-root .menu-btn{display:block}.site-root .sticky-cta{display:block}}
 `;
 
-// Loads the Google Fonts the prototype uses, once.
+// Loads the site font once (from our own server; see public/fonts/inter.css).
 export function useSiteFonts() {
   useEffect(() => {
     if (document.getElementById('site-fonts')) return;
     const l = document.createElement('link');
     l.id = 'site-fonts'; l.rel = 'stylesheet';
-    l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+    l.href = '/fonts/inter.css';
     document.head.appendChild(l);
   }, []);
 }

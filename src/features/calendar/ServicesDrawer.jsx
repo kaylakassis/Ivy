@@ -20,6 +20,7 @@ import { WEEKDAYS_SHORT, minToHM, hmToMin } from './utils.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { useReminderSettings, describeSchedule } from '../../lib/reminders.js';
 
+import { labelled } from '../../lib/labelled.js';
 const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 
 // Built-in reminder options (in minutes before appointment).
@@ -940,7 +941,7 @@ function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
     </div>
   );

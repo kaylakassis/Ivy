@@ -178,15 +178,15 @@ export default function SitePricing() {
           <p className="section-sub">Move the sliders to match your business. Numbers update live. No signup needed.</p>
           <div className="calc">
             <label>Clients you serve per month <output>{clients} clients</output></label>
-            <input type="range" min="5" max="200" value={clients} onChange={(e) => setClients(+e.target.value)} />
+            <input type="range" aria-label="Clients you serve per month" min="5" max="200" value={clients} onChange={(e) => setClients(+e.target.value)} />
             <label>Hours a week you spend on admin (billing, scheduling, follow-ups) <output>{hours} hrs/wk</output></label>
-            <input type="range" min="1" max="30" value={hours} onChange={(e) => setHours(+e.target.value)} />
+            <input type="range" aria-label="Hours a week you spend on admin" min="1" max="30" value={hours} onChange={(e) => setHours(+e.target.value)} />
             <label>Your hourly rate <output>${rate}/hr</output></label>
-            <input type="range" min="20" max="300" step="5" value={rate} onChange={(e) => setRate(+e.target.value)} />
+            <input type="range" aria-label="Your hourly rate" min="20" max="300" step="5" value={rate} onChange={(e) => setRate(+e.target.value)} />
             <label>How much of that admin you'd hand to Ivy (your guess) <output>{share}%</output></label>
-            <input type="range" min="0" max="90" step="5" value={share} onChange={(e) => setShare(+e.target.value)} />
+            <input type="range" aria-label="How much of that admin you would hand to Ivy" min="0" max="90" step="5" value={share} onChange={(e) => setShare(+e.target.value)} />
             <label>Clients who miss or cancel late (your estimate) <output>{noShowPct}%</output></label>
-            <input type="range" min="0" max="30" value={noShowPct} onChange={(e) => setNoShowPct(+e.target.value)} />
+            <input type="range" aria-label="Clients who miss or cancel late" min="0" max="30" value={noShowPct} onChange={(e) => setNoShowPct(+e.target.value)} />
             <div className="calc-grid">
               <div className="calc-cell"><div className="k">Tool savings</div><div className="v">+${MONTHLY_STACK_SAVINGS}/month</div><div className="d">compared with a typical stack of separate tools</div></div>
               <div className="calc-cell"><div className="k">Admin hours back</div><div className="v">{adminBack} hrs/mo</div><div className="d">billing + reminders, automated</div></div>

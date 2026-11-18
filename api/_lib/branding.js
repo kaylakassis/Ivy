@@ -34,7 +34,7 @@ async function fetchBrandingFromDb(workspaceId) {
   const r = await sql`
     SELECT cs.biz_name, cs.brand_logo_url, cs.brand_accent_color,
            cs.brand_email_signature, cs.brand_font, cs.invoice_layout,
-           cs.invoice_footer, cs.biz_contact, cs.slug, u.email AS owner_email
+           cs.invoice_footer, cs.biz_contact, cs.biz_mailing_address, cs.slug, u.email AS owner_email
       FROM workspaces w
       LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
       LEFT JOIN users u ON u.id = w.owner_id
@@ -56,7 +56,27 @@ async function fetchBrandingFromDb(workspaceId) {
     invoiceLayout:  isInvoiceLayout(row.invoice_layout) ? row.invoice_layout : DEFAULT_DESIGN.layout,
     invoiceFooter:  row.invoice_footer == null ? DEFAULT_DESIGN.footer : row.invoice_footer,
     contact:        row.biz_contact || '',
+    mailingAddress: cleanMailingAddress(row.biz_mailing_address),
   };
+}
+
+// One line, at most 300 characters. '' when there is none.
+export function cleanMailingAddress(v) {
+  return String(v == null ? '' : v).replace(/[\r\n]+/g, ', ').replace(/\s+/g, ' ').replace(/(,\s*)+/g, ', ').replace(/^[,\s]+|[,\s]+$/g, '').slice(0, 300);
+}
+
+export const MAILING_ADDRESS_REQUIRED = 'Add your business mailing address before sending. Marketing emails have to show one. You can add it in Account, under Brand.';
+
+// Thrown (and answered as code mailing_address_required) when a marketing
+// send is attempted without one.
+export class MailingAddressRequiredError extends Error {
+  constructor() { super(MAILING_ADDRESS_REQUIRED); this.code = 'mailing_address_required'; }
+}
+
+export async function requireMailingAddress(workspaceId) {
+  const b = await fetchBranding(workspaceId);
+  if (!b.mailingAddress) throw new MailingAddressRequiredError();
+  return b.mailingAddress;
 }
 
 // The business block a client-facing invoice carries: name, logo and the
@@ -108,6 +128,7 @@ function defaults() {
     invoiceLayout: DEFAULT_DESIGN.layout,
     invoiceFooter: DEFAULT_DESIGN.footer,
     contact: '',
+    mailingAddress: '',
   };
 }
 

@@ -17,6 +17,7 @@ import { fmtPrice, billingLabel } from './ProgramContent.jsx';
 import SalesOutline from './SalesOutline.jsx';
 import ArchivedBusinessCard, { isArchivedError } from '../../components/ArchivedBusiness.jsx';
 
+import PrivacyNote from '../../components/PrivacyNote.jsx';
 export default function PublicProgram() {
   const { id } = useParams();
   const [params] = useSearchParams();
@@ -147,6 +148,7 @@ export default function PublicProgram() {
           ) : (
             <button type="button" onClick={() => setCodeOpen(true)} style={{ alignSelf: 'flex-start', fontSize: 13, color: 'var(--accent)' }}>Apply a code</button>
           )}
+          <PrivacyNote business={business?.name}/>
           {formErr && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{formErr}</div>}
           {fullPrice ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

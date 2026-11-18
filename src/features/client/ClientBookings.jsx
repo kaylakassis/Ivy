@@ -576,7 +576,7 @@ function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
           Keep booking
         </button>
         <button className="btn btn-primary" onClick={onConfirm} disabled={busy}
-          style={{ ...actionBtn, flex: '1 1 140px', background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}>
+          style={{ ...actionBtn, flex: '1 1 140px', background: 'var(--danger)', borderColor: 'var(--danger)', color: 'var(--danger-ink, #fff)' }}>
           {busy ? 'Cancelling…' : (policy.late && policy.fee > 0 && booking.cardOnFile ? `Cancel and pay ${fmtMoney(policy.fee)}` : 'Cancel booking')}
         </button>
       </div>

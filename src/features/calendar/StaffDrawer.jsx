@@ -13,6 +13,7 @@ import Drawer, { inputSty } from './Drawer.jsx';
 import { api } from '../../lib/api.js';
 import { confirmAction } from '../../lib/confirm.js';
 
+import { labelled } from '../../lib/labelled.js';
 const COLORS = [
   '#8E826A', '#A78BFA', '#60A5FA', '#F472B6', '#FB923C',
   '#34D399', '#FBBF24', '#F87171', '#94A3B8',
@@ -407,7 +408,7 @@ function Field({ label, hint, required, children }) {
         color: 'var(--muted)', letterSpacing: '0.04em',
         textTransform: 'uppercase', marginBottom: 4,
       }}>{label}{required && <span style={{ color: 'var(--danger)' }}> *</span>}</label>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

@@ -296,7 +296,7 @@ function injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl, prefsUrlIn) 
 // set) overrides the default green; we compute a contrasting ink color
 // for button text via relative-luminance.
 // `heading` is plain text and is escaped here - pass it raw.
-export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, preheader, unsubscribeUrl }) {
+export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, preheader, unsubscribeUrl, showMailingAddress = false }) {
   // Brand tokens - the Ivy green palette the website uses (site/Chrome.jsx). Hard-coded
   // because email clients can't read CSS variables.
   const C = {
@@ -372,9 +372,11 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
   // Ivy itself as the sender - admin blasts, magic links, account
   // emails). Per-workspace transactional emails (booking confirmations,
   // invoices, etc.) carry the owner's branding and are exempt.
+  // A business's own marketing emails (campaigns, win-back and similar)
+  // carry the business's mailing address instead: showMailingAddress.
   const postalAddress = !businessName
     ? (process.env.IVY_POSTAL_ADDRESS || 'Ivy · 1209 Orange St, Wilmington, DE 19801, USA')
-    : '';
+    : (showMailingAddress ? String(branding?.mailingAddress || '').trim() : '');
   const postalBlock = postalAddress
     ? `<div style="margin-top:6px;font-size:10.5px;color:${C.muted2};letter-spacing:0.02em;">${escapeText(postalAddress)}</div>`
     : '';

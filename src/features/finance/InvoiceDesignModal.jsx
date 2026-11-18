@@ -121,7 +121,7 @@ export default function InvoiceDesignModal({ onClose }) {
                         style={{ width: 26, height: 26, borderRadius: 13, background: c, border: f.accentColor.toLowerCase() === c.toLowerCase() ? '3px solid var(--fg)' : '2px solid rgba(255,255,255,0.25)', cursor: 'pointer' }}/>
                     ))}
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)', cursor: 'pointer' }}>
-                      <input type="color" value={hexOk ? f.accentColor : '#2E3168'} onChange={(e) => set('accentColor', e.target.value)} style={{ width: 28, height: 28, padding: 0, border: 0, background: 'none', cursor: 'pointer' }}/>
+                      <input type="color" aria-label="Accent color" value={hexOk ? f.accentColor : '#2E3168'} onChange={(e) => set('accentColor', e.target.value)} style={{ width: 28, height: 28, padding: 0, border: 0, background: 'none', cursor: 'pointer' }}/>
                       Custom
                     </label>
                     <input value={f.accentColor} onChange={(e) => set('accentColor', e.target.value)} maxLength={7} style={{ ...inputS, width: 92, fontFamily: 'var(--font-num)' }}/>

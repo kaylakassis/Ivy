@@ -50,7 +50,6 @@ self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-const FONT_ORIGINS = ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'];
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -84,9 +83,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Google Fonts (CSS + woff2): stale-while-revalidate so type renders
-  // offline after the first visit.
-  if (FONT_ORIGINS.includes(url.origin)) {
+  // Web fonts (our own /fonts/ files): stale-while-revalidate so type
+  // renders offline after the first visit.
+  if (sameOrigin && url.pathname.startsWith('/fonts/')) {
     event.respondWith(staleWhileRevalidate(request));
     return;
   }

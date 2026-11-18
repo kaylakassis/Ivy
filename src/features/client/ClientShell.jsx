@@ -181,7 +181,7 @@ function ClientSidebar({ variant, data, direction }) {
           <div style={{
             fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
             textTransform: 'uppercase', color: 'var(--muted)',
-            padding: '14px 12px 4px', opacity: 0.75,
+            padding: '14px 12px 4px',
           }}>More</div>
         )}
         {compact && <div style={{ height: 1, background: 'var(--border)', margin: '6px 4px' }}/>}
@@ -340,12 +340,12 @@ function ClientTopbar({ isMobile }) {
         </h1>
       </div>
       {isMobile && pathname !== '/me/profile' && (
-        <Link to="/me/profile" aria-label="Your profile" style={{
+        <Link to="/me/profile" style={{
           width: 36, height: 36, borderRadius: 99, flexShrink: 0,
           background: 'var(--accent)', color: 'var(--accent-ink)',
           fontSize: 13, fontWeight: 600, textDecoration: 'none',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>{initialsOf(user)}</Link>
+        }}><span aria-hidden="true">{initialsOf(user)}</span><span className="sr-only">Your profile</span></Link>
       )}
     </header>
   );

@@ -120,7 +120,7 @@ export default function NotificationBell({ isMobile, plain = false }) {
       <button
         ref={buttonRef}
         type="button"
-        aria-label={unread > 0 ? `Notifications (${unread} unread)` : 'Notifications'}
+        aria-label={unread > 0 ? `Notifications, ${unread > 99 ? '99+' : unread} unread` : 'Notifications'}
         title="Notifications"
         onClick={() => setOpen((x) => !x)}
         className={plain ? 'topbar-icon-btn' : 'btn btn-outline'}
@@ -135,7 +135,7 @@ export default function NotificationBell({ isMobile, plain = false }) {
             minWidth: 18, height: 18, padding: '0 5px',
             borderRadius: 999,
             background: 'var(--danger, #B23A48)',
-            color: '#fff', fontSize: 10.5, fontWeight: 700,
+            color: 'var(--danger-ink, #fff)', fontSize: 10.5, fontWeight: 700,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             border: '2px solid var(--page, #FFFFFF)',
             boxSizing: 'content-box',

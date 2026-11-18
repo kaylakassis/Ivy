@@ -17,7 +17,7 @@ function keepPresentFontFaces(css, publicDir) {
   return css.replace(FONT_FACE, (rule) => {
     const file = rule.match(FONT_FILE)?.[1];
     if (!file) return rule;
-    return fs.existsSync(path.join(publicDir, 'fonts', path.basename(file))) ? rule : '';
+    return fs.existsSync(path.join(publicDir, 'fonts', file)) ? rule : '';
   });
 }
 function licensedFonts() {

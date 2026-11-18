@@ -20,6 +20,7 @@ import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { DetailsFields, draftFrom, detailsPatch, draftProblem } from './ClientDetailsForm.jsx';
 import { useClientFields } from './clientFields.js';
 
+import { labelled } from '../../lib/labelled.js';
 const SOURCES = ['Referral', 'Instagram', 'Website', 'Email', 'Walk-in', 'Other'];
 
 export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
@@ -239,7 +240,7 @@ function Field({ label, children }) {
   return (
     <div>
       <div className="metric-label" style={{ marginBottom: 6 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
     </div>
   );
 }

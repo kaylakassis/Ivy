@@ -5,7 +5,7 @@
   <title>Ivy - All-in-One Business Platform for Solopreneurs</title>
   <!-- Same policy the server sends as a header. Repeated here so the
        native app, which loads this file from the device, gets it too. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eM/zz3cB+LsAOAKkD2vij2YXMqlmun9pZBI9xkolzDc=' 'wasm-unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://js.squareup.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://player.vimeo.com https://www.loom.com https://*.public.blob.vercel-storage.com https://www.youtube.com https://www.youtube-nocookie.com https://www.instagram.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-eM/zz3cB+LsAOAKkD2vij2YXMqlmun9pZBI9xkolzDc=' 'wasm-unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://js.squareup.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://player.vimeo.com https://www.loom.com https://*.public.blob.vercel-storage.com https://www.youtube.com https://www.youtube-nocookie.com https://www.instagram.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="Ivy - the all-in-one business platform for solopreneurs, with an AI assistant that does your busywork: invoicing, booking, follow-ups, and more." />
   <!-- Match the dark "bold" theme on iOS Safari status bar / browser chrome. -->
@@ -25,19 +25,19 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Fonts must never block first paint. Inside the native app the bundle
        is local but this request is not; on a slow or absent network the
        fallback stacks paint immediately and web fonts swap in on arrival.
+       The font files are served from our own server (public/fonts/g), so
+       no visitor's address is sent to a third party to draw the text.
        The preload is promoted to a stylesheet from src/main.jsx: an inline
        onload handler would be blocked by the Content-Security-Policy.
        This is the only Inter request: the weights cover every font-weight
        the site and the app use (650 and 800 resolve to 700 as before), and
        id="site-fonts" tells the marketing chrome (useSiteFonts in
        site/Chrome.jsx) that the font is already on its way. -->
-  <link id="site-fonts" rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" />
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" /></noscript>
+  <link id="site-fonts" rel="preload" as="style" href="/fonts/inter.css" />
+  <noscript><link rel="stylesheet" href="/fonts/inter.css" /></noscript>
 </head>
 <body>
   <div id="root"></div>

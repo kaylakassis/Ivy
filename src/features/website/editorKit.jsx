@@ -12,6 +12,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES } from './sections.js';
 import { sectionAnchors, resolveSiteLink } from '../../lib/siteLinks.js';
 
+import { labelled } from '../../lib/labelled.js';
 // What the editors need to know about the site around them: the pages
 // (for the link picker), the sections on the page being edited (for
 // "scroll to" links), whether we are on a phone, and how to open the
@@ -42,7 +43,7 @@ export function FieldBlock({ label, hint, children }) {
   return (
     <div style={{ minWidth: 0 }}>
       {label && <label style={labelS}>{label}</label>}
-      {children}
+      {labelled(children, label)}
       {hint && <Hint>{hint}</Hint>}
     </div>
   );

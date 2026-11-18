@@ -10,6 +10,7 @@ import { publicOrigin } from '../../lib/publicUrl.js';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { CATEGORY_IDS } from '../../lib/categories.js';
 
+import { labelled } from '../../lib/labelled.js';
 const CATEGORIES = CATEGORY_IDS;
 
 export default function ShareDrawer({ settings, onSave, onClose }) {
@@ -400,7 +401,7 @@ function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{hint}</div>}
     </div>
   );

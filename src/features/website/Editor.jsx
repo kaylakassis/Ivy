@@ -1035,7 +1035,7 @@ function SiteStyleButton({ site, set }) {
               <>
                 <div>
                   <label style={fieldLabelSt}>Fonts</label>
-                  <select value={site.fontPair || ''}
+                  <select value={site.fontPair || ''} aria-label="Fonts"
                     onChange={(e) => set({ fontPair: e.target.value || null })}
                     style={fieldInputSt}>
                     <option value="">Use the template's fonts</option>

@@ -24,6 +24,7 @@ import AccountabilityPartnerTab from './AccountabilityPartnerTab.jsx';
 import RiskTab from './RiskTab.jsx';
 import { confirmAction, showNotice } from '../../lib/confirm.js';
 
+import { labelled } from '../../lib/labelled.js';
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
   { id: 'readiness',  label: 'Readiness',  icon: 'Check' },
@@ -2742,7 +2743,7 @@ function Field({ label, hint, children }) {
   return (
     <div>
       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 4 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

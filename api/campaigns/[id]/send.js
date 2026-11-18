@@ -9,6 +9,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { sendEmail } from '../../_lib/email.js';
 import { serializeCampaign, sendCampaign, buildCampaignEmail } from '../../_lib/campaigns.js';
+import { requireMailingAddress } from '../../_lib/branding.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -36,6 +37,9 @@ export default async function handler(req, res) {
 
     if (campaign.status === 'sent') return badRequest(res, 'This campaign was already sent');
     if (!campaign.subject?.trim()) return badRequest(res, 'Add a subject before sending');
+    // Before the campaign is claimed, so a refusal leaves it a draft.
+    try { await requireMailingAddress(workspaceId); }
+    catch (e) { if (e.code === 'mailing_address_required') return badRequest(res, e.message, { code: e.code }); throw e; }
 
     // Atomically claim the send: only the request that flips draft→sending
     // proceeds. A racing double-click matches 0 rows here and bails, so the

@@ -109,7 +109,7 @@ function snapshotInPage() {
   // chrome does not add a second.
   for (const link of head.querySelectorAll('link[rel="stylesheet"]')) {
     const href = link.getAttribute('href') || '';
-    if (!href.startsWith('https://fonts.googleapis.com')) continue;
+    if (href !== '/fonts/inter.css') continue;
     link.setAttribute('rel', 'preload');
     link.setAttribute('as', 'style');
   }

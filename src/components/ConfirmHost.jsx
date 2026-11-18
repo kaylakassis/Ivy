@@ -124,7 +124,7 @@ export default function ConfirmHost() {
           <button ref={okRef} type="button" className="btn btn-primary" onClick={accept}
             style={{
               minHeight: 44, flex: kind === 'notice' ? '0 1 160px' : '1 1 120px', justifyContent: 'center',
-              ...(danger ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' } : {}),
+              ...(danger ? { background: 'var(--danger)', borderColor: 'var(--danger)', color: 'var(--danger-ink, #fff)' } : {}),
             }}>{confirmLabel}</button>
         </div>
       </div>

@@ -101,8 +101,8 @@ export default function MobileDrawer({ onClose, closing = false }) {
                     <span>{item.label}</span>
                     {item.accent && !isActive && (
                       <span style={{
-                        marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-                        color: 'var(--accent)', letterSpacing: '0.06em',
+                        marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+                        color: 'var(--fg)', letterSpacing: '0.06em',
                       }}>NEW</span>
                     )}
                   </>

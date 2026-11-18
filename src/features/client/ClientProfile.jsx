@@ -513,7 +513,7 @@ function DeleteAccountSheet({ email, onClose }) {
         <div style={{ display: 'flex', gap: 10 }}>
           <button type="button" className="btn btn-outline" onClick={onClose} disabled={busy} style={{ ...actionBtn, flex: 1 }}>Keep account</button>
           <button type="submit" className="btn btn-primary" disabled={busy || !matches}
-            style={{ ...actionBtn, flex: 1, background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff' }}>
+            style={{ ...actionBtn, flex: 1, background: 'var(--danger)', borderColor: 'var(--danger)', color: 'var(--danger-ink, #fff)' }}>
             {busy ? 'Deleting…' : 'Delete'}
           </button>
         </div>

@@ -12,7 +12,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { isInvoiceFont, isInvoiceLayout, DEFAULT_DESIGN } from '../../src/lib/invoiceDesign.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { isValidAccent, invalidateBranding } from '../_lib/branding.js';
+import { isValidAccent, invalidateBranding, cleanMailingAddress } from '../_lib/branding.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
       await sql`INSERT INTO calendar_settings (workspace_id) VALUES (${workspaceId}) ON CONFLICT DO NOTHING`;
       const r = await sql`
         SELECT biz_name, brand_logo_url, brand_logo_blob_pathname, brand_font, invoice_layout, invoice_footer, biz_contact,
-               brand_accent_color, brand_email_signature
+               brand_accent_color, brand_email_signature, biz_mailing_address
           FROM calendar_settings WHERE workspace_id = ${workspaceId}
       `;
       const row = r.rows[0] || {};
@@ -44,6 +44,7 @@ export default async function handler(req, res) {
           invoiceLayout:   isInvoiceLayout(row.invoice_layout) ? row.invoice_layout : DEFAULT_DESIGN.layout,
           invoiceFooter:   row.invoice_footer == null ? DEFAULT_DESIGN.footer : row.invoice_footer,
           contact:         row.biz_contact || '',
+          mailingAddress:  cleanMailingAddress(row.biz_mailing_address),
         },
       });
     }
@@ -95,6 +96,9 @@ export default async function handler(req, res) {
         if (v && v.length > 2000) return badRequest(res, 'emailSignature too long (2000 char max)');
         push('brand_email_signature', v);
       }
+      if ('mailingAddress' in body) {
+        push('biz_mailing_address', cleanMailingAddress(body.mailingAddress) || null);
+      }
 
       if (sets.length === 0) return ok(res, { ok: true });
 
@@ -108,7 +112,7 @@ export default async function handler(req, res) {
          WHERE workspace_id = $${values.length}
          RETURNING biz_name, brand_logo_url, brand_logo_blob_pathname,
                    brand_accent_color, brand_email_signature,
-                   brand_font, invoice_layout, invoice_footer, biz_contact
+                   brand_font, invoice_layout, invoice_footer, biz_contact, biz_mailing_address
       `;
       const { rows } = await sql.query(queryText, values);
       const row = rows[0] || {};
@@ -130,6 +134,7 @@ export default async function handler(req, res) {
           invoiceLayout:   isInvoiceLayout(row.invoice_layout) ? row.invoice_layout : DEFAULT_DESIGN.layout,
           invoiceFooter:   row.invoice_footer == null ? DEFAULT_DESIGN.footer : row.invoice_footer,
           contact:         row.biz_contact || '',
+          mailingAddress:  cleanMailingAddress(row.biz_mailing_address),
         },
       });
     }

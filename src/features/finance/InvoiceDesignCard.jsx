@@ -26,7 +26,7 @@ export default function InvoiceDesignCard() {
 
   return (
     <div className="card" style={{ padding: 18, marginBottom: 14, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-      <div aria-hidden="true" style={{ width: 150, height: 104, borderRadius: 8, overflow: 'hidden', background: '#d7dbe0', flex: '0 0 auto', position: 'relative' }}>
+      <div aria-hidden="true" inert="" style={{ width: 150, height: 104, borderRadius: 8, overflow: 'hidden', background: '#d7dbe0', flex: '0 0 auto', position: 'relative' }}>
         {business && (
           <div style={{ position: 'absolute', left: 8, top: 8, width: 560, transformOrigin: 'top left', transform: 'scale(0.24)', pointerEvents: 'none' }}>
             <InvoiceDocument invoice={SAMPLE_INVOICE} business={business}/>

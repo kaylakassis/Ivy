@@ -26,6 +26,7 @@ import { safeBackground, safeHeadlineGradient, safePadding, safeTextAlign, norma
 import CancellationPolicySection, { PolicyFooterLink } from './CancellationPolicySection.jsx';
 import { showNotice } from '../../lib/confirm.js';
 
+import PrivacyNote from '../../components/PrivacyNote.jsx';
 // Link context for the public site: section anchors on this page, the
 // site's pages and the link base. The editor renders without a provider,
 // so links there are left as typed (they're disabled while editing).
@@ -638,12 +639,13 @@ function Contact({ data, handle, editable }) {
             }}>{data.successMessage || "Thanks - we'll be in touch shortly."}</div>
           ) : (
             <form style={{ display: 'grid', gap: 12 }} onSubmit={submit}>
-              <input placeholder="Your name" style={siteInput} value={vals.name} onChange={set('name')} />
-              <input placeholder="Email" type="email" required style={siteInput} value={vals.email} onChange={set('email')} />
-              <textarea placeholder="Message" rows={5} style={{ ...siteInput, resize: 'vertical' }} value={vals.message} onChange={set('message')} />
+              <input placeholder="Your name" aria-label="Your name" autoComplete="name" style={siteInput} value={vals.name} onChange={set('name')} />
+              <input placeholder="Email" aria-label="Email" autoComplete="email" type="email" required style={siteInput} value={vals.email} onChange={set('email')} />
+              <textarea placeholder="Message" aria-label="Message" rows={5} style={{ ...siteInput, resize: 'vertical' }} value={vals.message} onChange={set('message')} />
               {/* Honeypot - hidden from humans; bots that fill it are dropped server-side. */}
               <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={hp} onChange={(e) => setHp(e.target.value)}
                 style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
+              <PrivacyNote color="var(--site-muted)"/>
               {state === 'error' && <div style={{ fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t send - please try again.</div>}
               <button type="submit" disabled={state === 'sending'} style={{
                 padding: '12px 22px',
@@ -932,7 +934,7 @@ function Newsletter({ data, handle, editable }) {
             marginTop: 28, display: 'flex', gap: 8,
             maxWidth: 480, marginInline: 'auto',
           }}>
-            <input type="email" required placeholder={data.placeholder || 'you@example.com'}
+            <input type="email" required aria-label="Email address" autoComplete="email" placeholder={data.placeholder || 'you@example.com'}
               value={email} onChange={(e) => setEmail(e.target.value)}
               style={{
                 flex: 1, padding: '12px 14px', fontSize: 15,
@@ -951,6 +953,7 @@ function Newsletter({ data, handle, editable }) {
             }}>{state === 'sending' ? '…' : (data.buttonText || 'Subscribe')}</button>
           </form>
         )}
+        {state !== 'sent' && <PrivacyNote color="var(--site-muted)" style={{ marginTop: 10 }}/>}
         {state === 'error' && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t subscribe - please try again.</div>}
       </div>
     </section>

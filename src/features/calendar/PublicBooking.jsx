@@ -41,6 +41,7 @@ import PolicyConsent, { usePolicyConsent, CardOnFilePrompt } from './PolicyConse
 import { paymentErrorMessage } from '../../lib/paymentErrors.js';
 import './publicBooking.css';
 
+import PrivacyNote from '../../components/PrivacyNote.jsx';
 const DAYS_FIRST_LOAD = 28;
 const DAYS_PER_LOAD = 28;
 
@@ -1285,6 +1286,7 @@ export default function PublicBooking({ embedded = false }) {
                 )}
               </div>
             )}
+            <PrivacyNote business={bizName} style={{ marginTop: 14 }}/>
             <div className="pb-form-actions">
               <button type="button" className="pb-btn outline" onClick={backToPick}>
                 <Icons.ArrowLeft size={14}/> Back
@@ -1674,6 +1676,7 @@ function JoinMembershipModal({ slug, membership, bizName, onClose }) {
             required style={inputSty} autoComplete="email"/>
         </Field>
 
+        <PrivacyNote business={bizName} style={{ marginBottom: 14 }}/>
         {err && (
           <div style={{
             padding: '8px 12px', borderRadius: 8, marginBottom: 14,
@@ -1769,6 +1772,7 @@ function BuyPackageModal({ slug, pkg, bizName, onClose, defaultName = '', defaul
             required style={inputSty} autoComplete="email"/>
         </Field>
 
+        <PrivacyNote business={bizName} style={{ marginBottom: 14 }}/>
         {err && (
           <div style={{
             padding: '8px 12px', borderRadius: 8, marginBottom: 14,
@@ -1912,6 +1916,7 @@ function BuyGiftCardModal({ slug, bizName, onClose }) {
             style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
         </Field>
 
+        <PrivacyNote business={bizName} style={{ marginBottom: 14 }}/>
         {err && (
           <div style={{
             padding: '8px 12px', borderRadius: 8, marginBottom: 14,
@@ -2033,6 +2038,7 @@ function ContactModal({ slug, bizName, onClose }) {
                 placeholder="Hi! I'm wondering about…"
                 style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
             </Field>
+            <PrivacyNote business={bizName} style={{ marginBottom: 14 }}/>
             {err && (
               <div style={{
                 padding: '8px 12px', borderRadius: 8, marginBottom: 14,
@@ -2090,6 +2096,7 @@ function ProgramBuyModal({ program, bizName, onClose }) {
         <div style={{ fontSize: 13, color: 'var(--muted)' }}>{fmtProgramPrice(program.priceCents)} {programBilling(program.billing)} · paid to {bizName} through Stripe</div>
         <input className="input" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" autoFocus/>
         <input className="input" type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email"/>
+        <PrivacyNote business={bizName}/>
         {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>

@@ -9,6 +9,7 @@ import { RECURRENCE_OPTIONS, fmtDateISO } from './utils.js';
 import { api } from '../../lib/api.js';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
+import { labelled } from '../../lib/labelled.js';
 export default function AddBookingModal({ services, onSubmit, onClose, defaultDate, defaultStart, defaultClientId }) {
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
   const [clientName, setClientName]   = useState('');
@@ -321,7 +322,7 @@ function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
     </div>
   );

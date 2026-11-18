@@ -36,6 +36,7 @@
   --ok: #1F6E43;
   --warn: #A46508;
   --danger: #9B2C2C;
+  --danger-ink: #FFFFFF;
 
   --sidebar-bg: #E3E9E8;
   --sidebar-fg: #012B24;
@@ -70,6 +71,7 @@
   --ok: #6FE6A0;
   --warn: #F0B450;
   --danger: #FF6B6B;
+  --danger-ink: #2B0A0A;
 
   --sidebar-bg: #012B24;
   --sidebar-fg: #ECF0F1;

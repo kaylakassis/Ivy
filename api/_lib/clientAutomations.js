@@ -132,6 +132,7 @@ export function renderAutomationEmail({ kind, template, vars, branding, footer }
       ctaUrl: withCta ? vars.booking_link : null,
       footer: footer ?? `Sent by ${escapeHtml(vars.business)}.`,
       branding,
+      showMailingAddress: true,
     }),
   };
 }

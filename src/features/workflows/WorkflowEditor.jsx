@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
+import { labelled } from '../../lib/labelled.js';
 const TRIGGERS = [
   {
     id: 'lead_created',
@@ -470,7 +471,7 @@ function Field({ label, hint, children }) {
   return (
     <div>
       <label style={labelStyle}>{label}</label>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={hintStyle}>{hint}</div>}
     </div>
   );

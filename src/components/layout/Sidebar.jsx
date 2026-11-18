@@ -179,7 +179,7 @@ export default function Sidebar({ variant = 'full' }) {
                 <div style={{
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
                   textTransform: 'uppercase', color: 'var(--muted)',
-                  padding: '12px 12px 4px', opacity: 0.75,
+                  padding: '12px 12px 4px',
                 }}>{item.section}</div>
               )}
             <NavLink
@@ -194,8 +194,8 @@ export default function Sidebar({ variant = 'full' }) {
                   <span>{item.label}</span>
                   {item.accent && !isActive && (
                     <span style={{
-                      marginLeft: 'auto', fontSize: 10, fontWeight: 600,
-                      color: 'var(--accent)', letterSpacing: '0.06em',
+                      marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+                      color: 'var(--sidebar-fg, var(--fg))', letterSpacing: '0.06em',
                     }}>NEW</span>
                   )}
                 </>

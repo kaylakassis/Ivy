@@ -101,7 +101,7 @@ export default function ProductVideo() {
             <source src={VIDEO_SRC_WEBM} type="video/webm"/>
           </video>
           {!withSound && (
-            <button type="button" className="pv-cta" onClick={playWithSound} aria-label="Watch the video with sound">
+            <button type="button" className="pv-cta" onClick={playWithSound}>
               <span><i>▶</i> Watch with sound · 0:30</span>
             </button>
           )}

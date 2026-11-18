@@ -1180,6 +1180,9 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_url TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_blob_pathname TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_email_signature TEXT;
+-- The business's postal address, printed at the bottom of its marketing
+-- emails (US email law requires the sender's postal address on those).
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS biz_mailing_address TEXT;
 -- Invoice design (src/lib/invoiceDesign.js): font key, layout key, the
 -- footer line printed under every invoice, and the business's own contact
 -- lines (address, phone, email) shown in the From block.

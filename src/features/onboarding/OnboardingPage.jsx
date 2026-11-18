@@ -54,6 +54,7 @@ import {
   GOAL_OPTIONS, CHALLENGE_OPTIONS, STAGE_OPTIONS,
 } from './aboutFields.jsx';
 
+import { labelled } from '../../lib/labelled.js';
 // OTHER / OUTSIDE_US sentinels, validation and the save payload for the
 // About step live in aboutFields.jsx (shared with the dashboard prompt).
 
@@ -1987,7 +1988,7 @@ function Field({ label, hint, required, children }) {
         color: 'var(--muted)', letterSpacing: '0.04em',
         textTransform: 'uppercase', marginBottom: 6,
       }}>{label}{required && <span style={{ color: 'var(--danger)' }}> *</span>}</label>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );

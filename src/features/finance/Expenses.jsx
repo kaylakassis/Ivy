@@ -9,6 +9,7 @@ import { useViewport } from '../../lib/viewport.js';
 import { confirmAction } from '../../lib/confirm.js';
 import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
+import { labelled } from '../../lib/labelled.js';
 // Mirror api/_lib/expenses.js. Kept in sync by hand - small + stable.
 const CATEGORIES = [
   { key: 'advertising',     label: 'Advertising' },
@@ -334,7 +335,7 @@ function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 4 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

@@ -34,6 +34,7 @@ import { mintUnsubscribeToken } from '../api/_lib/unsubscribeToken.js';
 import { sendEmail, sendEmailToClient, sendEmailToClientByAddress, emailShell } from '../api/_lib/email.js';
 import { notifyLeadInstantReply } from '../api/_lib/leadNotify.js';
 import { sendCampaign } from '../api/_lib/campaigns.js';
+import { invalidateBranding } from '../api/_lib/branding.js';
 import { notifyBookingCancellation } from '../api/_lib/bookingNotify.js';
 import { notifyInvoicePaid } from '../api/_lib/invoiceNotify.js';
 import { notifyDormantOwner } from '../api/_lib/subscriptionNotify.js';
@@ -140,6 +141,11 @@ async function main() {
   const site = (await sql`INSERT INTO websites (workspace_id, handle, business_name, published_at)
     VALUES (${A.ws}, ${`ua-site-${S}`}, 'Alpha Studio', NOW()) RETURNING id`).rows[0];
   await sql`INSERT INTO website_form_submissions (website_id, form_id, payload) VALUES (${site.id}, 'newsletter', ${JSON.stringify({ email: sub, name: 'Nia' })}::jsonb)`;
+  // A campaign needs the business's mailing address on file (it is printed
+  // at the bottom of the email).
+  await sql`INSERT INTO calendar_settings (workspace_id, biz_mailing_address) VALUES (${A.ws}, '1 Alpha Way, Springfield, IL 62701')
+            ON CONFLICT (workspace_id) DO UPDATE SET biz_mailing_address = EXCLUDED.biz_mailing_address`;
+  invalidateBranding(A.ws);
   sent.length = 0;
   let c = await sendCampaign({ workspaceId: A.ws, campaign: { subject: 'Spring news', body: 'Hello', audience: 'newsletter' } });
   assert(c.sent === 1 && mailsTo(sub).length === 1 && hasOneClick(mailsTo(sub)[0]), 'subscriber gets the campaign with one-click headers');

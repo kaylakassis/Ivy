@@ -7,7 +7,9 @@
 // Run: node --import ./tests/bootstrap.mjs ./tests/campaigns.test.mjs
 
 import { sql } from '../api/_lib/db.js';
-import { resolveAudience, sendCampaign } from '../api/_lib/campaigns.js';
+import { resolveAudience, sendCampaign, buildCampaignEmail } from '../api/_lib/campaigns.js';
+import { invalidateBranding, cleanMailingAddress } from '../api/_lib/branding.js';
+import { emailShell } from '../api/_lib/email.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -49,11 +51,35 @@ async function run() {
       VALUES (${wid2}, 'B', 'b@example.com', 'active', ${JSON.stringify({ marketing: false })}::jsonb)`;
 
     const realFetch = globalThis.fetch;
-    globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: 'em_1' }) });
+    const outbound = [];
+    globalThis.fetch = async (_url, opts) => { try { outbound.push(JSON.parse(opts?.body || '{}')); } catch { /* not json */ } return { ok: true, status: 200, json: async () => ({ id: 'em_1' }) }; };
     let result;
     try {
+      // No mailing address on file: the campaign is refused before anything is sent.
+      let refused = null;
+      try { await sendCampaign({ workspaceId: wid2, campaign: { subject: 'Hi', body: 'Hello!', audience: 'all-clients' } }); }
+      catch (e) { refused = e; }
+      assert(refused?.code === 'mailing_address_required', 'a campaign with no business mailing address is refused');
+      assert(/mailing address/i.test(refused?.message || '') && !/[\u2013\u2014]/.test(refused?.message || ''), 'the refusal says what to add, in plain words');
+      assert(outbound.length === 0, 'and nothing was sent');
+
+      await sql`INSERT INTO calendar_settings (workspace_id, biz_name, biz_mailing_address)
+                VALUES (${wid2}, 'Maple Studio', ${'12 Main St\nSuite 4,  Springfield, IL 62701'})
+                ON CONFLICT (workspace_id) DO UPDATE SET biz_name = EXCLUDED.biz_name, biz_mailing_address = EXCLUDED.biz_mailing_address`;
+      invalidateBranding(wid2);
       result = await sendCampaign({ workspaceId: wid2, campaign: { subject: 'Hi', body: 'Hello!', audience: 'all-clients' } });
     } finally { globalThis.fetch = realFetch; }
+
+    const ADDRESS = '12 Main St, Suite 4, Springfield, IL 62701';
+    assert(cleanMailingAddress('12 Main St\nSuite 4,  Springfield, IL 62701') === ADDRESS, 'the address is kept as one tidy line');
+    assert(outbound.length === 1 && String(outbound[0].html || '').includes(ADDRESS), 'the campaign email carries the business mailing address');
+    assert(/unsubscribe/i.test(String(outbound[0]?.html || '')), 'and an unsubscribe link');
+    const built = await buildCampaignEmail({ workspaceId: wid2, campaign: { subject: 'Hi', body: 'Hello!' } });
+    assert(built.html.includes(ADDRESS), 'the test send shows the address too');
+    const receipt = emailShell({ heading: 'Booking confirmed', body: 'See you then', branding: { businessName: 'Maple Studio', mailingAddress: ADDRESS } });
+    assert(!receipt.includes(ADDRESS), 'a booking confirmation does not print the mailing address');
+    const ivyOwn = emailShell({ heading: 'Welcome', body: 'Hi' });
+    assert(/Wilmington|\d{5}/.test(ivyOwn), "Ivy's own emails still carry Ivy's postal address");
 
     assert(result.recipientCount === 2, 'recipientCount counts both clients');
     assert(result.sent === 1, 'one delivered (A)');

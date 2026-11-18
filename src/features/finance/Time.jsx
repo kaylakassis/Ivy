@@ -10,6 +10,7 @@ import { useTimeEntries } from './timeState.js';
 import { showNotice } from '../../lib/confirm.js';
 import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
+import { labelled } from '../../lib/labelled.js';
 const STATUS_META = {
   running: { label: 'Running', color: 'var(--accent)' },
   stopped: { label: 'Logged',  color: 'var(--fg-2)' },
@@ -522,7 +523,7 @@ function Field({ label, hint, children }) {
   return (
     <div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

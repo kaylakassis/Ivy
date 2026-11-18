@@ -245,7 +245,7 @@ const PAGE_CSS = `
 .site-root .price-card li{font-size:14px;color:rgba(11,12,8,.85);display:flex;gap:9px}
 .site-root .price-card li::before{content:'✓';font-weight:700}
 .site-root .price-card .btn{background:var(--ink);color:var(--lime);width:100%;justify-content:center;text-decoration:underline;text-underline-offset:3px}
-.site-root .price-card .fine{font-size:12.5px;color:rgba(11,12,8,.65);margin-top:12px;text-align:center}
+.site-root .price-card .fine{font-size:12.5px;color:rgba(11,12,8,.82);margin-top:12px;text-align:center}
 /* CTA */
 .site-root .cta-final{text-align:center;position:relative}
 .site-root .cta-final::before{content:'';position:absolute;bottom:-100px;left:50%;transform:translateX(-50%);width:800px;height:400px;background:radial-gradient(ellipse,rgba(76,186,127,.08) 0%,transparent 65%);pointer-events:none}

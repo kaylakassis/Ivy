@@ -190,7 +190,21 @@ body.ivy-fill .view-toggle.view-toggle-raised { bottom: calc(env(safe-area-inset
 }
 .dir-bold .nav-item .nav-badge { background: var(--accent); color: var(--accent-ink); }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* Text for screen readers only (a name for an icon or initials). */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* Keyboard focus. The fallback colour matters: the marketing site does not
+   define --accent, and an undefined variable silently cancels the whole
+   outline, leaving keyboard users with no idea where they are. */
+:focus-visible { outline: 2px solid var(--accent, #4CBA7F); outline-offset: 2px; border-radius: 4px; }
+/* A bordered field that switches the outline off in its own style still
+   shows focus: the same soft ring .input uses. Borderless fields (search
+   boxes, composers) are left to their container. */
+:where(input, textarea, select):where([style*="outline: none"], [style*="outline: 0"]):where(:not([style*="border: 0"]):not([style*="border: none"]):not([style*="border-width: 0"])):focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #4CBA7F) 35%, transparent);
+}
+/* A search pill or composer whose inner field has no border of its own. */
+.focus-within-ring:focus-within { border-color: var(--accent, #4CBA7F) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #4CBA7F) 25%, transparent); }
 
 @keyframes ivy-glow {
   0%, 100% { box-shadow: 0 0 0 0 var(--ok); }

@@ -1405,6 +1405,7 @@ function BrandingCard() {
   const [name, setName] = useState('');
   const [accent, setAccent] = useState('#2E3168');
   const [signature, setSignature] = useState('');
+  const [mailingAddress, setMailingAddress] = useState('');
 
   useEffect(() => {
     let live = true;
@@ -1415,6 +1416,7 @@ function BrandingCard() {
         setName((r.branding || {}).businessName || '');
         setAccent(r.branding.accentColor || '#2E3168');
         setSignature(r.branding.emailSignature || '');
+        setMailingAddress(r.branding.mailingAddress || '');
       })
       .catch((e) => live && setErr(e))
       .finally(() => live && setLoading(false));
@@ -1524,7 +1526,7 @@ function BrandingCard() {
           Brand accent color
         </label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <input type="color" value={accent}
+          <input type="color" aria-label="Brand accent color" value={accent}
             onChange={(e) => setAccent(e.target.value)}
             onBlur={() => accent !== (data?.accentColor || '#2E3168') && save({ accentColor: accent }, 'accent')}
             style={{
@@ -1561,6 +1563,21 @@ function BrandingCard() {
           style={{ ...fieldStyle, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
           Appended to every client-facing email under your message body. Plain text - line breaks are preserved.
+        </div>
+      </div>
+
+      {/* Mailing address */}
+      <div style={{ marginTop: 14, marginBottom: 8 }}>
+        <label htmlFor="brand-mailing-address" style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500, display: 'block' }}>
+          Business mailing address
+        </label>
+        <input id="brand-mailing-address" value={mailingAddress} onChange={(e) => setMailingAddress(e.target.value)}
+          onBlur={() => mailingAddress.trim() !== (data?.mailingAddress || '') && save({ mailingAddress: mailingAddress.trim() }, 'addr')}
+          maxLength={300} autoComplete="street-address"
+          placeholder="Street or PO box, city, state, ZIP"
+          style={fieldStyle}/>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+          Shown at the bottom of your marketing emails (campaigns and win-back messages). Email law requires a postal address on those; a PO box is fine. It is not added to booking confirmations or invoices.
         </div>
       </div>
 

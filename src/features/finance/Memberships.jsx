@@ -11,6 +11,7 @@ import { api } from '../../lib/api.js';
 import { confirmAction } from '../../lib/confirm.js';
 import { useDiscardGuard } from '../../lib/useDiscardGuard.js';
 
+import { labelled } from '../../lib/labelled.js';
 function fmtMoney(cents) {
   return '$' + (Number(cents || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -478,7 +479,7 @@ function Field({ label, hint, children }) {
   return (
     <div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

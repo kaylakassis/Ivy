@@ -112,7 +112,7 @@ export const LANDING_CSS = `
 .site-root .lp-price li::before{content:'✓';font-weight:700;flex-shrink:0}
 .site-root .lp-price .btn{background:var(--ink);color:var(--lime);width:100%;justify-content:center}
 .site-root .lp-price .btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(1,43,36,.35)}
-.site-root .lp-price .fine{font-size:12.5px;color:rgba(11,12,8,.65);margin-top:12px;text-align:center}
+.site-root .lp-price .fine{font-size:12.5px;color:rgba(11,12,8,.82);margin-top:12px;text-align:center}
 .site-root .lp-more{margin-top:28px;text-align:center}
 .site-root .lp-more summary{list-style:none;display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:15px;padding:12px 22px;border-radius:8px;border:1px solid var(--border2);color:var(--text);transition:border-color .2s,color .2s}
 .site-root .lp-more summary::-webkit-details-marker{display:none}
@@ -182,7 +182,7 @@ export function HeroVisual() {
       ) : (
         <>
           <img src={VIDEO_POSTER} alt="Ivy product video, 30 seconds" width="1280" height="720"/>
-          <button type="button" className="lp-play" onClick={() => setPlaying(true)} aria-label="Watch the video with sound">
+          <button type="button" className="lp-play" onClick={() => setPlaying(true)}>
             <i aria-hidden="true">▶</i> Watch with sound · 0:30
           </button>
         </>

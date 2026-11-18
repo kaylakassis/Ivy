@@ -13,6 +13,7 @@ import DocumentEditor from './DocumentEditor.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 import SendTemplateModal from './SendTemplateModal.jsx';
 
+import { labelled } from '../../lib/labelled.js';
 const STATUS_META = {
   draft:     { label: 'Draft',     color: 'var(--muted)' },
   sent:      { label: 'Awaiting',  color: 'var(--warn)' },
@@ -716,7 +717,7 @@ function Field({ label, hint, children }) {
   return (
     <div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );

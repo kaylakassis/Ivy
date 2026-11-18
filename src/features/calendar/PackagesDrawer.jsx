@@ -11,6 +11,7 @@ import Drawer, { inputSty } from './Drawer.jsx';
 import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 
+import { labelled } from '../../lib/labelled.js';
 export default function PackagesDrawer({ services, settings = null, onPatchSettings = null, onClose, inline = false }) {
   const [packages, setPackages] = useState(null);
   const [editing, setEditing]   = useState(null); // null = list view, {} = new, row = edit
@@ -426,7 +427,7 @@ function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg)', marginBottom: 4 }}>{label}</div>
-      {children}
+      {labelled(children, label)}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );
