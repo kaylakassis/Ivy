@@ -48,17 +48,23 @@ const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) +
 const weak = [];
 for (const t of Object.values(TEMPLATES)) {
   for (const bg of [t.vars['--site-bg'], t.vars['--site-surface']]) {
-    for (const k of ['--site-muted', '--site-fg-2', '--site-fg']) {
+    for (const k of ['--site-muted', '--site-fg-2', '--site-fg', '--site-accent']) {
       if (ratio(t.vars[k], bg) < 4.5) weak.push(`${t.id} ${k} on ${bg}`);
     }
   }
 }
-assert(weak.length === 0, `every website template's body and small grey text reaches 4.5:1 on its backgrounds${weak.length ? ': ' + weak.join(', ') : ''}`);
+assert(weak.length === 0, `every website template's body text, small grey text and brand colour reaches 4.5:1 on its backgrounds${weak.length ? ': ' + weak.join(', ') : ''}`);
+const weakButtons = Object.values(TEMPLATES).filter((t) => ratio(t.vars['--site-accent-ink'], t.vars['--site-accent']) < 4.5).map((t) => t.id);
+assert(weakButtons.length === 0, `button text is readable on every template's brand colour${weakButtons.length ? ': ' + weakButtons.join(', ') : ''}`);
 const tokens = src('src/styles/tokens.css');
 assert(/--danger: #9B2C2C;\n\s*--danger-ink: #FFFFFF;/.test(tokens) && /--danger: #FF6B6B;\n\s*--danger-ink: #2B0A0A;/.test(tokens), 'each theme says what colour text goes on its danger colour');
 assert(ratio('#FFFFFF', '#9B2C2C') >= 4.5 && ratio('#2B0A0A', '#FF6B6B') >= 4.5, 'and both pairs are readable');
 assert(/color: 'var\(--danger-ink, #fff\)'/.test(src('src/components/layout/NotificationBell.jsx')) && /color: 'var\(--danger-ink, #fff\)'/.test(src('src/components/ConfirmHost.jsx')), 'the unread badge and the delete button use it');
 assert(!/opacity: 0\.75/.test(src('src/components/layout/Sidebar.jsx').split('{item.section}')[0].slice(-400)) && !/padding: '14px 12px 4px', opacity/.test(src('src/features/client/ClientShell.jsx')), 'sidebar section labels are not dimmed below readable');
+
+// ---- claims on the Security page ------------------------------------------
+console.log('\n[security page claims]');
+assert(!/disable Ivy site-wide/.test(src('src/features/marketing/SecurityPage.jsx')), 'the Security page does not promise a switch to turn Ivy off (there is none)');
 
 // ---- privacy notice on public forms ---------------------------------------
 console.log('\n[privacy notice on public forms]');

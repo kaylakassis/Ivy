@@ -59,7 +59,6 @@ export default function SecurityPage() {
 
         <Section title="AI (Ivy) data handling">
           <p>When you chat with Ivy, the request (plus the relevant business context - e.g. revenue numbers, the clients relevant to the question) is sent to our AI model provider to generate the reply. Under our agreement with them, they do not train models on this data, and we send only what the question needs.</p>
-          <p>You can disable Ivy site-wide from your account page.</p>
         </Section>
 
         <Section title="Hosting + region">
