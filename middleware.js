@@ -1,7 +1,7 @@
-// Vercel edge middleware - runs in front of every /api/* request and the
-// site root "/".
+// Vercel edge middleware - runs in front of every /api/* request, the
+// site root "/", and the Admin screen's code under /assets/op/.
 //
-// Two jobs:
+// Three jobs (the third is at the bottom of this comment):
 //
 // 1. CORS for the Capacitor (native iOS/Android) shell on /api/*.
 //
@@ -42,12 +42,23 @@
 //     before, which sends them straight on to their dashboard or portal
 //     without first painting the marketing page.
 // The native app loads index.html from the device and never hits "/".
+//
+// 3. The Admin screen's code, /assets/op/*.
+//
+// The build puts everything under src/features/admin/ into its own file
+// in /assets/op/ (vite.config.js). Static files are served without any
+// sign-in check, so that file used to be downloadable by anyone who read
+// its name out of the main bundle. Here it is only handed to a browser
+// holding a valid operator pass (api/_lib/operatorPass.js: a signed,
+// short-lived cookie the app fetches for an operator just before loading
+// the screen). Everyone else gets "not found". The pass grants nothing on
+// the API; every admin request is still checked on the server.
 import { next, rewrite } from '@vercel/edge';
 
 export const config = {
   // API routes (CORS) and the site root (pre-rendered home). Other HTML /
   // asset routes use the static headers + rewrites in vercel.json.
-  matcher: ['/api/:path*', '/'],
+  matcher: ['/api/:path*', '/', '/assets/op/:path*'],
 };
 
 const NATIVE_ORIGINS = new Set([
@@ -83,7 +94,44 @@ function prerenderedHome(req) {
   return rewrite(new URL('/prerender/index.html', url));
 }
 
-export default function middleware(req) {
+// ── Operator pass (job 3) ─────────────────────────────────────────────
+// Same recipe as api/_lib/operatorPass.js, with the Web Crypto this
+// runtime has: "<user id>.<expiry ms>.<hex HMAC-SHA256 of op|id|expiry>".
+const OP_COOKIE = 'ivy_op';
+const OP_PREFIX = '/assets/op/';
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+export async function hasOperatorPass(req, nowMs = Date.now()) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return false;
+  const m = new RegExp(`(?:^|;\\s*)${OP_COOKIE}=([^;]+)`).exec(req.headers.get('cookie') || '');
+  if (!m) return false;
+  let raw;
+  try { raw = decodeURIComponent(m[1]); } catch { return false; }
+  const parts = raw.split('.');
+  if (parts.length !== 3) return false;
+  const [userId, exp, sig] = parts;
+  if (!/^[0-9a-f-]{36}$/i.test(userId) || !/^\d{10,16}$/.test(exp) || !/^[0-9a-f]{64}$/.test(sig)) return false;
+  if (Number(exp) <= nowMs) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const want = hex(await crypto.subtle.sign('HMAC', key, enc.encode(`op|${userId}|${exp}`)));
+  // Fixed-length compare with no early exit.
+  let diff = 0;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
+
+export default async function middleware(req) {
+  if (new URL(req.url).pathname.startsWith(OP_PREFIX)) {
+    if (await hasOperatorPass(req)) {
+      // Never stored by a shared cache: the next person through it may not
+      // be an operator.
+      return next({ headers: { 'Cache-Control': 'private, no-store' } });
+    }
+    return new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+
   const home = prerenderedHome(req);
   if (home) return home;
 

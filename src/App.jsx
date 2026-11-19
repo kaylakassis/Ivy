@@ -27,6 +27,7 @@ import { ClientPortalProvider } from './features/client/clientContext.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { isPlatformHost } from './lib/publicUrl.js';
+import { api } from './lib/api.js';
 import { lazyRoute } from './lib/lazyRoute.js';
 import { rememberedLanding } from './lib/landing.js';
 import GetAppBanner from './components/GetAppBanner.jsx';
@@ -64,7 +65,19 @@ const Documents   = lazyRoute(() => import('./features/documents/Documents.jsx')
 const Website     = lazyRoute(() => import('./features/website/Website.jsx'));
 const IvyPro      = lazyRoute(() => import('./features/ivy/IvyPro.jsx'));
 const AccountPage = lazyRoute(() => import('./features/account/AccountPage.jsx'));
-const AdminPage   = lazyRoute(() => import('./features/admin/AdminPage.jsx'));
+// Admin. On the website the screen's code lives in its own file that is only
+// served to a signed-in operator (middleware.js), so the app first asks for
+// the pass that unlocks it; anyone else is sent home without the file ever
+// being requested. The iPhone app's build leaves the screen out altogether
+// (__IVY_NATIVE_BUILD__ is a real true/false at build time, so the unused
+// branch and its file are dropped) and shows a link to the website.
+/* global __IVY_NATIVE_BUILD__ */
+const AdminPage   = lazyRoute(() => (__IVY_NATIVE_BUILD__
+  ? import('./features/more/AdminOnWeb.jsx')
+  : api.get('/auth/operator-pass').then(
+    () => import('./features/admin/AdminPage.jsx'),
+    () => ({ default: () => <Navigate to="/dashboard" replace/> }),
+  )));
 const MorePage    = lazyRoute(() => import('./features/more/MorePage.jsx'));
 const ShopsPage   = lazyRoute(() => import('./features/shops/ShopsPage.jsx'));
 

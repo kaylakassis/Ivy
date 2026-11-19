@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
 // Ivy's typeface, Neue Haas Grotesk, is licensed, so its files are not in
@@ -56,10 +56,17 @@ const APP_VERSION = process.env.VERCEL_GIT_COMMIT_SHA
   ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)
   : 'dev';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const NATIVE_BUILD = !!loadEnv(mode, process.cwd(), 'VITE_').VITE_API_BASE_URL;
+  return {
   plugins: [react(), licensedFonts()],
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+    // True only in the iPhone app's build (the one place VITE_API_BASE_URL
+    // is set, see scripts/check-ios-env.mjs). A real true/false in the
+    // code, so the bundler can drop what that build must not carry: the
+    // Admin screen is left out of the app entirely (src/App.jsx).
+    __IVY_NATIVE_BUILD__: JSON.stringify(NATIVE_BUILD),
   },
   server: {
     port: 5173,
@@ -87,6 +94,15 @@ export default defineConfig({
           if (/[\\/]node_modules[\\/](react-router|react-router-dom|@remix-run[\\/]router)[\\/]/.test(id)) return 'router';
           return undefined;
         },
+        // Any file that carries part of the Admin screen is written under
+        // /assets/op/, the one path only an operator may fetch
+        // (middleware.js). The screen is loaded on demand, so the bundler
+        // already gives it a file of its own; this only chooses where that
+        // file lives. (It is deliberately not a manual chunk: that pulls
+        // shared code in with it, and then every page would need the
+        // protected file.)
+        chunkFileNames: (chunk) => (chunk.moduleIds.some((id) => /[\\/]src[\\/]features[\\/]admin[\\/]/.test(id))
+          ? 'assets/op/[name]-[hash].js' : 'assets/[name]-[hash].js'),
       },
     },
     // Route-split chunks land around 50–200 KB each; the warning's 500 KB
@@ -94,4 +110,5 @@ export default defineConfig({
     // surface when something genuinely regresses.
     chunkSizeWarningLimit: 700,
   },
+};
 });
