@@ -175,7 +175,10 @@ async function run() {
       churnCount: churn, churnRate: act.length + pau.length === 0 ? 0 : Math.round((churn / (act.length + pau.length)) * 100),
       leadsInWindow: lds.filter((c) => (now - new Date(c.joinedAt).getTime()) / DAY <= 7).length,
     };
-    assert(JSON.stringify(s.counts) === JSON.stringify(expect.counts), `tab counts match the whole book (${JSON.stringify(s.counts)})`);
+    // "Needs attention" is counted from its own rules (tests/client-attention.test.mjs).
+    const { attention: attentionCount, ...stageCounts } = s.counts;
+    assert(JSON.stringify(stageCounts) === JSON.stringify(expect.counts), `tab counts match the whole book (${JSON.stringify(s.counts)})`);
+    assert(Number.isInteger(attentionCount) && attentionCount >= 0 && attentionCount <= s.counts.all, `the "Needs attention" count is a whole number within the book (${attentionCount})`);
     const got = { recentActives: s.analytics.recentActives, recentLeads: s.analytics.recentLeads, conversionRate: s.analytics.conversionRate,
       churnCount: s.analytics.churnCount, churnRate: s.analytics.churnRate, leadsInWindow: s.analytics.leadsInWindow };
     const want = { recentActives: expect.recentActives, recentLeads: expect.recentLeads, conversionRate: expect.conversionRate,
