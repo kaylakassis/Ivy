@@ -33,10 +33,9 @@ const CSS = `
 /* The two ways to create an account. Each says who it is for in its own
    words, so a client never ends up with a business account by guessing. */
 .ivy-w .new { margin: 10px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #9BB0A9; text-align: center; }
-.ivy-w .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; width: 100%;
-  background: rgba(255,255,255,.04); color: #F3F3EE; border: 1.5px solid rgba(255,255,255,.28); border-radius: 14px; padding: 13px 16px; font: inherit; }
+.ivy-w .choice { display: block; text-align: center; width: 100%;
+  background: rgba(255,255,255,.04); color: #F3F3EE; border: 1.5px solid rgba(255,255,255,.28); border-radius: 14px; padding: 15px 16px; font: inherit; }
 .ivy-w .choice b { font-size: 16px; font-weight: 650; }
-.ivy-w .choice span { font-size: 13.5px; line-height: 1.35; color: #C9CAC3; }
 @media (max-height: 760px) {
   .ivy-w .mark { width: 96px; height: 96px; border-radius: 22px; }
   .ivy-w h1 { font-size: 38px; margin-top: 22px; }
@@ -82,11 +81,9 @@ export default function WelcomePage() {
         <div className="new" id="ivy-w-new">New to Ivy? Create an account</div>
         <button type="button" className="choice" aria-describedby="ivy-w-new" onClick={() => navigate('/signup')}>
           <b>I run a business</b>
-          <span>Bookings, invoices and clients.</span>
         </button>
         <button type="button" className="choice" aria-describedby="ivy-w-new" onClick={() => navigate('/signup?mode=client')}>
           <b>I&apos;m a client</b>
-          <span>A business I use asked me to join. Free.</span>
         </button>
       </div>
       <div className="legal">

@@ -19,6 +19,7 @@ import { tryConsumeQuota, DEFAULT_EMAIL_CAP_PER_DAY } from './usageCounters.js';
 import { unsubscribeUrlFor } from './unsubscribeToken.js';
 import { sql } from './db.js';
 
+import { ivyPostalAddress } from './postalAddress.js';
 // The Ivy logo at the top of Ivy's own emails (not on a business's branded
 // emails, which show that business's logo or name). Always the production
 // address: a mail client has to be able to load it.
@@ -375,7 +376,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
   // A business's own marketing emails (campaigns, win-back and similar)
   // carry the business's mailing address instead: showMailingAddress.
   const postalAddress = !businessName
-    ? (process.env.IVY_POSTAL_ADDRESS || 'Ivy · 1209 Orange St, Wilmington, DE 19801, USA')
+    ? ivyPostalAddress()
     : (showMailingAddress ? String(branding?.mailingAddress || '').trim() : '');
   const postalBlock = postalAddress
     ? `<div style="margin-top:6px;font-size:10.5px;color:${C.muted2};letter-spacing:0.02em;">${escapeText(postalAddress)}</div>`

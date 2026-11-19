@@ -455,7 +455,7 @@ export default function Paywall({ ctx, onRefresh }) {
               account - this usually takes a couple of seconds.
             </p>
           ) : showPriming ? (
-            <PrimingStep step={primingStep} setStep={setPrimingStep} canTrial={canTrial}/>
+            <PrimingStep step={primingStep} setStep={setPrimingStep} canTrial={canTrial} offerClient={canTrial && !clientOnlyBusiness}/>
           ) : (
             <>
               {/* Truthful savings proof - the refs' "social proof / save
@@ -786,7 +786,7 @@ export default function Paywall({ ctx, onRefresh }) {
 // single big card + one "Continue" CTA, so the cognitive load is one
 // decision at a time. Skipped entirely for win-back / lapsed users (the
 // parent gates with `canTrial && !winback`).
-function PrimingStep({ step, setStep, canTrial }) {
+function PrimingStep({ step, setStep, canTrial, offerClient }) {
   if (!canTrial) return null;
   const screens = [
     {
@@ -849,6 +849,9 @@ function PrimingStep({ step, setStep, canTrial }) {
           Back
         </button>
       )}
+      {/* A client who created a business account by mistake meets this
+          card first. The way out is on every step, not only the last. */}
+      {offerClient && <NotABusiness variant="link"/>}
     </div>
   );
 }

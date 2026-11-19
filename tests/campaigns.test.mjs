@@ -79,7 +79,7 @@ async function run() {
     const receipt = emailShell({ heading: 'Booking confirmed', body: 'See you then', branding: { businessName: 'Maple Studio', mailingAddress: ADDRESS } });
     assert(!receipt.includes(ADDRESS), 'a booking confirmation does not print the mailing address');
     const ivyOwn = emailShell({ heading: 'Welcome', body: 'Hi' });
-    assert(/Wilmington|\d{5}/.test(ivyOwn), "Ivy's own emails still carry Ivy's postal address");
+    assert(ivyOwn.includes('24930 Washington Avenue Unit #268, Murrieta, CA 92564') && !/Wilmington|Orange St/.test(ivyOwn), "Ivy's own emails carry Ivy's real mailing address, not the old placeholder");
 
     assert(result.recipientCount === 2, 'recipientCount counts both clients');
     assert(result.sent === 1, 'one delivered (A)');

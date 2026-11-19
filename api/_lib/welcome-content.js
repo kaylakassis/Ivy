@@ -1,3 +1,4 @@
+import { ivyPostalAddress } from './postalAddress.js';
 // Welcome email content. Sent immediately at signup (api/auth/signup.js)
 // and re-sendable from the admin user-detail modal
 // (api/admin/users/[id].js → resendWelcome: true).
@@ -43,7 +44,7 @@ function renderFooter(appUrl) {
                       <a href="${appUrl}/account?tab=notifications" style="color:#9ca3af;text-decoration:underline" target="_blank">Email preferences</a>
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:10px">
-                      ${process.env.IVY_POSTAL_ADDRESS || 'Ivy · 1209 Orange St, Wilmington, DE 19801, USA'}
+                      ${escapeHtml(ivyPostalAddress())}
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:6px">
                       © ${year} Ivy AI LLC. All rights reserved.

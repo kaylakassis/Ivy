@@ -23,6 +23,7 @@ import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
 import { probeProvider, globalIvyCeiling } from '../_lib/ivy.js';
 import { appleConfigMissing, appleEnvironment, mintToken } from '../_lib/appStoreServer.js';
 import { OPS_ALERT_CRON, opsAlertRecipient } from '../_lib/opsAlerts.js';
+import { ivyPostalAddress, ivyPostalAddressSource } from '../_lib/postalAddress.js';
 
 const REQUIRED_LEN = 32;
 const DEFAULT_PLACEHOLDERS = new Set([
@@ -467,6 +468,8 @@ export default async function handler(req, res) {
     } catch (e) {
       checks.push(check('ai_ceiling', 'Ivy daily ceiling', 'warn', `could not compute: ${e.message}`));
     }
+    // The mailing address on Ivy's own emails, as it is actually printed.
+    checks.push(check('postal_address', 'Mailing address on Ivy emails', 'ok', `${ivyPostalAddress()} (${ivyPostalAddressSource()})`));
     // iPhone push: config + a provider token we can mint + whether any phone
     // has actually registered. TestFlight and App Store builds use Apple's
     // PRODUCTION push environment; "sandbox" is only for Xcode debug runs.

@@ -181,15 +181,15 @@ export default function AuthPage({ mode = 'signin' }) {
           <div role="radiogroup" aria-label="What kind of account do you need?"
             style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
-              ['owner', 'I run a business', 'Bookings, invoices and clients for my own business.'],
-              ['client', 'I\u2019m a client', 'A business I use asked me to join. Free.'],
-            ].map(([k, title, sub]) => {
+              ['owner', 'I run a business'],
+              ['client', 'I\u2019m a client'],
+            ].map(([k, title]) => {
               const on = role === k;
               return (
                 <button key={k} type="button" role="radio" aria-checked={on} data-role-choice={k}
                   onClick={() => setRole(k)}
                   style={{
-                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, textAlign: 'left',
+                    display: 'flex', alignItems: 'center', textAlign: 'left', minHeight: 48,
                     padding: '11px 12px', borderRadius: 12, cursor: 'pointer', font: 'inherit',
                     background: on ? 'var(--accent-soft)' : 'var(--surface)',
                     border: `2px solid ${on ? 'var(--accent)' : 'var(--border-strong)'}`,
@@ -204,7 +204,6 @@ export default function AuthPage({ mode = 'signin' }) {
                     }}/>
                     {title}
                   </span>
-                  <span style={{ fontSize: 12.5, lineHeight: 1.4, color: 'var(--fg-2)' }}>{sub}</span>
                 </button>
               );
             })}

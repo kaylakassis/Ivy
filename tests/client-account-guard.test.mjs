@@ -17,9 +17,13 @@ import meHandler from '../api/me/index.js';
 import dashboardHandler from '../api/dashboard.js';
 import clientsHandler from '../api/clients/index.js';
 import startBusiness from '../api/helper/start-business.js';
+import clientBookings from '../api/me/bookings.js';
+import clientPackages from '../api/me/packages.js';
+import clientProfile from '../api/me/profile.js';
 import becomeClient from '../api/account/become-client.js';
 import adminWorkspaces from '../api/admin/users/[id]/workspaces.js';
 import { clientSwitchCheck } from '../api/_lib/accountKind.js';
+import { evictWorkspaceGateCache } from '../api/_lib/workspaceGate.js';
 
 let pass = 0, fail = 0;
 const assert = (c, m) => { if (c) { pass++; console.log('  ✓', m); } else { fail++; console.log('  ✗', m); } };
@@ -70,6 +74,26 @@ async function main() {
   r = await signup(ownerEmail);
   const owner = await userByEmail(ownerEmail); made.push(owner.id);
   assert(r.statusCode === 201 && owner.signup_role === 'owner' && (await workspacesOf(owner.id)).length === 1, 'a business sign-up is stored as a business account, with its business');
+
+  console.log('\n[1b] a business account meets the paywall; a client account never does');
+  let ownerMe = await call(meHandler, { userId: owner.id });
+  assert(ownerMe.body.isOwner === true && ownerMe.body.subscription && ownerMe.body.subscription.isActive === false,
+    `a new business has no plan yet, so the app shows the paywall (status ${ownerMe.body.subscription?.status})`);
+  // During set-up the server lets the new business save its details; the
+  // moment set-up is finished it locks until a plan starts.
+  await sql`UPDATE workspaces SET onboarded_at = NOW() WHERE owner_id = ${owner.id}`;
+  evictWorkspaceGateCache((await workspacesOf(owner.id))[0].id);
+  let gated = await call(clientsHandler, { userId: owner.id });
+  assert(gated.statusCode === 402 && gated.body?.error === 'subscription-required', `once set-up is finished the business screens are locked on the server until a plan starts (got ${gated.statusCode} ${gated.body?.error})`);
+  await sql`UPDATE workspaces SET onboarded_at = NULL WHERE owner_id = ${owner.id}`;
+  evictWorkspaceGateCache((await workspacesOf(owner.id))[0].id);
+  let clientMe = await call(meHandler, { userId: client.id });
+  assert(clientMe.statusCode === 200 && !clientMe.body.subscription, 'a client account has no plan to buy: nothing for a paywall to show');
+  for (const [name, handler] of [['bookings', clientBookings], ['packages', clientPackages], ['profile', clientProfile]]) {
+    // eslint-disable-next-line no-await-in-loop
+    const res = await call(handler, { userId: client.id });
+    assert(res.statusCode === 200, `client ${name}: open, no payment asked (got ${res.statusCode})`);
+  }
 
   console.log('\n[2] a client account nobody has linked yet (email not confirmed, no business has added them)');
   let me = await call(meHandler, { userId: client.id });
@@ -181,13 +205,13 @@ function screens() {
   console.log('\n[9] the screens make the choice obvious');
   const src = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
   const welcome = src('src/features/auth/WelcomePage.jsx');
-  assert(/navigate\('\/signup'\)/.test(welcome) && /navigate\('\/signup\?mode=client'\)/.test(welcome) && /I run a business/.test(welcome) && /I&apos;m a client/.test(welcome),
+  assert(/navigate\('\/signup'\)/.test(welcome) && /navigate\('\/signup\?mode=client'\)/.test(welcome) && /<b>I run a business<\/b>\n\s*<\/button>/.test(welcome) && /<b>I&apos;m a client<\/b>\n\s*<\/button>/.test(welcome),
     'the app welcome screen offers "I run a business" and "I\'m a client" as separate buttons');
   const auth = src('src/features/auth/AuthPage.jsx');
   assert(/role="radiogroup"/.test(auth) && /data-role-choice=\{k\}/.test(auth) && /params\.get\('mode'\) === 'client' \? 'client' : 'owner'/.test(auth),
     'the sign-up form has the business or client choice at the top, and invite links preselect client');
-  assert(/<NotABusiness\/>/.test(src('src/features/onboarding/OnboardingPage.jsx')) && /<NotABusiness variant="link"\/>/.test(src('src/features/billing/Paywall.jsx')),
-    'business set-up and the paywall both offer "I\'m a client"');
+  assert(/<NotABusiness\/>/.test(src('src/features/onboarding/OnboardingPage.jsx')) && (src('src/features/billing/Paywall.jsx').match(/<NotABusiness variant="link"\/>/g) || []).length === 2,
+    'business set-up and the paywall (its first card and its plan screen) offer "I\'m a client"');
   const nab = src('src/components/NotABusiness.jsx');
   assert(/confirmAction\(/.test(nab) && /\/account\/become-client/.test(nab) && /\/helper\/start-business/.test(nab), 'switching either way asks first');
   assert(!/[\u2013\u2014]/.test(nab.replace(/\/\/.*$/gm, '')) && !/[\u2013\u2014]/.test(welcome.replace(/\/\/.*$/gm, '')), 'no dashes in what people read');
