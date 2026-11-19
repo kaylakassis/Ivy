@@ -22,8 +22,8 @@ const COLORS = [
 // What a helper may do beyond their own schedule. Mirrors
 // api/_lib/helpers.js PERMISSION_KEYS; the server is the source of truth.
 const PERMISSIONS = [
-  { key: 'schedule', label: 'Full calendar',  hint: 'See every booking, add, move, cancel and assign bookings to anyone. Off: only their own sessions.' },
-  { key: 'clients',  label: 'Clients',        hint: 'See the whole client list, add and edit clients, read and write notes. Off: only contact details for their sessions.' },
+  { key: 'schedule', label: 'Full calendar',  hint: 'See every booking, add, move, cancel and assign bookings to anyone. To book someone in they can look up any client by name, email and phone. Off: only their own sessions.' },
+  { key: 'clients',  label: 'Clients',        hint: 'See the whole client list, add and edit clients, read and write notes. They never see money: not invoices, and not what a client has spent. Off: only contact details for their sessions.' },
   { key: 'messages', label: 'Messages',       hint: 'Message your clients from your inbox, sent as your business and marked as written by them.' },
 ];
 const NO_PERMS = { schedule: false, clients: false, messages: false };

@@ -16,14 +16,16 @@
 // number by about $30.
 export const TOOL_STACK = [
   // `label` is what the site shows (Kayla: never name other products on
-  // the site); `source` is only our record of where each price comes from.
-  { label: 'Client management app', source: 'HoneyBook', monthly: 36, replaces: 'clients + invoices + contracts' },
-  { label: 'Scheduling app', source: 'Calendly', monthly: 12, replaces: 'booking pages + reminders' },
-  { label: 'Advanced scheduling app', source: 'Acuity Scheduling', monthly: 20, replaces: 'advanced scheduling + intake forms' },
-  { label: 'Bookkeeping app', source: 'QuickBooks Self-Employed', monthly: 20, replaces: 'invoices + expenses + taxes' },
-  { label: 'Email marketing app', source: 'Mailchimp', monthly: 13, replaces: 'newsletter + email blasts' },
-  { label: 'Website builder', source: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
-  { label: 'E-signature app', source: 'DocuSign', monthly: 15, replaces: 'legally-binding e-signatures' },
+  // the site). Where each price comes from is kept in the comment beside
+  // it, not in the data: anything in this list is sent to every visitor's
+  // browser, and a comment is not.
+  { label: 'Client management app', monthly: 36, replaces: 'clients + invoices + contracts' }, // list price source: HoneyBook
+  { label: 'Scheduling app', monthly: 12, replaces: 'booking pages + reminders' }, // list price source: Calendly
+  { label: 'Advanced scheduling app', monthly: 20, replaces: 'advanced scheduling + intake forms' }, // list price source: Acuity Scheduling
+  { label: 'Bookkeeping app', monthly: 20, replaces: 'invoices + expenses + taxes' }, // list price source: QuickBooks Self-Employed
+  { label: 'Email marketing app', monthly: 13, replaces: 'newsletter + email blasts' }, // list price source: Mailchimp
+  { label: 'Website builder', monthly: 23, replaces: 'website + custom domain' }, // list price source: Squarespace
+  { label: 'E-signature app', monthly: 15, replaces: 'legally-binding e-signatures' }, // list price source: DocuSign
 ];
 
 // Shown on the site as "list prices as of" this date.

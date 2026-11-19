@@ -29,8 +29,9 @@ export default async function handler(req, res) {
     if (!code) return badRequest(res, 'code is required');
 
     const cs = await sql`SELECT workspace_id FROM calendar_settings WHERE slug = ${slug}`;
-    if (cs.rows.length === 0) return notFound(res, 'No business with that handle');
-    const card = await findActiveByCode(cs.rows[0].workspace_id, code);
+    // One answer for "no such business" and "no such card": the check is
+    // for a card, not a way to learn which names are on Ivy.
+    const card = cs.rows.length ? await findActiveByCode(cs.rows[0].workspace_id, code) : null;
     if (!card) return notFound(res, 'Gift card not found or already used');
 
     return ok(res, {

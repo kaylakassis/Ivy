@@ -21,7 +21,7 @@
 import crypto from 'node:crypto';
 import { sql } from './db.js';
 import {
-  VALID_HANDLE, serializeService, serializeBlock, serializeBooking, publicLocationLabel,
+  VALID_HANDLE, publicService, serializeBlock, serializeBooking, publicLocationLabel,
 } from './calendar.js';
 import { isWorkspaceActive } from './clientPortal.js';
 import { loadWorkspaceAccess } from './businessAccess.js';
@@ -1000,7 +1000,7 @@ export async function publicShopPayload(slug, opts = {}) {
     const svcs = (svcBy[m.workspace_id] || [])
       .filter((s) => !chosen || chosen.has(String(s.id)))
       .map((r) => {
-        const out = serializeService(r);
+        const out = publicService(r);
         out.locationLabel = publicLocationLabel(out.locationType, out.locationLabel);
         if (!settings.showPrices) { out.price = 0; out.hidePrice = true; }
         return out;

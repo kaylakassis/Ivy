@@ -9,7 +9,10 @@
 // all off by default):
 //   messages - message the business's clients from the business inbox
 //   schedule - the whole calendar: see every booking, add, move, cancel,
-//              assign to any staff member
+//              assign to any staff member. Booking someone in means
+//              picking a client, so this also reads every client's name,
+//              email and phone (nothing else about them); the wording the
+//              owner sees says so.
 //   clients  - the full client list: add, edit, delete, read/write notes
 // Everything else (money, Ivy, documents, website, settings, other staff
 // management, programs/memberships/gift cards, reviews, branding) is
@@ -49,7 +52,7 @@ export const HELPER_INVITE_TTL_DAYS = 7;
 // The owner-granted permissions, in the order the UI lists them.
 export const PERMISSION_KEYS = ['schedule', 'clients', 'messages'];
 export const PERMISSION_LABELS = {
-  schedule: 'See the whole calendar and add, move, cancel or reassign bookings',
+  schedule: 'See the whole calendar and add, move, cancel or reassign bookings. To book someone in, they can look up any client\'s name, email and phone',
   clients:  'See the full client list, add and edit clients, read and write notes',
   messages: 'Message clients from the business inbox',
 };

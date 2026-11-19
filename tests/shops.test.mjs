@@ -159,7 +159,7 @@ async function main() {
   // ───────────────────────────────────────────────────────────────────
   console.log('\n[2] invites');
   r = await call(membersH, { method: 'POST', user: A, query: { id: shop.id }, body: { email: B.email } });
-  assert(r.statusCode === 201 && r.body.sent && r.body.hasAccount && r.body.member.status === 'invited', 'invite by email sent');
+  assert(r.statusCode === 201 && r.body.sent && !('hasAccount' in r.body) && !('reason' in r.body) && r.body.member.status === 'invited', 'invite by email sent, without saying whether that address has an account');
   const inviteMail = mailsTo(B.email).pop();
   assert(/invited you to be listed on their shop page/.test(inviteMail.subject), 'invite subject');
   assert(/Your clients/.test(inviteMail.html) && /never shows/.test(inviteMail.html) && /leave the shop page at any time/.test(inviteMail.html), 'email says what shows, what never shows, and that leaving is one tap');

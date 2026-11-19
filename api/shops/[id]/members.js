@@ -36,8 +36,8 @@ export default async function handler(req, res) {
       return created(res, {
         member: serializeMember(out.member, { owner: true }),
         sent: out.sent,
-        reason: out.reason,
-        hasAccount: out.hasAccount,
+        // Not whether that address already has an Ivy account, and not the
+        // mail service's own error text: neither is the inviter's to know.
         expiresAt: out.expiresAt,
         ttlDays: SHOP_INVITE_TTL_DAYS,
       });

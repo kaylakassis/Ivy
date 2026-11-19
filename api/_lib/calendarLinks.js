@@ -17,8 +17,14 @@ import { sql } from './db.js';
 import { buildBookingInvite, buildGoogleCalendarUrl, buildOutlookCalendarUrl } from './ical.js';
 import { appUrl } from './tokens.js';
 
+// A signed link is only as private as its secret. On the live site a
+// missing secret is an error, never a silent switch to a value that is
+// written in this file (which would let anyone sign a link to any booking).
 function secret() {
-  return process.env.CALENDAR_INVITE_SECRET || process.env.JWT_SECRET || 'ivy-calendar-invite';
+  const s = process.env.CALENDAR_INVITE_SECRET || process.env.JWT_SECRET;
+  if (s) return s;
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') throw new Error('Signing secret is not set');
+  return 'ivy-calendar-invite';
 }
 
 export function signInvite(bookingId) {

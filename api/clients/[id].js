@@ -11,7 +11,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedClient, serializeClient, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
+import { fetchOwnedClient, serializeClientFor, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
 import { helperClientScope } from '../_lib/helpers.js';
 import { blobPathnameForWorkspace } from '../_lib/blobScope.js';
 import { normalizePhone } from '../_lib/sms.js';
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         if (scope !== null && !scope.includes(existing.id)) return notFound(res, 'Client not found');
         return ok(res, { client: serializeClientMinimal(existing) });
       }
-      return ok(res, { client: serializeClient(existing) });
+      return ok(res, { client: serializeClientFor(req)(existing) });
     }
 
     if (req.method === 'PATCH') {
@@ -92,7 +92,8 @@ export default async function handler(req, res) {
         push('tags', body.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 20));
       }
       if ('notes' in body) push('notes', body.notes == null ? null : String(body.notes).slice(0, 4000));
-      if ('lifetimeValue' in body) {
+      // A helper cannot set what a client has spent either.
+      if ('lifetimeValue' in body && !req.helper) {
         const n = Number(body.lifetimeValue);
         if (!Number.isFinite(n) || n < 0) return badRequest(res, 'lifetimeValue must be a non-negative number');
         push('lifetime_value', n);
@@ -199,7 +200,7 @@ export default async function handler(req, res) {
         sets.push(`gallery_photos = $${values.length}::jsonb`);
       }
 
-      if (sets.length === 0) return ok(res, { client: serializeClient(existing) });
+      if (sets.length === 0) return ok(res, { client: serializeClientFor(req)(existing) });
 
       sets.push(`updated_at = NOW()`);
       values.push(id, workspaceId);
@@ -220,7 +221,7 @@ export default async function handler(req, res) {
              AND (client_email IS NULL OR client_email = '')
              AND cancelled_at IS NULL AND date >= CURRENT_DATE - 1`;
       }
-      return ok(res, { client: serializeClient(rows[0]) });
+      return ok(res, { client: serializeClientFor(req)(rows[0]) });
     }
 
     if (req.method === 'DELETE') {

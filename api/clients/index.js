@@ -7,7 +7,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeClient, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
+import { serializeClientFor, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
 import { helperClientScope } from '../_lib/helpers.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { clientDetailColumns, loadFieldDefs, mergeCustomFields, writeClientColumns } from '../_lib/clientDetails.js';
@@ -157,7 +157,7 @@ export default async function handler(req, res) {
         const minimal = helperSeesMinimalClients(req);
         const scope = minimal ? await helperClientScope(req.helper) : null;
         const scopeIds = scope === null ? null : scope; // [] = sees nobody
-        const project = minimal ? serializeClientMinimal : serializeClient;
+        const project = minimal ? serializeClientMinimal : serializeClientFor(req);
         const email = (req.query.email || '').toString().trim().toLowerCase();
         if (email) {
           const r = scopeIds
@@ -195,7 +195,7 @@ export default async function handler(req, res) {
         // is fine for every workspace until the UI catches up.
         const requestedLimit = Number.parseInt(req.query.limit, 10);
         const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
-          ? Math.min(5000, requestedLimit)
+          ? Math.min(req.helper ? 1000 : 5000, requestedLimit)
           : 1000;
         const requestedOffset = Number.parseInt(req.query.offset, 10);
         const offset = Number.isFinite(requestedOffset) && requestedOffset > 0
@@ -335,7 +335,7 @@ export default async function handler(req, res) {
       // the owner refreshes.
       await fireClientCreatedWorkflows({ workspaceId, client: rows[0], source: 'manual-create' });
       return created(res, {
-        client: serializeClient(rows[0]),
+        client: serializeClientFor(req)(rows[0]),
         invite: { sent: !!invite.sent, reason: invite.sent ? null : (invite.reason || null) },
       });
     }

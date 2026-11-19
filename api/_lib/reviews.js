@@ -10,9 +10,14 @@ export function serializeReview(row, { includeHidden = false, includeBookingId =
     status:       row.status,
     ownerResponse:    row.owner_response || null,
     ownerRespondedAt: row.owner_responded_at,
-    appealStatus:     row.appeal_status || 'none',
-    appealReason:     row.appeal_reason || null,
-    appealRequestedAt: row.appeal_requested_at || null,
+    // An appeal is a private note from the owner to Ivy about this review.
+    // Only the owner's own screens (includeHidden) ever get it; the public
+    // page and the reviewer do not.
+    ...(includeHidden ? {
+      appealStatus:     row.appeal_status || 'none',
+      appealReason:     row.appeal_reason || null,
+      appealRequestedAt: row.appeal_requested_at || null,
+    } : {}),
     createdAt:    row.created_at,
     ...(includeBookingId ? { bookingId: row.booking_id } : {}),
     ...(includeHidden    ? {} : (row.status === 'hidden' ? { hidden: true } : {})),

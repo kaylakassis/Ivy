@@ -31,6 +31,7 @@ export default async function handler(req, res) {
     // Owner's subscription lapsed: the site is archived. 200 with the
     // marker only, no pages.
     const access = await loadWorkspaceAccess(result.workspaceId);
+    if (!access.active && !access.everActive) return notFound(res, 'Site not published');
     if (!access.active) return ok(res, archivedPayload(access));
 
     return ok(res, {

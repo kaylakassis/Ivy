@@ -113,6 +113,32 @@ export function serializeSettings(row) {
   };
 }
 
+// What a visitor's page gets. The booking page needs the hours, the slot
+// rules and the look; it does not need the owner's own switches, the text
+// of their automatic reply to leads, or the exact map point of what may be
+// someone's home. The keys stay (emptied) so an older app that expects them
+// still reads a value of the right kind.
+export function publicSettings(row) {
+  const s = serializeSettings(row);
+  if (!s) return s;
+  return {
+    ...s,
+    leadInstantReplyEnabled: false,
+    leadInstantReplyMessage: '',
+    inviteNewClients: false,
+    waitlistAutoFill: false,
+    lat: null,
+    lng: null,
+  };
+}
+// Same idea for a service: reminder timings and which intake forms are
+// attached are how the owner runs things, not something a visitor uses.
+export function publicService(row) {
+  const s = serializeService(row);
+  if (!s) return s;
+  return { ...s, reminderMinutes: [], reminderUseDefault: true, intakeFormTemplateIds: [] };
+}
+
 // A phone number the business chose to show clients, pulled from the
 // free-text contact block they print on invoices (calendar_settings.
 // biz_contact, e.g. "123 Main St\n(512) 555-0100 · hello@x.com"). Returns

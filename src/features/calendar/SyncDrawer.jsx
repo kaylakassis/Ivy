@@ -196,9 +196,9 @@ function GoogleSection() {
         background: 'var(--surface-2)', border: '1px solid var(--border)',
         fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
       }}>
-        Google Calendar sync isn't configured on this deployment. Ask an
-        admin to set <code>GOOGLE_OAUTH_CLIENT_ID</code> and{' '}
-        <code>GOOGLE_OAUTH_CLIENT_SECRET</code> in Vercel env.
+        Google Calendar sync is not available right now. This is a set-up
+        problem on Ivy's side, not yours. Email hello@joinivy.ai and we
+        will fix it.
       </div>
     );
   }

@@ -99,7 +99,9 @@ export default async function handler(req, res) {
     const plan = body?.plan === 'annual' ? 'annual' : 'monthly';
     const annualPriceId = process.env.IVY_STRIPE_PRICE_ID_ANNUAL;
     if (plan === 'annual' && !annualPriceId) {
-      return badRequest(res, 'Annual billing is not configured yet - set IVY_STRIPE_PRICE_ID_ANNUAL.');
+      // eslint-disable-next-line no-console
+      console.error('[billing] annual plan requested but IVY_STRIPE_PRICE_ID_ANNUAL is not set');
+      return badRequest(res, 'The yearly plan is not available right now. Choose monthly, or email hello@joinivy.ai.');
     }
     const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
 

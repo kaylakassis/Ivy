@@ -13,6 +13,8 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { enforce } from '../_lib/rate-limit.js';
+import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { SCHEDULE_C_CATEGORIES } from '../_lib/expenses.js';
 import { csvRow } from '../_lib/csv.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
@@ -28,6 +30,12 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
+    // Money exports are capped and written down (who, when, which one).
+    if (await enforce(req, res, [{ key: `finexport:user:${user.id}`, max: 30, windowSeconds: 60 * 60 }])) return;
+    await recordWorkspaceAudit(req, {
+      workspaceId, actor: user, action: 'finance.export.tax',
+      target: { kind: 'export', id: null }, meta: { format: String(req.query.format || ''), type: String(req.query.type || ''), year: String(req.query.year || '') },
+    });
 
     const year = parseInt(req.query.year, 10);
     if (!Number.isInteger(year) || year < 2000 || year > 2100) {

@@ -1480,8 +1480,25 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
     await recordIvyAction(name, ctx?.workspaceId, result, a);
     return result;
   } catch (err) {
-    return { error: err?.message || String(err) };
+    // eslint-disable-next-line no-console
+    console.error(`[ivy tool] ${name} failed:`, err?.message || err);
+    return { error: toolErrorText(err) };
   }
+}
+
+// What an unexpected failure inside a tool may say to Ivy, and so to the
+// owner's screen and the saved chat. A tool's own plain refusals ("No
+// client by that name") pass through. Anything that reads like the
+// database, the network or a stack trace is replaced: table and column
+// names are how the product is built, not something to show anyone.
+const INTERNAL_ERROR = /(postgres|neon|pg_|\bsql\b|relation|column|constraint|violates|duplicate key|syntax error|econn|etimedout|enotfound|fetch failed|socket|\bat \S+ \(|node:|undefined|null \(reading|is not a function|cannot read)/i;
+export function toolErrorText(err) {
+  const msg = String(err?.message || err || '').trim();
+  const sqlState = typeof err?.code === 'string' && /^[0-9A-Z]{5}$/.test(err.code);
+  if (!msg || msg.length > 200 || sqlState || INTERNAL_ERROR.test(msg)) {
+    return 'Something went wrong on our side, so nothing was changed. Try again in a moment.';
+  }
+  return msg;
 }
 
 // Checks made when the model asks for a gated tool, before a pending row is

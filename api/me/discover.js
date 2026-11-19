@@ -20,6 +20,7 @@
 // distance bounds, all businesses match regardless of coords.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
+import { enforce } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { discoverShops } from '../_lib/shops.js';
@@ -39,6 +40,10 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
+    // The directory is for a person looking for someone to book. One
+    // search every few seconds is plenty; slicing it by word, category and
+    // map area to copy the whole list is not what it is for.
+    if (await enforce(req, res, [{ key: `discover:u:${user.id}`, max: 90, windowSeconds: 600 }])) return;
 
     const q        = (req.query.q || '').toString().trim();
     const category = (req.query.category || '').toString().trim();
@@ -214,8 +219,10 @@ export default async function handler(req, res) {
       tagline:        r.tagline || '',
       category:       r.category || null,
       addressLabel:   r.address_label || '',
-      lat:            r.lat == null ? null : Number(r.lat),
-      lng:            r.lng == null ? null : Number(r.lng),
+      // About a block's precision: enough for a map pin and "2 km away",
+      // not the exact spot (many of these businesses run from a home).
+      lat:            r.lat == null ? null : Math.round(Number(r.lat) * 1000) / 1000,
+      lng:            r.lng == null ? null : Math.round(Number(r.lng) * 1000) / 1000,
       distanceKm:     r.distance_km == null ? null : Number(r.distance_km),
       serviceCount:   r.service_count || 0,
       minPrice:       r.min_price != null ? Number(r.min_price) : null,

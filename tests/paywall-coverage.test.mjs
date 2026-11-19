@@ -57,7 +57,6 @@ const EXEMPT_FILES = [
   // subscribes. It gates on subscription_status itself instead of the paywall.
   'api/referrals/index.js',
   'api/health.js',
-  'api/public-stats.js',
   'api/geocode.js',
   'api/newsletter.js',
   'api/marketing-sitemap.xml.js',

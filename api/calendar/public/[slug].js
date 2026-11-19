@@ -18,7 +18,7 @@ import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
-  serializeSettings, serializeService, serializeBlock, serializeBooking,
+  publicSettings, publicService, serializeBlock, serializeBooking,
   hasConflict, losesBookingRace, withinAvailability, depositFor, videoRoomUrlForService,
   slotEpochMs, publicLocationLabel,
 } from '../../_lib/calendar.js';
@@ -108,6 +108,7 @@ async function getCalendar(req, res) {
     // Subscription lapsed: the page is archived. 200 with the archived
     // marker and nothing else - no services, slots or bookings leak.
     const access = await loadWorkspaceAccess(s.workspace_id);
+    if (!access.active && !access.everActive) return notFound(res, 'No booking page for that handle');
     if (!access.active) return ok(res, archivedPayload(access));
 
     // Everything below is independent of everything else, so it is asked for
@@ -146,6 +147,9 @@ async function getCalendar(req, res) {
         SELECT * FROM calendar_blocks
         WHERE workspace_id = ${wsId}
           AND blocks_bookings = TRUE
+          -- Only what the slot grid can still use. The owner's whole
+          -- history of time off is not a visitor's business.
+          AND date >= CURRENT_DATE - 1
         ORDER BY date, start_min
       `,
       // Only what the slot grid can still use: from yesterday on, plus
@@ -277,9 +281,9 @@ async function getCalendar(req, res) {
     return ok(res, {
       calendar: {
         giftCardsAvailable,
-        settings: serializeSettings(s),
+        settings: publicSettings(s),
         services: services.rows.map((r) => {
-          const out = serializeService(r);
+          const out = publicService(r);
           out.locationLabel = publicLocationLabel(out.locationType, out.locationLabel);
           return out;
         }),

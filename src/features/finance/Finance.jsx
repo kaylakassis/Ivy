@@ -882,25 +882,28 @@ function ExportMenuItem({ label, hint, onClick }) {
 // We render an actionable banner and strip the query params so a
 // refresh doesn't show the same banner forever.
 const STRIPE_ERRORS = {
+  // These four mean Ivy's own payment set-up needs attention. That is for
+  // Ivy to fix, so the owner is told so in plain words; the detail lives
+  // in Admin > Readiness, never on a customer's screen.
   no_key: {
-    title: 'Stripe isn\'t configured on this deploy yet',
-    body: 'Set STRIPE_SECRET_KEY in your Vercel project settings - a key starting with sk_live_ (or sk_test_ for testing) from https://dashboard.stripe.com/apikeys. Redeploy after saving.',
+    title: 'Card payments are not available right now',
+    body: 'This is a set-up problem on Ivy\'s side, not yours. Email hello@joinivy.ai and we will fix it.',
   },
   bad_key: {
-    title: 'Stripe rejected the API key',
-    body: 'STRIPE_SECRET_KEY in Vercel doesn\'t look like a valid Stripe secret key. It must start with sk_live_ or sk_test_. Get the right value from https://dashboard.stripe.com/apikeys and update the env var, then redeploy.',
+    title: 'Card payments are not available right now',
+    body: 'This is a set-up problem on Ivy\'s side, not yours. Email hello@joinivy.ai and we will fix it.',
   },
   restricted_key: {
-    title: 'Your Stripe key can\'t start Connect onboarding',
-    body: 'The STRIPE_SECRET_KEY on this deploy is a restricted key (rk_live_...) without Connect permissions - the Vercel Stripe integration installs these. Fix either way: (1) In Vercel > Settings > Environment Variables, replace STRIPE_SECRET_KEY with your full secret key (sk_live_...) from https://dashboard.stripe.com/apikeys and redeploy, or (2) in Stripe > Developers > API keys, edit that restricted key and grant "Connect" write access (Accounts + Account Links), then retry.',
+    title: 'Card payments are not available right now',
+    body: 'This is a set-up problem on Ivy\'s side, not yours. Email hello@joinivy.ai and we will fix it.',
   },
   connect_not_enabled: {
-    title: 'Your Stripe account hasn\'t enabled Connect yet',
-    body: 'Visit https://dashboard.stripe.com/connect/accounts/overview (or /test/connect/accounts/overview if you\'re using a test key) and click "Get started" - takes about 2 minutes. Then retry the Connect button.',
+    title: 'Card payments are not available right now',
+    body: 'This is a set-up problem on Ivy\'s side, not yours. Email hello@joinivy.ai and we will fix it.',
   },
   wrong_mode: {
-    title: 'Saved Stripe account is from the other mode',
-    body: 'A connected-account ID from the other mode (test vs. live) is saved on this workspace. Click Disconnect Stripe below, then reconnect - the new connection will match the current key.',
+    title: 'Your Stripe connection needs to be redone',
+    body: 'The Stripe account saved here no longer matches. Click Disconnect Stripe below, then connect again.',
   },
   unsupported_country: {
     title: 'Stripe rejected the account country',

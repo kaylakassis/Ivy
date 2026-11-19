@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     if (!isGoogleConfigured()) {
-      return badRequest(res, 'Google Calendar sync is not configured on this deployment yet. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in Vercel env.');
+      return badRequest(res, 'Google Calendar sync is not available right now. This is a set-up problem on Ivy\'s side, not yours. Email hello@joinivy.ai and we will fix it.');
     }
     const user = await requireUser(req, res);
     if (!user) return;

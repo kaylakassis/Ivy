@@ -33,6 +33,7 @@ export default async function handler(req, res) {
     if (await guardVisit(req, res, result.kind === 'ok' ? result.workspaceId : missKey(handle), { html: true })) return;
     if (result.kind !== 'ok') return notFound(res, handle);
     const access = await loadWorkspaceAccess(result.workspaceId);
+    if (!access.active && !access.everActive) return notFound(res, handle);
     if (!access.active) return archived(res, access);
     // Honor owner-configured 301 redirects before rendering.
     const hit = matchRedirect(result.site.redirects, '');

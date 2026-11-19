@@ -90,7 +90,7 @@ export default async function handler(req, res) {
         if (live === true) {
           detail = 'Live - SSL active. Your site is reachable on this domain.';
         } else if (live === false) {
-          detail = 'DNS verified. Vercel is issuing the SSL certificate - this usually takes a minute or two.';
+          detail = 'Your domain is verified. The secure certificate is being issued now. This usually takes a minute or two.';
         }
       }
     }

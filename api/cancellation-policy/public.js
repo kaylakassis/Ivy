@@ -41,7 +41,11 @@ async function workspaceBySite(handle) {
       JOIN workspaces w ON w.id = web.workspace_id
       JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
       LEFT JOIN calendar_settings cs ON cs.workspace_id = web.workspace_id
-     WHERE web.handle = ${handle} LIMIT 1
+     WHERE web.handle = ${handle}
+       -- Only a site that is actually public: an unpublished or private
+       -- site's name must not answer here with its business behind it.
+       AND web.published_at IS NOT NULL AND web.visibility != 'only_me'
+     LIMIT 1
   `;
   return rows[0] || null;
 }

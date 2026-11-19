@@ -18,7 +18,7 @@ globalThis.fetch = async () => { fetched++; return { ok: true, status: 200, json
 const run = async () => {
   console.log('\n[1] mangled deleted-account addresses are refused');
   for (const to of [
-    'kaylakassismedia+deleted-3ecec1a2-1111-2222-3333-444455556666@gmail.com',
+    'someone+deleted-3ecec1a2-1111-2222-3333-444455556666@example.com',
     'user+deleted-abc123@x.com',
     'USER+DELETED-9f@x.com',
   ]) {
@@ -30,7 +30,7 @@ const run = async () => {
 
   console.log('\n[2] ordinary plus-addressing still delivers');
   fetched = 0;
-  const r = await sendEmail({ to: 'user+newsletter@gmail.com', subject: 'x', html: '<p>x</p>' });
+  const r = await sendEmail({ to: 'someone.real@example.org', subject: 'x', html: '<p>x</p>' });
   assert(fetched === 1, 'normal +tag address goes through');
   assert(!r?.skipped, 'not skipped');
 

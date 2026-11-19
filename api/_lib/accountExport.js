@@ -54,7 +54,15 @@ export async function buildAccountExport(user) {
   ] = await Promise.all([
     sql`SELECT id, email, name, created_at, updated_at, email_verified_at
         FROM users WHERE id = ${user.id}`,
-    sql`SELECT * FROM workspaces WHERE id = ${workspaceId}`,
+    // Named columns, not "everything": the business row also carries Ivy's
+    // own operating notes (review holds and their reasons, complimentary
+    // access notes, billing session keys, reminder bookkeeping), which are
+    // not the owner's data and must not ride along in a download.
+    sql`SELECT id, name, created_at, onboarded_at, business_type,
+               subscription_status, subscription_source, trial_ends_at,
+               subscription_period_end, cancel_at_period_end, data_deletion_at,
+               streak_days, streak_best
+          FROM workspaces WHERE id = ${workspaceId}`,
     sql`SELECT * FROM clients          WHERE workspace_id = ${workspaceId}`,
     sql`SELECT * FROM services         WHERE workspace_id = ${workspaceId}`,
     sql`SELECT * FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
@@ -113,7 +121,9 @@ export async function buildAccountExport(user) {
     user:               stripSensitive(profile.rows[0] || null),
     workspace:          stripSensitive(workspace.rows[0] || null),
     website:            stripSensitive(website.rows[0] || null),
-    clients:            stripRows(clients.rows),
+    // user_id links a client to that person's own Ivy sign-in. It is an
+    // internal reference to someone else's account, not the owner's data.
+    clients:            stripRows(clients.rows).map(({ user_id: _userId, ...c }) => c),
     client_field_definitions: clientFields.rows,
     services:           stripRows(services.rows),
     calendar_settings:  stripSensitive(calendarSettings.rows[0] || null),

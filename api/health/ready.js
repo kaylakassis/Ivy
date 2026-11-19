@@ -65,6 +65,14 @@ export default async function handler(req, res) {
 
   const healthy = db === 'ok' && missingCritical.length === 0;
 
+  // Anyone may ask "is it up?". Which services are wired and which
+  // settings are missing is for the operator only: to a stranger that list
+  // is a map of how Ivy is built and where it is weak today.
+  const { isAdminBypass } = await import('../_lib/rate-limit.js');
+  if (!(await isAdminBypass(req))) {
+    return res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', time: new Date().toISOString() });
+  }
+
   return res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ok' : 'degraded',
     service: 'ivy-business-os',

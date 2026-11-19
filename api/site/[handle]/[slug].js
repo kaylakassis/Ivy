@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     if (await guardVisit(req, res, result.workspaceId || missKey(handle), { html: true })) return;
     if (result.kind !== 'ok') return notFound(res, handle, slug);
     const access = await loadWorkspaceAccess(result.workspaceId);
+    if (!access.active && !access.everActive) return notFound(res, handle, slug);
     if (!access.active) return archived(res, access);
     // 301 redirect if the owner has a rule for this slug.
     const hit = matchRedirect(result.site.redirects, slug || '');

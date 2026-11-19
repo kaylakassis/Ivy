@@ -41,6 +41,9 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 function secretKey() {
   const explicit = process.env.REBOOK_SECRET;
   if (explicit && explicit.length >= 16) return explicit;
+  if (!process.env.JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production')) {
+    throw new Error('Signing secret is not set');
+  }
   const seed = `${process.env.JWT_SECRET || 'no-jwt-secret'}|${appUrl()}|ivy-rebook-v1`;
   return crypto.createHash('sha256').update(seed).digest('hex');
 }

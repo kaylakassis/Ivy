@@ -63,6 +63,18 @@ export function serializeClientMinimal(row) {
   };
 }
 
+// Money is never a helper's to see, whatever the owner has switched on for
+// them (api/_lib/helpers.js). A helper with the clients permission gets the
+// full record minus what the client has spent.
+export function serializeClientFor(req) {
+  if (!req?.helper) return serializeClient;
+  return (row) => {
+    const c = serializeClient(row);
+    if (c) c.lifetimeValue = 0;
+    return c;
+  };
+}
+
 // True when the request runs in helper mode without the clients
 // permission - the client book must then be served minimal.
 export function helperSeesMinimalClients(req) {

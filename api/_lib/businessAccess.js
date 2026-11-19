@@ -27,11 +27,20 @@ export const DISCOVER_PATH = '/me/discover';
 // owner's domain instead of Ivy.
 export const DISCOVER_URL = 'https://www.joinivy.ai/me/discover';
 
+// `everActive`: this business has had a trial, a plan, complimentary access
+// or a hold at some point. An account that signed up and never started has
+// no public pages at all: its address answers "not found", the same as a
+// name nobody has. (Sign-up seeds the address from the person's own name,
+// so the "no longer available" card would otherwise confirm, by name, who
+// has opened an Ivy account.)
 function shape(row) {
-  if (!row) return { workspaceId: null, active: false, businessName: null };
+  if (!row) return { workspaceId: null, active: false, everActive: false, businessName: null };
+  const status = row.subscription_status || 'inactive';
   return {
     workspaceId: row.id,
     active: isWorkspaceActive(row),
+    everActive: !!(row.trial_ends_at || row.subscription_period_end || row.comp_until || row.risk_hold_at
+      || ['active', 'past_due', 'suspended', 'canceled', 'cancelled'].includes(status)),
     businessName: row.biz_name || row.workspace_name || 'This business',
   };
 }

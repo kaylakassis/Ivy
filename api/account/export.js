@@ -10,6 +10,7 @@ import { requireUser } from '../_lib/auth.js';
 import { buildAccountExport, exportFilename } from '../_lib/accountExport.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError, badRequest } from '../_lib/json.js';
 
@@ -28,7 +29,15 @@ async function streamDownload(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
+    // A full copy of the account is something a person asks for now and
+    // then. Capped, and written down, so a stolen sign-in cannot quietly
+    // take everything again and again.
+    if (await enforce(req, res, [{ key: `export-dl:user:${user.id}`, max: 6, windowSeconds: 60 * 60 }])) return;
     const payload = await buildAccountExport(user);
+    await recordWorkspaceAudit(req, {
+      workspaceId: payload.workspace?.id, actor: user, action: 'data.export',
+      target: { kind: 'account', id: user.id }, meta: { how: 'download', clients: payload.clients?.length || 0 },
+    });
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${exportFilename()}"`);
@@ -67,6 +76,10 @@ async function emailCopy(req, res) {
     if (blocked) return;
 
     const payload = await buildAccountExport(user);
+    await recordWorkspaceAudit(req, {
+      workspaceId: payload.workspace?.id, actor: user, action: 'data.export',
+      target: { kind: 'account', id: user.id }, meta: { how: 'email', clients: payload.clients?.length || 0 },
+    });
     const json = JSON.stringify(payload, null, 2);
     const bytes = Buffer.byteLength(json, 'utf8');
     const filename = exportFilename();
