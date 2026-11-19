@@ -34,7 +34,7 @@ const STEPS = [
   },
   {
     id: 'dashboard',
-    title: 'Dashboard',
+    title: 'Home',
     body: "This is your at-a-glance home: revenue, upcoming bookings, who's gone quiet, what needs your attention today. Everything important on one screen.",
     route: '/dashboard',
     selector: '[data-tour="nav-dashboard"]',
@@ -43,7 +43,7 @@ const STEPS = [
   {
     id: 'calendar',
     title: 'Calendar',
-    body: "Set your weekly availability and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS reminders. Your services live under Finance, in the Services section.",
+    body: "Set your weekly availability and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS reminders. Your services live under Money, in the Services section.",
     route: '/calendar',
     selector: '[data-tour="nav-calendar"]',
     placement: 'right',
@@ -74,7 +74,7 @@ const STEPS = [
   },
   {
     id: 'finance',
-    title: 'Finance - invoices + Stripe',
+    title: 'Money - invoices + Stripe',
     body: "Send invoices, accept card payments through your own Stripe account, refund (full or partial), track expenses, and export Schedule C-ready CSVs at tax time.",
     route: '/finance',
     selector: '[data-tour="nav-finance"]',

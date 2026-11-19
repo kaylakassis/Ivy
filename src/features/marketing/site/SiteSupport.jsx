@@ -68,7 +68,7 @@ const FAQ = [
   },
   {
     q: 'How do I get paid by my clients?',
-    a: ['Connect your own Stripe, Square or PayPal account under Finance. Client payments go straight to your account, not through us, and payouts follow whatever schedule your processor uses.'],
+    a: ['Connect your own Stripe, Square or PayPal account under Money. Client payments go straight to your account, not through us, and payouts follow whatever schedule your processor uses.'],
   },
   {
     q: 'Do my clients have to pay for anything?',

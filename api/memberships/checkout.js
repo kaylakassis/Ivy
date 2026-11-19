@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
       return badRequest(res, e.code === 'no_stripe_connection'
-        ? 'Memberships require Stripe. Connect Stripe in Finance to offer recurring plans.'
+        ? 'Memberships require Stripe. Connect Stripe in Money to offer recurring plans.'
         : e.message);
     }
 

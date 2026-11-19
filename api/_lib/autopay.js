@@ -111,7 +111,7 @@ export async function autopayAvailability(workspaceId) {
   if (!settings?.stripeConnectUserId && !settings?.stripeSecretEncrypted) {
     return {
       ok: false, provider, reason: 'not_connected',
-      message: 'Connect Stripe under Finance to charge a client\'s saved card automatically.',
+      message: 'Connect Stripe under Money to charge a client\'s saved card automatically.',
     };
   }
   if (settings?.stripeTaxEnabled) {

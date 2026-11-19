@@ -154,7 +154,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: invoiceCount > 0,
       required: false,
       href: '/finance?section=invoices',
-      why: 'Build one in Finance and send it; Ivy can draft it for you. The first one you get paid on is the whole point.',
+      why: 'Build one in Money and send it; Ivy can draft it for you. The first one you get paid on is the whole point.',
     },
   ];
 

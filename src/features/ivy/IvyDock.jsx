@@ -103,7 +103,7 @@ export default function IvyDock() {
     window.__ivyDockMounted = true;
     const onOpen = (e) => {
       const d = e?.detail || {};
-      setLaunch({ prompt: typeof d.prompt === 'string' ? d.prompt.slice(0, 500) : '', photo: !!d.photo, key: Date.now() });
+      setLaunch({ prompt: typeof d.prompt === 'string' ? d.prompt.slice(0, 500) : '', photo: !!d.photo, send: d.send === true, key: Date.now() });
       setOpen(true);
     };
     window.addEventListener(IVY_OPEN_EVENT, onOpen);
@@ -293,12 +293,12 @@ export function IvyQuickPanel({ onClose, prompt = '', photo = false }) {
 
 function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, suggestions, launch }) {
   const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending, usage } = ivy;
-  const [draft, setDraft] = useState(() => launch?.prompt || '');
+  const [draft, setDraft] = useState(() => (launch?.send ? '' : launch?.prompt || ''));
   const [photoSignal, setPhotoSignal] = useState(() => (launch?.photo ? launch.key : 0));
   // A later openIvy() while the panel is already open: refill + reopen menu.
   useEffect(() => {
     if (!launch) return;
-    if (launch.prompt) setDraft(launch.prompt);
+    if (launch.prompt && !launch.send) setDraft(launch.prompt);
     if (launch.photo) setPhotoSignal(launch.key);
   }, [launch]);
   const [listening, setListening] = useState(false);
@@ -339,6 +339,16 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
       Promise.resolve(send(t)).then((r) => { if (r && r.ok === false && r.retryText) setDraft((d) => d || r.retryText); }).catch(() => {});
     }
   }, [draft, thinking, send, photoAttach]);
+
+  // A request typed in the app (the box on Home) is sent as soon as the
+  // panel is up, once per request.
+  const sentLaunchRef = useRef(0);
+  useEffect(() => {
+    if (!launch?.send || !launch.prompt || sentLaunchRef.current === launch.key) return;
+    sentLaunchRef.current = launch.key;
+    submit(launch.prompt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launch]);
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {

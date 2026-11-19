@@ -94,7 +94,7 @@ export async function notifyPaymentClaimed({ workspaceId, invoiceId }) {
     const label = paidMethodLabel(inv.payment_claimed_method);
     const client = inv.client_name || 'A client';
     const amount = fmtMoney(totals.total);
-    const summary = `${client} says they paid invoice ${inv.number} (${amount}) by ${label}. Confirm it in Finance.`;
+    const summary = `${client} says they paid invoice ${inv.number} (${amount}) by ${label}. Confirm it in Money.`;
     const url = `/finance?invoice=${inv.id}`;
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName || 'the business';
@@ -121,10 +121,10 @@ export async function notifyPaymentClaimed({ workspaceId, invoiceId }) {
           <p><strong>${escapeHtml(client)}</strong> says they paid invoice
           <strong>${escapeHtml(inv.number)}</strong> (${escapeHtml(amount)}) by <strong>${escapeHtml(label)}</strong>.</p>
           ${inv.payment_claimed_note ? `<p style="color:#85827B;">Their note: "${escapeHtml(inv.payment_claimed_note)}"</p>` : ''}
-          <p>Check your ${escapeHtml(label)} account. Once the money is there, confirm it in Finance and
+          <p>Check your ${escapeHtml(label)} account. Once the money is there, confirm it in Money and
           the invoice is marked paid and the client gets a receipt. If it never shows up, mark it
           not received and the client can try again.</p>`,
-        ctaText: 'Confirm in Finance',
+        ctaText: 'Confirm in Money',
         ctaUrl: `${appUrl()}${url}`,
         footer: 'Ivy never moves money for these payments. It only tracks what the client told you.',
       });

@@ -41,7 +41,7 @@ export default function CancellationPolicySection({ data = {}, handle, editable 
       <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
         <div style={{ ...container, textAlign: 'center', color: 'var(--site-muted)', fontSize: 14 }}>
           {policy === undefined ? 'Loading your cancellation policy…'
-            : 'Your cancellation policy shows here. Write it in Finance, Services, Cancellation policy.'}
+            : 'Your cancellation policy shows here. Write it in Money, Services, Cancellation policy.'}
         </div>
       </section>
     );
@@ -96,7 +96,7 @@ export function CancellationPolicyEditor({ data = {}, update }) {
           style={{ ...input, resize: 'vertical', lineHeight: 1.5 }}/>
       </label>
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        The policy text updates on its own whenever you save a new version in Finance, Services, Cancellation policy.
+        The policy text updates on its own whenever you save a new version in Money, Services, Cancellation policy.
       </div>
     </>
   );

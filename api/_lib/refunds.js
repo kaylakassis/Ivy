@@ -293,7 +293,7 @@ export async function refundThroughProvider({ workspaceId, paymentIntent, paidMe
     creds = await loadStripeCreds(workspaceId);
   } catch (err) {
     if (err.code === 'no_stripe_connection') {
-      throw new Error('Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually.');
+      throw new Error('Card refund needs your Stripe account connected. Reconnect Stripe in Money, or refund manually.');
     }
     throw err;
   }

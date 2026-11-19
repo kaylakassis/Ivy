@@ -1,6 +1,6 @@
 // The owner's home (1.0.6 redesign). Owner-first order:
 //   1. Greeting + a one-line summary of the day + quick actions
-//      (New booking, New client, New invoice, Ask Ivy).
+//      (New booking, New client, New invoice), then the Ask Ivy box.
 //   2. Today (next appointment with Message / Start / Complete, money in
 //      today and this week) beside "Needs your attention" (the
 //      accountability partner's list, each row one tap from the fix).
@@ -35,6 +35,7 @@ import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 import TodayCard, { pickNext } from './TodayCard.jsx';
 import AttentionCard from './AttentionCard.jsx';
 import KeyNumbers from './KeyNumbers.jsx';
+import AskIvyCard from './AskIvyCard.jsx';
 import { fmtMoney, fmtTime } from './format.js';
 import { FLAGS } from '../../lib/featureFlags.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
@@ -239,8 +240,8 @@ function HeroBand({ data, setupFirst = false, offline = false }) {
     { label: 'New booking', icon: 'Calendar', to: '/calendar?newBooking=new' },
     { label: 'New client', icon: 'Users', to: '/clients?add=1' },
     { label: 'New invoice', icon: 'Dollar', to: '/finance?newInvoice=new' },
-    { label: 'Ask Ivy', icon: 'Spark', to: '/ivy', primary: true },
   ];
+  // (Ask Ivy is the box right under this band: AskIvyCard.)
   return (
     <div className="hero-band" style={{
       display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap',
@@ -415,6 +416,7 @@ export default function Dashboard() {
     <div>
       <HeroBand data={data} setupFirst={setupFirst}/>
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <AskIvyCard/>
         <FirstWinMoment celebrations={data?.firstWin?.celebrations}/>
         <FirstWinReadyCard show={showReady} onDone={loadDashboard}/>
         {setupFirst && setupCard}

@@ -49,7 +49,7 @@ export default function BookingMoneyNotes({ event, onBookingChanged }) {
   }
   if (event.cancelledAt && event.cancelledBy) lines.push(`Cancelled by ${event.cancelledBy === 'client' ? 'the client' : 'you'}`);
   const problems = [];
-  if (event.feeChargeError) problems.push(`The fee was not charged: ${event.feeChargeError}${event.feeInvoiceId ? ' A draft invoice for it is waiting in Finance, Invoices.' : ''}`);
+  if (event.feeChargeError) problems.push(`The fee was not charged: ${event.feeChargeError}${event.feeInvoiceId ? ' A draft invoice for it is waiting in Money, Invoices.' : ''}`);
   if (event.depositRefundError) problems.push(`The deposit refund did not go through: ${event.depositRefundError}`);
   const reqd = event.depositRefundRequest || null;
   const pending = reqd?.status === 'pending';

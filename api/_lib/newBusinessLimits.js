@@ -176,7 +176,7 @@ export async function enforceNewBusinessPayment({ workspaceId = null, stripeAcco
         type: 'payments',
         payload: {
           title: 'A card payment was not taken',
-          body: `A ${money(v.amount)} card payment was stopped because ${REASON_WORDS[v.reason](v.limits)}. These limits lift as soon as Stripe finishes verifying your account. Open Finance to finish.`,
+          body: `A ${money(v.amount)} card payment was stopped because ${REASON_WORDS[v.reason](v.limits)}. These limits lift as soon as Stripe finishes verifying your account. Open Money to finish.`,
           url: '/finance',
           tag: 'new-business-limit',
         },

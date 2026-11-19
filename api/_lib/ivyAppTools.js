@@ -735,7 +735,7 @@ async function draftPolicy(ws, rawOptions) {
     if (action !== 'flat') return;
     const fees = [...new Set(svc.map((s) => Number(s[key])).filter((n) => n > 0))];
     const amt = cleanAmount(amount);
-    if (!fees.length) check.push(`None of your services has a ${what} yet, so Ivy will not charge one. Set it on each service in Finance, Services.`);
+    if (!fees.length) check.push(`None of your services has a ${what} yet, so Ivy will not charge one. Set it on each service in Money, Services.`);
     else if (amt !== null && !fees.every((f) => f === amt)) check.push(`Your services charge a ${what} of ${fees.map(dollars).join(' or ')}, not ${dollars(amt)}. Ivy charges the amount set on each service.`);
   };
   feeCheck(o.lateAction, o.lateAmount, 'lateCancelFee', 'late cancellation fee');
@@ -760,7 +760,7 @@ async function readPolicyDraft(ws, args) {
   return {
     draft: d.text,
     ...(d.check.length ? { check_with_owner: d.check } : {}),
-    note: 'Nothing is saved. Show the owner the draft; to save it, call set_text with the same options (they approve the card). They can also paste it in Finance, Services, Cancellation policy, or use Help me write it there.',
+    note: 'Nothing is saved. Show the owner the draft; to save it, call set_text with the same options (they approve the card). They can also paste it in Money, Services, Cancellation policy, or use Help me write it there.',
   };
 }
 
@@ -780,7 +780,7 @@ async function readPolicy(ws, args) {
       late_cancel_fee: Number(s.cancellation_fee_amount || 0), window_hours: s.cancellation_window_hours ?? 24,
       no_show_fee: Number(s.no_show_fee_amount || 0),
     })),
-    manage: '[Finance](/finance), Services',
+    manage: '[Money](/finance), Services',
   };
 }
 
@@ -1046,7 +1046,7 @@ async function readAutopay(ws, a) {
         ...(sum.cardChanged ? { card_note: 'The client changed their saved card; ask again.' } : {}),
       };
     }),
-    manage: '[Finance](/finance), Recurring',
+    manage: '[Money](/finance), Recurring',
   };
 }
 

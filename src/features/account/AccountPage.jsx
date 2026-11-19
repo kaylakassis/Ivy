@@ -1155,7 +1155,7 @@ function NavigationCard() {
       )}
 
       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <NavToggleRow icon="Home" label="Dashboard" section="Home" locked/>
+        <NavToggleRow icon="Home" label="Home" section="Home" locked/>
         <NavToggleRow icon="Spark" label="Ivy" section="Home" locked/>
         {items.map((n) => (
           <NavToggleRow key={n.id} icon={n.icon} label={n.label} section={n.section}
@@ -1469,7 +1469,7 @@ function BrandingCard() {
         Your logo and brand color appear on every invoice, document, and
         booking email your clients receive. Replies route to your inbox.
         Fonts and layouts for invoices live in{' '}
-        <a href="/finance?design=1" style={{ color: 'var(--accent)' }}>Finance → Invoice design</a>.
+        <a href="/finance?design=1" style={{ color: 'var(--accent)' }}>Money → Invoice design</a>.
       </p>
 
       {/* Logo */}

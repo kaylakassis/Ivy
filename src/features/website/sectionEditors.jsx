@@ -187,7 +187,7 @@ function ShopEditor({ data, update }) {
       <Headline data={data} update={update}/>
       <Sub data={data} update={update}/>
       <Toggle checked={!!data.showOutOfStock} onChange={(v) => update({ showOutOfStock: v })} label="Show sold-out products too" hint="Off: only products in stock appear."/>
-      <Note>Your products, prices and photos come from <a href="/finance" style={{ color: 'var(--accent)' }}>Finance, Products</a>. Changes there show here automatically.</Note>
+      <Note>Your products, prices and photos come from <a href="/finance" style={{ color: 'var(--accent)' }}>Money, Products</a>. Changes there show here automatically.</Note>
     </>
   );
 }

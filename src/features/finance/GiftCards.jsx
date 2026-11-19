@@ -78,7 +78,7 @@ export default function GiftCards() {
       }}>
         <Icons.Gift size={14} stroke="var(--accent)"/>
         <span style={{ flex: 1, minWidth: 240 }}>
-          Gift cards are sold from your public booking page once card payments are connected in Finance. Recipients get the code by email immediately after payment and apply it when they book or when they pay one of your invoices. A refund you issue here gives back what is left on the card, then voids it; a partial amount trims its balance instead.
+          Gift cards are sold from your public booking page once card payments are connected in Money. Recipients get the code by email immediately after payment and apply it when they book or when they pay one of your invoices. A refund you issue here gives back what is left on the card, then voids it; a partial amount trims its balance instead.
         </span>
       </div>
       {notice && <div style={{ fontSize: 12.5, color: 'var(--ok)', padding: '0 4px' }}>{notice}</div>}

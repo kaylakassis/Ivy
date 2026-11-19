@@ -64,6 +64,16 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
       background: 'var(--page)',
       position: 'sticky', top: 0, zIndex: 40,
     }}>
+      {/* iPhone app: the menu button opens the More screen (everything that
+          is not on the bottom bar). It used to be the bar's fifth tab; that
+          slot now holds Clients. */}
+      {native && (
+        <button onClick={() => navigate('/more')}
+          aria-label="More" data-tour="nav-more"
+          className="topbar-icon-btn" style={{ marginLeft: -10 }}>
+          <Icons.Menu size={22} sw={1.7}/>
+        </button>
+      )}
       {isMobile && !native && (
         <button onClick={onMenuClick}
           aria-label="Open menu"

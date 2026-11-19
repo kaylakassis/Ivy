@@ -50,7 +50,7 @@ const REFUSALS = {
   not_found: 'One of these clients was not found.',
   keep_merged: 'The client you chose to keep was already merged into another record.',
   both_claimed: 'Both records have their own client portal account, signed up by two different people, so they cannot be merged. If they really are the same person, ask them which account to keep and remove the other client first.',
-  autopay_cards: 'Both records have automatic payments running on two different cards. Turn off automatic payments for one of them first (Finance > Recurring), then merge.',
+  autopay_cards: 'Both records have automatic payments running on two different cards. Turn off automatic payments for one of them first (Money > Recurring), then merge.',
 };
 
 export function cleanId(v) {

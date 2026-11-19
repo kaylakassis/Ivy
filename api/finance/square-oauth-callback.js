@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     // has none, so this check is skipped when there is nothing to compare.)
     const session = readSession(req);
     if (session?.sub && payload.uid && session.sub !== payload.uid) {
-      return back('error', 'This Square link was started from a different account. Please start the connection again from Finance.');
+      return back('error', 'This Square link was started from a different account. Please start the connection again from Money.');
     }
 
     if (!appFlow) {
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
       const nonce = readNonceCookie(req);
       const nonceHash = nonce ? crypto.createHash('sha256').update(nonce).digest('hex') : null;
       if (!payload.nonce || !hashesMatch(nonceHash, payload.nonce)) {
-        return back('error', 'This Square link did not come from this browser. Please start the connection again from Finance.');
+        return back('error', 'This Square link did not come from this browser. Please start the connection again from Money.');
       }
     }
 

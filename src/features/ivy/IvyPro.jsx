@@ -113,6 +113,18 @@ export default function IvyPro() {
     }
   };
 
+  // A request typed in the app (the "What do you want to do?" box on Home)
+  // arrives in router state, never in the address, and is sent once.
+  const askedRef = useRef(false);
+  useEffect(() => {
+    const ask = typeof location.state?.ask === 'string' ? location.state.ask.trim().slice(0, 500) : '';
+    if (loading || askedRef.current || !ask) return;
+    askedRef.current = true;
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null });
+    submit(ask);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, location.state]);
+
   if (loading) {
     return <div style={{ padding: 48 }}><Loader/></div>;
   }

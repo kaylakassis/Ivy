@@ -108,7 +108,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
           }}>
             <strong>Card payment isn't set up yet</strong> - this link will show the
             invoice but can't take a card. Connect a payment processor in
-            Finance to charge cards here; for now, take cash or a bank transfer
+            Money to charge cards here; for now, take cash or a bank transfer
             and mark the invoice paid.
           </div>
         )}

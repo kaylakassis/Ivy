@@ -288,8 +288,8 @@ function InvoiceCard({ status, needsService, index }) {
   if (inv.sentCount > 0) {
     return (
       <CardShell icon="Receipt" title="Your first invoice is out" done index={index}>
-        <p style={subStyle}>You have sent {inv.sentCount === 1 ? 'an invoice' : `${inv.sentCount} invoices`}. Finance tracks who has paid.</p>
-        <div style={rowStyle}><Link to="/finance?section=invoices" className="btn btn-outline">Open Finance</Link></div>
+        <p style={subStyle}>You have sent {inv.sentCount === 1 ? 'an invoice' : `${inv.sentCount} invoices`}. Money tracks who has paid.</p>
+        <div style={rowStyle}><Link to="/finance?section=invoices" className="btn btn-outline">Open Money</Link></div>
       </CardShell>
     );
   }
@@ -299,9 +299,9 @@ function InvoiceCard({ status, needsService, index }) {
         <p style={subStyle}>
           {needsService
             ? 'Ivy drafts your first invoice from your first service. Add one above.'
-            : 'Build one in Finance when you are ready; Ivy can draft it for you.'}
+            : 'Build one in Money when you are ready; Ivy can draft it for you.'}
         </p>
-        {!needsService && <div style={rowStyle}><Link to="/finance?section=invoices" className="btn btn-outline">Open Finance</Link></div>}
+        {!needsService && <div style={rowStyle}><Link to="/finance?section=invoices" className="btn btn-outline">Open Money</Link></div>}
       </CardShell>
     );
   }

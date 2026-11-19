@@ -84,7 +84,7 @@ export function FirstWinMoment({ celebrations }) {
             <p style={{ margin: '6px 0 12px', fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.5 }}>{detailFor(c)}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Link to={c.kind === 'payment' ? '/finance' : '/calendar'} className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5, gap: 6 }}>
-                {c.kind === 'payment' ? 'Open Finance' : 'Open calendar'} <Icons.Arrow size={11} sw={2}/>
+                {c.kind === 'payment' ? 'Open Money' : 'Open calendar'} <Icons.Arrow size={11} sw={2}/>
               </Link>
               <button type="button" className="btn btn-ghost" style={{ padding: '7px 12px', fontSize: 12.5, color: 'var(--muted)' }}
                 onClick={() => setShown((xs) => xs.filter((x) => x.kind !== c.kind))}>

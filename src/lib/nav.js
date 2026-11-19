@@ -15,14 +15,16 @@
 // every route stays reachable and deep-linkable. Items without a section
 // (Dashboard, Ivy, Admin) render pinned above the groups.
 export const NAV = [
-  { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
+  { id: 'dashboard', to: '/dashboard',  label: 'Home',           icon: 'Home' },
   { id: 'ivy',       to: '/ivy',        label: 'Ivy',        icon: 'Spark', accent: true },
   // Run — the day-to-day.
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users',    section: 'Run' },
   { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar', section: 'Run', productOnlyHidden: true },
   { id: 'comms',     to: '/messages',   label: 'Messages',       icon: 'Chat',     section: 'Run' },
-  // Money.
-  { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar',   section: 'Money' },
+  // Money sits with the day-to-day: getting paid is part of running the
+  // business. (It was its own one-item group, and was called "Finance"
+  // here while the phone bar called it "Money".)
+  { id: 'finance',   to: '/finance',    label: 'Money',          icon: 'Dollar',   section: 'Run' },
   // Grow.
   { id: 'programs',  to: '/programs',   label: 'Programs',       icon: 'Gift',     section: 'Grow', accent: true },
   { id: 'marketing', to: '/marketing',  label: 'Marketing',      icon: 'Mail',     section: 'Grow' },
@@ -63,11 +65,11 @@ export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hid
 }
 
 export const TITLES = {
-  dashboard: { title: 'Dashboard',     subtitle: 'Home, goals and tasks' },
+  dashboard: { title: 'Home',          subtitle: 'Today, what needs you, goals and tasks' },
   clients:   { title: 'Clients',       subtitle: 'Your people' },
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
-  finance:   { title: 'Finance',       subtitle: 'Money in, money out' },
+  finance:   { title: 'Money',       subtitle: 'Money in, money out' },
   marketing: { title: 'Marketing',     subtitle: 'Campaigns, automations and rewards' },
   reviews:   { title: 'Reviews',       subtitle: 'Publish & respond to client reviews' },
   comms:     { title: 'Messages',      subtitle: 'Inbox' },

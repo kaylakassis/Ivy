@@ -941,7 +941,7 @@ function FirstProductStep({ productDraft, setProductDraft, productCreated }) {
   return (
     <>
       <StepHeader title="Add your first product"
-        subtitle="The thing you sell. You can add the full catalog later in Finance → Products."/>
+        subtitle="The thing you sell. You can add the full catalog later in Money → Products."/>
       <Field label="Product name" required>
         <input className="input" value={productDraft.name}
           onChange={(e) => setProductDraft({ ...productDraft, name: e.target.value })}
@@ -969,7 +969,7 @@ function FirstProductStep({ productDraft, setProductDraft, productCreated }) {
       </Field>
       {productCreated && (
         <div style={{ fontSize: 12, color: 'var(--ok)' }}>
-          ✓ Product saved. You can edit or add more in Finance → Products anytime.
+          ✓ Product saved. You can edit or add more in Money → Products anytime.
         </div>
       )}
     </>
@@ -1573,10 +1573,10 @@ function WebsiteStep({ websiteStatus, websiteTemplate, setWebsiteTemplate }) {
 
 function TourStep() {
   const stops = [
-    { tab: 'Dashboard', icon: 'Home',     desc: 'The home page. Today\'s bookings, revenue this month, unread messages - at a glance.' },
+    { tab: 'Home', icon: 'Home',     desc: 'The home page. Today\'s bookings, revenue this month, unread messages - at a glance.' },
     { tab: 'Clients',   icon: 'Users',    desc: 'Every client + lead. Add, search, tag, drop notes. Click into a profile for their bookings + invoices.' },
     { tab: 'Calendar',  icon: 'Calendar', desc: 'Schedule. Click any slot to add a booking. Share drawer copies your booking link + QR.' },
-    { tab: 'Finance',   icon: 'Dollar',   desc: 'Invoices, quotes, expenses, time tracking, memberships, gift cards. Year-end CSV export under "Export ▾".' },
+    { tab: 'Money',   icon: 'Dollar',   desc: 'Invoices, quotes, expenses, time tracking, memberships, gift cards. Year-end CSV export under "Export ▾".' },
     { tab: 'Messages',  icon: 'Chat',     desc: 'Text + email threads with each client. Voice memos auto-transcribe.' },
     { tab: 'Documents', icon: 'Doc',      desc: 'Contracts + intake forms. Send for e-signature, audit trail included.' },
     { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups - birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },
@@ -2028,14 +2028,14 @@ const STRIPE_BOUNCE_MSGS = {
   connected:  { tone: 'ok',   title: 'Stripe is connected.',         body: 'You\'re ready to take cards. You can keep going with onboarding.' },
   pending:    { tone: 'warn', title: 'Stripe is verifying your account', body: 'You can continue setting up Ivy. Charges work as soon as Stripe finishes verification.' },
   incomplete: { tone: 'warn', title: 'Stripe form not finished',     body: 'You left the Stripe form before submitting. Click Connect Stripe again to resume - your account is saved.' },
-  no_key:     { tone: 'err',  title: 'Stripe isn\'t configured yet', body: 'Your STRIPE_SECRET_KEY env var is missing. Skip this step for now - you can connect Stripe later from Finance.' },
+  no_key:     { tone: 'err',  title: 'Stripe isn\'t configured yet', body: 'Your STRIPE_SECRET_KEY env var is missing. Skip this step for now - you can connect Stripe later from Money.' },
   bad_key:    { tone: 'err',  title: 'Stripe rejected the API key',  body: 'The STRIPE_SECRET_KEY in Vercel isn\'t a valid Stripe secret key. Skip for now - you can connect later.' },
   connect_not_enabled: { tone: 'err', title: 'Stripe Connect isn\'t enabled', body: 'Visit dashboard.stripe.com/connect/accounts/overview and click "Get started", then come back. Skip for now if you want.' },
-  wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Finance after onboarding to disconnect + reconnect.' },
+  wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Money after onboarding to disconnect + reconnect.' },
   unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy currently only supports US Stripe accounts. Email hello@joinivy.ai to enable your region.' },
   verify_email: { tone: 'warn', title: 'Confirm your email first', body: 'Before you can take card payments, we need to know your email address is yours. Open the link we emailed you when you signed up, then connect Stripe. You can keep setting up in the meantime.', resend: true },
   on_hold:    { tone: 'err',  title: 'This account is on hold', body: 'Card payments cannot be set up while your account is being reviewed. Email hello@joinivy.ai and we will sort it out.' },
-  error:      { tone: 'err',  title: 'Couldn\'t finish the Stripe step', body: 'Something went wrong. You can skip this and try again from Finance once you\'re in.' },
+  error:      { tone: 'err',  title: 'Couldn\'t finish the Stripe step', body: 'Something went wrong. You can skip this and try again from Money once you\'re in.' },
 };
 function StripeBounceBanner({ search, nav }) {
   const params = new URLSearchParams(search);

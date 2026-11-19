@@ -163,11 +163,11 @@ async function run() {
   const ownerMails = mailsTo(A.email);
   assert(ownerMails.length === 1, `owner got exactly one email (got ${ownerMails.length})`);
   assert(/says they paid .* by Zelle/.test(ownerMails[0]?.subject || ''), `subject: ${ownerMails[0]?.subject}`);
-  assert(ownerMails[0]?.html.includes(`/finance?invoice=${invA.id}`), 'email deep-links to the invoice in Finance');
+  assert(ownerMails[0]?.html.includes(`/finance?invoice=${invA.id}`), 'email deep-links to the invoice in Money');
   assert(ownerMails[0]?.html.includes('$150.00') && ownerMails[0].html.includes(invA.number), 'email names the amount + number');
   const feed = await sql`SELECT * FROM notifications WHERE user_id = ${A.uid} AND tag = ${`invoice-claim-${invA.id}`}`;
-  assert(feed.rows.length === 1 && feed.rows[0].url === `/finance?invoice=${invA.id}`, 'owner feed row with the Finance deep link');
-  assert(/Casey Client says they paid invoice .* \(\$150\.00\) by Zelle\. Confirm it in Finance\./.test(feed.rows[0]?.body || ''), `push body: ${feed.rows[0]?.body}`);
+  assert(feed.rows.length === 1 && feed.rows[0].url === `/finance?invoice=${invA.id}`, 'owner feed row with the Money deep link');
+  assert(/Casey Client says they paid invoice .* \(\$150\.00\) by Zelle\. Confirm it in Money\./.test(feed.rows[0]?.body || ''), `push body: ${feed.rows[0]?.body}`);
   const sys = await sql`
     SELECT m.* FROM messages m JOIN message_threads t ON t.id = m.thread_id
     WHERE t.workspace_id = ${A.wid} AND t.client_id = ${A.cid} AND m.kind = 'invoice-claimed'`;

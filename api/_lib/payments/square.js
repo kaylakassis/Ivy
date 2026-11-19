@@ -176,7 +176,7 @@ async function loadSquareCreds(settings, workspaceId = null) {
     // current token (next call retries); past expiry, fail with an
     // actionable message instead of Square's raw 401.
     if (expMs <= Date.now()) {
-      throw new Error(`Square access token expired and refresh failed ${result.detail || ''} - reconnect Square from Finance → Payment processor.`);
+      throw new Error(`Square access token expired and refresh failed ${result.detail || ''} - reconnect Square from Money → Payment processor.`);
     }
   }
   return creds;

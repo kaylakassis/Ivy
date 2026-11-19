@@ -6,15 +6,21 @@
 // 'ivy:open' event. iPhone app and anywhere the dock is not mounted: go to
 // the full-page /ivy route, which reads ?prompt= and ?photo=1.
 //
-// Never sends anything: the owner reviews the message and presses send.
+// By default nothing is sent: the owner reviews the message and presses
+// send. `send: true` is for words the owner has just typed or tapped
+// themselves inside the app (the "What do you want to do?" box on Home):
+// those go to Ivy as their message straight away. It travels in memory
+// (an event, or router state), never in a web address, so a link can still
+// never put words in the owner's mouth.
 export const IVY_OPEN_EVENT = 'ivy:open';
 
-export function openIvy({ prompt = '', photo = false, navigate } = {}) {
+export function openIvy({ prompt = '', photo = false, send = false, navigate } = {}) {
   const text = String(prompt || '').slice(0, 500);
   if (typeof window !== 'undefined' && window.__ivyDockMounted) {
-    window.dispatchEvent(new CustomEvent(IVY_OPEN_EVENT, { detail: { prompt: text, photo: !!photo } }));
+    window.dispatchEvent(new CustomEvent(IVY_OPEN_EVENT, { detail: { prompt: text, photo: !!photo, send: !!send && !!text } }));
     return;
   }
+  if (send && text && navigate) { navigate('/ivy', { state: { ask: text } }); return; }
   const q = new URLSearchParams();
   if (text) q.set('prompt', text);
   if (photo) q.set('photo', '1');

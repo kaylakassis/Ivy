@@ -26,7 +26,7 @@ export default function ConnectedPage() {
     : pending ? `${name} needs one more step.`
     : `${name} didn't connect.`;
   const body = good
-    ? `Payments through ${name} are ready. Head back to the Ivy app; your Finance tab will show ${name} as connected.`
+    ? `Payments through ${name} are ready. Head back to the Ivy app; your Money tab will show ${name} as connected.`
     : pending
       ? (status === 'incomplete'
         ? `The ${name} form wasn't finished. Back in the Ivy app, tap Connect again to pick up where you left off.`

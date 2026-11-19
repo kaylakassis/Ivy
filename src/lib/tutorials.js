@@ -84,7 +84,7 @@ export const TUTORIALS = {
     steps: [
       {
         title: 'Set your services first',
-        body: 'Services live under Finance → Services. Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking - your call. Photos there show on your booking page.',
+        body: 'Services live under Money → Services. Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking - your call. Photos there show on your booking page.',
         cta: { label: 'Open Services', to: '/finance?section=services' },
       },
       {
@@ -107,7 +107,7 @@ export const TUTORIALS = {
   },
 
   finance: {
-    title: 'Finance',
+    title: 'Money',
     intro: 'Invoices, expenses, recurring billing, time tracking, gift cards, memberships, payment processor - the whole money side of the business.',
     steps: [
       {

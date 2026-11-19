@@ -386,7 +386,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'create_invoice',
-    description: "Create a DRAFT invoice. Doesn't send it - owner reviews + sends from the Finance tab (or asks Ivy via send_invoice). Items is an array of line items.",
+    description: "Create a DRAFT invoice. Doesn't send it - owner reviews + sends from the Money tab (or asks Ivy via send_invoice). Items is an array of line items.",
     input_schema: {
       type: 'object',
       properties: {
@@ -556,7 +556,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'archive_invoices',
-    description: "APPROVAL-GATED. Archive (hide) paid, refunded or void invoices from the main Finance list, or bring them back with unarchive: true. Archiving deletes nothing and never changes revenue, refunds or tax exports; the owner sees them under the Archived filter. Use this when the owner wants to clean up or 'delete' a paid or refunded invoice.",
+    description: "APPROVAL-GATED. Archive (hide) paid, refunded or void invoices from the main invoice list, or bring them back with unarchive: true. Archiving deletes nothing and never changes revenue, refunds or tax exports; the owner sees them under the Archived filter. Use this when the owner wants to clean up or 'delete' a paid or refunded invoice.",
     input_schema: {
       type: 'object',
       properties: {
@@ -696,7 +696,7 @@ export const IVY_TOOLS = [
         tax_rate:    { type: 'number' },
         discount:    { type: 'number' },
         end_date:    { type: 'string', description: 'YYYY-MM-DD (optional).' },
-        auto_send:   { type: 'boolean', description: 'Requested auto-send preference. NOTE: Ivy-created schedules always start with auto-send OFF for safety; the owner can enable it from Finance → Recurring.' },
+        auto_send:   { type: 'boolean', description: 'Requested auto-send preference. NOTE: Ivy-created schedules always start with auto-send OFF for safety; the owner can enable it from Money → Recurring.' },
         notes:       { type: 'string' },
       },
       required: ['name', 'items', 'cadence', 'next_run_at'],
@@ -1213,8 +1213,8 @@ async function describeSensitiveAction(name, a, ctx = {}) {
     case 'archive_invoices': {
       const ids = Array.isArray(a.invoice_ids) ? a.invoice_ids.slice(0, 200) : [];
       const verb = a.unarchive ? 'Bring back' : 'Archive';
-      if (ids.length === 1) return `${verb} ${await invoiceLabel(ctx, ids[0])}${a.unarchive ? ' to the main Finance list' : ' (hidden from the main Finance list; revenue and records unchanged)'}`;
-      return `${verb} ${ids.length} invoices${a.unarchive ? ' to the main Finance list' : ' (hidden from the main Finance list; revenue and records unchanged)'}`;
+      if (ids.length === 1) return `${verb} ${await invoiceLabel(ctx, ids[0])}${a.unarchive ? ' to the main invoice list' : ' (hidden from the main invoice list; revenue and records unchanged)'}`;
+      return `${verb} ${ids.length} invoices${a.unarchive ? ' to the main invoice list' : ' (hidden from the main invoice list; revenue and records unchanged)'}`;
     }
     case 'send_quote':
       return `Email ${await quoteLabel(ctx, a.quote_id)}${a.client_id ? ` to ${await clientLabel(ctx, a.client_id)}` : ''}`;

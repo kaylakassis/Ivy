@@ -42,6 +42,28 @@ const STATUS_META = {
   refunded: { label: 'Refunded', color: 'var(--muted-2)' },
 };
 
+// The Money screen in three groups. Order inside a group is most-used first.
+export const MONEY_GROUPS = [
+  { id: 'getpaid', label: 'Get paid', sections: [
+    { id: 'invoices',  label: 'Invoices' },
+    { id: 'quotes',    label: 'Estimates' },
+    { id: 'recurring', label: 'Recurring' },
+    { id: 'pos',       label: 'Sell in person' },
+  ] },
+  { id: 'sell', label: 'What I sell', sections: [
+    { id: 'services',    label: 'Services' },
+    { id: 'products',    label: 'Products' },
+    { id: 'packages',    label: 'Packages' },
+    { id: 'memberships', label: 'Memberships' },
+    { id: 'giftcards',   label: 'Gift cards' },
+  ] },
+  { id: 'track', label: 'Track', sections: [
+    { id: 'expenses', label: 'Expenses' },
+    { id: 'time',     label: 'Time' },
+  ] },
+];
+export const moneyGroupOf = (section) => MONEY_GROUPS.find((g) => g.sections.some((x) => x.id === section)) || MONEY_GROUPS[0];
+
 export default function Finance() {
   const [tab, setTab]               = useState('all');
   // One page (50) of the current tab at a time, from the server; counts
@@ -208,7 +230,7 @@ export default function Finance() {
         display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
       }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Finance</h2>
+          <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Money</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
             Send invoices, track payments, watch revenue grow.
           </div>
@@ -271,30 +293,39 @@ export default function Finance() {
         )}
       </div>
 
-      {/* Section selector: Invoices / Estimates / Recurring / Memberships / Gift cards / Time / Expenses. */}
-      <div className="tab-row">
-        {[
-          { id: 'invoices',    label: 'Invoices' },
-          { id: 'pos',         label: 'Sell' },
-          { id: 'services',    label: 'Services' },
-          { id: 'products',    label: 'Products' },
-          { id: 'packages',    label: 'Packages' },
-          { id: 'memberships', label: 'Memberships' },
-          { id: 'quotes',      label: 'Estimates' },
-          { id: 'recurring',   label: 'Recurring' },
-          { id: 'giftcards',   label: 'Gift cards' },
-          { id: 'time',        label: 'Time' },
-          { id: 'expenses',    label: 'Expenses' },
-        ].map(({ id, label }) => (
-          <button key={id} onClick={() => setSection(id)}
-            data-section={id} className="seg-btn" style={{
-            padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-            background: section === id ? 'var(--surface)' : 'transparent',
-            color: section === id ? 'var(--fg)' : 'var(--muted)',
-            boxShadow: section === id ? 'var(--shadow-sm)' : 'none',
-            whiteSpace: 'nowrap',
-          }}>{label}</button>
-        ))}
+      {/* Three groups instead of eleven tabs in a row. Each group shows only
+          its own few sections, so the owner picks "what am I here to do"
+          first and never scans a wall of labels. The section ids are
+          unchanged, so every ?section= link still lands on its screen. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+        <div className="tab-row money-groups" role="tablist" aria-label="Money">
+          {MONEY_GROUPS.map((g) => {
+            const on = g.id === moneyGroupOf(section).id;
+            return (
+              <button key={g.id} role="tab" aria-selected={on} data-money-group={g.id}
+                onClick={() => { if (!on) setSection(g.sections[0].id); }}
+                className="seg-btn" style={{
+                  padding: '8px 16px', borderRadius: 8, border: 0, fontSize: 13.5, fontWeight: 650, cursor: 'pointer',
+                  background: on ? 'var(--surface)' : 'transparent',
+                  color: on ? 'var(--fg)' : 'var(--muted)',
+                  boxShadow: on ? 'var(--shadow-sm)' : 'none',
+                  whiteSpace: 'nowrap',
+                }}>{g.label}</button>
+            );
+          })}
+        </div>
+        <div className="money-sections" role="tablist" aria-label={moneyGroupOf(section).label}>
+          {moneyGroupOf(section).sections.map(({ id, label }) => (
+            <button key={id} role="tab" aria-selected={section === id} onClick={() => setSection(id)}
+              data-section={id} className="seg-btn" style={{
+                padding: '6px 14px', borderRadius: 99, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                border: `1px solid ${section === id ? 'var(--accent)' : 'var(--border-strong)'}`,
+                background: section === id ? 'var(--accent-soft)' : 'transparent',
+                color: section === id ? 'var(--fg)' : 'var(--fg-2)',
+                whiteSpace: 'nowrap',
+              }}>{label}</button>
+          ))}
+        </div>
       </div>
 
       {/* Section switches crossfade the panel (120ms) instead of remounting

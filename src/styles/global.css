@@ -496,6 +496,14 @@ body.app-walled .view-toggle { display: none; }
   .tab-row > * { flex-shrink: 0; }
 }
 
+/* Money screen: the sections inside the chosen group. Wraps on a phone. */
+.money-sections { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.tab-row.money-groups { align-self: flex-start; }
+@media (max-width: 720px) {
+  .tab-row.money-groups { align-self: stretch; flex-wrap: nowrap; }
+  .tab-row.money-groups > * { flex: 1 1 0; text-align: center; padding-left: 8px !important; padding-right: 8px !important; }
+}
+
 /* Modal backdrops: dialog containers get pointer cursor so the
    tap-to-dismiss affordance is discoverable; inner content keeps
    the default cursor. */
@@ -1248,7 +1256,8 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
 @media (max-width: 720px) {
   .dash-actions {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    /* Three buttons (the fourth, Ask Ivy, is now the box under the band). */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
   }
   .dash-actions .btn {

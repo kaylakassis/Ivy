@@ -17,7 +17,7 @@ import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
 import { verifyReturnState, connectedPageUrl } from '../_lib/connectReturn.js';
 
-const RESTART = 'Please start the PayPal connection again from Finance.';
+const RESTART = 'Please start the PayPal connection again from Money.';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
