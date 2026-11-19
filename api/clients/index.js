@@ -16,9 +16,11 @@ import { celebrateFirstClient } from '../_lib/milestones.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { encodeCursor, decodeCursor, cursorPageSize, looksLikeTimestamp, containsPattern } from '../_lib/listCursor.js';
+import { clientAttention, nextBookings } from '../_lib/clientAttention.js';
 
 // Tabs on the Clients screen. 'noemail' = no email on file (no reminders).
-const LIST_FILTERS = { all: null, active: 'active', leads: 'lead', paused: 'paused', noemail: 'noemail' };
+// 'attention': clients who need something from the owner (api/_lib/clientAttention.js).
+const LIST_FILTERS = { all: null, active: 'active', leads: 'lead', paused: 'paused', noemail: 'noemail', attention: 'attention' };
 const clampDays = (raw, dflt) => {
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) && n >= 1 ? Math.min(3650, n) : dflt;
@@ -30,8 +32,16 @@ async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
   const filterKey = Object.prototype.hasOwnProperty.call(LIST_FILTERS, String(req.query.filter || 'all'))
     ? String(req.query.filter || 'all') : 'all';
   const filter = LIST_FILTERS[filterKey];
-  const stageFilter = filter && filter !== 'noemail' ? filter : null;
+  const stageFilter = filter && filter !== 'noemail' && filter !== 'attention' ? filter : null;
   const noEmailOnly = filter === 'noemail';
+  // Who needs something, over the whole book. Drives the row labels, the
+  // "Needs attention" filter and its count, so the three always agree.
+  // Owner only: the labels carry money owed and inbox state, which a
+  // helper never sees whatever the owner has switched on for them.
+  const ownerView = !req.helper;
+  const attention = ownerView ? await clientAttention(workspaceId).catch(() => ({})) : {};
+  const attentionIds = Object.keys(attention);
+  const attentionOnly = filter === 'attention' ? attentionIds : null;
   const q = String(req.query.q || '').trim().slice(0, 200);
   const pattern = q ? containsPattern(q) : null;
   const out = {};
@@ -47,6 +57,7 @@ async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
         COUNT(*) FILTER (WHERE stage = 'lead')::int AS leads_n,
         COUNT(*) FILTER (WHERE stage = 'paused')::int AS paused_n,
         COUNT(*) FILTER (WHERE COALESCE(btrim(email), '') = '')::int AS noemail_n,
+        COUNT(*) FILTER (WHERE id = ANY(${attentionIds}::uuid[]))::int AS attention_n,
         COUNT(*) FILTER (WHERE stage = 'active' AND joined_at >= NOW() - make_interval(days => ${windowDays}))::int AS recent_actives,
         COUNT(*) FILTER (WHERE stage = 'lead' AND joined_at >= NOW() - make_interval(days => ${windowDays}))::int AS recent_leads,
         COUNT(*) FILTER (WHERE stage = 'paused' AND COALESCE(last_seen_at, joined_at) >= NOW() - make_interval(days => ${windowDays}))::int AS churn_n,
@@ -58,7 +69,7 @@ async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
     const conv = s.recent_actives + s.recent_leads;
     const churnBase = s.active_n + s.paused_n;
     out.summary = {
-      counts: { all: s.all_n, active: s.active_n, leads: s.leads_n, paused: s.paused_n, noemail: s.noemail_n },
+      counts: { all: s.all_n, active: s.active_n, leads: s.leads_n, paused: s.paused_n, noemail: s.noemail_n, ...(ownerView ? { attention: s.attention_n } : {}) },
       analytics: {
         windowDays, leadWindowDays: leadDays,
         recentActives: s.recent_actives, recentLeads: s.recent_leads,
@@ -86,6 +97,7 @@ async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
        AND (${scopeIds}::uuid[] IS NULL OR id = ANY(${scopeIds}::uuid[]))
        AND (${stageFilter}::text IS NULL OR stage = ${stageFilter})
        AND (${noEmailOnly} = FALSE OR COALESCE(btrim(email), '') = '')
+       AND (${attentionOnly}::uuid[] IS NULL OR id = ANY(${attentionOnly}::uuid[]))
        AND (${pattern}::text IS NULL OR name ILIKE ${pattern} OR email ILIKE ${pattern}
             OR EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ${pattern}))
        AND (${after[0]}::timestamptz IS NULL
@@ -96,7 +108,12 @@ async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
   const hasMore = r.rows.length > limit;
   const page = hasMore ? r.rows.slice(0, limit) : r.rows;
   const last = page[page.length - 1];
-  out.clients = page.map(project);
+  // Each row says why the client needs the owner, or when they are next in.
+  // (A helper may only see bookings assigned to them, so they get neither.)
+  const upcoming = ownerView ? await nextBookings(workspaceId, page.map((c) => c.id)).catch(() => ({})) : {};
+  out.clients = page.map((row) => (ownerView
+    ? { ...project(row), attention: attention[row.id] || null, nextBooking: upcoming[row.id] || null }
+    : project(row)));
   out.hasMore = hasMore;
   out.nextOffset = null;
   out.nextCursor = hasMore ? encodeCursor([last.cursor_seen, last.id]) : null;
@@ -108,6 +125,7 @@ async function listClientsPage(req, res, { workspaceId, scopeIds, project }) {
          AND (${scopeIds}::uuid[] IS NULL OR id = ANY(${scopeIds}::uuid[]))
          AND (${stageFilter}::text IS NULL OR stage = ${stageFilter})
          AND (${noEmailOnly} = FALSE OR COALESCE(btrim(email), '') = '')
+         AND (${attentionOnly}::uuid[] IS NULL OR id = ANY(${attentionOnly}::uuid[]))
          AND (${pattern}::text IS NULL OR name ILIKE ${pattern} OR email ILIKE ${pattern}
               OR EXISTS (SELECT 1 FROM unnest(tags) t WHERE t ILIKE ${pattern}))`;
     out.total = t.rows[0].n;

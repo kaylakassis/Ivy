@@ -1209,7 +1209,8 @@ CALENDAR (sidebar → "Calendar")
 
 CLIENTS (sidebar → "Clients")
 - Add a client: Clients → "+ Add client" button (top-right).
-- Import a list (CSV): Clients → "Import" button → upload CSV.
+- Import a list (CSV): Clients → the "..." button next to "Add client" → "Import clients" → upload CSV. Custom fields are in the same menu.
+- See who needs something: Clients → the "Needs attention" filter. It lists clients who owe overdue money, sent a message that is still unread, are a new lead nobody has replied to, have used up a package with nothing booked, or have gone quiet. Every row in the list also says why, or shows the client's next booking.
 - Open a client's record: Clients → click any row.
 - Tag clients or change stage (lead / active / paused): open the client → use the chips at the top of the drawer.
 - See revenue or visit history for a client: open the client drawer → scroll to the "Activity" + "Metrics" sections.

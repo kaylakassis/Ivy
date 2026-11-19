@@ -35,6 +35,45 @@ function timeAgo(iso) {
   return `${Math.round(d / 365)}y ago`;
 }
 
+// "Tue, Nov 24 at 3:00 PM" (or Today / Tomorrow) for a booking's date and
+// start minute. Built from the parts so the day never shifts with time zones.
+export function whenText(dateStr, startMin, now = new Date()) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr || ''));
+  if (!m) return '';
+  const mins = Number.isFinite(Number(startMin)) ? Number(startMin) : 0;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Math.floor(mins / 60), mins % 60);
+  const day0 = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day0(d) - day0(now)) / DAY);
+  const day = diff === 0 ? 'Today' : diff === 1 ? 'Tomorrow'
+    : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return `${day} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+// One line per client that answers "does this person need me?". Why they
+// need the owner (from the server, the same rules as Home), or when they
+// are next in, or when they were last seen.
+export function ClientStatusLine({ client }) {
+  const a = client.attention;
+  const base = { fontSize: 12.5, lineHeight: 1.35, minWidth: 0 };
+  if (a) {
+    const color = a.tone === 'danger' ? 'var(--danger)' : a.tone === 'warn' ? 'var(--warn)' : 'var(--fg-2)';
+    return (
+      <div data-client-status={a.key} style={{ ...base, display: 'flex', alignItems: 'baseline', gap: 6, color: 'var(--fg)' }}>
+        <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 99, background: color, flexShrink: 0, transform: 'translateY(-1px)' }}/>
+        <span style={{ minWidth: 0 }}>
+          <span style={{ fontWeight: 600 }}>{a.label}</span>
+          {a.more > 0 && <span style={{ color: 'var(--muted)', whiteSpace: 'nowrap' }}> · plus {a.more} more</span>}
+        </span>
+      </div>
+    );
+  }
+  if (client.nextBooking) {
+    return <div data-client-status="next" style={{ ...base, color: 'var(--fg-2)' }}>Next: {whenText(client.nextBooking.date, client.nextBooking.startMin)}</div>;
+  }
+  const seen = timeAgo(client.lastSeenAt);
+  return <div data-client-status="seen" style={{ ...base, color: 'var(--muted)' }}>{seen ? `Last seen ${seen === 'Today' || seen === 'Yesterday' ? seen.toLowerCase() : seen}` : 'No visits yet'}</div>;
+}
+
 export default function Clients() {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
@@ -56,6 +95,7 @@ export default function Clients() {
   // Signal is back: load the live list.
   useEffect(() => { if (offlineView && !offline) refresh(); }, [offlineView, offline, refresh]);
   const [openId, setOpenId] = useState(null);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   // "Let your clients know" (the "I've moved to Ivy" email), opened by
@@ -226,6 +266,7 @@ export default function Clients() {
     if (tab === 'leads' && c.stage !== 'lead') return false;
     if (tab === 'paused' && c.stage !== 'paused') return false;
     if (tab === 'noemail' && (c.email || '').trim()) return false;
+    if (tab === 'attention' && !c.attention) return false;
     if (!ql) return true;
     return (c.name || '').toLowerCase().includes(ql)
       || (c.email || '').toLowerCase().includes(ql)
@@ -240,6 +281,104 @@ export default function Clients() {
     setAddOpen(false);
     setAddNotice(inviteNotice(made));
   };
+
+  // ---- pieces of the screen, ordered below ---------------------------------
+  // Search and the filters come first and the clients right after them. On
+  // a phone the summary numbers sit under the list (they used to push the
+  // first client almost off the first screen).
+  const TABS = [
+    ['all', 'All'],
+    // The server sends this count to the owner only; a helper has no such filter.
+    ...(!summary?.counts || 'attention' in summary.counts ? [['attention', 'Needs attention']] : []),
+    ['active', 'Active'], ['leads', 'Leads'], ['paused', 'Paused'],
+    ...(counts.noemail || tab === 'noemail' ? [['noemail', 'Missing email']] : []),
+  ];
+  const searchBox = (
+    <div className="focus-within-ring" style={{
+      display: 'flex', alignItems: 'center', gap: 8, padding: cardList ? '9px 12px' : '6px 12px',
+      borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
+      width: cardList ? '100%' : undefined, boxSizing: 'border-box',
+    }}>
+      <Icons.Search size={cardList ? 15 : 13} sw={1.8} stroke="var(--muted)"/>
+      <input value={query} onChange={(e) => setQuery(e.target.value)}
+        aria-label="Search clients" enterKeyHint="search"
+        placeholder="Search by name, email, or tag"
+        style={{ border: 0, outline: 0, background: 'transparent', fontSize: cardList ? 16 : 13, width: cardList ? '100%' : 200, minWidth: 0, flex: cardList ? 1 : undefined, color: 'var(--fg)' }}/>
+    </div>
+  );
+  const tabRow = (
+    <div className="tab-row" role="tablist" aria-label="Filter clients">
+      {TABS.map(([id, label]) => {
+        const n = counts[id] || 0;
+        const flag = id === 'attention' && n > 0;
+        return (
+          <button key={id} role="tab" aria-selected={tab === id} data-client-tab={id} onClick={() => setTab(id)} style={{
+            padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
+            background: tab === id ? 'var(--surface)' : 'transparent',
+            color: tab === id ? 'var(--fg)' : 'var(--muted)',
+            boxShadow: tab === id ? 'var(--shadow-sm)' : 'none',
+            display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+          }}>
+            {label}
+            <span style={{
+              fontSize: 10.5, padding: '1px 6px', borderRadius: 99,
+              background: flag ? 'var(--warn)' : (tab === id ? 'var(--surface-2)' : 'var(--surface)'),
+              color: flag ? '#1b1300' : 'var(--muted)', fontWeight: 700,
+            }}>{n}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+  const filterBlock = cardList ? (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {searchBox}
+      {tabRow}
+    </div>
+  ) : (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      {tabRow}
+      <div style={{ flex: 1 }}/>
+      {searchBox}
+    </div>
+  );
+  // One slim line, not a card: it matters now and then, not every visit.
+  const dupBlock = dupCount > 0 && (
+    <button type="button" onClick={() => setDupOpen(true)} data-dup-strip style={{
+      display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
+      padding: '8px 12px', borderRadius: 10, cursor: 'pointer', fontSize: 13,
+      background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--fg-2)',
+    }}>
+      <Icons.Users size={14} sw={1.8} stroke="var(--accent)"/>
+      <span style={{ flex: 1, minWidth: 0 }}>{dupCount} possible duplicate{dupCount === 1 ? '' : 's'}</span>
+      <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12.5 }}>Review</span>
+      <Icons.Arrow size={13} stroke="var(--muted)"/>
+    </button>
+  );
+  const statsBlock = (
+  <div className="grid-auto stat-grid">
+    <AnalyticCard label="Total clients" value={counts.active + counts.paused}
+      sub={`${counts.active} active · ${counts.paused} paused`} icon={<Icons.Users size={16} sw={1.8}/>}/>
+    <AnalyticCard
+      label={<>Leads in last <EditableNumber value={leadWindow} onChange={setLeadWindow} min={1} max={365}/> days</>}
+      value={analytics.leadsInWindow}
+      sub={`${counts.leads} total leads`}
+      icon={<Icons.Plus size={16} sw={2}/>}
+      tone="accent"/>
+    <AnalyticCard
+      label={<>Conversion rate · last <EditableNumber value={analyticsWindow} onChange={setAnalyticsWindow} min={1} max={365}/> days</>}
+      value={analytics.conversionRate + '%'}
+      sub={`${analytics.recentActives}/${analytics.recentActives + analytics.recentLeads} in window`}
+      icon={<Icons.Trending size={16} sw={1.8}/>}
+      tone={analytics.conversionRate >= 30 ? 'ok' : analytics.conversionRate >= 15 ? 'neutral' : 'warn'}/>
+    <AnalyticCard
+      label={<>Churn rate · last <EditableNumber value={analyticsWindow} onChange={setAnalyticsWindow} min={1} max={365}/> days</>}
+      value={analytics.churnRate + '%'}
+      sub={`${analytics.churnCount} paused in window`}
+      icon={<Icons.Clock size={16} sw={1.8}/>}
+      tone={analytics.churnRate > 20 ? 'bad' : analytics.churnRate > 10 ? 'warn' : 'ok'}/>
+  </div>
+  );
 
   // A client opened by link (?id=) may not be on a loaded page yet.
   const [linkedClient, setLinkedClient] = useState(null);
@@ -269,29 +408,39 @@ export default function Clients() {
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{
-        display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
-      }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Clients</h2>
-          <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Your book of business - actives, leads, and the ones on pause.
-          </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
-            <Icons.Folder size={13} sw={1.8}/>
-            <span>Any client can become a folder: all of their files in one place.</span>
-          </div>
+      {/* The list is the screen: one primary action here, the occasional
+          ones (import, custom fields) behind the menu, and no explanation
+          text pushing the first client down the page. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {!cardList && <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Clients</h2>}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => setFieldsOpen(true)} aria-label="Custom fields" title="Custom fields">
-            <Icons.Settings size={13}/> Fields
-          </button>
-          <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
-            <Icons.Doc size={13}/> Import
-          </button>
+        <div style={{ display: 'flex', gap: 8, position: 'relative' }}>
           <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
             <Icons.Plus size={13} sw={2}/> Add client
           </button>
+          <button className="btn btn-outline" onClick={() => setMoreOpen((v) => !v)}
+            aria-label="More client tools" aria-haspopup="menu" aria-expanded={moreOpen} style={{ padding: '8px 10px' }}>
+            <Icons.More size={16}/>
+          </button>
+          {moreOpen && (
+            <>
+              <div onClick={() => setMoreOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} aria-hidden="true"/>
+              <div role="menu" className="card" style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 41, padding: 4, minWidth: 210,
+                display: 'flex', flexDirection: 'column', gap: 2, boxShadow: 'var(--shadow)',
+              }}>
+                <button role="menuitem" className="btn btn-ghost" style={{ justifyContent: 'flex-start', gap: 8 }}
+                  onClick={() => { setMoreOpen(false); setImportOpen(true); }}>
+                  <Icons.Doc size={14}/> Import clients
+                </button>
+                <button role="menuitem" className="btn btn-ghost" style={{ justifyContent: 'flex-start', gap: 8 }}
+                  onClick={() => { setMoreOpen(false); setFieldsOpen(true); }}>
+                  <Icons.Settings size={14}/> Custom fields
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -321,80 +470,9 @@ export default function Clients() {
         </div>
       )}
 
-      {dupCount > 0 && (
-        <button type="button" onClick={() => setDupOpen(true)} className="card" style={{
-          display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-          padding: '11px 14px', cursor: 'pointer', color: 'var(--fg)', fontSize: 13,
-        }}>
-          <span style={{
-            width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: 'var(--accent-soft)', color: 'var(--accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icons.Users size={15} sw={1.8}/></span>
-          <span style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
-            <strong>Possible duplicates ({dupCount})</strong>
-            <span style={{ display: 'block', color: 'var(--muted)', fontSize: 12 }}>The same person entered twice? Review and merge them.</span>
-          </span>
-          <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 12.5, flexShrink: 0 }}>Review</span>
-          <Icons.Arrow size={13} stroke="var(--muted)"/>
-        </button>
-      )}
-
-      {/* Analytics */}
-      <div className="grid-auto stat-grid">
-        <AnalyticCard label="Total clients" value={counts.active + counts.paused}
-          sub={`${counts.active} active · ${counts.paused} paused`} icon={<Icons.Users size={16} sw={1.8}/>}/>
-        <AnalyticCard
-          label={<>Leads in last <EditableNumber value={leadWindow} onChange={setLeadWindow} min={1} max={365}/> days</>}
-          value={analytics.leadsInWindow}
-          sub={`${counts.leads} total leads`}
-          icon={<Icons.Plus size={16} sw={2}/>}
-          tone="accent"/>
-        <AnalyticCard
-          label={<>Conversion rate · last <EditableNumber value={analyticsWindow} onChange={setAnalyticsWindow} min={1} max={365}/> days</>}
-          value={analytics.conversionRate + '%'}
-          sub={`${analytics.recentActives}/${analytics.recentActives + analytics.recentLeads} in window`}
-          icon={<Icons.Trending size={16} sw={1.8}/>}
-          tone={analytics.conversionRate >= 30 ? 'ok' : analytics.conversionRate >= 15 ? 'neutral' : 'warn'}/>
-        <AnalyticCard
-          label={<>Churn rate · last <EditableNumber value={analyticsWindow} onChange={setAnalyticsWindow} min={1} max={365}/> days</>}
-          value={analytics.churnRate + '%'}
-          sub={`${analytics.churnCount} paused in window`}
-          icon={<Icons.Clock size={16} sw={1.8}/>}
-          tone={analytics.churnRate > 20 ? 'bad' : analytics.churnRate > 10 ? 'warn' : 'ok'}/>
-      </div>
-
-      {/* Filter + search */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div className="tab-row">
-          {[['all','All'],['active','Active'],['leads','Leads'],['paused','Paused'], ...(counts.noemail || tab === 'noemail' ? [['noemail', 'Missing email']] : [])].map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
-              background: tab === id ? 'var(--surface)' : 'transparent',
-              color: tab === id ? 'var(--fg)' : 'var(--muted)',
-              boxShadow: tab === id ? 'var(--shadow-sm)' : 'none',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-              {label}
-              <span style={{
-                fontSize: 10.5, padding: '1px 6px', borderRadius: 99,
-                background: tab === id ? 'var(--surface-2)' : 'var(--surface)',
-                color: 'var(--muted)', fontWeight: 600,
-              }}>{counts[id]}</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ flex: 1 }}/>
-        <div className="focus-within-ring" style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-          borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
-        }}>
-          <Icons.Search size={13} sw={1.8} stroke="var(--muted)"/>
-          <input value={query} onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search clients"
-            placeholder="Search by name, email, or tag"
-            style={{ border: 0, outline: 0, background: 'transparent', fontSize: 13, width: 200, color: 'var(--fg)' }}/>
-        </div>
-      </div>
+      {!cardList && statsBlock}
+      {filterBlock}
+      {dupBlock}
 
       {/* Table - desktop/tablet keeps the 6-column grid; mobile collapses
           to a stacked card list since six fixed-width columns can't fit
@@ -402,12 +480,12 @@ export default function Clients() {
       <div className="card stagger" style={{ overflow: 'hidden' }}>
         {!cardList && (
           <div style={{
-            display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
+            display: 'grid', gridTemplateColumns: '1.5fr 96px 0.9fr 1.35fr 118px 100px 40px',
             padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
             fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
             background: 'var(--surface-2)', gap: 8,
           }}>
-            <div>Client</div><div>Stage</div><div>Health</div><div>Last seen</div>
+            <div>Client</div><div>Stage</div><div>Health</div><div>What&apos;s next</div>
             <div>Folder</div>
             <div style={{ textAlign: 'right' }}>Lifetime</div><div/>
           </div>
@@ -418,10 +496,13 @@ export default function Clients() {
           <div style={{ padding: 48 }}>
             <EmptyNote
               icon="Users"
-              title={tab === 'all' ? 'No clients yet' : tab === 'noemail' ? 'Every client has an email' : `No ${tab} match`}
-              hint={tab === 'all'
+              title={query.trim() ? `No clients match "${query.trim()}"` : tab === 'all' ? 'No clients yet' : tab === 'noemail' ? 'Every client has an email' : tab === 'attention' ? 'Nobody needs you right now' : `No ${tab} match`}
+              hint={query.trim() ? 'Check the spelling, or clear the search to see everyone.'
+                : tab === 'all'
                 ? 'Add your first client or lead to start your book of business.'
-                : tab === 'noemail' ? 'Booking reminders can reach everyone.' : 'Try a different tab or clear your search.'}
+                : tab === 'noemail' ? 'Booking reminders can reach everyone.'
+                : tab === 'attention' ? 'A client shows up here when they owe money, message you, run out of sessions, or go quiet.'
+                : 'Try a different tab or clear your search.'}
             />
           </div>
         ) : rows.map((c, i) => (
@@ -461,6 +542,9 @@ export default function Clients() {
           </div>
         )}
       </div>
+
+      {/* Phones and tablets: the summary numbers come after the clients. */}
+      {cardList && statsBlock}
 
       {/* Folders not tied to any client (made from Ivy or before a client
           existed). Tucked away; most owners never have one. */}
@@ -551,11 +635,10 @@ function inviteNotice(client) {
 
 function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onMerge, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
-  const lastSeen = timeAgo(client.lastSeenAt);
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
+      display: 'grid', gridTemplateColumns: '1.5fr 96px 0.9fr 1.35fr 118px 100px 40px',
       padding: '14px 20px', alignItems: 'center', gap: 8,
       borderTop: first ? 'none' : '1px solid var(--border)',
       cursor: 'pointer', transition: 'background .1s', ...stagger(index),
@@ -582,7 +665,7 @@ function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolde
       </div>
       <div><StageChip stage={client.stage}/></div>
       <ClientMetricsChips metrics={metrics}/>
-      <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{lastSeen || '-'}</div>
+      <ClientStatusLine client={client}/>
       <div onClick={(e) => e.stopPropagation()}>
         <FolderChip folders={folders} busy={folderBusy} onClick={onFolder}/>
       </div>
@@ -687,7 +770,6 @@ function MetricChip({ label, tone, title }) {
 // shows enough to triage clients without horizontal scroll.
 function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onMerge, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
-  const lastSeen = timeAgo(client.lastSeenAt);
   return (
     <div
       onClick={onOpen}
@@ -722,8 +804,8 @@ function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, 
           fontSize: 11.5, color: 'var(--muted)',
         }}>
           <StageChip stage={client.stage}/>
-          {lastSeen && <span>· Last seen {lastSeen}</span>}
         </div>
+        <div style={{ marginTop: 5 }}><ClientStatusLine client={client}/></div>
         <div style={{ marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
           <FolderChip folders={folders} busy={folderBusy} onClick={onFolder}/>
         </div>
