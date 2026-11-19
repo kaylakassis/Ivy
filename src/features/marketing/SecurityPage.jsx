@@ -49,12 +49,12 @@ export default function SecurityPage() {
 
         <Section title="Your data, exportable any time">
           <p>From your account page, download a complete export of everything you've put into Ivy: client list, booking history, invoices, documents, messages. Standard CSV + JSON formats - usable in any other tool.</p>
-          <p>If you cancel, your data stays available for 60 days for export. After that it's deleted from active and backup systems within a further 30 days.</p>
+          <p>If you cancel, you keep full access until the end of the period you paid for. After that your data stays available to download for 7 days, then it is permanently deleted. If a free trial ends without a subscription, the workspace is kept for 4 weeks. We email you before anything is deleted, and resubscribing stops it. Backups are overwritten within a further 30 days.</p>
         </Section>
 
         <Section title="Who sees your data">
-          <p>The short list: you, your invited staff, your clients (in the limited views they're shown), and our AI model provider (when Ivy generates a response - see below).</p>
-          <p>Ivy staff access is logged and only happens when you explicitly request support help on a specific record. No automated mining of customer data, ever.</p>
+          <p>The short list: you, your invited staff, your clients (in the limited views they are shown), and the companies that run parts of Ivy for us, such as hosting, email and payments. They are listed in our <a href="/privacy" style={{ color: 'var(--accent)' }}>Privacy Policy</a> and include our AI model provider when Ivy writes a reply.</p>
+          <p>A small number of authorized Ivy team members can see account totals and usage, such as how much a business has collected through Ivy and which features it uses. We use this to support you and keep the service healthy. We look inside a specific client record, message or document only when you ask us for help with it. Changes made by Ivy staff are logged. We never sell your data or use it for advertising.</p>
         </Section>
 
         <Section title="AI (Ivy) data handling">
@@ -62,11 +62,11 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Hosting + region">
-          <p>All production infrastructure is hosted in the United States. Vercel for serverless compute + static; Neon Postgres for the database; Vercel Blob for image uploads. No data leaves US data centers.</p>
+          <p>Your data is stored in the United States: Neon Postgres for the database and Vercel Blob for uploaded files. To keep pages fast, a request may be handled by a Vercel server in the United States, Europe (Frankfurt) or Asia-Pacific (Sydney). Those servers pass your data along and do not keep it.</p>
         </Section>
 
         <Section title="Backups + business continuity">
-          <p>Database snapshots run automatically. We can restore to any point in the last 30 days. In the unlikely event we shut down, we'll give you 90 days' notice and a one-click data export.</p>
+          <p>Our database provider keeps a rolling history, so the database can be restored to an earlier point if something goes wrong. In the unlikely event we shut down, we will give you 90 days' notice and a way to download your data.</p>
         </Section>
 
         <Section title="Reporting a security issue">

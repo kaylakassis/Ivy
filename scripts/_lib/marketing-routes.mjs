@@ -37,6 +37,7 @@ const STATIC_PAGES = [
   { path: '/terms',        priority: '0.3', sources: [LEGAL('TermsPage.jsx'), LEGAL('LegalPage.jsx')] },
   { path: '/do-not-sell',  priority: '0.3', sources: [LEGAL('DoNotSellPage.jsx'), LEGAL('LegalPage.jsx')] },
   { path: '/accessibility', priority: '0.3', sources: [LEGAL('AccessibilityPage.jsx'), LEGAL('LegalPage.jsx')] },
+  { path: '/copyright',    priority: '0.3', sources: [LEGAL('CopyrightPage.jsx'), LEGAL('LegalPage.jsx')] },
 ];
 
 // Every React-rendered public page that gets pre-rendered.

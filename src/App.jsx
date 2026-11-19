@@ -154,6 +154,7 @@ const PrivacyPage   = lazyRoute(() => import('./features/legal/PrivacyPage.jsx')
 const TermsPage     = lazyRoute(() => import('./features/legal/TermsPage.jsx'));
 const DoNotSellPage = lazyRoute(() => import('./features/legal/DoNotSellPage.jsx'));
 const AccessibilityPage = lazyRoute(() => import('./features/legal/AccessibilityPage.jsx'));
+const CopyrightPage = lazyRoute(() => import('./features/legal/CopyrightPage.jsx'));
 const SiteAbout     = lazyRoute(() => import('./features/marketing/site/SiteAbout.jsx'));
 const SiteSupport   = lazyRoute(() => import('./features/marketing/site/SiteSupport.jsx'));
 const VerticalPage  = lazyRoute(() => import('./features/marketing/VerticalPage.jsx'));
@@ -166,7 +167,7 @@ const IntegrationsPage = lazyRoute(() => import('./features/marketing/Integratio
 
 // Pre-rendered path → the chunk its route needs ("/" is handled below).
 const PRERENDERED_ROUTES = {
-  '/privacy': PrivacyPage, '/terms': TermsPage, '/do-not-sell': DoNotSellPage, '/accessibility': AccessibilityPage,
+  '/privacy': PrivacyPage, '/terms': TermsPage, '/do-not-sell': DoNotSellPage, '/accessibility': AccessibilityPage, '/copyright': CopyrightPage,
   '/about': SiteAbout, '/support': SiteSupport, '/pricing': SitePricing,
   '/tour': SiteTour, '/features': SiteFeatures,
   '/security': SecurityPage, '/mobile': MobilePage, '/integrations': IntegrationsPage,
@@ -449,6 +450,7 @@ export default function App() {
         <Route path="/terms"   element={<TermsPage />} />
         <Route path="/do-not-sell" element={<DoNotSellPage />} />
         <Route path="/accessibility" element={<AccessibilityPage />} />
+        <Route path="/copyright" element={<CopyrightPage />} />
 
         {/* Marketing - extra public surfaces beyond the home page. */}
         <Route path="/about"       element={<WebOnly><SiteAbout /></WebOnly>} />

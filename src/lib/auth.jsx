@@ -10,6 +10,12 @@ import { clearOfflineData } from './offlineData.js';
 import { logOutIap } from './iap.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
+
+// The signed-in user. `pv` tells the server which Privacy Policy version
+// this build of the app carries, so it only asks someone to accept an
+// updated policy from a build that can actually show it (an iPhone app
+// from before the update keeps working and asks after it is updated).
+const ME_PATH = `/auth/me?pv=${encodeURIComponent(CURRENT_PRIVACY_VERSION)}`;
 const Ctx = createContext(null);
 
 // Local hint that a session probably exists on this browser. RootRouter
@@ -33,7 +39,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let live = true;
-    api.get('/auth/me')
+    api.get(ME_PATH)
       .then((r) => {
         if (!live) return;
         setUser(r.user);
@@ -63,7 +69,7 @@ export function AuthProvider({ children }) {
   // does. Without this, someone who signs in (rather than reopening the app)
   // never saw the "We updated our Privacy Policy" notice until they reloaded.
   const loadLegalState = useCallback(() => {
-    api.get('/auth/me')
+    api.get(ME_PATH)
       .then((r) => { setTerms(r.terms || null); setPrivacy(r.privacy || null); })
       .catch(() => {});
   }, []);
@@ -217,7 +223,7 @@ export function AuthProvider({ children }) {
   // Refresh the user (e.g. after email verification) so UI flips immediately.
   const refresh = useCallback(async () => {
     try {
-      const r = await api.get('/auth/me');
+      const r = await api.get(ME_PATH);
       setUser(r.user);
       setImpersonating(r.impersonating || null);
       setTerms(r.terms || null); setPrivacy(r.privacy || null);

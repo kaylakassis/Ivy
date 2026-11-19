@@ -317,6 +317,11 @@
       "destination": "/prerender/accessibility.html"
     },
     {
+      "source": "/copyright",
+      "has": [{ "type": "host", "value": "www.joinivy.ai" }],
+      "destination": "/prerender/copyright.html"
+    },
+    {
       "source": "/for/:slug",
       "has": [{ "type": "host", "value": "www.joinivy.ai" }],
       "destination": "/prerender/for/:slug.html"

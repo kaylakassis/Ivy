@@ -79,10 +79,10 @@ Stripe; in-person checkout by QR code; video meetings; Google Calendar (two-way 
 - Payment data never touches Ivy's servers. Client cards go straight to Stripe through Stripe's hosted checkout; Ivy sees amount, status and customer email, never the card number.
 - Passwords are hashed with bcrypt. Ivy cannot recover a password, only reset it through the verified email on file.
 - Owners can download a complete export (client list, booking history, invoices, documents, messages) as CSV and JSON at any time from their account page, even if the subscription has lapsed.
-- After cancelling, data stays available for export for 60 days, then is deleted from active and backup systems within a further 30 days.
+- After cancelling, the owner keeps access until the end of the paid period. Data then stays available to download for 7 days and is permanently deleted after that (a trial that ends without a subscription is kept for 4 weeks). Ivy emails the owner before anything is deleted. Backups are overwritten within a further 30 days.
 - When the owner chats with Ivy, the request plus the relevant business context is sent to Ivy's AI model provider to generate the reply. Under Ivy's agreement with that provider, the data is not used to train models, and only what the question needs is sent.
-- Ivy staff access to customer data is logged and only happens when the owner explicitly asks for support on a specific record.
-- Database snapshots run automatically and can be restored to any point in the last 30 days.
+- A small number of authorized Ivy team members can see account totals and usage. Ivy looks inside a specific client record, message or document only when the owner asks for help with it. Changes made by Ivy staff are logged. Ivy never sells customer data or uses it for advertising.
+- The database provider keeps a rolling history, so the database can be restored to an earlier point if something goes wrong.
 - Security reports: security@joinivy.ai. Ivy responds within one business day and does not pursue legal action against good-faith research.
 
 ## Who makes Ivy
@@ -104,6 +104,7 @@ Ivy is built by a business owner, for business owners, by a small team on purpos
 - Terms of Service: https://www.joinivy.ai/terms
 - Do Not Sell or Share My Personal Information: https://www.joinivy.ai/do-not-sell
 - Accessibility: https://www.joinivy.ai/accessibility
+- Reporting copyright infringement: https://www.joinivy.ai/copyright
 
 Ivy for specific businesses:
 https://www.joinivy.ai/for/massage-therapists, https://www.joinivy.ai/for/hair-stylists, https://www.joinivy.ai/for/personal-trainers, https://www.joinivy.ai/for/coaches, https://www.joinivy.ai/for/cleaners, https://www.joinivy.ai/for/photographers, https://www.joinivy.ai/for/videographers, https://www.joinivy.ai/for/makeup-artists, https://www.joinivy.ai/for/nail-techs, https://www.joinivy.ai/for/lash-artists, https://www.joinivy.ai/for/estheticians, https://www.joinivy.ai/for/yoga-instructors, https://www.joinivy.ai/for/pilates-teachers, https://www.joinivy.ai/for/tattoo-artists, https://www.joinivy.ai/for/doulas, https://www.joinivy.ai/for/tutors, https://www.joinivy.ai/for/music-teachers, https://www.joinivy.ai/for/life-coaches, https://www.joinivy.ai/for/career-coaches, https://www.joinivy.ai/for/consultants, https://www.joinivy.ai/for/dog-walkers, https://www.joinivy.ai/for/pet-groomers, https://www.joinivy.ai/for/real-estate-agents, https://www.joinivy.ai/for/event-planners, https://www.joinivy.ai/for/wedding-planners, https://www.joinivy.ai/for/freelance-designers, https://www.joinivy.ai/for/copywriters, https://www.joinivy.ai/for/handymen

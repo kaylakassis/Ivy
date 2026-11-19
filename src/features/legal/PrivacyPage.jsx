@@ -9,9 +9,9 @@
 import React from 'react';
 import LegalPage, { H2, P, UL } from './LegalPage.jsx';
 
-export const PRIVACY_VERSION = '2026-11-05';
+export const PRIVACY_VERSION = '2026-11-19';
 
-export const PRIVACY_LAST_UPDATED = 'November 7, 2026';
+export const PRIVACY_LAST_UPDATED = 'November 19, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -35,9 +35,13 @@ export function PrivacyPolicyBody() {
       </P>
 
       <H2>What we collect</H2>
-      <P><strong>Account data.</strong> When you sign up we store your email,
-        a hashed password (we never see the plaintext), an optional name, and
-        a workspace ID associated with your account.</P>
+      <P><strong>Account data.</strong> When you sign up we store your name,
+        your email, a scrambled (hashed) password that we can never read, and
+        the country you signed up from, which we work out from your network
+        address. During set-up we ask how you heard about Ivy, where your
+        business is based, and what stage it is at. If you add a phone number
+        or turn on notifications in the app, we store that number and the
+        notification address for your device.</P>
       <P><strong>Business data you create.</strong> Anything you put into your
         workspace - clients, calendar bookings, services, invoices, messages,
         documents, goals, rewards rules, AI chats with Ivy - is stored on your
@@ -74,6 +78,20 @@ export function PrivacyPolicyBody() {
         client lists, invoices, messages, documents, and bookings
         remain yours and are never packaged or licensed to anyone.</P>
 
+      <H2>If you are a client of a business that uses Ivy</H2>
+      <P>Businesses use Ivy to take bookings, send invoices and documents,
+        and message their clients. If you book with, pay, or contact a
+        business through an Ivy page, that business receives the details you
+        give and decides how they are used. Ivy stores and handles those
+        details on the business's behalf.</P>
+      <P>To see, correct or delete what a business holds about you, ask that
+        business. You can also email us at{' '}
+        <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>{' '}
+        and we will pass your request to them.</P>
+      <P>You only get text messages from a business if you agreed to them.
+        Reply STOP to any text to end them. Every marketing email has an
+        unsubscribe link.</P>
+
       <H2>How we use it</H2>
       <UL>
         <li>To run the product (show you your clients, send a magic link, etc.).</li>
@@ -104,14 +122,21 @@ export function PrivacyPolicyBody() {
 
       <H2>Who we share it with</H2>
       <UL>
-        <li><strong>Vercel</strong> - hosts the application and the static files.</li>
-        <li><strong>Neon</strong> - hosts the Postgres database where your workspace data lives.</li>
-        <li><strong>Resend</strong> - sends transactional email on our behalf.</li>
-        <li><strong>AI model provider</strong> - a US-based, contracted sub-processor that processes your messages to Ivy and returns AI replies. Name available on request.</li>
-        <li><strong>Stripe</strong> - processes any payments you or your clients make through Ivy (when enabled).</li>
+        <li><strong>Vercel</strong>: runs the application and stores uploaded files.</li>
+        <li><strong>Neon</strong>: hosts the database where your workspace data lives.</li>
+        <li><strong>Resend</strong>: sends email on our behalf.</li>
+        <li><strong>AI model provider</strong>: a US-based company under contract that processes your messages to Ivy and returns replies. Name available on request.</li>
+        <li><strong>Stripe</strong>: processes Ivy subscription payments, and the payments you or your clients make through Ivy.</li>
+        <li><strong>Square and PayPal</strong>: process payments, only for businesses that connect them.</li>
+        <li><strong>Twilio</strong>: sends and receives text messages, where text messaging is turned on.</li>
+        <li><strong>Apple and RevenueCat</strong>: handle subscriptions bought in the iPhone app. Apple also delivers app notifications.</li>
+        <li><strong>Google</strong>: calendar sync, only if you connect your Google Calendar.</li>
+        <li><strong>Sentry</strong>: receives error reports when something breaks, so we can fix it.</li>
+        <li><strong>OpenStreetMap</strong>: when you type an address, the address text is sent to look it up.</li>
       </UL>
-      <P>Each of these is a contracted sub-processor under their own privacy
-        terms. We do not share data with anyone else, and we do not sell data.</P>
+      <P>Each of these handles data only to run Ivy for us, under its own
+        privacy terms. We do not share data with anyone else, unless the law
+        requires us to, and we do not sell data.</P>
 
       <H2>Where it's stored</H2>
       <P>The Postgres database is hosted in the United States. Email and AI
@@ -158,6 +183,20 @@ export function PrivacyPolicyBody() {
         analytics (event logs we own and store ourselves) to measure
         feature usage and product performance as described under
         "Product analytics" above.</P>
+      <P>Ivy also keeps some settings on your device, and the iPhone app
+        keeps a copy of your upcoming schedule and client list there so it
+        works without a connection. Fonts and other page files are served
+        from our own servers, not from an advertising or analytics
+        company.</P>
+
+      <H2>California residents</H2>
+      <P>If you live in California you have the right to know what personal
+        information we hold about you, to have it corrected or deleted, and
+        not to be treated differently for asking. We do not sell personal
+        information or share it for advertising. See our{' '}
+        <a href="/do-not-sell" style={{ color: 'var(--accent)' }}>Do Not Sell or Share</a>{' '}
+        page, or email{' '}
+        <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>.</P>
 
       <H2>Security</H2>
       <P>Passwords are hashed with bcrypt. All traffic is encrypted in transit

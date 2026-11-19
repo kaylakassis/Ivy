@@ -65,6 +65,41 @@ assert(!/opacity: 0\.75/.test(src('src/components/layout/Sidebar.jsx').split('{i
 // ---- claims on the Security page ------------------------------------------
 console.log('\n[security page claims]');
 assert(!/disable Ivy site-wide/.test(src('src/features/marketing/SecurityPage.jsx')), 'the Security page does not promise a switch to turn Ivy off (there is none)');
+const security = src('src/features/marketing/SecurityPage.jsx');
+assert(!/60 days/.test(security) && /available to download for 7 days/.test(security) && /kept for 4 weeks/.test(security), 'it gives the same data-retention times as the Terms and the app (7 days, 4 weeks for a trial), not 60 days');
+assert(!/No data leaves US data centers/.test(security) && /Frankfurt/.test(security) && /Sydney/.test(security), 'it says where requests are handled, instead of claiming nothing leaves the US');
+assert(!/only happens when you explicitly request support/.test(security) && /can see account totals and usage/.test(security), 'it says what Ivy staff can see, matching the Privacy Policy');
+assert(!/any point in the last 30 days/.test(security), 'it does not promise a backup window that depends on the database plan');
+const llmsFull = src('public/llms-full.txt');
+assert(!/for 60 days|any point in the last 30 days|only happens when the owner explicitly asks/.test(llmsFull), 'the plain-text site summary carries the same corrections');
+
+// ---- privacy policy ---------------------------------------------------------
+console.log('\n[privacy policy]');
+const policy = src('src/features/legal/PrivacyPage.jsx');
+const named = ['Vercel', 'Neon', 'Resend', 'Stripe', 'Square and PayPal', 'Twilio', 'Apple and RevenueCat', 'Google', 'Sentry', 'OpenStreetMap'];
+assert(named.every((n) => policy.includes(`<strong>${n}</strong>`)) && /AI model provider/.test(policy), 'it lists every outside service the app sends data to');
+assert(!/We do not share data with anyone else, and we do not sell data/.test(policy) && /unless the law\s+requires us to/.test(policy), 'it no longer says data goes to nobody else');
+assert(!/an optional name/.test(policy) && /the country you signed up from/.test(policy), 'it says what sign-up really collects (name required, sign-up country, set-up questions)');
+assert(/If you are a client of a business that uses Ivy/.test(policy) && /Reply STOP/.test(policy), 'it has a section for the clients of businesses that use Ivy');
+assert(/California residents/.test(policy) && /href="\/do-not-sell"/.test(policy), 'it has a California section');
+assert(!/Anthropic|Claude|OpenAI|GPT/.test(policy), 'it does not name the AI provider');
+const vApi = /CURRENT_PRIVACY_VERSION = '([^']+)'/.exec(src('api/_lib/legal.js'))[1];
+const vWeb = /CURRENT_PRIVACY_VERSION = '([^']+)'/.exec(src('src/lib/legal.js'))[1];
+const vPage = /PRIVACY_VERSION = '([^']+)'/.exec(policy)[1];
+assert(vApi === vWeb && vWeb === vPage && vApi >= '2026-11-19', `the policy version is the same in the server, the app and the page (${vApi})`);
+assert(new RegExp(`PRIOR_PRIVACY_VERSIONS = \\['2026-11-05'`).test(src('api/_lib/legal.js')), 'the previous version is still accepted at sign-up from app builds that carry it');
+assert(/ME_PATH = `\/auth\/me\?pv=\$\{encodeURIComponent\(CURRENT_PRIVACY_VERSION\)\}`/.test(src('src/lib/auth.jsx')) && /clientCanShowCurrentPrivacy\(req\)/.test(src('api/auth/me.js')),
+  'the app tells the server which policy version it carries, so an older iPhone app is never stuck behind a notice it cannot accept');
+
+// ---- copyright page -----------------------------------------------------------
+console.log('\n[copyright page]');
+const copyrightPage = src('src/features/legal/CopyrightPage.jsx');
+assert(/path="\/copyright"/.test(copyrightPage) && /support@joinivy\.ai/.test(copyrightPage) && /penalty of perjury/.test(copyrightPage) && /counter-notice/.test(copyrightPage) && /repeatedly post/.test(copyrightPage),
+  'it says how to report, what a notice needs, what happens next, and the repeat-infringer rule');
+assert(/24930 Washington Avenue Unit #268, Murrieta, CA 92564/.test(copyrightPage), 'it gives the mailing address for notices');
+assert(!/[\u2013\u2014]/.test(copyrightPage.replace(/\/\/.*$/gm, '')), 'no dashes in what people read');
+assert(/path="\/copyright" element=\{<CopyrightPage \/>\}/.test(src('src/App.jsx')) && /path: '\/copyright'/.test(src('scripts/_lib/marketing-routes.mjs')) && /"source": "\/copyright"/.test(src('vercel.json')), 'it is a real, pre-rendered page in the sitemap list');
+assert(/href="\/copyright">Copyright<\/a>/.test(src('src/features/marketing/site/Chrome.jsx')) && /href="\/copyright">Copyright<\/a>/.test(src('public/blog.html')), 'the site and blog footers link to it');
 
 // ---- privacy notice on public forms ---------------------------------------
 console.log('\n[privacy notice on public forms]');

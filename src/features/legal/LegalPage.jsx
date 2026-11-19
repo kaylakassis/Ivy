@@ -47,6 +47,7 @@ export default function LegalPage({ title, lastUpdated, path, description, child
           <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
           <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
           <Link to="/accessibility" style={{ color: 'inherit', textDecoration: 'none' }}>Accessibility</Link>
+          <Link to="/copyright" style={{ color: 'inherit', textDecoration: 'none' }}>Copyright</Link>
         </div>
       </div>
     </div>

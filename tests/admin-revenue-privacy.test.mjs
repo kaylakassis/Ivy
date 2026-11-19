@@ -127,6 +127,21 @@ async function run() {
     r = await call(meHandler, { headers: { cookie } });
     assert(r.body?.privacy?.needsAcknowledgement === true && r.body?.privacy?.currentVersion === CURRENT_PRIVACY_VERSION, 'needsAcknowledgement true for the older version');
     assert(r.body?.terms?.needsAcceptance === false, 'terms gate unaffected');
+    // An iPhone app from before the update carries the old policy text and
+    // could not record acceptance of the new one, so it is not asked.
+    const ios = { cookie, 'x-client-platform': 'ios' };
+    r = await call(meHandler, { headers: ios });
+    assert(r.body?.privacy?.needsAcknowledgement === false, 'an installed iPhone app that says nothing about its policy version is not asked (it could only show the old text)');
+    r = await call(meHandler, { headers: ios, query: { pv: PRIOR_PRIVACY_VERSIONS[0] } });
+    assert(r.body?.privacy?.needsAcknowledgement === false, 'nor one that carries the previous version');
+    r = await call(meHandler, { headers: ios, query: { pv: CURRENT_PRIVACY_VERSION } });
+    assert(r.body?.privacy?.needsAcknowledgement === true, 'an updated iPhone app that carries the current version is asked');
+    r = await call(meHandler, { headers: { cookie }, query: { pv: PRIOR_PRIVACY_VERSIONS[0] } });
+    assert(r.body?.privacy?.needsAcknowledgement === false, 'a browser tab still running the previous version is not asked until it reloads');
+    r = await call(meHandler, { headers: { cookie }, query: { pv: CURRENT_PRIVACY_VERSION } });
+    assert(r.body?.privacy?.needsAcknowledgement === true, 'the current website is asked');
+    r = await call(acceptTerms, { method: 'POST', headers: ios, body: { document: 'privacy', version: PRIOR_PRIVACY_VERSIONS[0] } });
+    assert(r.statusCode === 400, 'accepting the previous version is never recorded as accepting the new one');
     r = await call(acceptTerms, { method: 'POST', headers: { cookie }, body: { document: 'privacy', version: '2000-01-01' } });
     assert(r.statusCode === 400, 'wrong version refused');
     r = await call(acceptTerms, { method: 'POST', headers: { cookie }, body: { document: 'privacy', version: CURRENT_PRIVACY_VERSION } });
