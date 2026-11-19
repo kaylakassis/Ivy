@@ -6,13 +6,13 @@
 // row - same defense-in-depth pattern as /api/calendar/public/contact).
 //
 // On checkout success, the workspace's webhook (subscription mode)
-// creates the client_memberships row + links to a Stripe customer.
+// creates the client_memberships row for metadata.client_id.
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
-import { findOrCreateCustomer, createMembershipCheckoutSession } from '../_lib/stripe.js';
+import { createMembershipCheckoutSession } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
@@ -67,21 +67,19 @@ export default async function handler(req, res) {
         : e.message);
     }
 
-    // Find-or-create a clients-row + Stripe customer for the buyer
-    // BEFORE we mint Checkout, so the webhook can stitch the
-    // resulting subscription back to a known client_id.
+    // Find-or-create a clients row for the buyer BEFORE we mint Checkout,
+    // so the webhook can stitch the resulting subscription back to a
+    // known client_id (carried in metadata).
     let clientId = null;
-    let stripeCustomerId = null;
     // Case-insensitive: a client the owner typed in as Jane@Example.com must
-    // not become a second client row (and a second Stripe customer) here.
+    // not become a second client row here.
     const existing = await sql`
-      SELECT id, stripe_customer_id FROM clients
+      SELECT id FROM clients
        WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail}
        LIMIT 1
     `;
     if (existing.rows.length > 0) {
       clientId = existing.rows[0].id;
-      stripeCustomerId = existing.rows[0].stripe_customer_id;
     } else {
       const ins = await sql`
         INSERT INTO clients (workspace_id, name, email, stage, source)
@@ -90,24 +88,15 @@ export default async function handler(req, res) {
       `;
       clientId = ins.rows[0].id;
     }
-    if (!stripeCustomerId) {
-      const cust = await findOrCreateCustomer({
-        secretKey: creds.secretKey,
 
-        stripeAccount: creds.stripeAccount,
-        email: buyerEmail, name: buyerName,
-        workspaceId, clientId,
-      });
-      stripeCustomerId = cust.id;
-      // Defense-in-depth: scope the UPDATE to workspace_id so the
-      // public membership-checkout flow can never link a Stripe
-      // customer to a clients row outside its own workspace.
-      await sql`
-        UPDATE clients SET stripe_customer_id = ${stripeCustomerId}
-         WHERE id = ${clientId} AND workspace_id = ${workspaceId}
-      `;
-    }
-
+    // SECURITY: nobody has signed in here; the email is only what the
+    // visitor typed. The session must NEVER carry an existing Stripe
+    // customer: Checkout would show that customer's saved card, name and
+    // billing address to whoever opened the link, and let them pay with
+    // it. So the session gets the typed email only and Stripe makes a
+    // fresh customer for the subscription. The client's own customer
+    // (clients.stripe_customer_id, the one autopay charges) is neither
+    // read nor changed here; the webhook links by metadata.client_id.
     const base = appUrl();
     const session = await createMembershipCheckoutSession({
       secretKey: creds.secretKey,
@@ -115,7 +104,7 @@ export default async function handler(req, res) {
       stripeAccount: creds.stripeAccount,
       priceId: tier.stripe_price_id,
       amountCents: Number(tier.price_cents) || null,
-      customerId: stripeCustomerId,
+      customerEmail: buyerEmail,
       workspaceId,
       membershipId: tier.id,
       clientId,

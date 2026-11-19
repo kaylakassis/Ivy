@@ -681,8 +681,13 @@ export async function createMembershipProduct({
   return { productId: product.id, priceId: price.id };
 }
 
+// The membership sign-up is public (no sign-in), so this takes the buyer's
+// typed email and deliberately has NO customer parameter: a session that
+// carries an existing customer shows that customer's saved card, name and
+// billing address to whoever opens the link. Stripe creates a fresh
+// customer for the subscription; the webhook links it by metadata.client_id.
 export async function createMembershipCheckoutSession({
-  secretKey, stripeAccount, priceId, customerId, customerEmail,
+  secretKey, stripeAccount, priceId, customerEmail,
   workspaceId, membershipId, clientId,
   successUrl, cancelUrl,
   // What one billing period costs, so the new-business payment limits
@@ -706,8 +711,7 @@ export async function createMembershipCheckoutSession({
     body['metadata[client_id]'] = clientId;
     body['subscription_data[metadata][client_id]'] = clientId;
   }
-  if (customerId) body.customer = customerId;
-  else if (customerEmail) body.customer_email = customerEmail;
+  if (customerEmail) body.customer_email = customerEmail;
   const session = await stripeFetch('/checkout/sessions', {
     method: 'POST', secretKey, stripeAccount, body, knownAmountCents: amountCents,
   });

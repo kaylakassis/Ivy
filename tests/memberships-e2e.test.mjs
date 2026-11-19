@@ -203,14 +203,18 @@ async function run() {
   r = await call(membershipCheckout, req({ method: 'POST', body: { slug: B.slug, membershipId: monthly.id, ...buyer } }));
   assert(r.statusCode === 404, "A's tier through B's handle → 404");
   // A client the owner typed in with mixed case already exists.
-  const existing = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${A.wid}, 'Casey', ${`ME-Casey-${STAMP}@Example.com`}, 'active') RETURNING id`).rows[0].id;
+  // ... and already has a Stripe customer (the one a saved card lives on).
+  const existing = (await sql`INSERT INTO clients (workspace_id, name, email, stage, stripe_customer_id) VALUES (${A.wid}, 'Casey', ${`ME-Casey-${STAMP}@Example.com`}, 'active', ${`cus_casey_${STAMP}`}) RETURNING id`).rows[0].id;
   calls.length = 0;
   r = await call(membershipCheckout, req({ method: 'POST', body: { slug: A.slug, membershipId: monthly.id, ...buyer } }));
   assert(r.statusCode === 200 && /checkout\.stripe\.com/.test(r.body.url), `checkout → Stripe URL (got ${r.statusCode} ${JSON.stringify(r.body)})`);
   assert((await sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${A.wid} AND LOWER(email) = ${buyer.email}`).rows[0].n === 1, 'existing client matched case-insensitively (no duplicate)');
   const cs = lastStripe(/POST .*\/v1\/checkout\/sessions$/);
   const client = (await sql`SELECT * FROM clients WHERE id = ${existing}`).rows[0];
-  assert(cs.body.mode === 'subscription' && cs.body['line_items[0][price]'] && cs.body.customer === client.stripe_customer_id && cs.headers['Stripe-Account'] === A.acct, 'subscription-mode session for the tier price on the connected account');
+  assert(cs.body.mode === 'subscription' && cs.body['line_items[0][price]'] && cs.headers['Stripe-Account'] === A.acct, 'subscription-mode session for the tier price on the connected account');
+  // Nobody signed in: the session carries the typed email, never the
+  // client's existing customer (tests/public-checkout-saved-cards.test.mjs).
+  assert(!('customer' in cs.body) && cs.body.customer_email === buyer.email && stripeCalls(/\/v1\/customers/).length === 0 && client.stripe_customer_id === `cus_casey_${STAMP}`, "public session has the typed email only; the client's own customer is not attached, looked up or changed");
   assert(cs.body['metadata[purpose]'] === 'membership' && cs.body['metadata[membership_id]'] === monthly.id && cs.body['metadata[client_id]'] === existing && cs.body['metadata[workspace_id]'] === A.wid, 'session metadata');
   assert(cs.body['subscription_data[metadata][purpose]'] === 'membership' && cs.body['subscription_data[metadata][client_id]'] === existing && cs.body['subscription_data[metadata][workspace_id]'] === A.wid, 'subscription metadata for the webhook');
   assert(cs.body.success_url.includes(`/book/${A.slug}?membership=joined`), 'returns to the booking page');

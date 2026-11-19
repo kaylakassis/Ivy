@@ -261,13 +261,14 @@ async function run() {
   calls.length = 0;
   r = await call(programCheckout, req({ method: 'POST', body: { programId: oneTime.id, ...buyer } }));
   assert(r.statusCode === 200 && /checkout\.stripe\.com/.test(r.body.url), `checkout returns a Stripe URL (got ${r.statusCode} ${JSON.stringify(r.body)})`);
-  const cust = lastStripe(/POST .*\/v1\/customers$/);
-  assert(!!cust && cust.body.email === buyer.email && cust.headers['Stripe-Account'] === A.acct, 'Stripe customer created on the connected account');
   const cs = lastStripe(/POST .*\/v1\/checkout\/sessions$/);
   assert(!!cs && cs.headers['Stripe-Account'] === A.acct && cs.headers.Authorization === 'Bearer sk_test_programs', 'checkout session minted as a direct charge on the connected account (platform key + Stripe-Account)');
   assert(cs.body.mode === 'payment' && cs.body['line_items[0][price_data][unit_amount]'] === '4900' && cs.body['line_items[0][price_data][currency]'] === 'usd', 'mode=payment, amount 4900 usd');
   const client = (await sql`SELECT * FROM clients WHERE workspace_id = ${A.wid} AND email = ${buyer.email}`).rows[0];
-  assert(!!client && client.stage === 'lead' && client.source === 'program' && String(client.stripe_customer_id).startsWith('cus_'), 'client row created as a program lead with the Stripe customer id');
+  assert(!!client && client.stage === 'lead' && client.source === 'program' && client.stripe_customer_id === null, 'client row created as a program lead, with no Stripe customer linked before anyone has paid');
+  // Nobody signed in: the typed email only, never a customer (a customer
+  // would show its saved card; tests/public-checkout-saved-cards.test.mjs).
+  assert(!('customer' in cs.body) && cs.body.customer_email === buyer.email && stripeCalls(/\/v1\/customers/).length === 0, 'session carries the typed email and no customer; none is looked up or created');
   assert(cs.body['metadata[purpose]'] === 'program' && cs.body['metadata[program_id]'] === oneTime.id && cs.body['metadata[client_id]'] === client.id && cs.body['metadata[workspace_id]'] === A.wid, 'session metadata: purpose/program_id/client_id/workspace_id');
   assert(cs.body['payment_intent_data[metadata][purpose]'] === 'program' && cs.body['payment_intent_data[metadata][program_id]'] === oneTime.id, 'payment intent metadata mirrors the session');
   assert(cs.body.success_url.includes(`/p/${oneTime.id}?purchased=1`) && cs.body.cancel_url.includes('cancelled=1'), 'success/cancel URLs return to the sales page');
@@ -277,7 +278,7 @@ async function run() {
   r = await call(programCheckout, req({ method: 'POST', body: { programId: oneTime.id, name: 'Casey Again', email: buyer.email.toUpperCase() }, ip: `${IPB}.6` }));
   assert(r.statusCode === 200, 'second checkout for the same email (different case) works');
   assert((await sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${A.wid} AND LOWER(email) = ${buyer.email}`).rows[0].n === 1, 'no duplicate client row');
-  assert(stripeCalls(/\/v1\/customers/).length === 0, 'stored Stripe customer reused (no customer lookup)');
+  assert(stripeCalls(/\/v1\/customers/).length === 0 && !('customer' in lastStripe(/POST .*\/v1\/checkout\/sessions$/).body), 'returning buyer: still no customer lookup and none attached');
 
   const session = (id, over = {}) => ({
     id, mode: 'payment', status: 'complete', payment_status: 'paid', amount_total: 4900, payment_intent: `pi_${id}`,
