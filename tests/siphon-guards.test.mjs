@@ -159,6 +159,8 @@ async function main() {
   assert(!/constraint|clients_workspace/.test(toolErrorText(dbErr)) && /nothing was changed/.test(toolErrorText(dbErr)), 'a database error never reaches Ivy\'s reply');
   assert(!/relation/.test(toolErrorText(new Error('relation "foo" does not exist'))) && !/fetch/.test(toolErrorText(new Error('fetch failed'))) && !/reading/.test(toolErrorText(new TypeError("Cannot read properties of undefined (reading 'id')"))), 'nor a missing table, a network fault or a code fault');
   assert(toolErrorText(new Error('No client by that name.')) === 'No client by that name.', 'a plain refusal written for the owner passes through');
+  const longRefusal = `Jane Doe is already a client with that email (client id 84cbc290-cf82-4e99-af4d-f29bfcdb3cc1). Nothing was added; update their record instead (update_client). If this person already has two records, find_duplicate_clients and merge_clients will join them. ${'Tell the owner which record you found. '.repeat(6)}`;
+  assert(longRefusal.length > 400 && toolErrorText(new Error(longRefusal)) === longRefusal.trim(), 'so does a long one: Ivy needs the whole instruction to act on it');
   const customerFacing = ['src/features/finance/Finance.jsx', 'src/features/onboarding/OnboardingPage.jsx', 'src/features/calendar/SyncDrawer.jsx', 'api/billing/checkout.js', 'api/calendar/google/connect.js'];
   const leaks = customerFacing.filter((p) => /(badRequest\(res, |body: |title: |>\s*)[^\n]*(STRIPE_SECRET_KEY|GOOGLE_OAUTH_CLIENT|IVY_STRIPE_PRICE_ID|in Vercel|Vercel env|env var)/.test(read(p)));
   assert(leaks.length === 0, `no customer-facing message names an internal setting or the hosting provider (${leaks.join(', ') || 'none'})`);

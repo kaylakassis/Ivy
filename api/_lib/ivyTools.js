@@ -1486,16 +1486,19 @@ export async function executeIvyTool(name, args, ctx, opts = {}) {
   }
 }
 
-// What an unexpected failure inside a tool may say to Ivy, and so to the
-// owner's screen and the saved chat. A tool's own plain refusals ("No
-// client by that name") pass through. Anything that reads like the
-// database, the network or a stack trace is replaced: table and column
-// names are how the product is built, not something to show anyone.
-const INTERNAL_ERROR = /(postgres|neon|pg_|\bsql\b|relation|column|constraint|violates|duplicate key|syntax error|econn|etimedout|enotfound|fetch failed|socket|\bat \S+ \(|node:|undefined|null \(reading|is not a function|cannot read)/i;
+// What a failure inside a tool may say to Ivy, and so to the owner's screen
+// and the saved chat. Tools refuse on purpose all the time, in full
+// sentences written for Ivy ("Jane is already a client with that email...
+// update their record instead"); those pass through untouched, however
+// long. Only what is recognisably the database, the network or a code
+// fault is replaced: table and column names are how the product is built,
+// not something to show anyone.
+const INTERNAL_ERROR = /(violates [\w-]+ constraint|duplicate key value|relation "[^"]*"|column "[^"]*"|syntax error at or near|null value in column|invalid input syntax|NeonDbError|\bpg_\w+|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang up|Cannot read propert|is not a function|is not defined|is not iterable|Unexpected token|node:internal|\bat \S+ \(\S+:\d+:\d+\))/i;
 export function toolErrorText(err) {
   const msg = String(err?.message || err || '').trim();
   const sqlState = typeof err?.code === 'string' && /^[0-9A-Z]{5}$/.test(err.code);
-  if (!msg || msg.length > 200 || sqlState || INTERNAL_ERROR.test(msg)) {
+  const codeFault = err instanceof TypeError || err instanceof ReferenceError || err instanceof SyntaxError || err instanceof RangeError;
+  if (!msg || msg.length > 1500 || sqlState || codeFault || INTERNAL_ERROR.test(msg)) {
     return 'Something went wrong on our side, so nothing was changed. Try again in a moment.';
   }
   return msg;

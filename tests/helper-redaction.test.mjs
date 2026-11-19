@@ -109,7 +109,7 @@ async function run() {
   assert(r.statusCode === 200 && r.body.clients.length === 1 && r.body.hasMore === true, 'pagination still works in helper mode');
   await setPerms(s1, { schedule: true, clients: true });
   r = await call(clientById, { cookie: hc, headers: asA, query: { id: c1 } });
-  assert(r.statusCode === 200 && r.body.client.notes === 'secret notes' && r.body.client.lifetimeValue === 999, 'clients permission → full record');
+  assert(r.statusCode === 200 && r.body.client.notes === 'secret notes' && r.body.client.lifetimeValue === 0, 'clients permission → full record, except what the client has spent (money is never a helper\'s)');
   r = await call(clientById, { cookie: A.cookie, query: { id: c1 } });
   assert(r.body.client.notes === 'secret notes' && Array.isArray(r.body.client.attachments), 'owner unaffected');
   await setPerms(s1, { schedule: true });
