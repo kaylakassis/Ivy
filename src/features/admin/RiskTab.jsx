@@ -27,9 +27,12 @@ export default function RiskTab({ labels }) {
   const [checking, setChecking] = useState(false);
 
   const [limits, setLimits] = useState(null);
+  // Accounts or visitors reading far more than normal use explains
+  // (api/_lib/activityWatch.js).
+  const [activity, setActivity] = useState([]);
 
   const load = () => api.get('/admin/risk')
-    .then((r) => { setAccounts(r.accounts || []); setLimits(r.limits || null); setErr(null); })
+    .then((r) => { setAccounts(r.accounts || []); setLimits(r.limits || null); setActivity(r.activity || []); setErr(null); })
     .catch((e) => setErr(e.message || 'Could not load the risk list.'));
   useEffect(() => { load(); }, []);
 
@@ -38,6 +41,7 @@ export default function RiskTab({ labels }) {
     try {
       const r = await api.post('/admin/risk', payload);
       if (r.accounts) setAccounts(r.accounts);
+      if (r.activity) setActivity(r.activity);
       return r;
     } catch (e) {
       setErr(e.message || 'That did not work. Nothing was changed.');
@@ -87,6 +91,10 @@ export default function RiskTab({ labels }) {
 
       {accounts !== null && (
         <>
+          <Group title="Unusual activity" count={activity.length}
+            empty="Nobody is reading far more than normal. Ivy counts how many different pages of data each account opens and emails you if one goes well past what a busy business does.">
+            {activity.map((f) => <ActivityCard key={f.id} f={f} act={act}/>)}
+          </Group>
           <Group title="On hold" count={held.length} empty="No business is on hold.">
             {held.map((a) => <AccountCard key={a.workspaceId} a={a} act={act} labels={labels}/>)}
           </Group>
@@ -241,6 +249,59 @@ function Group({ title, count, empty, children }) {
       {count === 0
         ? <div className="card" style={{ padding: 16, fontSize: 13, color: 'var(--muted)' }}>{empty}</div>
         : children}
+    </div>
+  );
+}
+
+// One unusual-activity flag: who, what Ivy saw, what Ivy did about it, and
+// what the operator can do. Slowing down only holds NEW reads to a human
+// pace for an hour; it never blocks saving, booking or payments.
+function ActivityCard({ f, act }) {
+  const [busy, setBusy] = useState(false);
+  const run = async (what) => {
+    setBusy(true);
+    await act({ action: 'activity', flagId: f.id, what });
+    setBusy(false);
+  };
+  const until = f.slowUntil ? new Date(f.slowUntil).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null;
+  return (
+    <div className="card" data-activity-flag={f.kind} style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0, borderColor: f.slowed ? 'var(--warn, #c98500)' : undefined }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, overflowWrap: 'anywhere' }}>{f.businessName || f.who}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2, overflowWrap: 'anywhere' }}>
+            {f.userId
+              ? `${f.accountKind} account${f.businessName && f.who ? ` · ${f.who}` : ''}${f.email ? ` · ${f.email}` : ''}`
+              : `Not signed in${f.networkAddress ? ` · network address ${f.networkAddress}` : ''}`}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+            First noticed {fmtDate(f.firstAt)} ({relTime(f.firstAt)}) · last seen {relTime(f.lastAt)}
+            {f.accountCreatedAt ? ` · account opened ${relTime(f.accountCreatedAt)}` : ''}
+          </div>
+        </div>
+        {f.slowed
+          ? <Chip><Icons.Clock size={12}/> Slowed down until {until}</Chip>
+          : f.everSlowed ? <Chip tone="ok">Slow-down ended</Chip> : <Chip>Watching</Chip>}
+      </div>
+      <div style={{ fontSize: 13, lineHeight: 1.55 }}>{f.what}</div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+        {f.slowed
+          ? (f.userId
+            ? 'Ivy is holding this account to a normal pace for an hour. They can still save, book, message and take payments.'
+            : 'Ivy is letting this network open only a few new businesses a minute for an hour. Pages it already opened still work.')
+          : 'Nothing has been changed for them.'}
+        {!f.userId ? ' Search engines are not counted here.' : ''}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={() => run('reviewed')} style={{ minHeight: 40 }}>Looks fine, hide this</button>
+        {f.slowed && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => run('lift')} style={{ minHeight: 40 }}>Lift the slow-down</button>}
+        {f.userId && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => run('trust')} style={{ minHeight: 40 }}>Trust this account for 30 days</button>}
+      </div>
+      {f.workspaceId && (
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+          To take this business offline, find it in the box above and choose "Take offline".
+        </div>
+      )}
     </div>
   );
 }

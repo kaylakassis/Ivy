@@ -5,6 +5,7 @@
 import { warmupDbOnce } from '../../_lib/db.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { guardVisit } from '../../_lib/activityWatch.js';
 import { publicShopPayload, validShopSlug } from '../../_lib/shops.js';
 import { renderShopHtml } from '../../_lib/shopHtml.js';
 import { renderArchivedHtml } from '../../_lib/businessAccess.js';
@@ -27,6 +28,7 @@ export default async function handler(req, res) {
     const ip = getClientIp(req);
     if (await enforce(req, res, [{ key: `shophtml:ip:${ip}`, max: 120, windowSeconds: 600 }])) return;
     const payload = await publicShopPayload(slug);
+    if (await guardVisit(req, res, `shop:${slug}`, { html: true })) return;
     if (!payload) return notFound(res, slug);
     if (payload.archived) {
       res.statusCode = 200;

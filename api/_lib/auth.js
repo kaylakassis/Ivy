@@ -4,6 +4,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
+import { watchRead, refuseIfSlowed } from './activityWatch.js';
 import { sql } from './db.js';
 import { getOrSet as hotCacheGetOrSet, invalidate as hotCacheInvalidate } from './hotCache.js';
 
@@ -303,6 +304,10 @@ export async function requireUser(req, res) {
          AND created_at > NOW() - INTERVAL '24 hours'
     `.catch(() => { /* tracking only */ });
   }
+  // Unusual-activity watch (api/_lib/activityWatch.js): counts how many
+  // different pages of data this account reads, and holds an account that
+  // is far past normal use to a human pace. Reads only; never a save.
+  if (refuseIfSlowed(res, await watchRead(req, row))) return null;
   return row;
 }
 

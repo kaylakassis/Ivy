@@ -14,6 +14,7 @@
 import { sql } from '../../_lib/db.js';
 import { readSession } from '../../_lib/auth.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { serializeReview } from '../../_lib/reviews.js';
 import { publicLocationLabel } from '../../_lib/calendar.js';
@@ -62,6 +63,7 @@ export default async function handler(req, res) {
       LEFT JOIN websites w ON w.workspace_id = cs.workspace_id
       WHERE cs.slug = ${slug} AND cs.discoverable = TRUE
     `;
+    if (await guardVisit(req, res, cs.rows[0]?.workspace_id || missKey(slug))) return;
     if (cs.rows.length === 0) return notFound(res, 'Business not found');
     const row = cs.rows[0];
     const workspaceId = row.workspace_id;

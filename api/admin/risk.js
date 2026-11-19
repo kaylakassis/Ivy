@@ -12,6 +12,10 @@
 //                    apply the answers (a rejection places a hold)
 //          limits    change the card payment limits for businesses
 //                    Stripe has not verified yet ({ limits: {...} })
+//          activity  act on an unusual-activity flag ({ flagId, what }):
+//                    'reviewed' hide it, 'lift' end a slow-down now,
+//                    'trust' end it and stop watching the account for a
+//                    month (api/_lib/activityWatch.js)
 //
 // Every action is written to the audit log with who did it.
 import { requireSameOrigin } from '../_lib/security.js';
@@ -23,6 +27,7 @@ import {
   listRiskAccounts, placeRiskHold, releaseRiskHold, markRiskReviewed, syncStripeAccountStatuses,
 } from '../_lib/riskHold.js';
 import { getLimits, setLimits, describeLimits } from '../_lib/newBusinessLimits.js';
+import { listActivityFlags, reviewActivityFlag } from '../_lib/activityWatch.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -42,7 +47,10 @@ export default async function handler(req, res) {
         return ok(res, { results: await listRiskAccounts({ search: q, limit: 20 }) });
       }
       const limits = await getLimits();
-      return ok(res, { accounts: await listRiskAccounts(), limits, limitsText: describeLimits(limits) });
+      return ok(res, {
+        accounts: await listRiskAccounts(), limits, limitsText: describeLimits(limits),
+        activity: await listActivityFlags().catch(() => []),
+      });
     }
 
     const body = await readBody(req);
@@ -62,6 +70,17 @@ export default async function handler(req, res) {
       const limits = await setLimits(body.limits);
       await recordAudit(req, { actor, action: 'risk.limits', meta: { before, after: limits } });
       return ok(res, { ok: true, limits, limitsText: describeLimits(limits) });
+    }
+
+    // Unusual activity (an account or a visitor reading far more than normal).
+    if (action === 'activity') {
+      const flagId = String(body.flagId || '');
+      const what = String(body.what || '');
+      if (!UUID_RE.test(flagId) || !['reviewed', 'lift', 'trust'].includes(what)) return badRequest(res, 'Pick a flag first.');
+      const out = await reviewActivityFlag({ id: flagId, by, trust: what === 'trust', lift: what === 'lift' });
+      if (!out.ok) return notFound(res, 'That flag was not found.');
+      await recordAudit(req, { actor, action: `risk.activity.${what}`, meta: { flagId, subject: out.subject } });
+      return ok(res, { ok: true, activity: await listActivityFlags().catch(() => []) });
     }
 
     const workspaceId = String(body.workspaceId || '');

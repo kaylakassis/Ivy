@@ -14,6 +14,7 @@
 import { sql, warmupDbOnce } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
@@ -98,6 +99,9 @@ async function getCalendar(req, res) {
         JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
       WHERE cs.slug = ${slug}
     `;
+    // One network opening hundreds of different businesses (or trying
+    // hundreds of names) is collecting a list, not booking.
+    if (await guardVisit(req, res, settings.rows[0]?.workspace_id || missKey(slug))) return;
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const s = settings.rows[0];
 

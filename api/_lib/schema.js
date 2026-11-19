@@ -5638,4 +5638,41 @@ UPDATE users u SET signup_role = 'client'
    AND COALESCE(u.user_type, 'regular') = 'regular'
    AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
    AND NOT EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id OR sm.revoked_user_id = u.id);
+-- Unusual-activity watch (api/_lib/activityWatch.js). activity_reads is a
+-- small counter per account (or per hashed network address) per hour:
+-- how many different pages of data it read. activity_flags is one row per
+-- subject per day once a count passes a line; Admin > Risk reads it.
+-- activity_trust marks an account the operator has said is fine.
+CREATE TABLE IF NOT EXISTS activity_reads (
+  subject TEXT NOT NULL,
+  bucket TIMESTAMPTZ NOT NULL,
+  n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (subject, bucket)
+);
+CREATE INDEX IF NOT EXISTS idx_activity_reads_bucket ON activity_reads (bucket);
+CREATE TABLE IF NOT EXISTS activity_flags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subject TEXT NOT NULL,
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  flag_day DATE NOT NULL,
+  peak_hour INTEGER NOT NULL DEFAULT 0,
+  day_total INTEGER NOT NULL DEFAULT 0,
+  detail JSONB NOT NULL DEFAULT '{}'::jsonb,
+  slow_until TIMESTAMPTZ,
+  slowed_at TIMESTAMPTZ,
+  first_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reviewed_at TIMESTAMPTZ,
+  reviewed_by TEXT,
+  UNIQUE (subject, kind, flag_day)
+);
+CREATE INDEX IF NOT EXISTS idx_activity_flags_recent ON activity_flags (first_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_flags_slow ON activity_flags (subject, slow_until) WHERE slow_until IS NOT NULL;
+CREATE TABLE IF NOT EXISTS activity_trust (
+  subject TEXT PRIMARY KEY,
+  until TIMESTAMPTZ NOT NULL,
+  by_email TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;

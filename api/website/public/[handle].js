@@ -12,6 +12,8 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { loadWorkspaceAccess, archivedPayload } from '../../_lib/businessAccess.js';
+import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -20,7 +22,11 @@ export default async function handler(req, res) {
     // the visibility filter below survives a fresh deploy.
     await ensureSchemaApplied();
     const { handle, slug } = req.query;
+    // Same cap as the booking page: generous for a visitor clicking around
+    // a site, a wall for something trying every name to see which exist.
+    if (await enforce(req, res, [{ key: `siteget:ip:${getClientIp(req)}`, max: 240, windowSeconds: 600 }])) return;
     const result = await loadPublicSite({ handle, slug });
+    if (await guardVisit(req, res, result.kind === 'ok' ? result.workspaceId : missKey(handle))) return;
     if (result.kind !== 'ok') return notFound(res, 'Site not published');
     // Owner's subscription lapsed: the site is archived. 200 with the
     // marker only, no pages.

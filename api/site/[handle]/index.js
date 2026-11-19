@@ -12,6 +12,7 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { renderSiteHtml } from '../../_lib/siteHtml.js';
 import { loadWorkspaceAccess, renderArchivedHtml } from '../../_lib/businessAccess.js';
+import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
     // Stripe Checkout returns here with ?order=success|cancel.
     const order = typeof req.query.order === 'string' ? req.query.order : null;
     const result = await loadPublicSite({ handle, slug: '' });
+    if (await guardVisit(req, res, result.kind === 'ok' ? result.workspaceId : missKey(handle), { html: true })) return;
     if (result.kind !== 'ok') return notFound(res, handle);
     const access = await loadWorkspaceAccess(result.workspaceId);
     if (!access.active) return archived(res, access);

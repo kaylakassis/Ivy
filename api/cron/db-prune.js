@@ -63,6 +63,14 @@ async function handler(req, res) {
 
     results.rateLimits = await prune('rate_limits',
       `attempted_at < NOW() - INTERVAL '7 days'`);
+    // Unusual-activity watch: hourly counters, then the flags raised from
+    // them (a visitor's flag carries a network address, so 30 days).
+    results.activityReads = await prune('activity_reads',
+      `bucket < NOW() - INTERVAL '14 days'`);
+    results.activityFlags = await prune('activity_flags',
+      `first_at < NOW() - INTERVAL '30 days'`);
+    results.activityTrust = await prune('activity_trust',
+      `until < NOW() - INTERVAL '1 day'`);
     // 2-step email codes live 10 minutes; a day covers the hourly send cap.
     results.mfaEmailCodes = await prune('mfa_email_codes',
       `created_at < NOW() - INTERVAL '1 day'`);

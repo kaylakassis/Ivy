@@ -1,29 +1,32 @@
 // GET /api/site/:handle/products  (public, no auth)
 //
 // Lists the workspace's active products for the storefront Shop section.
-// Returns the same serialized shape as the owner-side /api/products list
-// minus internal-only fields (cost, sku). Stays read-only - the public
-// can browse but never mutate inventory.
+// Read-only. It follows the same rules as the site it belongs to
+// (api/_lib/publicSite.js): a site that is private, unpublished, or whose
+// owner's plan has lapsed has no public product list either. Visitors are
+// told whether something is in stock, never how many are left.
 import { sql } from '../../_lib/db.js';
+import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
+import { loadPublicSite } from '../../_lib/publicSite.js';
+import { loadWorkspaceAccess } from '../../_lib/businessAccess.js';
+import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
+    await ensureSchemaApplied();
     const handle = (req.query.handle || '').toString().toLowerCase();
     if (!handle) return notFound(res);
+    if (await enforce(req, res, [{ key: `siteget:ip:${getClientIp(req)}`, max: 240, windowSeconds: 600 }])) return;
 
-    // Resolve workspace by website handle (the published storefront URL).
-    const w = await sql`
-      SELECT w2.workspace_id FROM websites w2
-        JOIN workspaces ws ON ws.id = w2.workspace_id
-        JOIN users u ON u.id = ws.owner_id AND u.deleted_at IS NULL
-      WHERE w2.handle = ${handle}
-        AND published_at IS NOT NULL
-      LIMIT 1
-    `;
-    if (w.rows.length === 0) return notFound(res, 'No shop at that handle');
-    const workspaceId = w.rows[0].workspace_id;
+    const site = await loadPublicSite({ handle, slug: '' });
+    if (await guardVisit(req, res, site.workspaceId || missKey(handle))) return;
+    if (site.kind !== 'ok') return notFound(res, 'No shop at that handle');
+    const workspaceId = site.workspaceId;
+    const access = await loadWorkspaceAccess(workspaceId);
+    if (!access.active) return ok(res, { products: [] });
 
     const r = await sql`
       -- NOTE: products has no description/photo_url columns (the owner
@@ -43,9 +46,10 @@ export default async function handler(req, res) {
         description: null,
         price:      Number(p.price || 0),
         photoUrl:   null,
-        // Surface stock state but not the exact count for non-track products.
         inStock:    p.track_stock ? Number(p.stock_qty || 0) > 0 : true,
-        stockQty:   p.track_stock ? Number(p.stock_qty || 0) : null,
+        // Kept in the shape for older app versions; the count itself is
+        // the owner's business.
+        stockQty:   null,
       })),
     });
   } catch (err) {

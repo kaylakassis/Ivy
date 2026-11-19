@@ -7,6 +7,7 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { renderSiteHtml } from '../../_lib/siteHtml.js';
 import { loadWorkspaceAccess, renderArchivedHtml } from '../../_lib/businessAccess.js';
+import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -29,6 +30,8 @@ export default async function handler(req, res) {
     }
 
     const result = await loadPublicSite({ handle, slug });
+    // Counted once per site name, whichever page was asked for.
+    if (await guardVisit(req, res, result.workspaceId || missKey(handle), { html: true })) return;
     if (result.kind !== 'ok') return notFound(res, handle, slug);
     const access = await loadWorkspaceAccess(result.workspaceId);
     if (!access.active) return archived(res, access);

@@ -7,6 +7,7 @@
 import { warmupDbOnce } from '../../_lib/db.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { guardVisit } from '../../_lib/activityWatch.js';
 import { publicShopPayload, validShopSlug, ownedWorkspaceOf } from '../../_lib/shops.js';
 import { requireUser } from '../../_lib/auth.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
@@ -33,6 +34,7 @@ export default async function handler(req, res) {
       if (!previewWorkspaceId) return notFound(res, 'No shop page at that address');
     }
     const payload = await publicShopPayload(slug, { previewWorkspaceId });
+    if (!previewWorkspaceId && await guardVisit(req, res, `shop:${slug}`)) return;
     if (!payload) return notFound(res, 'No shop page at that address');
     // Never cached: a pro who leaves (or whose plan lapses) must vanish on
     // the next load, and open times must be live. (A browser honours
