@@ -30,6 +30,25 @@ const CSS = `
   animation: ivy-w-rise .6s ease-out 1.2s both; }
 .ivy-w .primary { background: #ECF0F1; color: #012B24; border: 0; border-radius: 14px; padding: 16px; font: inherit; font-size: 17px; font-weight: 700; }
 .ivy-w .secondary { background: transparent; color: #F3F3EE; border: 1.5px solid rgba(255,255,255,.28); border-radius: 14px; padding: 15px; font: inherit; font-size: 16px; font-weight: 600; }
+/* The two ways to create an account. Each says who it is for in its own
+   words, so a client never ends up with a business account by guessing. */
+.ivy-w .new { margin: 10px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #9BB0A9; text-align: center; }
+.ivy-w .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; width: 100%;
+  background: rgba(255,255,255,.04); color: #F3F3EE; border: 1.5px solid rgba(255,255,255,.28); border-radius: 14px; padding: 13px 16px; font: inherit; }
+.ivy-w .choice b { font-size: 16px; font-weight: 650; }
+.ivy-w .choice span { font-size: 13.5px; line-height: 1.35; color: #C9CAC3; }
+@media (max-height: 760px) {
+  .ivy-w .mark { width: 96px; height: 96px; border-radius: 22px; }
+  .ivy-w h1 { font-size: 38px; margin-top: 22px; }
+  .ivy-w .actions { margin-top: 26px; gap: 10px; }
+}
+@media (max-height: 620px) {
+  .ivy-w .mark { width: 64px; height: 64px; border-radius: 16px; }
+  .ivy-w h1 { font-size: 30px; margin-top: 14px; }
+  .ivy-w p { font-size: 14.5px; margin-top: 8px; }
+  .ivy-w .actions { margin-top: 18px; }
+  .ivy-w .legal { position: static; margin-top: 14px; }
+}
 .ivy-w .legal { position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); font-size: 12px; color: #8A8D85;
   display: flex; gap: 16px; animation: ivy-w-rise .6s ease-out 1.35s both; }
 .ivy-w .legal a { color: inherit; text-decoration: none }
@@ -60,7 +79,15 @@ export default function WelcomePage() {
       <p>Bookings, invoices, clients and an assistant that does the admin. One app.</p>
       <div className="actions">
         <button type="button" className="primary" onClick={() => navigate('/signin')}>Sign in</button>
-        <button type="button" className="secondary" onClick={() => navigate('/signup')}>Create an account</button>
+        <div className="new" id="ivy-w-new">New to Ivy? Create an account</div>
+        <button type="button" className="choice" aria-describedby="ivy-w-new" onClick={() => navigate('/signup')}>
+          <b>I run a business</b>
+          <span>Bookings, invoices and clients.</span>
+        </button>
+        <button type="button" className="choice" aria-describedby="ivy-w-new" onClick={() => navigate('/signup?mode=client')}>
+          <b>I&apos;m a client</b>
+          <span>A business I use asked me to join. Free.</span>
+        </button>
       </div>
       <div className="legal">
         <LegalLink to="/privacy">Privacy</LegalLink>

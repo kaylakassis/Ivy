@@ -320,7 +320,12 @@ export async function userContext(user) {
       userType: user.user_type || 'regular',
     },
     isOwner:  !!workspace,
-    isClient: memberships.length > 0,
+    // A client account counts as a client even with no business linked yet
+    // (email not confirmed, or the business has not added them). Every app
+    // build sends isClient to the client portal; without this it fell
+    // through to the business screens, which then created a business.
+    isClient: memberships.length > 0 || (!workspace && user.signup_role === 'client'),
+    clientAccount: !workspace && user.signup_role === 'client',
     isHelper: helps.some((h) => h.status === 'active'),
     workspaceId: workspace?.id || null,
     // The owner's workspace as one object. Several screens read

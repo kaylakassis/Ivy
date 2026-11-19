@@ -241,7 +241,7 @@ export async function requireUser(req, res) {
              walkthrough_completed_at, user_type, totp_enrolled_at, mfa_email_enabled_at,
              terms_accepted_at, terms_version,
              privacy_version, privacy_accepted_at,
-             password_changed_at, deleted_at, last_active_at, ui_prefs
+             password_changed_at, deleted_at, last_active_at, ui_prefs, signup_role
       FROM users WHERE id = ${session.sub}
     `;
     // Cache `null` for a genuinely-absent user so a bogus/old session
@@ -335,6 +335,11 @@ export async function ensureWorkspace(userId) {
   // Lazy import: helpers.js imports this module.
   const { isHelperUser } = await import('./helpers.js');
   if (await isHelperUser(userId)) throw new HelperOnlyError();
+  // A client account never gets a business by touching an owner endpoint
+  // (accountKind.js). Starting one is an explicit choice:
+  // api/helper/start-business.js.
+  const { signupRoleOf, ClientOnlyError } = await import('./accountKind.js');
+  if (await signupRoleOf(userId) === 'client') throw new ClientOnlyError();
   try {
     // Insert only if no workspace exists yet. With the unique index on
     // owner_id (schema.js) a parallel insert fails and the catch re-reads;

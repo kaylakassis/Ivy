@@ -174,6 +174,43 @@ export default function AuthPage({ mode = 'signin' }) {
           </p>
         </div>
 
+        {/* Business or client: asked up front, in plain words, because the two
+            accounts open different apps. (A small link under the form used
+            to be the only way to pick "client", and people missed it.) */}
+        {isSignUp && (
+          <div role="radiogroup" aria-label="What kind of account do you need?"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[
+              ['owner', 'I run a business', 'Bookings, invoices and clients for my own business.'],
+              ['client', 'I\u2019m a client', 'A business I use asked me to join. Free.'],
+            ].map(([k, title, sub]) => {
+              const on = role === k;
+              return (
+                <button key={k} type="button" role="radio" aria-checked={on} data-role-choice={k}
+                  onClick={() => setRole(k)}
+                  style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 3, textAlign: 'left',
+                    padding: '11px 12px', borderRadius: 12, cursor: 'pointer', font: 'inherit',
+                    background: on ? 'var(--accent-soft)' : 'var(--surface)',
+                    border: `2px solid ${on ? 'var(--accent)' : 'var(--border-strong)'}`,
+                    color: 'var(--fg)',
+                  }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14.5, fontWeight: 650 }}>
+                    <span aria-hidden="true" style={{
+                      width: 15, height: 15, borderRadius: 99, flexShrink: 0, boxSizing: 'border-box',
+                      border: `2px solid ${on ? 'var(--accent)' : 'var(--muted)'}`,
+                      background: on ? 'var(--accent)' : 'transparent',
+                      boxShadow: on ? 'inset 0 0 0 2.5px var(--accent-soft)' : 'none',
+                    }}/>
+                    {title}
+                  </span>
+                  <span style={{ fontSize: 12.5, lineHeight: 1.4, color: 'var(--fg-2)' }}>{sub}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {isSignUp && (
           <Field label="Your name">
             <input value={name} onChange={(e) => setName(e.target.value)}
@@ -298,23 +335,10 @@ export default function AuthPage({ mode = 'signin' }) {
           )}
         </div>
 
-        {isSignUp && (
+        {isSignUp && role === 'owner' && (
           <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
-            {role === 'owner' ? (
-              <>
-                You&apos;re responsible for your own business decisions - consult a
-                qualified professional for material ones.{' '}
-                <button type="button" onClick={() => setRole('client')}
-                  style={{ color: 'var(--fg-2)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>
-                  Booking with a business that uses Ivy?
-                </button>
-              </>
-            ) : (
-              <button type="button" onClick={() => setRole('owner')}
-                style={{ color: 'var(--fg-2)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>
-                Running a business? Create a workspace instead
-              </button>
-            )}
+            You&apos;re responsible for your own business decisions - consult a
+            qualified professional for material ones.
           </div>
         )}
       </form>
@@ -498,10 +522,10 @@ function Field({ label, children }) {
   );
 }
 
-// (The old two-card RoleToggle was removed: the business-vs-client
-// decision now lives as a small text link under the form, so the owner
-// path - the overwhelming majority of signups - is the single clear
-// action. ?mode=client deep links still preselect the client role.)
+// (Business or client is chosen with the two cards at the top of the
+// sign-up form. For a while it was only a small text link under the form;
+// clients missed it and created business accounts. ?mode=client deep
+// links still preselect the client card.)
 
 // Password input with a show/hide eye toggle.
 // `invalid` adds a red border so it can be used for the "doesn't match" state.

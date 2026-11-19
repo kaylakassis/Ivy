@@ -385,6 +385,13 @@ export default function UserProfileSheet({ userId, labels }) {
           <DuplicateBusinesses userId={userId}/>
         </Section>
       )}
+      {/* One business: the place to switch someone who signed up as a
+          business by mistake to a client account. */}
+      {b && b.workspaceCount === 1 && (
+        <Section title="Account type" testId="profile-account-type">
+          <DuplicateBusinesses userId={userId}/>
+        </Section>
+      )}
 
       {us && (
         <Section title="Usage (counts only)" testId="profile-usage">

@@ -70,10 +70,10 @@ async function ensureQaAccount() {
     const ins = await sql`
       INSERT INTO users (email, password_hash, name, email_verified_at,
                          terms_version, terms_accepted_at,
-                         privacy_version, privacy_accepted_at, user_type)
+                         privacy_version, privacy_accepted_at, user_type, signup_role)
       VALUES (${QA_EMAIL}, ${pw}, 'QA Tester', NOW(),
               ${CURRENT_TERMS_VERSION}, NOW(),
-              ${CURRENT_PRIVACY_VERSION}, NOW(), 'regular')
+              ${CURRENT_PRIVACY_VERSION}, NOW(), 'regular', 'owner')
       RETURNING id`;
     userId = ins.rows[0].id;
   }

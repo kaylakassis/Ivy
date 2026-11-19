@@ -5624,4 +5624,18 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_identity_state TEXT
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_verified_at TIMESTAMPTZ;
 -- The limits themselves, set in Admin > Risk. NULL = the built-in defaults.
 ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS new_business_limits JSONB;
+
+-- What an account signed up as: 'owner' (runs a business) or 'client' (a
+-- business's customer, client portal only). A client account is never
+-- given a business by accident (api/_lib/accountKind.js). NULL = an
+-- account from before this column that owns a business or helps at one.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_role TEXT;
+-- Accounts from before the column that own nothing and help nowhere are
+-- client accounts: an owner always got a workspace at sign-up. Safe to run
+-- again: every path that creates an account now sets the role itself.
+UPDATE users u SET signup_role = 'client'
+ WHERE u.signup_role IS NULL
+   AND COALESCE(u.user_type, 'regular') = 'regular'
+   AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
+   AND NOT EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id OR sm.revoked_user_id = u.id);
 `;

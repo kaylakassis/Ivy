@@ -1,9 +1,9 @@
 // POST /api/helper/start-business
 //
-// "Run your own business?" from the helper shell. A helper's account owns
-// nothing, and the owner gate (workspaceGate.js) deliberately refuses to
-// mint a workspace for a helper-only account by accident. This is the
-// one explicit path: the signed-in user asks for their own business, we
+// "Run your own business?" from the helper shell or the client portal. A
+// helper's account and a client account own nothing, and the owner gate
+// (workspaceGate.js) deliberately refuses to mint a workspace for either
+// by accident. This is the one explicit path: the signed-in user asks for their own business, we
 // create the workspace exactly the way signup does for an owner
 // (incomplete subscription, card-backed trial starts at the paywall), and
 // the app sends them through onboarding. Idempotent: an existing owner
@@ -36,6 +36,8 @@ export default async function handler(req, res) {
       if (retry.rows.length === 0) throw err;
       return ok(res, { workspaceId: retry.rows[0].id, created: false });
     }
+    // From here on this is a business account (accountKind.js).
+    await sql`UPDATE users SET signup_role = 'owner' WHERE id = ${user.id} AND signup_role = 'client'`;
     invalidateOwnerWorkspace(user.id);
     invalidateUserCache(user.id);
     return created(res, { workspaceId: row.id, created: true });

@@ -257,8 +257,8 @@ async function createUser(req, res) {
 
   const dbUserType = (userType === 'sponsored' || userType === 'beta' || userType === 'affiliate') ? userType : 'regular';
   const ins = await sql`
-    INSERT INTO users (email, password_hash, name, user_type, email_verified_at)
-    VALUES (${email}, ${password_hash}, ${name}, ${dbUserType}, NOW())
+    INSERT INTO users (email, password_hash, name, user_type, email_verified_at, signup_role)
+    VALUES (${email}, ${password_hash}, ${name}, ${dbUserType}, NOW(), 'owner')
     RETURNING id, email, name, user_type, created_at
   `;
   const user = ins.rows[0];

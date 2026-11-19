@@ -30,6 +30,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode, iapUnavailableReason, iapIdentifyRefusal } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS, MONTHLY_STACK_SAVINGS } from '../../lib/pricing.js';
 
+import NotABusiness from '../../components/NotABusiness.jsx';
 // Real, truthful conversion proof - mirrors the marketing pricing page.
 // We deliberately do NOT fabricate star ratings or user counts (Ivy
 // has no review corpus to quote); the stack-replacement savings is a
@@ -754,6 +755,11 @@ export default function Paywall({ ctx, onRefresh }) {
                   Go to {clientOnlyBusiness.businessName} as a client →
                 </a>
               )}
+
+              {/* Someone who created a business account by mistake and is
+                  really a client of a business. Only before any plan or
+                  trial; the server checks again. */}
+              {canTrial && !clientOnlyBusiness && <NotABusiness variant="link"/>}
 
               {/* Trust line - every top-earner closes with Terms/Privacy.
                   On phones the plan card already links both. */}

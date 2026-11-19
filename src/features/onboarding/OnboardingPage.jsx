@@ -55,6 +55,7 @@ import {
 } from './aboutFields.jsx';
 
 import { labelled } from '../../lib/labelled.js';
+import NotABusiness from '../../components/NotABusiness.jsx';
 // OTHER / OUTSIDE_US sentinels, validation and the save payload for the
 // About step live in aboutFields.jsx (shared with the dashboard prompt).
 
@@ -775,6 +776,9 @@ export default function OnboardingPage() {
       }}>
         {currentStep === 'welcome'      && (
           <>
+            {/* A client who created a business account by mistake lands
+                here first. Give them the way out before any questions. */}
+            <NotABusiness/>
             {/* Primary path for coaches: let Ivy do the setup. */}
             <button type="button" onClick={() => {
               setErr(null);

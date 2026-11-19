@@ -123,6 +123,16 @@ export async function ensureActiveWorkspace(user, req, res, opts = {}) {
     });
     return null;
   }
+  // A client account owns nothing either, and must not be handed a
+  // business because an old app build sent it to the business screens.
+  if (owned.rows.length === 0 && user.signup_role === 'client') {
+    stampRequestId(undefined, res);
+    res.status(403).json({
+      error: 'client-only',
+      message: 'This is a client account. It does not have a business.',
+    });
+    return null;
+  }
 
   // ensureWorkspace itself is required for shape (we need the id even
   // on a freshly-created row). If THAT throws, the request can't make

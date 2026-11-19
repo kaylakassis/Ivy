@@ -191,13 +191,13 @@ export default async function handler(req, res) {
           email, password_hash, name,
           terms_version, terms_accepted_at,
           privacy_version, privacy_accepted_at,
-          last_login_at, last_active_at, signup_country
+          last_login_at, last_active_at, signup_country, signup_role
         )
         VALUES (
           ${emailKey}, ${password_hash}, ${cleanName},
           ${CURRENT_TERMS_VERSION}, NOW(),
           ${privacyVersionAccepted}, NOW(),
-          NOW(), NOW(), ${signupCountry}
+          NOW(), NOW(), ${signupCountry}, ${role}
         )
         RETURNING id, email, name, created_at, email_verified_at
       `;

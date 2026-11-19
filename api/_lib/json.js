@@ -61,6 +61,12 @@ export function serverError(res, err, req) {
     console.warn('[api] 403: helper-only ·', res.req?.method, res.req?.url);
     return res.status(403).json({ error: 'helper-only', message: err.message });
   }
+  // The same for a client account (accountKind.js).
+  if (err?.code === 'client-only') {
+    // eslint-disable-next-line no-console
+    console.warn('[api] 403: client-only ·', res.req?.method, res.req?.url);
+    return res.status(403).json({ error: 'client-only', message: err.message });
+  }
   // Log the error server-side (Vercel captures console.error in logs) but
   // redact PII first - Postgres errors + stacks can carry query params
   // (emails, phones, tokens) into third-party log aggregators. Sentry's

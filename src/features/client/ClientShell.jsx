@@ -25,6 +25,7 @@ import OfflineBanner from '../../components/OfflineBanner.jsx';
 import NativePushPrompt from '../../components/NativePushPrompt.jsx';
 import { syncPushOnLaunch } from '../../lib/push.js';
 
+import { startBusinessFromClientAccount } from '../../components/NotABusiness.jsx';
 // Primary destinations (tab bar on phones, top of the sidebar on desktop).
 const PRIMARY = [
   { to: '/me',          label: 'Home',     icon: 'Home',     end: true },
@@ -272,6 +273,11 @@ function UserBlock({ data, compact }) {
               <Icons.Settings size={13}/> Account settings
             </NavLink>
           )}
+          {!data?.isOwner && !data?.isHelper && (
+            <button onClick={() => { setOpen(false); startBusinessFromClientAccount(); }} style={menuBtn}>
+              <Icons.Trending size={13}/> Run your own business?
+            </button>
+          )}
           <button onClick={doSignOut} style={menuBtn}>
             <Icons.Arrow size={13}/> Sign out
           </button>
@@ -470,6 +476,12 @@ function MoreSheet({ data, summary, onClose }) {
               <span style={{ ...iconBox, background: 'var(--surface-2)', color: 'var(--fg-2)' }}><Icons.Calendar size={18}/></span>
               <span style={{ fontSize: 15, fontWeight: 550 }}>Switch to helper view</span>
             </Link>
+          )}
+          {!data?.isOwner && !data?.isHelper && (
+            <button type="button" style={row} onClick={() => { onClose?.(); startBusinessFromClientAccount(); }}>
+              <span style={{ ...iconBox, background: 'var(--surface-2)', color: 'var(--fg-2)' }}><Icons.Trending size={18}/></span>
+              <span style={{ fontSize: 15, fontWeight: 550 }}>Run your own business?</span>
+            </button>
           )}
           <button type="button" style={row} onClick={doSignOut}>
             <span style={{ ...iconBox, background: 'var(--surface-2)', color: 'var(--fg-2)' }}><Icons.Arrow size={18}/></span>

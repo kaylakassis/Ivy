@@ -31,7 +31,9 @@ export default function ClientHome() {
   const [extra, setExtra] = useState(null); // { bookings, invoices, documents, programs, packages }
 
   const summary = data?.summary;
-  const isClient = !!data?.isClient;
+  // Linked to at least one business. (data.isClient alone is also true for
+  // a client account nobody has linked yet, which gets the empty state.)
+  const isClient = (data?.memberships?.length || 0) > 0;
   const wantInvoices = (summary?.openInvoices || 0) > 0;
   const wantDocs = (summary?.pendingDocs || 0) > 0;
 

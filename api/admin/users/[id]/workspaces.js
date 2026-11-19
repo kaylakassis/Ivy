@@ -1,5 +1,6 @@
 // GET  /api/admin/users/:id/workspaces
 // POST /api/admin/users/:id/workspaces  { removeWorkspaceId, allowData? }
+// POST /api/admin/users/:id/workspaces  { makeClientAccount: true, allowData? }
 //
 // Resolves an owner who ended up with more than one business record (a
 // sign-up race before workspaces were made one per owner). GET lists each of
@@ -20,49 +21,11 @@ import { requireSuperAdmin, getAdminActor } from '../../../_lib/admin.js';
 import { readBody } from '../../../_lib/body.js';
 import { recordAudit } from '../../../_lib/audit.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
+import { workspaceTables, countsFor, dataRowsOf, hasLivePlan, clientSwitchCheck, convertToClientAccount } from '../../../_lib/accountKind.js';
+import { invalidateUserCache } from '../../../_lib/auth.js';
+import { invalidateOwnerWorkspace } from '../../../_lib/clientPortal.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const IDENT_RE = /^[a-z_][a-z0-9_]*$/;
-
-// Records every new business gets automatically (settings rows). Having
-// only these means nobody has used that business.
-const SETUP_ONLY = new Set([
-  'calendar_settings', 'workspace_profile', 'finance_settings', 'websites',
-  'notification_preferences', 'workspace_settings', 'branding', 'admin_analytics_cache',
-]);
-
-async function workspaceTables() {
-  const { rows } = await sql`
-    SELECT c.table_name
-      FROM information_schema.columns c
-      JOIN information_schema.tables t
-        ON t.table_schema = c.table_schema AND t.table_name = c.table_name
-     WHERE c.table_schema = 'public' AND c.column_name = 'workspace_id'
-       AND t.table_type = 'BASE TABLE'
-     ORDER BY c.table_name`;
-  return rows.map((r) => r.table_name).filter((n) => IDENT_RE.test(n));
-}
-
-async function countsFor(workspaceId, tables) {
-  if (!tables.length) return {};
-  // One query: a COUNT per table. Table names come from the catalog and are
-  // checked against IDENT_RE; the workspace id is a bound parameter.
-  const parts = tables.map((t) => `SELECT '${t}' AS t, COUNT(*)::int AS n FROM "${t}" WHERE workspace_id = $1`);
-  const { rows } = await sql.query(parts.join(' UNION ALL '), [workspaceId]);
-  const out = {};
-  for (const r of rows) if (r.n > 0) out[r.t] = r.n;
-  return out;
-}
-
-function hasLivePlan(w) {
-  const now = Date.now();
-  const future = (d) => d && new Date(d).getTime() > now;
-  if (w.subscription_status === 'active' && (w.stripe_subscription_id || w.subscription_source === 'apple')) return true;
-  if (w.subscription_status === 'trialing' && future(w.trial_ends_at) && (w.stripe_subscription_id || w.subscription_source === 'apple')) return true;
-  if (w.subscription_status === 'past_due') return true;
-  return false;
-}
-
 async function listFor(userId) {
   const { rows } = await sql`
     SELECT w.*, cs.biz_name, cs.slug
@@ -75,9 +38,7 @@ async function listFor(userId) {
   for (const [i, w] of rows.entries()) {
     // eslint-disable-next-line no-await-in-loop
     const counts = await countsFor(w.id, tables);
-    const dataRows = Object.entries(counts)
-      .filter(([t]) => !SETUP_ONLY.has(t))
-      .reduce((s, [, n]) => s + n, 0);
+    const dataRows = dataRowsOf(counts);
     out.push({
       id: w.id,
       createdAt: w.created_at,
@@ -108,10 +69,34 @@ export default async function handler(req, res) {
     if (!u) return notFound(res, 'User not found');
 
     if (req.method === 'GET') {
-      return ok(res, { workspaces: await listFor(u.id) });
+      // clientSwitch: can this account be turned into a client account
+      // (someone who created a business by mistake)? With the reason if not.
+      const sw = await clientSwitchCheck(u.id, { allowData: true });
+      const strict = sw.ok ? await clientSwitchCheck(u.id) : sw;
+      return ok(res, {
+        workspaces: await listFor(u.id),
+        clientSwitch: sw.ok
+          ? { eligible: true, dataRows: sw.dataRows, needsConfirm: !strict.ok }
+          : { eligible: false, reason: sw.reason, message: sw.message },
+      });
     }
 
     const body = await readBody(req);
+
+    // Make this a client account: remove the one unused business. Never
+    // with a plan or trial; records only after the admin has seen the count.
+    if (body?.makeClientAccount === true) {
+      const result = await convertToClientAccount(u.id, { allowData: body?.allowData === true });
+      if (!result.ok) return badRequest(res, result.message, { code: `switch-${result.reason}`, dataRows: result.dataRows });
+      invalidateOwnerWorkspace(u.id);
+      invalidateUserCache(u.id);
+      const adminActor = await getAdminActor(req).catch(() => null);
+      await recordAudit(req, {
+        actor: adminActor, targetUserId: u.id, action: 'user.became_client_account',
+        meta: { email: u.email, workspaceId: result.workspaceId, dataRows: result.dataRows, by: 'admin' },
+      });
+      return ok(res, { ok: true, madeClientAccount: true, workspaces: [] });
+    }
     const target = String(body?.removeWorkspaceId || '');
     if (!UUID_RE.test(target)) return badRequest(res, 'Pick which business to remove');
     const list = await listFor(u.id);
