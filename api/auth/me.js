@@ -22,6 +22,16 @@ function clientCanShowCurrentPrivacy(req) {
   return !isNativeClient(req);
 }
 
+// Same question for the Terms, and stricter, because the Terms prompt is a
+// wall, not a notice: only a copy of the app that says it carries the
+// current Terms (?tv=) is asked. An older iPhone app, or a browser tab
+// left open from before the update, would show the old text and then fail
+// to record acceptance, locking the person out of their own account. They
+// keep working and are asked the next time the app or page is fresh.
+function clientCanShowCurrentTerms(req) {
+  return String(req.query?.tv || '').trim() === CURRENT_TERMS_VERSION;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
@@ -49,7 +59,7 @@ export default async function handler(req, res) {
     // re-accept modal. needsTermsAcceptance covers two cases:
     // (a) user predates the column entirely (terms_version is NULL),
     // (b) we bumped the version and they haven't re-accepted yet.
-    const needsTermsAcceptance = !hasAcceptedCurrentTerms(user);
+    const needsTermsAcceptance = !hasAcceptedCurrentTerms(user) && clientCanShowCurrentTerms(req);
 
     return ok(res, {
       // Surface isSuperAdmin from either path so the frontend knows

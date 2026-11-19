@@ -42,7 +42,7 @@ export default function TermsAcceptModal() {
     : 'We updated our Terms.';
   const intro = isFirstTime
     ? "Your account was created before we tracked acceptance explicitly. Take a minute to confirm the disclaimers below - we want every user to have seen them."
-    : `Our Terms of Service were updated to version ${terms?.currentVersion || 'the current version'}. Take a minute to read what changed and confirm before continuing.`;
+    : 'We added one section to our Terms of Service: section 8, "Ivy\'s property". It says that Ivy AI LLC owns the product and its name, that copying it or collecting data from it by automated means is not allowed, and that we may slow down an account that does. It takes effect on December 3, 2026. Nothing else changed.';
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="terms-accept-title"

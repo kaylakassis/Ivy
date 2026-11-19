@@ -36,7 +36,7 @@ import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
-import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersion } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersion, acceptableTermsVersion } from '../_lib/legal.js';
 import { recordReferralSignup } from '../_lib/referrals.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -107,7 +107,10 @@ export default async function handler(req, res) {
     // the request rather than silently default - we want the proof.
     // The frontend checkbox text says "I agree to the Terms and
     // Privacy Policy" so a single click is expected to send both.
-    if (acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
+    // The version this copy of the app showed the person (an iPhone app
+    // from before a Terms update still shows, and sends, the earlier one).
+    const termsVersionAccepted = acceptableTermsVersion(acceptedTermsVersion);
+    if (!termsVersionAccepted) {
       return badRequest(res, `You must accept the current Terms (${CURRENT_TERMS_VERSION}) to create an account.`);
     }
     const privacyVersionAccepted = acceptablePrivacyVersion(acceptedPrivacyVersion);
@@ -195,7 +198,7 @@ export default async function handler(req, res) {
         )
         VALUES (
           ${emailKey}, ${password_hash}, ${cleanName},
-          ${CURRENT_TERMS_VERSION}, NOW(),
+          ${termsVersionAccepted}, NOW(),
           ${privacyVersionAccepted}, NOW(),
           NOW(), NOW(), ${signupCountry}, ${role}
         )
@@ -224,7 +227,7 @@ export default async function handler(req, res) {
       await sql`
         INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
         VALUES
-          (${user.id}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
+          (${user.id}, 'terms',   ${termsVersionAccepted},   ${ip}, ${ua}),
           (${user.id}, 'privacy', ${privacyVersionAccepted}, ${ip}, ${ua})
       `;
       // Email consent: the required account-emails box and the optional

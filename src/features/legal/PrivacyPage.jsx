@@ -47,9 +47,11 @@ export function PrivacyPolicyBody() {
         documents, goals, rewards rules, AI chats with Ivy - is stored on your
         behalf so the product can work. We treat this as your data, not ours.</P>
       <P><strong>Operational data.</strong> Server logs, error reports, and
-        rate-limit records (used to block brute-force attempts on the sign-in
-        page). These are kept for up to 30 days and contain IP addresses but
-        no business data.</P>
+        rate-limit and unusual-activity records (used to block brute-force
+        attempts on the sign-in page and automated collection of data from
+        the Service, such as counting how many pages an account or a network
+        address opens). These are kept for up to 30 days and contain IP
+        addresses but no business data.</P>
       <P><strong>Product analytics.</strong> We track how the product is
         used at a platform level - sign-ups, active users, feature
         adoption, conversion funnels, retention, revenue across the

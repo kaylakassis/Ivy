@@ -28,7 +28,7 @@ import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersion } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersion, acceptableTermsVersion } from '../_lib/legal.js';
 import { findLiveInvite, acceptInvite, invalidateHelperCache } from '../_lib/helpers.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
       if (!name) return badRequest(res, 'Your name is required');
       const pw = validatePassword(body.password);
       if (!pw.ok) return badRequest(res, pw.error);
-      if (body.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
+      if (!acceptableTermsVersion(body.acceptedTermsVersion)) {
         return badRequest(res, `You must accept the current Terms (${CURRENT_TERMS_VERSION}) to create a sign-in.`);
       }
       if (!acceptablePrivacyVersion(body.acceptedPrivacyVersion)) {
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
             last_login_at, last_active_at
           ) VALUES (
             ${email}, ${passwordHash}, ${name}, NOW(),
-            ${CURRENT_TERMS_VERSION}, NOW(), ${acceptablePrivacyVersion(body.acceptedPrivacyVersion)}, NOW(),
+            ${acceptableTermsVersion(body.acceptedTermsVersion)}, NOW(), ${acceptablePrivacyVersion(body.acceptedPrivacyVersion)}, NOW(),
             NOW(), NOW()
           )
           RETURNING id
@@ -137,7 +137,7 @@ export default async function handler(req, res) {
         await sql`
           INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
           VALUES
-            (${userId}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
+            (${userId}, 'terms',   ${acceptableTermsVersion(body.acceptedTermsVersion)},   ${ip}, ${ua}),
             (${userId}, 'privacy', ${acceptablePrivacyVersion(body.acceptedPrivacyVersion) || CURRENT_PRIVACY_VERSION}, ${ip}, ${ua})
         `;
         await recordSignupConsent(req, { userId, consent, source: 'helper_invite' });

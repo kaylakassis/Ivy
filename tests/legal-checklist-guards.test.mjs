@@ -88,7 +88,7 @@ const vWeb = /CURRENT_PRIVACY_VERSION = '([^']+)'/.exec(src('src/lib/legal.js'))
 const vPage = /PRIVACY_VERSION = '([^']+)'/.exec(policy)[1];
 assert(vApi === vWeb && vWeb === vPage && vApi >= '2026-11-19', `the policy version is the same in the server, the app and the page (${vApi})`);
 assert(new RegExp(`PRIOR_PRIVACY_VERSIONS = \\['2026-11-05'`).test(src('api/_lib/legal.js')), 'the previous version is still accepted at sign-up from app builds that carry it');
-assert(/ME_PATH = `\/auth\/me\?pv=\$\{encodeURIComponent\(CURRENT_PRIVACY_VERSION\)\}`/.test(src('src/lib/auth.jsx')) && /clientCanShowCurrentPrivacy\(req\)/.test(src('api/auth/me.js')),
+assert(/ME_PATH = `\/auth\/me\?pv=\$\{encodeURIComponent\(CURRENT_PRIVACY_VERSION\)\}&tv=\$\{encodeURIComponent\(CURRENT_TERMS_VERSION\)\}`/.test(src('src/lib/auth.jsx')) && /clientCanShowCurrentPrivacy\(req\)/.test(src('api/auth/me.js')) && /clientCanShowCurrentTerms\(req\)/.test(src('api/auth/me.js')),
   'the app tells the server which policy version it carries, so an older iPhone app is never stuck behind a notice it cannot accept');
 
 // ---- copyright page -----------------------------------------------------------

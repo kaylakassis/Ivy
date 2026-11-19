@@ -13,11 +13,11 @@
 import React from 'react';
 import LegalPage, { H2, P, UL } from './LegalPage.jsx';
 
-export const TERMS_VERSION = '2026-05-05';
+export const TERMS_VERSION = '2026-11-19';
 
 export default function TermsPage() {
   return (
-    <LegalPage title="Terms of Service" lastUpdated="November 7, 2026" path="/terms"
+    <LegalPage title="Terms of Service" lastUpdated="November 19, 2026" path="/terms"
       description="The Terms of Service that govern your access to and use of Ivy. By creating an account or using the Service, you agree to be bound by these Terms.">
       <P><strong>Effective version: {TERMS_VERSION}.</strong> These Terms
         of Service ("Terms") govern your access to and use of Ivy (the
@@ -165,7 +165,81 @@ export default function TermsPage() {
         See the Privacy Policy for the full list of sub-processors
         who handle data only to operate the Service on our behalf.</P>
 
-      <H2>8. Service availability</H2>
+      <H2>8. Ivy's property</H2>
+      <P><em>This section was added on November 19, 2026 and takes
+        effect on December 3, 2026.</em></P>
+      <P><strong>We own the Service.</strong> The Service is owned by
+        Ivy AI LLC and its licensors. That includes the software, the
+        design and layout of the screens, the text, graphics and
+        templates we provide, the way features work together, the
+        instructions and methods that guide Ivy (the assistant), and
+        the "Ivy" name and logo. These are protected by copyright,
+        trademark, trade secret and other laws. These Terms give you a
+        right to use the Service; they do not transfer any ownership
+        to you.</P>
+      <P><strong>Your right to use it.</strong> While your account is
+        in good standing, we give you a limited, non-exclusive,
+        non-transferable, revocable right to use the Service to run
+        your own business or, if you are a client of a business that
+        uses Ivy, to deal with that business. Every right not
+        expressly given to you in these Terms is reserved by Ivy AI
+        LLC.</P>
+      <P><strong>What you may not do.</strong> Except where the law
+        says a restriction like this cannot apply, you may not, and may
+        not help anyone else to:</P>
+      <UL>
+        <li>Copy, modify, translate, or make a derivative work of the
+          Service or any part of it.</li>
+        <li>Reverse-engineer, decompile, or disassemble the Service,
+          or try to work out its source code, its underlying models,
+          or the instructions that guide Ivy.</li>
+        <li>Try to get Ivy to reveal its instructions, tools, or how
+          it was built, or publish them if you obtain them.</li>
+        <li>Collect information from the Service by automated means
+          (bots, scrapers, crawlers, scripts, or bulk downloads),
+          other than exporting your own Customer Data with the tools
+          we provide. Public search engines may index the public pages
+          our robots.txt file allows.</li>
+        <li>Collect or build a list of the businesses that use Ivy, or
+          of their clients.</li>
+        <li>Access or use the Service in order to build a competing
+          product or service, or to copy its features, functions, or
+          screens.</li>
+        <li>Frame, mirror, or republish any part of the Service on
+          another site or app.</li>
+        <li>Resell, sublicense, rent, or share access to the Service,
+          or share your sign-in with anyone outside your
+          business.</li>
+        <li>Remove or hide any copyright, trademark, or other
+          notice.</li>
+        <li>Get around any limit, security measure, or access control
+          in the Service.</li>
+      </UL>
+      <P><strong>Templates and material we provide.</strong> We provide
+        website templates, sample text, document templates, images,
+        and similar material. You may use them inside the Service, and
+        on the pages and documents you create with the Service, for
+        your own business. You may not sell or distribute them on
+        their own or as part of a competing product. Pages you publish
+        with Ivy contain your own content, which stays yours under
+        section 7.</P>
+      <P><strong>The Ivy name and logo.</strong> You may not use the
+        "Ivy" name, logo, or any confusingly similar name, logo, or
+        domain without our written permission. You may say truthfully
+        that your business uses Ivy.</P>
+      <P><strong>Feedback.</strong> If you send us ideas, suggestions,
+        or feedback about the Service, you agree we may use them
+        freely, without payment and without any obligation to you.
+        This does not give us any rights in your Customer Data.</P>
+      <P><strong>Protecting the Service.</strong> We watch for activity
+        that looks like automated collection or copying, such as an
+        account reading or downloading far more than normal use would
+        explain. If we see it, we may slow the account down, limit it,
+        or suspend it under section 11 (Termination) while we look
+        into it. We will tell you if we do, unless the law or the
+        safety of the Service means we should not.</P>
+
+      <H2>9. Service availability</H2>
       <P>We aim to keep Ivy available but make no uptime guarantee.
         Maintenance, updates, and force-majeure events may disrupt
         access. <strong>You are responsible for keeping your own
@@ -173,7 +247,7 @@ export default function TermsPage() {
         Settings page provides a full JSON export of your workspace
         for this purpose.</P>
 
-      <H2>9. Fees and billing</H2>
+      <H2>10. Fees and billing</H2>
       <P>Ivy is a paid subscription, billed in advance on a recurring
         basis (weekly or annual) after any free trial, and fees are
         non-refundable except where required by law. If you cancel, you
@@ -189,7 +263,7 @@ export default function TermsPage() {
         processing fees are charged separately by Stripe and are not
         part of Ivy's pricing.</P>
 
-      <H2>10. Termination</H2>
+      <H2>11. Termination</H2>
       <P>You may delete your account at any time from Account
         Settings, which permanently removes your workspace and
         associated data within 30 days. We may terminate or suspend
@@ -198,7 +272,7 @@ export default function TermsPage() {
         conduct we reasonably believe is harmful to other users or to
         us.</P>
 
-      <H2>11. Disclaimers</H2>
+      <H2>12. Disclaimers</H2>
       <P>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT
         WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
         BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY,
@@ -208,7 +282,7 @@ export default function TermsPage() {
         WILL BE CORRECTED; OR THAT THE SERVICE OR ANY OUTPUT FROM IT
         WILL BE ACCURATE OR RELIABLE FOR ANY PARTICULAR PURPOSE.</P>
 
-      <H2>12. Limitation of liability</H2>
+      <H2>13. Limitation of liability</H2>
       <P>TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL
         Ivy, ITS OFFICERS, EMPLOYEES, CONTRACTORS, OR LICENSORS BE
         LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL,
@@ -231,7 +305,7 @@ export default function TermsPage() {
         allow certain exclusions, in which case the exclusions apply
         only to the extent permitted.</P>
 
-      <H2>13. Release of liability</H2>
+      <H2>14. Release of liability</H2>
       <P><strong>You acknowledge that you use the Service at your own
         risk and release Ivy from any and all claims, damages,
         losses, costs, and expenses (including reasonable attorneys'
@@ -253,7 +327,7 @@ export default function TermsPage() {
           documents.</li>
       </UL>
 
-      <H2>14. Indemnification</H2>
+      <H2>15. Indemnification</H2>
       <P>You agree to defend, indemnify, and hold harmless Ivy,
         its officers, employees, contractors, and licensors from and
         against any claim, demand, loss, liability, cost, or expense
@@ -263,7 +337,7 @@ export default function TermsPage() {
         regulation; or (e) any dispute between you and a third party
         (including your own clients).</P>
 
-      <H2>15. Changes to these Terms</H2>
+      <H2>16. Changes to these Terms</H2>
       <P>We may update these Terms as the product and legal
         environment evolve. When we make material changes, we will
         announce them by email and/or in-app at least fourteen (14)
@@ -272,7 +346,7 @@ export default function TermsPage() {
         Service. Continued use after a change means you accept the
         new Terms.</P>
 
-      <H2>16. Governing law &amp; disputes</H2>
+      <H2>17. Governing law &amp; disputes</H2>
       <P>These Terms are governed by the laws of the State of
         California, USA, excluding its conflict-of-law rules. Any
         dispute arising out of or related to these Terms or the
@@ -283,7 +357,7 @@ export default function TermsPage() {
         capacity and not as a plaintiff or class member in any
         purported class or representative proceeding.</P>
 
-      <H2>17. Severability &amp; entire agreement</H2>
+      <H2>18. Severability &amp; entire agreement</H2>
       <P>If any provision of these Terms is held invalid or
         unenforceable, the remaining provisions remain in full force
         and effect, and the invalid provision is replaced with one
@@ -292,7 +366,7 @@ export default function TermsPage() {
         agreement between you and Ivy regarding the Service and
         supersede any prior agreements.</P>
 
-      <H2>18. Contact</H2>
+      <H2>19. Contact</H2>
       <P>Questions about these Terms:{' '}
         <a href="mailto:support@joinivy.ai" style={{ color: 'var(--accent)' }}>support@joinivy.ai</a>.
       </P>

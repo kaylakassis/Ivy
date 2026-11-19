@@ -15,7 +15,7 @@ import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 // this build of the app carries, so it only asks someone to accept an
 // updated policy from a build that can actually show it (an iPhone app
 // from before the update keeps working and asks after it is updated).
-const ME_PATH = `/auth/me?pv=${encodeURIComponent(CURRENT_PRIVACY_VERSION)}`;
+const ME_PATH = `/auth/me?pv=${encodeURIComponent(CURRENT_PRIVACY_VERSION)}&tv=${encodeURIComponent(CURRENT_TERMS_VERSION)}`;
 const Ctx = createContext(null);
 
 // Local hint that a session probably exists on this browser. RootRouter

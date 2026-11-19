@@ -10,7 +10,22 @@
 // IMPORTANT: have a real attorney review the actual policy text before
 // charging anyone. The text here is best-effort template language, not
 // legal advice.
-export const CURRENT_TERMS_VERSION = '2026-05-05';
+export const CURRENT_TERMS_VERSION = '2026-11-19';
+
+// Earlier Terms versions still accepted AT SIGN-UP, for the same reason as
+// PRIOR_PRIVACY_VERSIONS below: an iPhone app already in the App Store
+// carries its own copy of the Terms and keeps sending that version until
+// people update. We record exactly the version the person accepted. They
+// are asked to accept the current Terms the first time they open a copy of
+// the app (or the website) that can show them (api/auth/me.js).
+export const PRIOR_TERMS_VERSIONS = ['2026-05-05'];
+
+// The version to record for a sign-up, or null when it is not one we accept.
+export function acceptableTermsVersion(v) {
+  const s = String(v || '');
+  if (s === CURRENT_TERMS_VERSION || PRIOR_TERMS_VERSIONS.includes(s)) return s;
+  return null;
+}
 
 // Same versioning contract for the Privacy Policy - when you
 // substantively change /privacy text, bump this string + the mirror

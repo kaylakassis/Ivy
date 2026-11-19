@@ -18,6 +18,7 @@
 //     page already shows, narrowed further to the services the member
 //     chose to list on the shop.
 //   • Every owner/member query is scoped by the caller's workspace id.
+import { publicReviewerName } from './reviews.js';
 import crypto from 'node:crypto';
 import { sql } from './db.js';
 import {
@@ -1043,7 +1044,7 @@ export async function publicShopPayload(slug, opts = {}) {
         count: a?.n || 0,
         avg: a?.avg || null,
         recent: (recentBy[m.workspace_id] || []).map((r) => ({
-          id: r.id, reviewerName: r.reviewer_name, rating: r.rating, text: r.text || '', ownerResponse: r.owner_response || null, createdAt: r.created_at,
+          id: r.id, reviewerName: publicReviewerName(r.reviewer_name), rating: r.rating, text: r.text || '', ownerResponse: r.owner_response || null, createdAt: r.created_at,
         })),
       } : { count: 0, avg: null, recent: [] },
     };

@@ -52,10 +52,6 @@ All-in-one business platform for solo owners and small teams. Vite + React front
 │       ├── documents/
 │       ├── website/              # + PublicSite.jsx (route /site/:handle)
 │       └── ivy/
-├── project/                      # original HTML/Babel prototype (reference only)
-│   ├── Ivy OS.html
-│   └── src/                      # feature source used by the prototype
-└── chats/                        # design chat transcripts
 ```
 
 ## Getting started
@@ -119,6 +115,3 @@ migrate endpoint once after first deploy to create tables.
 - ⏳ Messages attachments (images / files via Vercel Blob)
 - ⏳ Reminders delivery (cron + email after Documents/Messages glue lands)
 
-## Reference: the prototype
-
-`project/Ivy OS.html` is the original design prototype (React + Babel in-browser). Every feature was designed and iterated there - treat it as the source of truth for visuals and UX. The feature stubs in `src/features/*` will be fleshed out to match, then wired to the Postgres-backed API.

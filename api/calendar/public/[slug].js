@@ -14,6 +14,7 @@
 import { sql, warmupDbOnce } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { publicReviewerName } from '../../_lib/reviews.js';
 import { guardVisit, missKey } from '../../_lib/activityWatch.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
@@ -248,7 +249,7 @@ async function getCalendar(req, res) {
       avg:   agg.rows[0]?.avg || null,
       recent: recent.rows.map((r) => ({
         id: r.id,
-        reviewerName: r.reviewer_name,
+        reviewerName: publicReviewerName(r.reviewer_name),
         rating: r.rating,
         text: r.text || '',
         ownerResponse: r.owner_response || null,
