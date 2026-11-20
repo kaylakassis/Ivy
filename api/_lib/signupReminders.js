@@ -126,6 +126,10 @@ const EMAIL_HASH_SQL = `encode(sha256(convert_to(
 export const ELIGIBLE_SQL = `
       u.deleted_at IS NULL
   AND u.email IS NOT NULL
+  -- A confirm-first sign-up whose link was never opened is not an account
+  -- yet, and the address may not even be the person's who typed it. It
+  -- gets the one "finish creating your account" email and nothing more.
+  AND NOT (u.confirm_required AND u.email_verified_at IS NULL)
   AND u.created_at > NOW() - INTERVAL '${WINDOW_DAYS} days'
   AND COALESCE(u.user_type, 'regular') NOT IN ('beta', 'sponsored', 'super_admin')
   AND NOT COALESCE(u.is_tester, FALSE)

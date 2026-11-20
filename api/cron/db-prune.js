@@ -117,6 +117,14 @@ async function handler(req, res) {
     results.softDeletedUsers = await prune('users',
       `deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'`);
 
+    // Confirm-first sign-ups that were never finished (the link in the
+    // email was not opened within a week). Nobody could ever sign in to
+    // them, so there is nothing in them; removing the row frees the
+    // address and stops Ivy holding an email its owner may never have
+    // typed. (The link itself expires after a day.)
+    results.unfinishedSignups = await prune('users',
+      `confirm_required = TRUE AND email_verified_at IS NULL AND created_at < NOW() - INTERVAL '7 days'`);
+
     return ok(res, { ok: true, results, durationMs: Date.now() - t0 });
   } catch (err) {
     return serverError(res, err);

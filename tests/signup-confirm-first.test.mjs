@@ -193,6 +193,17 @@ async function main() {
   }
   assert(codes.slice(0, 5).every((c) => c === 400) && codes.slice(5).every((c) => c === 429), `the old "already has an account" answer is capped at five an hour per network (${codes.join(',')})`);
 
+  console.log('\n[6b] loose ends');
+  const { ELIGIBLE_SQL } = await import('../api/_lib/signupReminders.js');
+  const waitingAddr = addr('waiting');
+  await call(signupHandler, form(waitingAddr, PW, { confirmFirst: true }));
+  const waiting = await userOf(waitingAddr);
+  await sql`UPDATE users SET created_at = NOW() - INTERVAL '3 days' WHERE id IN (${waiting.id}, ${lu.id})`;
+  const eligible = async (id) => (await sql.query(`SELECT 1 FROM users u WHERE u.id = $1 AND ${ELIGIBLE_SQL}`, [id])).rows.length === 1;
+  assert(await eligible(lu.id) === true && await eligible(waiting.id) === false, 'an unfinished sign-up gets no "come back and finish setting up" reminders (a real account that stalled still does)');
+  const prune = read('api/cron/db-prune.js');
+  assert(/confirm_required = TRUE AND email_verified_at IS NULL AND created_at < NOW\(\) - INTERVAL '7 days'/.test(prune), 'and is cleared out after a week, freeing the address');
+
   console.log('\n[7] the screens');
   const auth = read('src/lib/auth.jsx'); const page = read('src/features/auth/AuthPage.jsx'); const wait = read('src/features/auth/CheckEmail.jsx'); const verify = read('src/features/auth/VerifyEmailPage.jsx');
   assert(/confirmFirst: true,/.test(auth) && /if \(r\?\.checkEmail\) \{/.test(auth) && /ivy_signup_ticket/.test(auth), 'the app asks for the confirm-first flow and keeps the ticket');
