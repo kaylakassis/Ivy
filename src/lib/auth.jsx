@@ -170,7 +170,20 @@ export function AuthProvider({ children }) {
       // server can record an immutable acceptance row per document.
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
       acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
+      // Confirm-first: the server answers "check your email" whatever was
+      // typed and never says whether the address already has an account
+      // (api/_lib/signupTicket.js). The account is finished from the link
+      // in that email (src/features/auth/CheckEmail.jsx).
+      confirmFirst: true,
     });
+    if (r?.checkEmail) {
+      clearFormToken();
+      // The ticket lets this browser be signed straight in when the link
+      // is opened here, and lets the waiting screen see when it has been.
+      try { if (r.ticket) localStorage.setItem('ivy_signup_ticket', r.ticket); } catch { /* private mode */ }
+      try { localStorage.removeItem('ivy_skip_onboarding_until'); } catch { /* private mode */ }
+      return r;
+    }
     // Native shell: cookies do not survive the cross-origin hop, so the
     // server also returns the session token. Keep it on the device.
     clearFormToken();

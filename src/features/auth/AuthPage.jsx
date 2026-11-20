@@ -6,6 +6,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { primeFormToken, HONEYPOT_FIELD } from '../../lib/formToken.js';
 import AuthShell from './AuthShell.jsx';
+import CheckEmail from './CheckEmail.jsx';
 import { FLAGS } from '../../lib/featureFlags.js';
 
 export default function AuthPage({ mode = 'signin' }) {
@@ -57,6 +58,8 @@ export default function AuthPage({ mode = 'signin' }) {
   // continue button rather than redirecting silently (the old
   // ?emailIssue param was never read anywhere).
   const [emailWarn, setEmailWarn] = useState(null);
+  // After the sign-up form: waiting for the link in the email to be opened.
+  const [pending, setPending] = useState(null);   // { ticket }
   // The field nobody sees: a person leaves it empty, a form-filling
   // script does not (src/lib/formToken.js).
   const [hp, setHp] = useState('');
@@ -67,6 +70,12 @@ export default function AuthPage({ mode = 'signin' }) {
   const canSubmit = !busy
     && (!isSignUp
       || (name.trim().length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && password.length >= 8 && acceptedTerms && acceptedEmails));
+
+  const sendSignUp = () => {
+    const typedRef = refInput.trim() ? refInput.trim().toUpperCase() : null;
+    return signUp(email, password, name.trim(), role, refCode || (role === 'owner' ? typedRef : null),
+      { accountEmails: acceptedEmails, marketing: marketingOptIn, note: hp });
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -92,9 +101,8 @@ export default function AuthPage({ mode = 'signin' }) {
         // go out - hold the user here with an explicit notice + a
         // continue button so they know to resend from their account,
         // instead of redirecting silently.
-        const typedRef = refInput.trim() ? refInput.trim().toUpperCase() : null;
-        const r = await signUp(email, password, name.trim(), role, refCode || (role === 'owner' ? typedRef : null),
-          { accountEmails: acceptedEmails, marketing: marketingOptIn, note: hp });
+        const r = await sendSignUp();
+        if (r?.checkEmail) { setPending({ ticket: r.ticket || null }); return; }
         if (r?.emailErrors) {
           setEmailWarn(role === 'client' ? '/me' : '/');
           return;
@@ -122,6 +130,19 @@ export default function AuthPage({ mode = 'signin' }) {
       setBusy(false);
     }
   };
+
+  // Sign-up sent: the account is finished from the link in the email.
+  if (pending) {
+    return (
+      <AuthShell>
+        <CheckEmail
+          email={email.trim()} password={password} ticket={pending.ticket}
+          onResend={async () => { const r = await sendSignUp(); if (r?.checkEmail) setPending({ ticket: r.ticket || null }); }}
+          onBack={() => { setPending(null); setErr(null); }}
+          onDone={() => nav(nextTarget || (role === 'client' ? '/me' : '/'), { replace: true })}/>
+      </AuthShell>
+    );
+  }
 
   // Second-factor step: shown after a correct password for a 2-step account.
   if (mfaStep) {
@@ -281,6 +302,11 @@ export default function AuthPage({ mode = 'signin' }) {
             background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
             color: 'var(--danger)', fontSize: 12.5,
           }}>{err}</div>
+        )}
+        {err && !isSignUp && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -8 }}>
+            Just signed up? Open the link in the email we sent you first.
+          </div>
         )}
 
         {emailWarn && (

@@ -49,6 +49,11 @@ export default async function handler(req, res) {
       UPDATE users SET
         password_hash = ${password_hash},
         password_changed_at = NOW() - INTERVAL '1 second',
+        -- The reset link went to the inbox, so opening it proves the
+        -- address. That finishes a confirm-first sign-up that was waiting
+        -- on its own link (accounts already confirmed are unchanged).
+        email_verified_at = CASE WHEN confirm_required THEN COALESCE(email_verified_at, NOW()) ELSE email_verified_at END,
+        confirm_required = FALSE,
         updated_at = NOW()
       WHERE id = ${valid.userId}
     `;

@@ -249,3 +249,9 @@ CREATE TABLE IF NOT EXISTS activity_trust (
   by_email TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Confirm-first sign-up (api/_lib/signupTicket.js). TRUE from the moment a
+-- sign-up is taken until the link in the confirmation email is opened;
+-- until then the account cannot be signed in to. Accounts from before this
+-- (and from older iPhone app versions) are FALSE and unaffected.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_required BOOLEAN NOT NULL DEFAULT FALSE;

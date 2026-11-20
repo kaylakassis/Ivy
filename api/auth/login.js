@@ -113,7 +113,7 @@ export default async function handler(req, res) {
 
     const { rows } = await sql`
       SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at,
-             mfa_email_enabled_at
+             mfa_email_enabled_at, confirm_required
       FROM users WHERE LOWER(email) = ${emailKey}
       -- Only a pre-fix database can hold two case variants of one address
       -- (the ops alert flags them); prefer the exact, oldest row.
@@ -136,6 +136,14 @@ export default async function handler(req, res) {
       return miss();
     }
     // Right password: the slate is clean again.
+    // A confirm-first sign-up whose link has not been opened yet is not an
+    // account anyone can sign in to. It answers exactly like a wrong
+    // password, counted the same way, so "sign up, then try to sign in"
+    // cannot tell a new address from one that already had an account.
+    if (user.confirm_required && !user.email_verified_at) {
+      recordAudit(req, { actor: user, action: 'auth.login_fail', meta: { email: emailKey, reason: 'not_confirmed' } });
+      return miss();
+    }
     await clearRateLimit(emailIpFailKey);
     await clearRateLimit(emailFailKey);
 
@@ -168,7 +176,7 @@ export default async function handler(req, res) {
     // bottom-nav / command-palette show the Admin tab on first paint.
     // /api/auth/me also adds this on subsequent loads; doing it here
     // avoids the "refresh once and Admin appears" papercut.
-    const { password_hash, ...safe } = user;
+    const { password_hash, confirm_required: _confirmRequired, ...safe } = user;
     const payload = {
       user: { ...safe, isSuperAdmin: emailIsSuperAdmin(safe.email) || safe.user_type === 'super_admin' },
     };

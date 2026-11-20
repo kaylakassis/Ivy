@@ -11,7 +11,12 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { findValidToken, consumeToken, KIND_VERIFY } from '../_lib/tokens.js';
-import { invalidateUserCache } from '../_lib/auth.js';
+import { invalidateUserCache, signSession, setSessionCookie, isNativeClient } from '../_lib/auth.js';
+import { readSignupTicket } from '../_lib/signupTicket.js';
+import { clearRateLimit } from '../_lib/rate-limit.js';
+import { sendEmail } from '../_lib/email.js';
+import { renderWelcome } from '../_lib/welcome-content.js';
+import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 import { claimSignupPerks } from '../_lib/signupPerks.js';
 
@@ -29,16 +34,20 @@ export default async function handler(req, res) {
     ]);
     if (blocked) return;
 
-    const { token } = await readBody(req);
+    const { token, ticket } = await readBody(req);
     const valid = await findValidToken({ kind: KIND_VERIFY, raw: token });
     if (!valid) return unauthorized(res, 'This verification link is invalid or has expired');
 
     // Read the user row regardless of whether the token's been used yet.
     const { rows } = await sql`
-      SELECT id, email, name, created_at, email_verified_at
+      SELECT id, email, name, created_at, email_verified_at, confirm_required, signup_role
       FROM users WHERE id = ${valid.userId}
     `;
     const user = rows[0];
+    // A confirm-first sign-up being finished by this link.
+    const finishing = !!user?.confirm_required && !user.email_verified_at;
+    if (user) { delete user.confirm_required; delete user.signup_role; }
+    const role = rows[0]?.signup_role === 'client' ? 'client' : 'owner';
     if (!user) return unauthorized(res, 'This verification link is invalid or has expired');
 
     if (valid.alreadyUsed) {
@@ -51,13 +60,24 @@ export default async function handler(req, res) {
         // Retry the perk claim (idempotent) in case the first click's
         // claim hit a blip: the address is proven either way.
         await claimSignupPerks(user.id);
+        // Mail scanners open links before people do. If that is what used
+        // this one, the browser that made the sign-up (it holds the
+        // ticket) is still signed straight in when the person taps it.
+        if (readSignupTicket(ticket) === user.id) {
+          const sessionToken = signSession(user.id);
+          setSessionCookie(res, sessionToken);
+          const out = { user, alreadyVerified: true, confirmed: true, signedIn: true };
+          if (isNativeClient(req)) out.token = sessionToken;
+          return ok(res, out);
+        }
         return ok(res, { user, alreadyVerified: true });
       }
       return unauthorized(res, 'This verification link is invalid or has expired');
     }
 
     await sql`
-      UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW())
+      UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), confirm_required = FALSE,
+                       last_login_at = COALESCE(last_login_at, NOW())
       WHERE id = ${valid.userId}
     `;
     // Bust the cached row so the next authed request sees the verified
@@ -74,7 +94,33 @@ export default async function handler(req, res) {
       SELECT id, email, name, created_at, email_verified_at
       FROM users WHERE id = ${valid.userId}
     `;
-    return ok(res, { user: refreshed.rows[0] });
+    if (!finishing) return ok(res, { user: refreshed.rows[0] });
+
+    // The account is now real. Any "wrong password" marks from trying to
+    // sign in before the link was opened are forgiven.
+    const emailKey = String(refreshed.rows[0].email || '').toLowerCase();
+    await clearRateLimit(`login:fail:${emailKey}`);
+    await clearRateLimit(`login:fail:${emailKey}:${ip}`);
+    // The welcome email was held back until the address was confirmed.
+    try {
+      const w = renderWelcome({ name: String(user.name || '').trim().split(/\s+/)[0] || null, appUrl: appUrl(), variant: role });
+      await sendEmail({ to: refreshed.rows[0].email, subject: w.subject, html: w.html });
+    } catch (mailErr) {
+      // eslint-disable-next-line no-console
+      console.error('[verify-email] welcome email failed:', mailErr?.message);
+    }
+    // Signed straight in only on the browser or app that made the sign-up
+    // (it holds the ticket). Whoever opens the link anywhere else has
+    // proved the inbox, not that they chose the password, so they are
+    // asked to sign in: if the password is not theirs, "forgot password"
+    // puts the account in their hands alone.
+    const sameDevice = readSignupTicket(ticket) === valid.userId;
+    if (!sameDevice) return ok(res, { user: { email: refreshed.rows[0].email }, confirmed: true, signedIn: false, role });
+    const sessionToken = signSession(valid.userId);
+    setSessionCookie(res, sessionToken);
+    const payload = { user: refreshed.rows[0], confirmed: true, signedIn: true, role };
+    if (isNativeClient(req)) payload.token = sessionToken;
+    return ok(res, payload);
   } catch (err) {
     return serverError(res, err);
   }

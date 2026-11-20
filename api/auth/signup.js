@@ -19,7 +19,8 @@ import {
 } from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
-import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { enforce, getClientIp, rateLimit } from '../_lib/rate-limit.js';
+import { makeSignupTicket, makeDecoyTicket } from '../_lib/signupTicket.js';
 import { checkHuman } from '../_lib/humanCheck.js';
 import { isDisposableEmail, DISPOSABLE_EMAIL_MESSAGE } from '../_lib/disposableEmail.js';
 
@@ -168,9 +169,52 @@ export default async function handler(req, res) {
 
     // Case-insensitive: an older row stored as "Irene@x.com" still owns
     // "irene@x.com".
-    const existing = await sql`SELECT id, email, deleted_at FROM users WHERE LOWER(email) = ${emailKey}`;
-    if (existing.rows.some((row) => !row.deleted_at)) {
+    // Confirm-first (the website and current app builds send confirmFirst):
+    // the answer is "check your email" whatever was typed, and the truth
+    // goes to the inbox, so sign-up cannot be used to test which addresses
+    // have an Ivy account (api/_lib/signupTicket.js). iPhone app versions
+    // from before this do not send the flag and are answered the way they
+    // expect, with the "already has an account" answer capped per network.
+    const confirmFirst = body.confirmFirst === true;
+    const existing = await sql`SELECT id, email, name, deleted_at, confirm_required, email_verified_at FROM users WHERE LOWER(email) = ${emailKey}`;
+    const live = existing.rows.find((row) => !row.deleted_at);
+    // Hashed before the branch so an existing address takes as long to
+    // answer as a new one.
+    const password_hash = await hashPassword(password);
+    if (live && !confirmFirst) {
+      if (await enforce(req, res, [{ key: `signup-taken:ip:${ip}`, max: 5, windowSeconds: 60 * 60 }])) return;
       return badRequest(res, ACCOUNT_EXISTS_MESSAGE, { code: 'email_taken' });
+    }
+    if (live && confirmFirst) {
+      const unfinished = live.confirm_required && !live.email_verified_at;
+      if (!unfinished) {
+        // A real account. Tell its owner, by email, at most a few times a
+        // day (so this cannot be used to pester someone).
+        const quota = await rateLimit({ key: `signup-exists-mail:${emailKey}`, max: 3, windowSeconds: 24 * 60 * 60 });
+        if (quota.allowed) {
+          await sendEmail({
+            to: emailKey,
+            subject: 'You already have an Ivy account',
+            html: emailShell({
+              heading: 'You already have an Ivy account',
+              body: `<p>${live.name ? `Hi ${escapeHtml(firstName(live.name))},` : 'Hi,'}</p>
+                     <p>Someone just tried to create an Ivy account with this email address. There is already one, so nothing was changed.</p>
+                     <p>If that was you, sign in instead. If you do not remember your password, you can reset it from the sign-in page.</p>`,
+              ctaText: 'Sign in',
+              ctaUrl: `${appUrl()}/signin`,
+              footer: 'If this was not you, you can ignore this email. Your account is safe.',
+            }),
+          }).catch((e) => console.error('[signup] existing-account email failed:', e?.message));
+        }
+        return res.status(202).json({ checkEmail: true, ticket: makeDecoyTicket() });
+      }
+      // An earlier sign-up for this address that was never finished. The
+      // newest attempt replaces it (its details and password are the ones
+      // that count, and the older email's link stops working). Capped so
+      // it cannot be used to keep cancelling someone's sign-up.
+      const quota = await rateLimit({ key: `signup-redo:${emailKey}`, max: 5, windowSeconds: 24 * 60 * 60 });
+      if (!quota.allowed) return res.status(202).json({ checkEmail: true, ticket: makeDecoyTicket() });
+      await sql`DELETE FROM users WHERE id = ${live.id} AND confirm_required = TRUE AND email_verified_at IS NULL`;
     }
     for (const row of existing.rows) {
       // Self-heal: a soft-deleted row squatting on an unmangled email
@@ -182,7 +226,6 @@ export default async function handler(req, res) {
       await sql`UPDATE users SET email = ${mangled}, updated_at = NOW() WHERE id = ${row.id} AND deleted_at IS NOT NULL`;
     }
 
-    const password_hash = await hashPassword(password);
     // Two signups for the same address racing each other (double tap, two
     // tabs) both pass the check above; the unique indexes on users.email and
     // LOWER(users.email) let exactly one INSERT win. The loser gets the same
@@ -194,18 +237,21 @@ export default async function handler(req, res) {
           email, password_hash, name,
           terms_version, terms_accepted_at,
           privacy_version, privacy_accepted_at,
-          last_login_at, last_active_at, signup_country, signup_role
+          last_login_at, last_active_at, signup_country, signup_role, confirm_required
         )
         VALUES (
           ${emailKey}, ${password_hash}, ${cleanName},
           ${termsVersionAccepted}, NOW(),
           ${privacyVersionAccepted}, NOW(),
-          NOW(), NOW(), ${signupCountry}, ${role}
+          ${confirmFirst ? null : new Date().toISOString()}, NOW(), ${signupCountry}, ${role}, ${confirmFirst}
         )
         RETURNING id, email, name, created_at, email_verified_at
       `;
     } catch (insErr) {
-      if (isUniqueViolation(insErr)) return badRequest(res, ACCOUNT_EXISTS_MESSAGE, { code: 'email_taken' });
+      if (isUniqueViolation(insErr)) {
+        if (confirmFirst) return res.status(202).json({ checkEmail: true, ticket: makeDecoyTicket() });
+        return badRequest(res, ACCOUNT_EXISTS_MESSAGE, { code: 'email_taken' });
+      }
       throw insErr;
     }
     const user = insertUser.rows[0];
@@ -325,6 +371,33 @@ export default async function handler(req, res) {
         // eslint-disable-next-line no-console
         console.warn('[signup] referral attribution failed:', refErr.message);
       }
+    }
+
+    // Confirm-first: no session yet. One email with the link that finishes
+    // the account; the welcome email follows once it is opened
+    // (api/auth/verify-email.js).
+    if (confirmFirst) {
+      try {
+        const raw = await createToken({ userId: user.id, kind: KIND_VERIFY, ttlMinutes: VERIFY_TTL_MIN });
+        await sendEmail({
+          to: emailKey,
+          subject: 'Finish creating your Ivy account',
+          html: emailShell({
+            heading: 'One tap to finish',
+            body: `<p>${user.name ? `Hi ${escapeHtml(firstName(user.name))},` : 'Hi,'}</p>
+                   <p>Tap the button below to confirm this is your email and finish creating your Ivy account.</p>
+                   <p>This link expires in 24 hours.</p>`,
+            ctaText: 'Finish creating my account',
+            ctaUrl: `${appUrl()}/verify-email?token=${encodeURIComponent(raw)}`,
+            footer: 'If you did not ask for an Ivy account, you can ignore this email and nothing will be created.',
+          }),
+        });
+      } catch (mailErr) {
+        // The account exists but cannot be finished without the link. The
+        // screen offers "Send it again", which redoes the sign-up.
+        console.error('[signup] confirmation email failed:', mailErr?.message);
+      }
+      return res.status(202).json({ checkEmail: true, ticket: makeSignupTicket(user.id) });
     }
 
     const sessionToken = signSession(user.id);

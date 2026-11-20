@@ -11,6 +11,8 @@ import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
 import AuthShell from './AuthShell.jsx';
+import { isNative } from '../../lib/platform.js';
+import { setNativeAuthToken } from '../../lib/nativeAuth.js';
 
 export default function VerifyEmailPage() {
   const [params] = useSearchParams();
@@ -20,6 +22,7 @@ export default function VerifyEmailPage() {
 
   const [status, setStatus] = useState('verifying'); // 'verifying' | 'ok' | 'already' | 'error'
   const [errMsg, setErrMsg] = useState(null);
+  const [confirmedEmail, setConfirmedEmail] = useState('');
   // Guard against React StrictMode firing the effect twice on mount
   // (dev) or a tab visibility flicker re-triggering it. The token is
   // single-use; a second POST would consume the just-issued idempotent
@@ -31,9 +34,20 @@ export default function VerifyEmailPage() {
     if (sentRef.current) return;
     sentRef.current = true;
     let live = true;
-    api.post('/auth/verify-email', { token })
+    // The ticket from a sign-up made in this browser (if any): with it, the
+    // server signs this browser straight in when the link finishes the
+    // account (api/auth/verify-email.js).
+    let ticket = null;
+    try { ticket = localStorage.getItem('ivy_signup_ticket'); } catch { /* private mode */ }
+    api.post('/auth/verify-email', { token, ticket: ticket || undefined })
       .then(async (r) => {
         if (!live) return;
+        if (r?.confirmed) { try { localStorage.removeItem('ivy_signup_ticket'); } catch { /* private mode */ } }
+        // Finished a new account from somewhere other than where it was
+        // started (another phone, the Mail app's browser): confirmed, and
+        // the place it was started carries on by itself.
+        if (r?.confirmed && !r.signedIn) { setConfirmedEmail(r.user?.email || ''); setStatus('confirmed'); return; }
+        if (r?.confirmed && r.token && isNative()) await setNativeAuthToken(r.token);
         // Beacon other open tabs (the dashboard that showed the banner)
         // so their auth providers re-fetch instantly instead of waiting
         // for the next focus/poll cycle.
@@ -81,6 +95,25 @@ export default function VerifyEmailPage() {
                 ? "Looks like you've already confirmed this email. Taking you in…"
                 : 'Taking you to your dashboard…'}
             </p>
+          </>
+        )}
+        {status === 'confirmed' && (
+          <>
+            <div style={{
+              width: 56, height: 56, borderRadius: 99, alignSelf: 'center',
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icons.Check size={28} sw={2.4} />
+            </div>
+            <h1 className="page-title" style={{ margin: 0, fontSize: 24 }}>Email confirmed</h1>
+            <p style={{ margin: 0, color: 'var(--fg-2)', fontSize: 13.5, lineHeight: 1.55 }}>
+              Your Ivy account is ready. Go back to where you signed up (the Ivy app or the other tab) and it will carry on by itself.
+            </p>
+            <Link to={`/signin${confirmedEmail ? `?email=${encodeURIComponent(confirmedEmail)}` : ''}`} className="btn btn-primary"
+              style={{ justifyContent: 'center', padding: '12px 14px', minHeight: 44 }}>
+              Or sign in here
+            </Link>
           </>
         )}
         {status === 'error' && (
