@@ -104,6 +104,7 @@ async function main() {
   assert((app.match(/features\/admin\//g) || []).length === 1, 'nothing else in the app loads the Admin screen');
   const stub = read('src/features/more/AdminOnWeb.jsx');
   assert(/https:\/\/www\.joinivy\.ai\/admin/.test(stub) && /isSuperAdmin/.test(stub) && !/api\.(get|post)\(/.test(stub), 'the app\'s Admin page is a link for the operator and nothing else');
+  assert(!/<Navigate/.test(stub), 'it never redirects (the app confirms who is signed in a moment after it opens, and must not bounce the operator to Home meanwhile)');
 }
 
 main().catch((e) => { console.error('crashed:', e); fail++; }).finally(async () => {
