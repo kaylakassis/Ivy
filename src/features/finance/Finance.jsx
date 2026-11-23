@@ -19,9 +19,7 @@ import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
 import ManualMethodsCard from './ManualMethodsCard.jsx';
 import InvoiceDesignCard from './InvoiceDesignCard.jsx';
-import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
-import Time from './Time.jsx';
 import Memberships from './Memberships.jsx';
 import Quotes from './Quotes.jsx';
 import GiftCards from './GiftCards.jsx';
@@ -57,10 +55,6 @@ export const MONEY_GROUPS = [
     { id: 'memberships', label: 'Memberships' },
     { id: 'giftcards',   label: 'Gift cards' },
   ] },
-  { id: 'track', label: 'Track', sections: [
-    { id: 'expenses', label: 'Expenses' },
-    { id: 'time',     label: 'Time' },
-  ] },
 ];
 export const moneyGroupOf = (section) => MONEY_GROUPS.find((g) => g.sections.some((x) => x.id === section)) || MONEY_GROUPS[0];
 
@@ -76,7 +70,9 @@ export default function Finance() {
   } = useInvoices({ tab });
   usePullRefresh(reloadInvoices);
 
-  const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | 'expenses'
+  // Expense tracking was retired; an owner who logged some keeps the exports.
+  const hasPastExpenses = (summary?.pastEntries?.expenses || 0) > 0;
+  const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | ...
   const [openId, setOpenId]         = useState(null);
   const [creatingBusy, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
@@ -194,7 +190,8 @@ export default function Finance() {
     const filterParam = params.get('filter');
     const filterOk = filterParam && ['all', 'draft', 'sent', 'overdue', 'paid', 'refunded', 'voided', 'archived'].includes(filterParam);
     if (filterOk) { setTab(filterParam); setSection('invoices'); }
-    if (sectionParam) setSection(sectionParam);
+    // An old link to a section that was retired (expenses, time) opens Invoices.
+    if (sectionParam && MONEY_GROUPS.some((g) => g.sections.some((x) => x.id === sectionParam))) setSection(sectionParam);
     if (sectionParam || filterParam) {
       params.delete('section');
       params.delete('filter');
@@ -253,8 +250,8 @@ export default function Finance() {
               }}>
                 <ExportMenuHeader label="Taxes"/>
                 <ExportMenuItem
-                  label="Schedule C summary"
-                  hint="For your CPA"
+                  label="Year-end income summary"
+                  hint="For your accountant"
                   onClick={() => downloadCSV('/api/finance/tax-export')}
                 />
                 <ExportMenuHeader label="QuickBooks Online"/>
@@ -263,22 +260,26 @@ export default function Finance() {
                   hint="Import as sales transactions"
                   onClick={() => downloadCSV('/api/finance/accounting-export?format=quickbooks&type=invoices')}
                 />
-                <ExportMenuItem
-                  label="Purchases (expenses)"
-                  hint="Import as expense bills"
-                  onClick={() => downloadCSV('/api/finance/accounting-export?format=quickbooks&type=expenses')}
-                />
+                {hasPastExpenses && (
+                  <ExportMenuItem
+                    label="Expenses you logged"
+                    hint="Expense tracking was retired; these are yours to keep"
+                    onClick={() => downloadCSV('/api/finance/accounting-export?format=quickbooks&type=expenses')}
+                  />
+                )}
                 <ExportMenuHeader label="Xero"/>
                 <ExportMenuItem
                   label="Sales (invoices)"
                   hint="Import as sales invoices"
                   onClick={() => downloadCSV('/api/finance/accounting-export?format=xero&type=invoices')}
                 />
-                <ExportMenuItem
-                  label="Purchases (expenses)"
-                  hint="Import as bills"
-                  onClick={() => downloadCSV('/api/finance/accounting-export?format=xero&type=expenses')}
-                />
+                {hasPastExpenses && (
+                  <ExportMenuItem
+                    label="Expenses you logged"
+                    hint="Expense tracking was retired; these are yours to keep"
+                    onClick={() => downloadCSV('/api/finance/accounting-export?format=xero&type=expenses')}
+                  />
+                )}
               </div>
             </>
           )}
@@ -333,9 +334,7 @@ export default function Finance() {
           would have no box to animate, so it's a real flex column that
           keeps the page's 20px gap between the panel's children. */}
       <div key={section} className="panel-enter" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {section === 'expenses' ? (
-        <Expenses/>
-      ) : section === 'pos' ? (
+      {section === 'pos' ? (
         <PointOfSale/>
       ) : section === 'services' ? (
         <FinanceServices/>
@@ -351,8 +350,6 @@ export default function Finance() {
         <Memberships/>
       ) : section === 'giftcards' ? (
         <GiftCards/>
-      ) : section === 'time' ? (
-        <Time/>
       ) : (
         <InvoicesSection
           invoices={invoices} summary={summary} counts={counts} rows={rows}

@@ -42,8 +42,8 @@ check('every sensitive tool is a real tool', () => {
 
 check('the new expanded tools are registered', () => {
   const expected = [
-    'create_quote', 'create_product', 'create_expense', 'create_goal',
-    'create_time_entry', 'create_recurring_invoice',
+    'create_quote', 'create_product', 'create_goal',
+    'create_recurring_invoice',
     'create_package',
     'send_quote', 'reschedule_booking',
     'send_document', 'send_review_request', 'refund_invoice',

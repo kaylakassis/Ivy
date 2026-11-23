@@ -108,7 +108,7 @@ export const TUTORIALS = {
 
   finance: {
     title: 'Money',
-    intro: 'Invoices, expenses, recurring billing, time tracking, gift cards, memberships, payment processor - the whole money side of the business.',
+    intro: 'Invoices, estimates, recurring billing, what you sell, gift cards, memberships and your payment processor: the money side of the business.',
     steps: [
       {
         title: 'Connect a payment processor',
@@ -127,12 +127,8 @@ export const TUTORIALS = {
         body: 'Got a monthly retainer? Set up a recurring invoice once - Ivy auto-generates and sends it every cycle. Includes built-in failure handling and dunning if a card declines.',
       },
       {
-        title: 'Track expenses for tax season',
-        body: 'Expenses tab. Log spend with a category + receipt photo. We surface tax-deductible totals by IRS category at year-end so your accountant has clean numbers.',
-      },
-      {
-        title: 'Memberships, gift cards, time-tracking',
-        body: 'Each is its own sub-tab - turn on what fits your business. Memberships = recurring access plans. Gift cards = sellable balances clients can spend on services. Time = bill hourly with one tap.',
+        title: 'Memberships and gift cards',
+        body: 'Each has its own section; use what fits your business. Memberships are recurring access plans. Gift cards are balances clients buy and spend on your services.',
       },
     ],
   },

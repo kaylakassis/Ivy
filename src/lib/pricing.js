@@ -22,7 +22,6 @@ export const TOOL_STACK = [
   { label: 'Client management app', monthly: 36, replaces: 'clients + invoices + contracts' }, // list price source: HoneyBook
   { label: 'Scheduling app', monthly: 12, replaces: 'booking pages + reminders' }, // list price source: Calendly
   { label: 'Advanced scheduling app', monthly: 20, replaces: 'advanced scheduling + intake forms' }, // list price source: Acuity Scheduling
-  { label: 'Bookkeeping app', monthly: 20, replaces: 'invoices + expenses + taxes' }, // list price source: QuickBooks Self-Employed
   { label: 'Website builder', monthly: 23, replaces: 'website + custom domain' }, // list price source: Squarespace
   { label: 'E-signature app', monthly: 15, replaces: 'legally-binding e-signatures' }, // list price source: DocuSign
 ];

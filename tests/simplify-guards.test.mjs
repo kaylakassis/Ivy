@@ -7,18 +7,18 @@ let pass = 0, fail = 0;
 const assert = (c, m) => { if (c) { pass++; console.log('  ✓', m); } else { fail++; console.log('  ✗', m); } };
 const src = (f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 
-console.log('\n[Money in three groups]');
+console.log('\n[Money in two groups]');
 const fin = src('src/features/finance/Finance.jsx');
 const block = fin.slice(fin.indexOf('export const MONEY_GROUPS = ['), fin.indexOf('export const moneyGroupOf'));
 const groups = [...block.matchAll(/\{ id: '(\w+)', label: '([^']+)', sections: \[([\s\S]*?)\] \}/g)]
   .map((m) => ({ id: m[1], label: m[2], sections: [...m[3].matchAll(/id: '(\w+)',\s+label: '([^']+)'/g)].map((x) => ({ id: x[1], label: x[2] })) }));
-assert(groups.length === 3 && groups.map((g) => g.label).join('|') === 'Get paid|What I sell|Track', 'three groups: Get paid, What I sell, Track');
+assert(groups.length === 2 && groups.map((g) => g.label).join('|') === 'Get paid|What I sell', 'two groups: Get paid, What I sell (expense and time tracking were retired)');
 const all = groups.flatMap((g) => g.sections.map((s) => s.id));
-const EVERY = ['invoices', 'quotes', 'recurring', 'pos', 'services', 'products', 'packages', 'memberships', 'giftcards', 'expenses', 'time'];
-assert(all.length === EVERY.length && EVERY.every((id) => all.includes(id)) && new Set(all).size === all.length, 'every one of the eleven sections is in exactly one group (nothing was removed)');
+const EVERY = ['invoices', 'quotes', 'recurring', 'pos', 'services', 'products', 'packages', 'memberships', 'giftcards'];
+assert(all.length === EVERY.length && EVERY.every((id) => all.includes(id)) && new Set(all).size === all.length, 'every one of the nine sections is in exactly one group');
 assert(groups.every((g) => g.sections.length <= 5), 'no group shows more than five choices');
 assert(/moneyGroupOf\(section\)\.sections\.map/.test(fin) && /data-section=\{id\}/.test(fin), 'only the chosen group\'s sections are shown, with the same ids existing links use');
-assert(/if \(sectionParam\) setSection\(sectionParam\);/.test(fin), 'an existing ?section= link still opens its screen');
+assert(/if \(sectionParam && MONEY_GROUPS\.some\(\(g\) => g\.sections\.some\(\(x\) => x\.id === sectionParam\)\)\) setSection\(sectionParam\);/.test(fin), 'an existing ?section= link still opens its screen, and a link to a retired section opens Invoices');
 assert(/MONEY_GROUPS\.find\(\(g\) => g\.sections\.some\(\(x\) => x\.id === section\)\) \|\| MONEY_GROUPS\[0\]/.test(fin), 'an unknown section falls back to the first group instead of an empty screen');
 
 console.log('\n[one name per area]');

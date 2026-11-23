@@ -1,5 +1,5 @@
 // Calendar dates with no time ("2026-11-15": an invoice due date, a quote
-// expiry, a task due date, an expense date).
+// expiry, a task due date).
 //
 // `new Date('2026-11-15')` reads a bare date as midnight UTC, so anyone west
 // of London saw it as the evening before ("Due 11/14"). And

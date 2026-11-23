@@ -1576,7 +1576,7 @@ function TourStep() {
     { tab: 'Home', icon: 'Home',     desc: 'The home page. Today\'s bookings, revenue this month, unread messages - at a glance.' },
     { tab: 'Clients',   icon: 'Users',    desc: 'Every client + lead. Add, search, tag, drop notes. Click into a profile for their bookings + invoices.' },
     { tab: 'Calendar',  icon: 'Calendar', desc: 'Schedule. Click any slot to add a booking. Share drawer copies your booking link + QR.' },
-    { tab: 'Money',   icon: 'Dollar',   desc: 'Invoices, quotes, expenses, time tracking, memberships, gift cards. Year-end CSV export under "Export ▾".' },
+    { tab: 'Money',   icon: 'Dollar',   desc: 'Invoices, quotes, memberships, gift cards. Year-end income export under "Export ▾".' },
     { tab: 'Messages',  icon: 'Chat',     desc: 'Text + email threads with each client. Voice memos auto-transcribe.' },
     { tab: 'Documents', icon: 'Doc',      desc: 'Contracts + intake forms. Send for e-signature, audit trail included.' },
     { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups - birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },

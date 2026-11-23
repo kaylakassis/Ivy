@@ -7,6 +7,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { retiredWrite } from '../_lib/retired.js';
 import {
   serializeExpense, SCHEDULE_C_KEYS, VALID_PAYMENT_METHODS,
 } from '../_lib/expenses.js';
@@ -18,6 +19,8 @@ function isoDate(s) {
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
+  // Retired (api/_lib/retired.js): what is there can still be read, nothing can be added or changed.
+  if (retiredWrite(req, res, 'expenses')) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;

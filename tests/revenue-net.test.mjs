@@ -127,8 +127,7 @@ async function run() {
   assert(near(ctx?.revenueThisMonth, 310), `Ivy's snapshot (${ctx?.revenueThisMonth})`);
   const tctx = { workspaceId: wid, userId: uid, sessionId: null };
   const ds = await executeIvyTool('get_dashboard_summary', {}, tctx);
-  const pl = await executeIvyTool('get_pl_summary', {}, tctx);
-  assert(near(ds?.revenue_this_month, 310) && near(pl?.this_month?.revenue, 310), `Ivy's tools (${ds?.revenue_this_month} / ${pl?.this_month?.revenue})`);
+  assert(near(ds?.revenue_this_month, 310), `Ivy's tools (${ds?.revenue_this_month})`);
   assert(near(await computeGoalCurrent(wid, 'revenue'), 310), 'revenue goal progress');
   const wk = await buildWeekStats({ workspaceId: wid, from: new Date(Date.now() - 7 * 86400000), to: new Date(Date.now() + 60000) });
   assert(near(wk?.revenuePaid, 310), `weekly recap "collected" (${wk?.revenuePaid})`);

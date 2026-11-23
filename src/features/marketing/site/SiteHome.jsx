@@ -627,7 +627,7 @@ export default function SiteHome() {
             <div className="feat"><div className="icon">🌐</div><h3>Website builder + custom domain</h3><p>Drag-and-drop pages published to your own domain, SEO built in. Site forms turn visitors into leads automatically.</p></div>
             <div className="feat"><div className="icon">⚡</div><h3>Workflows + automated reminders</h3><p>"When a booking completes, wait 2 days, then ask for a review." Describe the rule - Ivy builds the workflow.</p></div>
             <div className="feat"><div className="icon">💳</div><h3>Memberships, packages & gift cards</h3><p>Recurring revenue built in - plus in-person QR checkout, and reviews + rewards.</p></div>
-            <div className="feat"><div className="icon">📊</div><h3>Goals + finance dashboard</h3><p>Revenue, expenses, time tracking, and a Schedule-C-ready tax export compatible with QuickBooks and Xero.</p></div>
+            <div className="feat"><div className="icon">📊</div><h3>Goals + finance dashboard</h3><p>Revenue and goals at a glance, and a year-end income export that works with QuickBooks and Xero.</p></div>
           </div>
         </div>
       </section>

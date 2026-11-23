@@ -75,7 +75,7 @@ const STEPS = [
   {
     id: 'finance',
     title: 'Money - invoices + Stripe',
-    body: "Send invoices, accept card payments through your own Stripe account, refund (full or partial), track expenses, and export Schedule C-ready CSVs at tax time.",
+    body: "Send invoices, accept card payments through your own Stripe account, refund (full or partial), and export your year's income at tax time.",
     route: '/finance',
     selector: '[data-tour="nav-finance"]',
     placement: 'right',

@@ -74,7 +74,7 @@ const inv = src('src/features/finance/InvoiceEditor.jsx');
 assert(/if \(blank\) \{ animateClose\(\{ discardBlank: true \}\); return; \}/.test(inv) && /if \(dirty\) \{[\s\S]{0,300}await onSave\(/.test(inv), 'invoice: closing a draft saves unsaved changes, and a never-filled draft is thrown away');
 assert(/info\?\.discardBlank && inv\?\.status === 'draft'\) remove\(inv\.id\)/.test(src('src/features/finance/Finance.jsx')), 'invoice: the list drops the never-filled draft');
 assert(/const close = async \(\) => \{[\s\S]{0,700}await onSave\(\{ name: name\.trim\(\) \|\| 'Untitled', contentHtml: body, fields \}\)/.test(src('src/features/documents/DocumentEditor.jsx')), 'document: closing a draft saves it first');
-for (const f of ['finance/Quotes.jsx', 'finance/Recurring.jsx', 'finance/Time.jsx', 'finance/Expenses.jsx', 'finance/Memberships.jsx']) {
+for (const f of ['finance/Quotes.jsx', 'finance/Recurring.jsx', 'finance/Memberships.jsx']) {
   const s = src(`src/features/${f}`);
   assert(/useDiscardGuard\(\{/.test(s) && /guard\.close\(onClose\)/.test(s), `${f.split('/')[1]}: closing with unsaved changes asks "Close without saving?"`);
 }

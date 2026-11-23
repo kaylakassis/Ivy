@@ -74,7 +74,7 @@ export default function SiteFeatures() {
             <p className="section-sub">Ivy sees your real numbers and answers in plain English with specific actions - not "consider engaging your top customers" but "send Sarah a check-in; she's 22 days quiet." Anything that reaches a client waits for your approval.</p>
             <ul className="checks">
               <li><b>Ask anything:</b> quiet clients, overdue invoices, this week's bookings, revenue this month</li>
-              <li><b>Delegate anything:</b> draft invoices and quotes, book sessions, create tasks, log expenses</li>
+              <li><b>Delegate anything:</b> draft invoices and quotes, book sessions, create tasks</li>
               <li><b>Automate in plain English:</b> describe a rule, Ivy builds the workflow</li>
               <li><b>Approval-gated sends:</b> messages, invoices, and contracts preview before they go out</li>
               <li><b>600 messages a month included</b> - one message can draft, send, book or build; a meter shows where you stand</li>
@@ -126,7 +126,7 @@ export default function SiteFeatures() {
               <li><b>Memberships, packages &amp; gift cards</b> - recurring revenue, built in</li>
               <li><b>In-person sales</b> - show a QR, they pay on their phone</li>
               <li><b>Overdue autopilot:</b> due-soon warnings and overdue nudges without you lifting a finger</li>
-              <li><b>Goals + finance dashboard</b> with a Schedule-C-ready tax export (QuickBooks/Xero compatible)</li>
+              <li><b>Goals + finance dashboard</b> with a year-end income export (QuickBooks/Xero compatible)</li>
             </ul>
           </div>
           <div className="visual">
@@ -190,9 +190,7 @@ export default function SiteFeatures() {
           <div className="mini-grid">
             <div className="mini"><div className="icon">⚡</div><h4>Workflows + automated reminders</h4><p>Trigger-based automations: new lead, quiet client, completed booking - send emails, SMS, tasks, or documents.</p></div>
             <div className="mini"><div className="icon">📁</div><h4>Folders</h4><p>Any client can become a folder: their bookings, invoices, estimates, and documents in one place.</p></div>
-            <div className="mini"><div className="icon">⏱️</div><h4>Time tracking</h4><p>Billable timers per client that convert straight into invoice line items.</p></div>
             <div className="mini"><div className="icon">🎯</div><h4>Goals</h4><p>Revenue, booking, and client goals that track themselves against your real numbers.</p></div>
-            <div className="mini"><div className="icon">🧾</div><h4>Expenses</h4><p>Log deductible expenses that roll straight into your quarterly tax export.</p></div>
             <div className="mini"><div className="icon">📈</div><h4>Analytics</h4><p>Lead conversion, churn, revenue trends, and website traffic - 30/90/365-day views.</p></div>
           </div>
         </div>

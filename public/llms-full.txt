@@ -16,7 +16,7 @@ Every feature ships in the one plan. There are no tiers, no locked doors and no 
 Ivy, the assistant, sees the owner's real numbers (revenue this month, active clients, who has gone quiet, what is overdue) and answers in plain English with specific actions, not "consider engaging your top customers" but "send Sarah a check-in; she's 22 days quiet."
 
 - Ask anything: quiet clients, overdue invoices, this week's bookings, revenue this month.
-- Delegate anything: draft invoices and quotes, book sessions, create tasks, log expenses.
+- Delegate anything: draft invoices and quotes, book sessions, create tasks.
 - Automate in plain English: describe a rule and Ivy builds the workflow.
 - Approval-gated sends: messages, invoices and contracts are previewed before they go out. Anything that reaches a client waits for the owner's approval.
 - 600 assistant messages a month are included and reset on the 1st. One message can draft, send, book or build; a meter shows where you stand. Everything else in Ivy is unlimited.
@@ -42,7 +42,7 @@ Ivy, the assistant, sees the owner's real numbers (revenue this month, active cl
 - Memberships, packages and gift cards.
 - In-person sales: show a QR code and the client pays on their phone. Cash logging built in.
 - Overdue autopilot: due-soon warnings and overdue nudges.
-- Goals and a finance dashboard with a Schedule-C-ready tax export, compatible with QuickBooks and Xero.
+- Goals and a finance dashboard with a year-end income export, compatible with QuickBooks and Xero.
 
 ## Clients
 

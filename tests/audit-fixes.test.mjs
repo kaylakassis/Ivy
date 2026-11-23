@@ -96,7 +96,7 @@ async function run() {
     for (const [name, mod] of [
       ['clients/index', await import('../api/clients/index.js')],
       ['quotes/index', await import('../api/quotes/index.js')],
-      ['expenses/index', await import('../api/expenses/index.js')],
+      ['products/index', await import('../api/products/index.js')],
     ]) {
       const r = mockRes();
       const req = {

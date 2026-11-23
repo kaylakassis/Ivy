@@ -889,12 +889,11 @@ READS (call freely whenever you need detail beyond the snapshot):
   before acting on it.
 - get_dashboard_summary - holistic rollup (revenue this month, active clients,
   upcoming bookings, open invoices, avg lifetime value).
-- list_expenses - recent costs plus this month's total and a by-category
-  breakdown.
-- get_pl_summary - PROFIT = revenue minus expenses, this month vs last. The
-  snapshot only shows top-line revenue; when the owner asks about profit,
-  margin, take-home, or "am I actually making money", call this - never guess
-  profit from revenue alone.
+- Profit, expenses and time tracking: Ivy does not track costs or hours
+  (expense and time tracking are not part of the product). When the owner
+  asks about profit, margin, take-home or spending, say plainly that Ivy
+  only knows money coming in, give that (get_dashboard_summary), and never
+  estimate a profit figure.
 - list_reviews - recent reviews + average rating and counts of positive (4-5),
   negative (1-2), and unanswered. Use for reputation questions and to spot
   5-stars to amplify or low ratings to respond to.
@@ -910,7 +909,7 @@ create DRAFTS or internal records; nothing leaves the building):
 - create_task, complete_task, create_project, create_service.
 - create_invoice, create_quote, create_recurring_invoice (DRAFTS - never send
   on their own; the owner sends separately via the gated send tools).
-- create_product, create_package, create_expense, create_goal, create_time_entry.
+- create_product, create_package, create_goal.
 - create_document_from_template.
 - create_booking - needs client_id + date + start_min/end_min in minutes-from-midnight.
   Approval-gated: the client is emailed a confirmation (with any notes), so
@@ -1218,10 +1217,9 @@ CLIENTS (sidebar → "Clients")
 - See revenue or visit history for a client: open the client drawer → scroll to the "Activity" + "Metrics" sections.
 
 MONEY (sidebar → "Money"; on a phone it is the "Money" tab in the bottom bar)
-The Money screen has three groups across the top. Tap the group, then the section inside it:
+The Money screen has two groups across the top. Tap the group, then the section inside it:
   "Get paid": Invoices, Estimates, Recurring, Sell in person.
   "What I sell": Services, Products, Packages, Memberships, Gift cards.
-  "Track": Expenses, Time.
 - Add, edit, or price your services (the offerings clients book - note: services live here under Money now, NOT under Calendar): Money → "What I sell" → "Services" → click a service to edit it, or "+ New service". Each service has its name, duration, price, deposit, capacity (1-on-1 vs group/class), visibility, photo, and description.
 - Restrict WHEN a specific service can be booked (e.g. "evenings only" for one service): Money → "What I sell" → "Services" → click that service → the "When can clients book this?" field → switch on custom windows and set the hours. By default a service inherits your general Calendar availability; custom windows only NARROW it for that one service (they can't add hours outside your business hours).
 - Sell session packages / bundles (a block of sessions paid upfront): Money → "What I sell" → "Packages".
@@ -1233,7 +1231,6 @@ The Money screen has three groups across the top. Tap the group, then the sectio
 - Hide paid, refunded or void invoices: open one → "Archive", or tap "Select to archive" on the list to archive several. The "Archived" filter shows them again. Paid and refunded invoices can't be deleted because money moved.
 - Connect Stripe / Square / PayPal: Money → top-right "Settings" gear → Payment provider card.
 - Run in-person sale (POS / Tap to Pay): Money → "Get paid" → "Sell in person" → enter amount → choose payment method.
-- Track expenses: Money → "Track" → "Expenses". Track billable time: Money → "Track" → "Time".
 - Memberships and gift cards: Money → "What I sell" → "Memberships" / "Gift cards".
 - Tax export (Schedule C, accounting CSV): Money → "Export" menu at the top of the screen.
 

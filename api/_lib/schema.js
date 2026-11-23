@@ -5680,4 +5680,12 @@ CREATE TABLE IF NOT EXISTS activity_trust (
 -- until then the account cannot be signed in to. Accounts from before this
 -- (and from older iPhone app versions) are FALSE and unaffected.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS confirm_required BOOLEAN NOT NULL DEFAULT FALSE;
+-- Time tracking was retired (api/_lib/retired.js). A timer left running has
+-- no screen to stop it from any more, so it is stopped here, once, with the
+-- time it had run so far. Entries themselves are kept.
+UPDATE time_entries SET
+       ended_at = COALESCE(ended_at, NOW()),
+       duration_seconds = COALESCE(duration_seconds, GREATEST(0, EXTRACT(EPOCH FROM (NOW() - started_at))::int)),
+       status = 'stopped', updated_at = NOW()
+ WHERE status = 'running';
 `;

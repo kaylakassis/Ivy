@@ -71,21 +71,6 @@ export const IVY_TOOLS = [
     },
   },
   {
-    name: 'list_expenses',
-    description: "Lists recent expenses plus this month's total and a by-category breakdown. Use when the user asks about costs, spending, expenses, deductions, or where their money is going.",
-    input_schema: {
-      type: 'object',
-      properties: {
-        limit: { type: 'integer', description: 'Max recent rows. Default 20, max 50.' },
-      },
-    },
-  },
-  {
-    name: 'get_pl_summary',
-    description: "Profit summary: revenue minus expenses (net profit) for this month and last month. Use whenever the user asks about profit, take-home, margin, net, or whether they're actually making money - revenue alone doesn't answer that.",
-    input_schema: { type: 'object', properties: {} },
-  },
-  {
     name: 'list_reviews',
     description: "Lists recent client reviews with ratings, plus totals (average rating, count of 4-5 star vs 1-2 star, and how many have no owner reply yet). Use when the user asks about reviews, reputation, ratings, feedback, or which reviews to respond to or amplify.",
     input_schema: {
@@ -625,23 +610,6 @@ export const IVY_TOOLS = [
     },
   },
   {
-    name: 'create_expense',
-    description: 'Log a business expense (for bookkeeping / Schedule-C).',
-    input_schema: {
-      type: 'object',
-      properties: {
-        amount:         { type: 'number' },
-        date:           { type: 'string', description: 'YYYY-MM-DD. Defaults to today.' },
-        category:       { type: 'string' },
-        vendor:         { type: 'string' },
-        notes:          { type: 'string' },
-        payment_method: { type: 'string' },
-        is_deductible:  { type: 'boolean', description: 'Defaults to true.' },
-      },
-      required: ['amount', 'category'],
-    },
-  },
-  {
     name: 'create_goal',
     description: 'Create a business goal the dashboard tracks against real data.',
     input_schema: {
@@ -655,21 +623,6 @@ export const IVY_TOOLS = [
         notes:    { type: 'string' },
       },
       required: ['title', 'type', 'target'],
-    },
-  },
-  {
-    name: 'create_time_entry',
-    description: 'Start a billable time entry / timer for work done.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        description: { type: 'string' },
-        client_id:   { type: 'string' },
-        service_id:  { type: 'string' },
-        hourly_rate: { type: 'number' },
-        billable:    { type: 'boolean', description: 'Defaults to true.' },
-      },
-      required: ['description'],
     },
   },
   {
@@ -905,8 +858,6 @@ export const HANDLERS = {
   search_invoices,
   search_bookings,
   get_dashboard_summary,
-  list_expenses,
-  get_pl_summary,
   list_reviews,
   list_leads,
   remember,
@@ -940,9 +891,7 @@ export const HANDLERS = {
   // Writes - expanded creates
   create_quote,
   create_product,
-  create_expense,
   create_goal,
-  create_time_entry,
   create_recurring_invoice,
   // Writes - expanded gated sends
   send_quote,
@@ -1568,7 +1517,7 @@ const READ_ONLY_TOOLS = new Set([
   'list_quiet_clients', 'list_overdue_invoices', 'list_upcoming_bookings', 'search_clients',
   'list_clients', 'list_services', 'list_documents', 'list_workflows', 'list_projects',
   'list_staff', 'list_tasks', 'search_invoices', 'search_bookings', 'get_dashboard_summary',
-  'list_expenses', 'get_pl_summary', 'list_reviews', 'list_leads',
+  'list_reviews', 'list_leads',
   'remember', 'forget', 'list_memories', 'explain_workflow_suggestion',
   'get_website', 'get_availability', ...OWNER_READ_ONLY, ...APP_READ_ONLY,
 ]);
@@ -1633,9 +1582,7 @@ const DONE_TEXT = {
   toggle_workflow: (a, r) => `Turned ${r.workflow?.enabled ? 'on' : 'off'} the automation ${qt(r.workflow?.name)}`,
   create_quote: (a, r) => `Drafted estimate${numBit(r.quote?.number)} (not sent)`,
   create_product: (a, r) => `Created the product ${qt(r.product?.name || a.name)}`,
-  create_expense: (a, r) => `Logged an expense of $${Number(r.expense?.amount ?? a.amount ?? 0).toFixed(2)}${r.expense?.category ? ` (${r.expense.category})` : ''}`,
   create_goal: (a, r) => `Set the goal ${qt(r.goal?.title || a.title)}`,
-  create_time_entry: (a, r) => `Logged time: ${qt(r.time_entry?.description || a.description)}`,
   create_recurring_invoice: (a, r) => `Set up the recurring invoice ${qt(r.recurring_invoice?.name || a.name)} as a draft (auto-send is off)`,
   create_package: (a, r) => `Created the package ${qt(r.package?.name || a.name)}`,
   send_message_to_client: (a, r) => `Sent a message to ${r.client_name || 'the client'}`,
@@ -2364,54 +2311,6 @@ async function get_dashboard_summary({ workspaceId }) {
     open_invoices:      invoices.rows[0]?.open_count || 0,
     open_invoices_value: Number(invoices.rows[0]?.open_value || 0),
     average_lifetime_value: Number(ltv.rows[0]?.avg_ltv || 0),
-  };
-}
-
-async function list_expenses({ workspaceId, args }) {
-  const tz = await workspaceTimeZone(workspaceId);
-  const limit = clampInt(args?.limit, 20, 1, 50);
-  const [recent, month, byCat] = await Promise.all([
-    sql`SELECT id, amount, date, category, vendor, notes, is_deductible
-          FROM expenses WHERE workspace_id = ${workspaceId}
-          ORDER BY date DESC, created_at DESC LIMIT ${limit}`,
-    sql`SELECT COALESCE(SUM(amount), 0)::numeric AS total
-          FROM expenses WHERE workspace_id = ${workspaceId}
-            AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date`,
-    sql`SELECT category, COALESCE(SUM(amount), 0)::numeric AS total
-          FROM expenses WHERE workspace_id = ${workspaceId}
-            AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date
-          GROUP BY category ORDER BY total DESC LIMIT 8`,
-  ]);
-  return {
-    expenses: recent.rows.map((r) => ({ ...r, amount: Number(r.amount) })),
-    this_month_total: Number(month.rows[0].total),
-    this_month_by_category: byCat.rows.map((r) => ({ category: r.category, total: Number(r.total) })),
-  };
-}
-
-async function get_pl_summary({ workspaceId }) {
-  const tz = await workspaceTimeZone(workspaceId);
-  // Revenue = paid invoices (materialized total, same source as the snapshot
-  // Ivy already quotes). Expenses = expenses.amount. Profit = revenue - expenses.
-  const [rev, exp] = await Promise.all([
-    sql`SELECT
-          COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
-          COALESCE(SUM(invoice_net_revenue(invoices)) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
-                                        AND paid_at <  date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS last_month
-        FROM invoices
-        WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL`,
-    sql`SELECT
-          COALESCE(SUM(amount) FILTER (WHERE date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date), 0)::numeric AS this_month,
-          COALESCE(SUM(amount) FILTER (WHERE date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month')::date
-                                        AND date <  (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date), 0)::numeric AS last_month
-        FROM expenses WHERE workspace_id = ${workspaceId}`,
-  ]);
-  const r = rev.rows[0], e = exp.rows[0];
-  const tR = Number(r.this_month), tE = Number(e.this_month);
-  const lR = Number(r.last_month),  lE = Number(e.last_month);
-  return {
-    this_month: { revenue: tR, expenses: tE, profit: tR - tE },
-    last_month: { revenue: lR, expenses: lE, profit: lR - lE },
   };
 }
 
@@ -3200,27 +3099,6 @@ async function create_product({ workspaceId, args }) {
   return { product: rows[0] };
 }
 
-async function create_expense({ workspaceId, args }) {
-  const amount = Number(args?.amount);
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error('amount must be a positive number');
-  const date = args?.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? args.date : new Date().toISOString().slice(0, 10);
-  const category = (args?.category || '').toString().slice(0, 80) || 'other';
-  const { rows } = await sql`
-    INSERT INTO expenses (
-      workspace_id, amount, date, category, vendor, notes,
-      receipt_url, payment_method, is_deductible
-    ) VALUES (
-      ${workspaceId}, ${amount}, ${date}, ${category},
-      ${args.vendor ? String(args.vendor).slice(0, 200) : null},
-      ${args.notes ? String(args.notes).slice(0, 2000) : null},
-      ${null}, ${args.payment_method ? String(args.payment_method).slice(0, 40) : null},
-      ${args.is_deductible !== false}
-    )
-    RETURNING id, amount, category, date
-  `;
-  return { expense: rows[0] };
-}
-
 async function create_goal({ workspaceId, args }) {
   const title = (args?.title || '').toString().trim();
   if (!title) throw new Error('title is required');
@@ -3240,31 +3118,6 @@ async function create_goal({ workspaceId, args }) {
     RETURNING id, title, type, target
   `;
   return { goal: rows[0] };
-}
-
-async function create_time_entry({ workspaceId, args }) {
-  const description = (args?.description || '').toString().trim();
-  if (!description) throw new Error('description is required');
-  let clientId = null;
-  if (args.client_id) {
-    const cl = await sql`SELECT id FROM clients WHERE id = ${args.client_id} AND workspace_id = ${workspaceId}`;
-    if (cl.rows.length === 0) throw new Error('Unknown client');
-    clientId = String(args.client_id);
-  }
-  let serviceId = null;
-  if (args.service_id) {
-    const sv = await sql`SELECT id FROM services WHERE id = ${args.service_id} AND workspace_id = ${workspaceId}`;
-    if (sv.rows.length === 0) throw new Error('Unknown service');
-    serviceId = String(args.service_id);
-  }
-  const hourlyRate = Number.isFinite(Number(args.hourly_rate)) ? Number(args.hourly_rate) : null;
-  const billable = args.billable !== false;
-  const { rows } = await sql`
-    INSERT INTO time_entries (workspace_id, client_id, service_id, description, hourly_rate, billable, status)
-    VALUES (${workspaceId}, ${clientId}, ${serviceId}, ${description.slice(0, 500)}, ${hourlyRate}, ${billable}, 'running')
-    RETURNING id, description, status
-  `;
-  return { time_entry: rows[0] };
 }
 
 async function create_recurring_invoice({ workspaceId, args }) {

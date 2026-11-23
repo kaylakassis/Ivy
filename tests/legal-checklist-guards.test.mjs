@@ -32,7 +32,7 @@ assert(labelled(el('input', { id: 'x' }), 'Amount').props['aria-label'] === unde
 const wrapper = el('div', {}, el('input', {}));
 assert(labelled(wrapper, 'Amount') === wrapper, 'anything that is not a single plain control is returned untouched');
 assert(labelled(el('input', {}), el('b', {}, 'x')).props['aria-label'] === undefined, 'a caption that is not plain text is not used as a name');
-const WRAPPERS = ['admin/AdminPage', 'finance/Quotes', 'finance/Time', 'finance/InvoiceEditor', 'finance/Recurring', 'finance/Expenses', 'finance/Memberships',
+const WRAPPERS = ['admin/AdminPage', 'finance/Quotes', 'finance/InvoiceEditor', 'finance/Recurring', 'finance/Memberships',
   'rewards/Rewards', 'workflows/WorkflowEditor', 'clients/AddClientModal', 'website/editorKit', 'onboarding/OnboardingPage', 'calendar/ShareDrawer',
   'calendar/ServicesDrawer', 'calendar/PackagesDrawer', 'calendar/AddBookingModal', 'calendar/EventDrawer', 'calendar/StaffDrawer', 'documents/Documents'];
 assert(WRAPPERS.every((w) => /\{labelled\(children, label\)\}/.test(src(`src/features/${w}.jsx`))), `all ${WRAPPERS.length} caption-above-field wrappers name their control`);

@@ -67,10 +67,10 @@ const STOPS = [
     mock: 'sell',
   },
   {
-    id: 'money', act: 'paid', area: 'Expenses, time & taxes',
+    id: 'money', act: 'paid', area: 'Numbers & exports',
     title: 'Know your real numbers.',
-    blurb: 'Log expenses, bill your hours, and hand your accountant a clean export instead of a shoebox.',
-    chips: ['Expense log with categories', 'Billable timers that become invoice lines', 'Revenue vs expenses', 'Schedule-C-ready export', 'QuickBooks & Xero compatible CSV', 'Revenue, client & session goals', 'Conversion & churn analytics'],
+    blurb: 'See what came in, track goals against your real numbers, and hand your accountant a clean export instead of a shoebox.',
+    chips: ['Paid, outstanding and overdue at a glance', 'Year-end income export', 'QuickBooks & Xero compatible CSV', 'Revenue, client & session goals', 'Conversion & churn analytics'],
     mock: 'money',
   },
   {
@@ -98,7 +98,7 @@ const STOPS = [
     id: 'ivy', act: 'ivy', area: 'Ivy, the assistant',
     title: 'An assistant that actually does things.',
     blurb: 'Ask in plain English. Ivy reads your real numbers, does the work, and waits for your approval on anything that reaches a client.',
-    chips: ['600 messages a month included', 'Answers from live data: who hasn’t paid, who’s quiet, what’s booked', 'Sends messages, invoices, estimates & documents', 'Books, reschedules & cancels sessions', 'Adds clients, expenses, tasks & goals', 'Builds automations from one sentence', 'Every outbound action needs your OK', 'Remembers what you tell her', 'Morning briefing of your day', 'Spots habits worth automating', 'Reads files you drop in'],
+    chips: ['600 messages a month included', 'Answers from live data: who hasn’t paid, who’s quiet, what’s booked', 'Sends messages, invoices, estimates & documents', 'Books, reschedules & cancels sessions', 'Adds clients, tasks & goals', 'Builds automations from one sentence', 'Every outbound action needs your OK', 'Remembers what you tell her', 'Morning briefing of your day', 'Spots habits worth automating', 'Reads files you drop in'],
     mock: 'ivy',
   },
   {
@@ -430,16 +430,16 @@ const MOCKS = {
     </Frame>
   ),
   money: () => (
-    <Frame url="joinivy.ai/finance?tab=expenses">
+    <Frame url="joinivy.ai/finance">
       <div className="mk-stats">
         <div className="mk-stat st" style={st(0)}><div className="k">Revenue</div><div className="v lime">$4,280</div></div>
-        <div className="mk-stat st" style={st(1)}><div className="k">Expenses</div><div className="v">$610</div></div>
-        <div className="mk-stat st" style={st(2)}><div className="k">Billable hours</div><div className="v">31.5</div></div>
+        <div className="mk-stat st" style={st(1)}><div className="k">Outstanding</div><div className="v">$610</div></div>
+        <div className="mk-stat st" style={st(2)}><div className="k">Paid this year</div><div className="v">$31,900</div></div>
       </div>
       <div className="mk-list">
-        <div className="mk-row st" style={st(3)}><span className="who">Massage table linens<small>Supplies · $84.00</small></span><span className="chip n">deductible</span></div>
-        <div className="mk-row st" style={st(4)}><span className="who">Timer · Jordan T. · 1h 30m<small>became an invoice line</small></span><span className="chip g">billed</span></div>
-        <div className="mk-row st" style={st(5)}><span className="who">Schedule-C export<small>QuickBooks & Xero compatible</small></span><span className="chip g">ready</span></div>
+        <div className="mk-row st" style={st(3)}><span className="who">Goal: $5,000 this month<small>86% there, tracked from paid invoices</small></span><span className="chip n">on track</span></div>
+        <div className="mk-row st" style={st(4)}><span className="who">Invoice #1042 · Jordan T.<small>paid by card</small></span><span className="chip g">paid</span></div>
+        <div className="mk-row st" style={st(5)}><span className="who">Year-end income export<small>QuickBooks & Xero compatible</small></span><span className="chip g">ready</span></div>
       </div>
     </Frame>
   ),

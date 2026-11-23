@@ -6,6 +6,18 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
+
+async function pastEntryCounts(workspaceId) {
+  try {
+    const { rows } = await sql`
+      SELECT (SELECT COUNT(*)::int FROM expenses WHERE workspace_id = ${workspaceId}) AS expenses,
+             (SELECT COUNT(*)::int FROM time_entries WHERE workspace_id = ${workspaceId}) AS time_entries`;
+    return { expenses: rows[0]?.expenses || 0, timeEntries: rows[0]?.time_entries || 0 };
+  } catch {
+    return { expenses: 0, timeEntries: 0 };
+  }
+}
+
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -86,6 +98,9 @@ export default async function handler(req, res) {
           archived: Number(r.count_archived || 0),
           all:      Number(r.count_all || 0),
         },
+        // Expense and time tracking were retired (api/_lib/retired.js). An
+        // owner who logged some still gets their exports offered.
+        pastEntries: await pastEntryCounts(workspaceId),
       },
     });
   } catch (err) {

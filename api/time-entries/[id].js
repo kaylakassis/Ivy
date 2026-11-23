@@ -8,11 +8,14 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { retiredWrite } from '../_lib/retired.js';
 import { serializeEntry, fetchOwnedEntry } from '../_lib/timeEntries.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
+  // Retired (api/_lib/retired.js): what is there can still be read, nothing can be added or changed.
+  if (retiredWrite(req, res, 'time')) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;

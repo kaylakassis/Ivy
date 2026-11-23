@@ -3,7 +3,7 @@
 // "OK / Cancel", cannot be styled, and look like a system error inside the
 // iPhone app. These open Ivy's own pop-up instead (see ConfirmHost.jsx).
 //
-//   if (!(await confirmAction({ title: 'Delete this expense?', confirmLabel: 'Delete', danger: true }))) return;
+//   if (!(await confirmAction({ title: 'Delete this invoice?', confirmLabel: 'Delete', danger: true }))) return;
 //   showNotice('Could not send. Please try again.');
 //   const year = await askText({ title: 'Which year?', defaultValue: '2026' });
 //

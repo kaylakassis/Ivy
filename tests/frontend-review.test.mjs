@@ -39,7 +39,7 @@ for (const f of ['src/features/finance/Finance.jsx', 'src/features/finance/Quote
   assert(!badDisplay.test(read(f)), `${f} formats due/issue/expiry/next-run dates with fmtDateOnly`);
 }
 for (const f of [
-  'src/features/goals/Goals.jsx', 'src/features/finance/Quotes.jsx', 'src/features/finance/Expenses.jsx',
+  'src/features/goals/Goals.jsx', 'src/features/finance/Quotes.jsx',
   'src/features/finance/Recurring.jsx', 'src/features/client/ClientBookings.jsx', 'src/features/client/ClientPackages.jsx',
 ]) {
   assert(!read(f).includes('toISOString().slice(0, 10)'), `${f} takes "today" from the viewer's calendar`);

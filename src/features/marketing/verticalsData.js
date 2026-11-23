@@ -127,7 +127,7 @@ export const VERTICALS = {
       { title: 'Project tracking', body: 'Group each shoot’s bookings, invoices, and files under one project and move it through your stages.' },
       { title: 'Deliver in the portal', body: 'Share the final cut through the client’s portal once their invoice is paid.' },
       { title: 'Recurring retainers', body: 'Bill monthly content packages on a recurring invoice - set it once and it sends every cycle.' },
-      { title: 'Tax-ready expenses', body: 'Track equipment, mileage, contractor fees - exports straight into your tax software.' },
+      { title: 'Year-end income export', body: 'One file of everything you were paid, ready for your accountant or your tax software.' },
     ],
     use: [
       'Add your packages,',
@@ -342,12 +342,11 @@ export const VERTICALS = {
     icon: 'Trending', angle: 'consultants',
     homeLine: 'Discovery → proposal → retainer → invoices, in one flow.',
     headline: 'The full consulting practice in one workspace.',
-    sub: 'Discovery calls, signed proposals, recurring retainers, time tracking, expense logs, and tax-ready exports - all in one app.',
+    sub: 'Discovery calls, signed proposals, recurring retainers, and a year-end income export - all in one app.',
     bullets: [
       { title: 'Proposal generation', body: 'Build a templated proposal; client e-signs; Ivy creates the recurring invoice.' },
-      { title: 'Retainer billing', body: 'Monthly retainer auto-charges. Optional time tracking surfaces unbilled hours.' },
-      { title: 'Time + expenses', body: 'Track billable hours + reimbursable expenses. They flow onto the next invoice automatically.' },
-      { title: 'Tax-ready exports', body: 'Schedule-C summary plus QuickBooks/Xero CSV exports, ready to hand your CPA.' },
+      { title: 'Retainer billing', body: 'Bill a monthly retainer on a recurring invoice. Set it once and it sends every cycle.' },
+      { title: 'Year-end income export', body: 'A summary of what you were paid, plus QuickBooks and Xero files, ready to hand your accountant.' },
     ],
     use: [
       'Add your discovery + project + retainer services.',
@@ -449,7 +448,6 @@ export const VERTICALS = {
       { title: 'Proposal templates', body: 'Re-usable proposals with scope + price + timeline. Client e-signs; you start the work.' },
       { title: 'Milestone invoicing', body: 'Bill in stages - sketch, revision, final - sending each invoice as you hit the milestone.' },
       { title: 'Async deliverables', body: 'Attach final files to the project and share them through the client’s portal.' },
-      { title: 'Time + expense tracking', body: 'Track billable hours; auto-flow onto the next invoice.' },
     ],
     use: [
       'Add discovery + project + retainer services.',
