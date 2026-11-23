@@ -50,6 +50,7 @@ function hasSessionHint() {
 
 // ── Lazy: business app pages ──
 const Dashboard   = lazyRoute(() => import('./features/dashboard/Dashboard.jsx'));
+const Progress    = lazyRoute(() => import('./features/dashboard/Progress.jsx'));
 const Clients     = lazyRoute(() => import('./features/clients/Clients.jsx'));
 const ProgramsPage = lazyRoute(() => import('./features/programs/ProgramsPage.jsx'));
 const PublicProgram = lazyRoute(() => import('./features/programs/PublicProgram.jsx'));
@@ -115,7 +116,7 @@ const OWNER_PAGES = {
   '/dashboard': Dashboard, '/clients': Clients, '/programs': ProgramsPage, '/calendar': Calendar,
   '/finance': Finance, '/marketing': Marketing, '/reviews': Reviews, '/messages': Messages,
   '/documents': Documents, '/website': Website, '/ivy': IvyPro, '/account': AccountPage,
-  '/more': MorePage, '/admin': AdminPage, '/shops': ShopsPage,
+  '/more': MorePage, '/admin': AdminPage, '/shops': ShopsPage, '/progress': Progress,
 };
 const CLIENT_PAGES = {
   '/me': ClientHome, '/me/messages': ClientMessages, '/me/bookings': ClientBookings,
@@ -238,7 +239,7 @@ export function warmApp(pathname) {
 // Client-facing pages (portal, booking, invoices...) get the client set of
 // lines; the marketing site and auth pages keep the quiet spinner.
 const OWNER_PREFIXES = ['/dashboard', '/clients', '/calendar', '/finance', '/messages', '/ivy',
-  '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding', '/shops'];
+  '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding', '/shops', '/progress'];
 const CLIENT_PREFIXES = ['/me', '/helper', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/', '/shop/'];
 function RouteFallback({ client = false }) {
   const { pathname } = useLocation();
@@ -360,11 +361,11 @@ function MarketingRedirect({ tab }) {
   return <Navigate to={`/marketing?${p.toString()}`} replace/>;
 }
 
-// /goals?task=X → /dashboard?task=X#goals (the Goals & Tasks block lives on
-// the dashboard; CommandPalette task hits carry ?task= so keep the query).
+// /goals?task=X → /progress?task=X#goals (the Goals & Tasks block lives on
+// the Progress page; CommandPalette task hits carry ?task= so keep the query).
 function GoalsRedirect() {
   const q = window.location.search || '';
-  return <Navigate to={`/dashboard${q}#goals`} replace/>;
+  return <Navigate to={`/progress${q}#goals`} replace/>;
 }
 
 // Client portal: /me/billing (saved cards, memberships) and /me/orders
@@ -489,6 +490,7 @@ export default function App() {
             /dashboard so the marketing page can own /. */}
         <Route element={<RequireAuth><RoleRouter><AppShell /></RoleRouter></RequireAuth>}>
           <Route path="/dashboard"  element={<Dashboard />} />
+          <Route path="/progress"   element={<Progress />} />
           <Route path="/clients"    element={<Clients />} />
           {/* Projects became Folders inside Clients. Old links keep working. */}
           <Route path="/projects"   element={<ProjectsRedirect />} />

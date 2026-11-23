@@ -9,7 +9,8 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import BookingRequestActions from './BookingRequestActions.jsx';
 
-const SHOW = 5;
+// Three at a time: enough to act on, short enough to finish.
+const SHOW = 3;
 
 export default function AttentionCard({ attention, hideKeys = [], onChanged }) {
   const [all, setAll] = useState(false);

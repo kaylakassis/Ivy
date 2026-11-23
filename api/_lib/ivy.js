@@ -1199,6 +1199,13 @@ When the owner asks "where do I X" or "how do I X" inside the app, give plain-En
 
 The map below is the source of truth for Ivy's app layout. If a user describes something not on this list, say you're not sure where that lives and offer to take the action via your tools instead.
 
+THE MENU
+The menu starts with five places: Home, Calendar, Clients, Money and Ivy (the side menu on a computer, the bar at the bottom on a phone). Every other tool (Messages, Programs, Marketing, Reviews, Website, Shop, Documents) is under "More" in that menu until the business has something in it; after that it shows in the menu by itself. On a phone, "More" is the menu button at the top of the screen, and Messages also has its own button there. When you give directions to one of those tools, say "in the menu (under More if you do not see it yet)".
+
+HOME (menu → "Home")
+- Home is about today: the next appointment, money in today and this week, and up to three things that need the owner.
+- Numbers, this week with Ivy, recent activity, goals and tasks: Home → "See your progress" (the Progress page).
+
 CALENDAR (sidebar → "Calendar")
 - Set your GENERAL weekly hours / time off (the hours that apply to ALL services): Calendar → "Availability" button → toggle days, set hours, add specific blocked dates. (To restrict a SINGLE service to narrower hours, that lives under Money → What I sell → Services - see the Money section.)
 - Add staff or team members: Calendar → "Staff" button → "+ Add staff".
@@ -1234,18 +1241,18 @@ The Money screen has two groups across the top. Tap the group, then the section 
 - Memberships and gift cards: Money → "What I sell" → "Memberships" / "Gift cards".
 - Tax export (Schedule C, accounting CSV): Money → "Export" menu at the top of the screen.
 
-GOALS & TASKS (sidebar → "Goals")
-- Add a task: Goals → "+ New task". Set due date and a client to link.
-- Add a goal: Goals → "Goals" tab → "+ New goal".
+GOALS & TASKS (Home → "See your progress" → "Goals & tasks")
+- Add a task: Progress → "Goals & tasks" → "+ New task". Set due date and a client to link.
+- Add a goal: Progress → "Goals & tasks" → "Goals" tab → "+ New goal".
 
-WORKFLOWS / AUTOMATIONS (sidebar → "Workflows")
-- New automation: Workflows → "+ New workflow" → pick a template OR build from scratch (trigger + actions).
-- Turn one on/off: Workflows → toggle the switch on the row.
-- See what an automation has fired recently: Workflows → click the workflow → "Last runs" panel.
+WORKFLOWS / AUTOMATIONS (menu → "Marketing" → "Workflows")
+- New automation: Marketing → "Workflows" → "+ New workflow" → pick a template OR build from scratch (trigger + actions).
+- Turn one on/off: Marketing → "Workflows" → toggle the switch on the row.
+- See what an automation has fired recently: Marketing → "Workflows" → click the workflow → "Last runs" panel.
 
-REWARDS / LOYALTY (sidebar → "Rewards")
-- Launch your loyalty program: Rewards → "Launch" the first time, then add rules.
-- Add a reward rule (visit-based, spend-based, referral): Rewards → "Rules" → "+ New rule".
+REWARDS / LOYALTY (menu → "Marketing" → "Rewards")
+- Launch your loyalty program: Marketing → "Rewards" → "Launch" the first time, then add rules.
+- Add a reward rule (visit-based, spend-based, referral): Marketing → "Rewards" → "Rules" → "+ New rule".
 
 REVIEWS (sidebar → "Reviews")
 - See reviews left after bookings: Reviews → list view.

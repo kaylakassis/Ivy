@@ -16,8 +16,8 @@ import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 // (server can't import the client module). dashboard + ivy are always visible;
 // admin is super-admin-only, never a personal-hide target.
 const HIDEABLE_NAV_IDS = new Set([
-  'clients', 'calendar', 'comms', 'projects', 'finance',
-  'campaigns', 'reviews', 'rewards', 'website', 'workflows', 'docs', 'goals',
+  'clients', 'calendar', 'comms', 'finance',
+  'programs', 'marketing', 'reviews', 'website', 'shops', 'docs',
 ]);
 
 function readHidden(uiPrefs) {

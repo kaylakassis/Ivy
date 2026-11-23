@@ -11,6 +11,7 @@ import { isNative } from '../lib/platform.js';
 import { permissionState, getSubscription, subscribePush } from '../lib/push.js';
 import { useTutorial } from '../lib/tutorialState.jsx';
 import { useExitAnimation } from './motion/useExitAnimation.js';
+import { usePromptSlot, PROMPT_RANK } from '../lib/promptQueue.js';
 
 // Same key the web card uses, so the two never ask back to back.
 const SNOOZE_KEY = 'ivy_notify_prompt_snooze';
@@ -54,7 +55,10 @@ export default function NativePushPrompt({ active, audience = 'owner' }) {
   }, [active, tutorialOpen]);
 
   // Keep the sheet mounted for its 140ms slide-down after `show` flips off.
-  const exit = useExitAnimation(show);
+  // One prompt at a time: this sheet waits while a billing strip, the
+  // email reminder or a required set-up step is on screen.
+  const mine = usePromptSlot('push', show, PROMPT_RANK.push);
+  const exit = useExitAnimation(show && mine);
   if (!exit.mounted) return null;
 
   const notNow = () => { snooze(SNOOZE_NOT_NOW_MS); setShow(false); };

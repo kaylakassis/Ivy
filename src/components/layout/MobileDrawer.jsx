@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
-import { visibleNavFor } from '../../lib/nav.js';
+import { useNavGroups } from '../../lib/useNavGroups.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 
@@ -20,12 +20,9 @@ export default function MobileDrawer({ onClose, closing = false }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
-  // Match Sidebar's filter (super-admin + the owner's own hidden tabs). The
-  // drawer has no useUserContext, so business-type gating stays at its default.
-  const visibleNav = visibleNavFor({
-    isSuperAdmin: user?.isSuperAdmin,
-    hiddenNav: user?.ui_prefs?.hiddenNav,
-  });
+  // The same menu as the desktop sidebar: five places, any tool the
+  // business uses, then "More".
+  const { main, more, moreOpen, toggleMore } = useNavGroups();
   // Mirror the floating ViewToggle's URL-based logic so the drawer
   // version of the switcher stays in sync without needing /api/me.
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
@@ -86,30 +83,16 @@ export default function MobileDrawer({ onClose, closing = false }) {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px' }}>
-          {visibleNav.map((item) => {
-            const Icon = Icons[item.icon] || Icons.Home;
-            return (
-              <NavLink key={item.id}
-                to={item.to} end={item.to === '/'}
-                data-tour={`nav-${item.id}`}
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              >
-                {({ isActive }) => (
-                  <>
-                    <Icon size={18} sw={isActive ? 1.8 : 1.5}
-                      stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'}/>
-                    <span>{item.label}</span>
-                    {item.accent && !isActive && (
-                      <span style={{
-                        marginLeft: 'auto', fontSize: 10, fontWeight: 700,
-                        color: 'var(--fg)', letterSpacing: '0.06em',
-                      }}>NEW</span>
-                    )}
-                  </>
-                )}
-              </NavLink>
-            );
-          })}
+          {main.map((item) => <DrawerLink key={item.id} item={item}/>)}
+          {more.length > 0 && (
+            <button type="button" className="nav-item" onClick={toggleMore} aria-expanded={moreOpen} data-nav-more
+              style={{ width: '100%', textAlign: 'left', color: 'var(--muted)' }}>
+              <Icons.More size={18} sw={1.5}/>
+              <span>More</span>
+              <Icons.ArrowDown size={13} sw={1.8} style={{ marginLeft: 'auto', transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}/>
+            </button>
+          )}
+          {moreOpen && more.map((item) => <DrawerLink key={item.id} item={item}/>)}
         </nav>
 
         <div style={{ flex: 1 }}/>
@@ -206,5 +189,30 @@ function DrawerViewBtn({ active, onClick, icon, label, sub }) {
         }}>{sub}</span>
       )}
     </button>
+  );
+}
+
+function DrawerLink({ item }) {
+  const Icon = Icons[item.icon] || Icons.Home;
+  return (
+    <NavLink
+      to={item.to} end={item.to === '/'}
+      data-tour={`nav-${item.id}`}
+      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+    >
+      {({ isActive }) => (
+        <>
+          <Icon size={18} sw={isActive ? 1.8 : 1.5}
+            stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'}/>
+          <span>{item.label}</span>
+          {item.accent && item.id !== 'ivy' && !isActive && (
+            <span style={{
+              marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+              color: 'var(--fg)', letterSpacing: '0.06em',
+            }}>NEW</span>
+          )}
+        </>
+      )}
+    </NavLink>
   );
 }

@@ -75,7 +75,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: !!emailVerifiedAt,
       required: true,
       href: '/account',
-      why: 'We use it for password resets and to send booking notifications. Without it, those go nowhere.',
+      why: 'Ivy sends password resets and booking notices to it. Until it is confirmed, those have nowhere to go.',
     },
     {
       id: 'bizName',
@@ -83,7 +83,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: !!(settings.biz_name && settings.biz_name.trim()),
       required: true,
       href: '/calendar',
-      why: 'Shows on your booking page, invoices, and client emails.',
+      why: 'It shows on your booking page, invoices and client emails.',
     },
     {
       id: 'slug',
@@ -91,7 +91,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: !!(settings.slug && settings.slug.trim()),
       required: true,
       href: '/calendar',
-      why: '/book/<your-slug> - the link you share with clients.',
+      why: 'This is the web address you share so clients can book you.',
     },
     {
       id: 'service',
@@ -112,7 +112,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       href: '/calendar?availability=1',
       why: hasAvailabilityWindow && availabilitySkipped
         ? 'Your booking page is using standard weekday hours for now. Set the days and times you really work.'
-        : 'Without availability windows, your booking page shows zero open slots.',
+        : 'Until you set your hours, your booking page has no open times.',
     },
 
     // ── Recommended: ready for real business ──
@@ -122,7 +122,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: stripeConnected,
       required: false,
       href: '/finance',
-      why: "Take card payments + deposits without chasing checks. Works with your Stripe account - or we'll help you create one in a few minutes.",
+      why: 'Take card payments and deposits without chasing checks. Use your own Stripe account, or create one in a few minutes.',
     },
     {
       id: 'website',
@@ -130,7 +130,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: websiteLive,
       required: false,
       href: '/website',
-      why: 'A polished, hosted site you can spin up in minutes - services, pricing, contact, all linked to your booking flow.',
+      why: 'A hosted site with your services, prices and contact details, linked to your booking page.',
     },
     {
       id: 'firstClient',
@@ -138,7 +138,7 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       done: clientCount > 0,
       required: false,
       href: '/clients?add=1',
-      why: 'Either import from a CSV or add a few you already work with - you choose whether to send portal invites.',
+      why: 'Import a list or add a few people you already work with. You choose whether they get an invite.',
     },
     {
       id: 'firstBooking',

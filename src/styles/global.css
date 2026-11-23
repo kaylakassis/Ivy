@@ -1230,6 +1230,9 @@ html.native body.has-mobile-nav .app-root.client-portal > div {
 /* Dashboard (1.0.6): Today + Needs your attention side by side on wide
    screens, stacked on phones; key numbers 2-up on phones, 5-up on desktop;
    quick actions as a 4-up grid that never wraps oddly at 390px. */
+@media (max-width: 720px) {
+  .ask-ivy-starters { display: none !important; }
+}
 .dash-top {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

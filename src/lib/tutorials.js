@@ -21,28 +21,24 @@
 
 export const TUTORIALS = {
   dashboard: {
-    title: 'Your Dashboard',
-    intro: 'The home base. Every metric that matters at a glance - plus shortcuts to whatever needs your attention right now.',
+    title: 'Home',
+    intro: 'Home is about today: who you are seeing, what came in, and the few things that need you.',
     steps: [
       {
-        title: 'Read the room in 5 seconds',
-        body: "The header band shows the four numbers you check most: revenue this month, active clients, booked sessions, and outstanding invoices. They update in real time as the day unfolds.",
+        title: 'Today',
+        body: "Your next appointment sits at the top with the buttons you need for it, and the money that came in today and this week is right beside it.",
       },
       {
-        title: "Today's focus",
-        body: "Your appointments for the day are pinned right under the header - name, time, service, and any notes. Tap one to jump straight into that booking.",
+        title: 'Needs your attention',
+        body: "Ivy keeps a short list of what is waiting on you: a message to answer, an invoice to chase, a booking to approve. Each row has one button that opens the exact place to deal with it.",
       },
       {
-        title: 'Quiet clients alert',
-        body: "Anyone you haven't messaged in 3+ weeks shows up here as a soft nudge. Tap the row to start a conversation before they go cold.",
+        title: 'Ask Ivy',
+        body: 'Type what you want to do in the box at the top, in your own words. Ivy does it with your approval, or shows you where it is.',
       },
       {
-        title: 'Your shortcut row',
-        body: "The big tiles below today's appointments are one-tap shortcuts to the actions you'll do most: add a client, send an invoice, drop a booking on the calendar, kick off a doc to sign.",
-      },
-      {
-        title: 'Ivy is always one tap away',
-        body: 'Tap the "Ivy" bubble in the bottom-right of any page to ask your AI assistant anything - from "how should I price my new service?" to "draft a check-in to my 3 quietest clients."',
+        title: 'Progress',
+        body: 'Your numbers, this week with Ivy, and your goals and tasks are one tap away under "See your progress".',
       },
     ],
   },

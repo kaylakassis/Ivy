@@ -58,15 +58,15 @@ async function run() {
 
     console.log('\n[2] PATCH stores only valid hideable ids');
     res = mkRes();
-    await navPrefs(req(uid, 'PATCH', { hiddenNav: ['workflows', 'reviews', 'dashboard', 'admin', 'bogus'] }), res);
+    await navPrefs(req(uid, 'PATCH', { hiddenNav: ['marketing', 'reviews', 'dashboard', 'admin', 'bogus'] }), res);
     assert(res.statusCode === 200, 'PATCH ok');
-    assert(JSON.stringify([...res.body.hiddenNav].sort()) === JSON.stringify(['reviews', 'workflows']),
-      'dashboard/admin/bogus dropped; workflows+reviews kept');
+    assert(JSON.stringify([...res.body.hiddenNav].sort()) === JSON.stringify(['marketing', 'reviews']),
+      'dashboard/admin/bogus dropped; marketing+reviews kept');
 
     console.log('\n[3] GET reflects the write (cache busted)');
     res = mkRes();
     await navPrefs(req(uid, 'GET'), res);
-    assert(JSON.stringify([...res.body.hiddenNav].sort()) === JSON.stringify(['reviews', 'workflows']), 'persisted');
+    assert(JSON.stringify([...res.body.hiddenNav].sort()) === JSON.stringify(['marketing', 'reviews']), 'persisted');
 
     console.log('\n[4] second PATCH replaces');
     res = mkRes();
@@ -76,14 +76,14 @@ async function run() {
     console.log('\n[5] merges into ui_prefs without clobbering other keys');
     await sql`UPDATE users SET ui_prefs = jsonb_set(ui_prefs, '{foo}', '"bar"') WHERE id = ${uid}`;
     res = mkRes();
-    await navPrefs(req(uid, 'PATCH', { hiddenNav: ['goals'] }), res);
+    await navPrefs(req(uid, 'PATCH', { hiddenNav: ['docs'] }), res);
     const prefs = (await sql`SELECT ui_prefs FROM users WHERE id = ${uid}`).rows[0].ui_prefs;
     assert(prefs.foo === 'bar', 'unrelated ui_prefs key preserved');
-    assert(JSON.stringify(prefs.hiddenNav) === JSON.stringify(['goals']), 'hiddenNav updated');
+    assert(JSON.stringify(prefs.hiddenNav) === JSON.stringify(['docs']), 'hiddenNav updated');
 
     console.log('\n[6] non-array hiddenNav → 400');
     res = mkRes();
-    await navPrefs(req(uid, 'PATCH', { hiddenNav: 'workflows' }), res);
+    await navPrefs(req(uid, 'PATCH', { hiddenNav: 'marketing' }), res);
     assert(res.statusCode === 400, 'rejects a non-array');
 
     await sql`DELETE FROM users WHERE id = ${uid}`;

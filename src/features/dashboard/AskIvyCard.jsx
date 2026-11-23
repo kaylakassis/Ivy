@@ -51,7 +51,8 @@ export default function AskIvyCard() {
           Ask Ivy
         </button>
       </form>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      {/* Phones show just the box (the Ivy tab is on the bar below). */}
+      <div className="ask-ivy-starters" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         {ASK_IVY_STARTERS.map((s) => (
           <button key={s.label} type="button" onClick={() => ask(s.prompt)}
             style={{

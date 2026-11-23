@@ -6,9 +6,13 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
-export default function SampleDataCard({ empty, onChanged }) {
+// onShowChange (optional) tells Home whether this card has anything to
+// show, so Home can keep to one prompt at a time.
+export default function SampleDataCard({ empty, onChanged, onShowChange }) {
   const [exists, setExists] = useState(null); // null=loading
   const [busy, setBusy] = useState(false);
+  const showing = exists === true || (exists === false && !!empty);
+  useEffect(() => { onShowChange?.(showing); return () => onShowChange?.(false); }, [showing, onShowChange]);
 
   useEffect(() => {
     let live = true;

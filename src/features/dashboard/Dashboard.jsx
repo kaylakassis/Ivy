@@ -1,24 +1,22 @@
-// The owner's home (1.0.6 redesign). Owner-first order:
+// The owner's home. It does one job: today.
 //   1. Greeting + a one-line summary of the day + quick actions
 //      (New booking, New client, New invoice), then the Ask Ivy box.
-//   2. Today (next appointment with Message / Start / Complete, money in
-//      today and this week) beside "Needs your attention" (the
-//      accountability partner's list, each row one tap from the fix).
-//   3. One setup card (required steps first, plus "bring your clients
-//      over" and sample data), which disappears when setup is done.
-//   4. Key numbers with honest comparisons.
-//   5. At most one promotional card (switching, 2-step, an automation Ivy
-//      noticed, notifications, invite a friend), each still dismissible.
-//   6. This week with Ivy, recent activity, goals and tasks.
+//   2. At most ONE prompt (the next set-up step, switching, 2-step,
+//      an automation Ivy noticed, notifications, invite a friend). It
+//      also waits its turn behind the billing strip and the email
+//      reminder at the top of the screen (src/lib/promptQueue.js).
+//   3. Today (next appointment with Message / Start / Complete, money in
+//      today and this week) beside "Needs your attention" (up to three
+//      things, each one tap from the fix).
+//   4. A link to Progress, where the numbers, this week with Ivy, recent
+//      activity and goals and tasks now live (Progress.jsx).
 // One API call (/api/dashboard) feeds everything above except the setup
 // status; skeletons hold the layout while it loads.
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { readCache, writeCache } from '../../lib/deviceCache.js';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SkelBlock } from '../../components/Skeleton.jsx';
-import EmptyNote from '../../components/EmptyNote.jsx';
-import { GoalsAndTasks } from '../goals/Goals.jsx';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
@@ -30,14 +28,13 @@ import SampleDataCard from './SampleDataCard.jsx';
 import SwitchingCard, { dismissed as switchDismissed } from './SwitchingCard.jsx';
 import WorkflowSuggestionCard from './WorkflowSuggestionCard.jsx';
 import { FirstWinReadyCard, FirstWinMoment } from './FirstWinCards.jsx';
-import ImportClientsModal from '../clients/ImportClientsModal.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 import TodayCard, { pickNext } from './TodayCard.jsx';
 import AttentionCard from './AttentionCard.jsx';
-import KeyNumbers from './KeyNumbers.jsx';
 import AskIvyCard from './AskIvyCard.jsx';
-import { fmtMoney, fmtTime } from './format.js';
+import { fmtTime } from './format.js';
 import { FLAGS } from '../../lib/featureFlags.js';
+import { usePromptSlot, PROMPT_RANK } from '../../lib/promptQueue.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
 import { checkPartnerRatingWin } from '../../lib/ratingPrompt.js';
 import { isNative } from '../../lib/platform.js';
@@ -87,58 +84,18 @@ function useSetupStatus() {
   return data;
 }
 
-function ChecklistRow({ item }) {
-  return (
-    <Link to={item.href} style={{
-      display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', borderRadius: 8,
-      background: 'var(--surface)', border: '1px solid var(--border-strong)', textDecoration: 'none', color: 'inherit',
-    }}>
-      <span style={{
-        width: 18, height: 18, borderRadius: 99, flexShrink: 0, marginTop: 1,
-        background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
-      }}/>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 550 }}>{item.label}</div>
-        {item.why && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>{item.why}</div>}
-      </div>
-      <Icons.Arrow size={12} stroke="var(--muted)" sw={1.8} style={{ alignSelf: 'center', flexShrink: 0 }}/>
-    </Link>
-  );
-}
-
-function ActionRow({ icon, label, why, button, onClick, busy }) {
-  const Icon = Icons[icon] || Icons.Spark;
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
-      background: 'var(--surface)', border: '1px solid var(--border-strong)', flexWrap: 'wrap',
-    }}>
-      <span style={{ width: 18, display: 'inline-flex', justifyContent: 'center', color: 'var(--accent)' }}><Icon size={15}/></span>
-      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 550 }}>{label}</div>
-        {why && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>{why}</div>}
-      </div>
-      <button type="button" className="btn btn-outline" disabled={busy} onClick={onClick} style={{ padding: '6px 11px', fontSize: 12.5 }}>
-        {button}
-      </button>
-    </div>
-  );
-}
-
-// One card for everything "getting set up": the required steps (or, once
-// those are done, the recommended ones), bringing clients over from
-// another app, and trying the app with sample data.
-function SetupCard({ status, switchPrompt, offerSample, onHide, onChanged }) {
-  const [open, setOpen] = useState(true);
-  const [importOpen, setImportOpen] = useState(false);
+// Set-up, one step at a time: the next thing to do, why it matters, and
+// one button that goes there. First the steps the booking page needs, then
+// (one by one) the optional ones. No list to read through.
+function SetupCard({ status, offerSample, onHide, onChanged }) {
   const [sampleBusy, setSampleBusy] = useState(false);
   const required = status.items.filter((i) => i.required);
   const recommended = status.items.filter((i) => !i.required);
   const phase = status.complete ? 'recommended' : 'required';
   const group = phase === 'required' ? required : recommended;
   const done = group.filter((i) => i.done).length;
-  const left = group.filter((i) => !i.done);
-  const next = left[0];
+  const next = group.find((i) => !i.done);
+  if (!next) return null;
   const pct = Math.round((done / Math.max(1, group.length)) * 100);
   const tone = phase === 'required' ? 'var(--accent)' : 'var(--ok)';
   const addSample = async () => {
@@ -147,63 +104,35 @@ function SetupCard({ status, switchPrompt, offerSample, onHide, onChanged }) {
     finally { setSampleBusy(false); }
   };
   return (
-    <section className="card" aria-labelledby="setup-h" style={{
-      padding: 18, borderColor: tone,
+    <section className="card" aria-labelledby="setup-h" data-home-prompt="setup" style={{
+      padding: 16, borderColor: tone,
       background: phase === 'required' ? 'color-mix(in srgb, var(--accent-soft) 45%, var(--surface))' : 'var(--surface)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <span style={{
-          width: 32, height: 32, borderRadius: 9, flexShrink: 0, background: tone,
-          color: phase === 'required' ? 'var(--accent-ink)' : '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}><Icons.Check size={16} sw={2.4}/></span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <h3 id="setup-h" style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-              {phase === 'required' ? 'Finish setting up your business' : "You're ready for bookings. A few extras"}
-            </h3>
-            <span style={{ fontSize: 11, fontWeight: 650, padding: '2px 8px', borderRadius: 99, background: tone, color: phase === 'required' ? 'var(--accent-ink)' : '#fff' }}>
-              {done}/{group.length}
-            </span>
-          </div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>
-            {phase === 'required' ? 'A few quick steps and your booking page can take bookings.' : 'Optional, but each one helps you get paid and found.'}
-            {next && <> Up next: <strong>{next.label.charAt(0).toLowerCase() + next.label.slice(1)}</strong>.</>}
-          </div>
-          <div style={{ height: 6, borderRadius: 99, background: 'var(--border)', overflow: 'hidden', margin: '10px 0 12px' }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: tone, transition: 'width .25s ease' }}/>
-          </div>
-          {open && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {left.map((item) => <ChecklistRow key={item.id} item={item}/>)}
-              {switchPrompt && (
-                <ActionRow icon="Users" label="Switching from another app?" button="Bring them over"
-                  why="Bring your clients and upcoming appointments over in a few minutes. Nobody gets a message unless you say so."
-                  onClick={() => setImportOpen(true)}/>
-              )}
-              {offerSample && (
-                <ActionRow icon="Spark" label="See it with sample data" button={sampleBusy ? 'Adding…' : 'Add sample data'} busy={sampleBusy}
-                  why="One sample client, booking and invoice. Remove it any time." onClick={addSample}/>
-              )}
-            </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            {next && (
-              <Link to={next.href} className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5, textDecoration: 'none' }}>
-                {next.label} <Icons.Arrow size={11} sw={2}/>
-              </Link>
-            )}
-            <button type="button" onClick={() => setOpen((o) => !o)} className="btn btn-ghost" style={{ padding: '7px 10px', fontSize: 12.5, color: 'var(--muted)' }}>
-              {open ? 'Hide steps' : 'Show all steps'}
-            </button>
-            <div style={{ flex: 1 }}/>
-            <button type="button" onClick={onHide} className="btn btn-ghost" style={{ padding: '7px 10px', fontSize: 12.5, color: 'var(--muted)' }}
-              title="Hide for 7 days. It comes back if anything changes.">
-              Hide for now
-            </button>
-          </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--fg-2)', fontWeight: 600 }}>
+        <span>{phase === 'required' ? `Getting set up: step ${done + 1} of ${group.length}` : `You're ready for bookings. Extra ${done + 1} of ${group.length}`}</span>
+        <div aria-hidden style={{ flex: 1, height: 5, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: tone, transition: 'width .25s ease' }}/>
         </div>
       </div>
-      {importOpen && <ImportClientsModal onClose={() => setImportOpen(false)} onComplete={() => onChanged?.()}/>}
+      <h3 id="setup-h" style={{ margin: '10px 0 0', fontSize: 16, fontWeight: 700 }}>{next.label}</h3>
+      {next.why && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>{next.why}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Link to={next.href} className="btn btn-primary" style={{ padding: '8px 16px', fontSize: 13, textDecoration: 'none' }}>
+          Do this now <Icons.Arrow size={11} sw={2}/>
+        </Link>
+        {offerSample && phase === 'required' && (
+          <button type="button" onClick={addSample} disabled={sampleBusy} className="btn btn-ghost"
+            title="One sample client, booking and invoice. Remove it any time."
+            style={{ padding: '8px 10px', fontSize: 12.5, color: 'var(--accent)' }}>
+            {sampleBusy ? 'Adding…' : 'See it with sample data'}
+          </button>
+        )}
+        <div style={{ flex: 1 }}/>
+        <button type="button" onClick={onHide} className="btn btn-ghost" style={{ padding: '8px 10px', fontSize: 12.5, color: 'var(--muted)' }}
+          title="Hide for 7 days. It comes back if anything changes.">
+          Hide for now
+        </button>
+      </div>
     </section>
   );
 }
@@ -288,27 +217,64 @@ function DashboardSkeleton() {
         <SkelBlock height={220}/>
         <SkelBlock height={220}/>
       </div>
-      <div className="dash-numbers">
-        {Array.from({ length: 5 }, (_, i) => <SkelBlock key={i} height={112}/>)}
-      </div>
     </>
   );
 }
 
-// ── one promotional card at a time ─────────────────────────────────────
-function PromoSlot({ data, setupVisible, onChanged }) {
-  const [notifyShowing, setNotifyShowing] = useState(false);
-  const onNotify = useCallback((v) => setNotifyShowing(!!v), []);
-  if (!data) return null;
-  if (data.switchPrompt && !setupVisible && !switchDismissed()) return <SwitchingCard show onImported={onChanged}/>;
-  if (data.twoStepPrompt) return <TwoStepCard show/>;
-  if (data.workflowSuggestion) return <WorkflowSuggestionCard suggestion={data.workflowSuggestion} onChanged={onChanged}/>;
-  return (
-    <>
-      <NotifyPrompt onShowChange={onNotify}/>
-      {!notifyShowing && FLAGS.referrals && <InviteFriendCard/>}
-    </>
-  );
+// ── one prompt at a time ───────────────────────────────────────────────
+// Home shows at most one thing that asks the owner to do something. In
+// order: "your booking page is ready", the next required set-up step,
+// bringing clients over, 2-step verification, an automation Ivy noticed,
+// the next optional set-up step, then the quiet ones (sample data is on,
+// turn on notifications, invite a friend). It also waits behind the
+// billing strip and the email reminder at the top of the screen. Once the
+// owner hides one, nothing else takes its place on this visit.
+function HomePrompt({ data, setup, empty, onChanged }) {
+  const [setupHidden, setSetupHidden] = useState(() => isDismissed());
+  const [quiet, setQuiet] = useState(false);
+  const [tail, setTail] = useState({ sample: false, notify: false, invite: false });
+  const onSample = useCallback((v) => setTail((t) => (t.sample === !!v ? t : { ...t, sample: !!v })), []);
+  const onNotify = useCallback((v) => setTail((t) => (t.notify === !!v ? t : { ...t, notify: !!v })), []);
+  const onInvite = useCallback((v) => setTail((t) => (t.invite === !!v ? t : { ...t, invite: !!v })), []);
+
+  const showReady = !!data?.firstWin?.showReady;
+  const setupOpen = !!setup && Array.isArray(setup.items) && setup.items.length > 0
+    && !setup.fullyComplete && !setupHidden && !showReady;
+  const required = setupOpen && !setup.complete;
+  let pick = 'tail';
+  if (!data || quiet) pick = null;
+  else if (showReady) pick = 'ready';
+  else if (required) pick = 'setup';
+  else if (data.switchPrompt && !switchDismissed()) pick = 'switch';
+  else if (data.twoStepPrompt) pick = 'twoStep';
+  else if (data.workflowSuggestion) pick = 'workflow';
+  else if (setupOpen) pick = 'setup';
+  const wants = pick === 'tail' ? (tail.sample || tail.notify || tail.invite) : !!pick;
+  const mine = usePromptSlot('home', wants, pick === 'ready' || required ? PROMPT_RANK.homeRequired : PROMPT_RANK.home);
+
+  if (!pick) return null;
+  if (pick === 'tail') {
+    // These decide for themselves whether they have anything to say, so
+    // they stay mounted (hidden) while something else has the turn.
+    return (
+      <div hidden={!mine} data-home-prompt="quiet" style={{ display: mine ? 'flex' : 'none', flexDirection: 'column' }}>
+        <SampleDataCard empty={false} onChanged={onChanged} onShowChange={onSample}/>
+        {!tail.sample && <NotifyPrompt onShowChange={onNotify}/>}
+        {!tail.sample && !tail.notify && FLAGS.referrals && <InviteFriendCard onShowChange={onInvite}/>}
+      </div>
+    );
+  }
+  if (!mine) return null;
+  if (pick === 'ready') return <FirstWinReadyCard show onDone={onChanged}/>;
+  if (pick === 'setup') {
+    return (
+      <SetupCard status={setup} offerSample={empty} onChanged={onChanged}
+        onHide={() => { dismissForAWeek(); setSetupHidden(true); setQuiet(true); }}/>
+    );
+  }
+  if (pick === 'switch') return <SwitchingCard show onImported={onChanged}/>;
+  if (pick === 'twoStep') return <TwoStepCard show/>;
+  return <WorkflowSuggestionCard suggestion={data.workflowSuggestion} onChanged={onChanged}/>;
 }
 
 export default function Dashboard() {
@@ -316,9 +282,8 @@ export default function Dashboard() {
   const [loadErr, setLoadErr] = useState(null);
   const [loading, setLoading] = useState(() => !readCache('dashboard'));
   const { ctx } = useUserContext();
-  const businessType = ctx?.owns?.businessType || 'both';
   const setup = useSetupStatus();
-  const [setupHidden, setSetupHidden] = useState(() => isDismissed());
+  const location = useLocation();
 
   // iPhone app with no signal: today's card from the copy saved on the phone.
   const offline = useOffline();
@@ -341,11 +306,6 @@ export default function Dashboard() {
   }, []);
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
   usePullRefresh(loadDashboard);
-  useEffect(() => {
-    if (loading || window.location.hash !== '#goals') return undefined;
-    const t = setTimeout(() => document.getElementById('goals')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
-    return () => clearTimeout(t);
-  }, [loading]);
   useIntervalWhenVisible(loadDashboard, 30000);
   // iPhone app: a week with the accountability partner on and three items
   // cleared is a win worth asking for a rating on (src/lib/ratingPrompt.js).
@@ -368,17 +328,17 @@ export default function Dashboard() {
   }, [data?.streak?.milestone]);
 
   const currency = data?.currency || 'USD';
-  const activity = data?.activity || [];
   // A business with no real clients or bookings yet.
   const empty = !!data && Number(data.metrics?.clients || 0) === 0 && Number(data.metrics?.booked || 0) === 0;
   const showReady = !!data?.firstWin?.showReady;
-  const setupVisible = !!setup && Array.isArray(setup.items) && setup.items.length > 0
-    && !setup.fullyComplete && !setupHidden && !showReady;
-  const setupFirst = setupVisible && !setup.complete;
-  const setupCard = setupVisible && (
-    <SetupCard status={setup} switchPrompt={!!data?.switchPrompt} offerSample={empty}
-      onHide={() => { dismissForAWeek(); setSetupHidden(true); }} onChanged={loadDashboard}/>
-  );
+  // The set-up steps still to do. While any are left, the "finish set-up"
+  // row is left out of "Needs your attention" (the prompt above says it).
+  const setupOpen = !!setup && Array.isArray(setup.items) && setup.items.length > 0 && !setup.fullyComplete && !showReady;
+  const setupFirst = setupOpen && !setup.complete;
+
+  // Goals and tasks moved to Progress. Old links, the iPhone app's
+  // notifications and Ivy's daily message still point at Home's #goals.
+  if (location.hash === '#goals') return <Navigate to={`/progress${location.search || ''}#goals`} replace/>;
 
   if (offlineView) {
     return (
@@ -386,7 +346,6 @@ export default function Dashboard() {
         <HeroBand data={null} offline/>
         <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <OfflineTodayCard snapshot={offlineSnapshot}/>
-          {data?.keyNumbers && <KeyNumbers k={data.keyNumbers} currency={currency} loading={false} businessType={businessType}/>}
         </div>
       </div>
     );
@@ -418,107 +377,31 @@ export default function Dashboard() {
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <AskIvyCard/>
         <FirstWinMoment celebrations={data?.firstWin?.celebrations}/>
-        <FirstWinReadyCard show={showReady} onDone={loadDashboard}/>
-        {setupFirst && setupCard}
+        <HomePrompt data={data} setup={setup} empty={empty} onChanged={loadDashboard}/>
 
         {loading && !data ? <DashboardSkeleton/> : (
-          <>
-            <div className="dash-top">
-              <TodayCard today={data?.today || []} money={data?.money} currency={currency} onChanged={loadDashboard}/>
-              <AttentionCard attention={data?.attention} hideKeys={setupVisible ? ['setup'] : []} onChanged={loadDashboard}/>
-            </div>
-            <KeyNumbers k={data?.keyNumbers} currency={currency} loading={false} businessType={businessType}/>
-          </>
+          <div className="dash-top">
+            <TodayCard today={data?.today || []} money={data?.money} currency={currency} onChanged={loadDashboard}/>
+            <AttentionCard attention={data?.attention} hideKeys={setupOpen || showReady ? ['setup'] : []} onChanged={loadDashboard}/>
+          </div>
         )}
 
-        {!setupFirst && setupCard}
-        <SampleDataCard empty={false} onChanged={loadDashboard}/>
-        <PromoSlot data={data} setupVisible={setupVisible} onChanged={loadDashboard}/>
-
-        {data?.week && <ThisWeekCard week={data.week} currency={currency}/>}
-
-        <div className="card" style={{ padding: 20 }}>
-          <div className="metric-label" style={{ marginBottom: 10 }}>Recent activity</div>
-          {activity.length === 0 ? (
-            <EmptyNote icon="Clock" title="Nothing yet" hint="Payments and bookings will appear here."/>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {activity.slice(0, 6).map((a, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-                  <span aria-hidden style={{ width: 6, height: 6, borderRadius: 99, background: a.kind === 'payment' ? 'var(--ok)' : 'var(--accent)', flexShrink: 0 }}/>
-                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.text}</span>
-                  <span style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>{relTime(a.ts)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div id="goals" style={{ scrollMarginTop: 80 }}>
-          <div className="metric-label" style={{ marginBottom: 12 }}>Goals & tasks</div>
-          <GoalsAndTasks/>
-        </div>
+        <Link to="/progress" className="card" data-home-progress style={{
+          display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', textDecoration: 'none', color: 'inherit',
+        }}>
+          <span style={{ width: 32, height: 32, borderRadius: 9, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-2)', color: 'var(--fg-2)' }}>
+            <Icons.Trending size={16}/>
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>See your progress</span>
+            <span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)', marginTop: 1 }}>Your numbers, this week, goals and tasks</span>
+          </span>
+          <Icons.Arrow size={13} stroke="var(--muted)" sw={1.8}/>
+        </Link>
       </div>
       <SuccessToast text={streakToast} onDone={() => setStreakToast(null)}/>
     </div>
   );
-}
-
-// "This week with Ivy": the last 7 days in the same numbers the Monday
-// recap email carries. Money and new clients now live in Key numbers, so
-// this card keeps what only it says: sessions completed, what Ivy did, and
-// the time that saved.
-function fmtTimeSaved(minutes) {
-  const m = Math.round(Number(minutes || 0));
-  if (m < 90) return `about ${m} ${m === 1 ? 'minute' : 'minutes'}`;
-  const h = Math.round((m / 60) * 10) / 10;
-  return `about ${h} ${h === 1 ? 'hour' : 'hours'}`;
-}
-function ThisWeekCard({ week, currency }) {
-  const rows = Array.isArray(week.ivyRows) ? week.ivyRows : [];
-  const bits = [
-    week.completedBookings > 0 && `${week.completedBookings} ${week.completedBookings === 1 ? 'session' : 'sessions'} completed`,
-    week.bookingsTaken > 0 && `${week.bookingsTaken} new ${week.bookingsTaken === 1 ? 'booking' : 'bookings'}`,
-    week.revenuePaid > 0 && `${fmtMoney(week.revenuePaid, currency)} collected`,
-  ].filter(Boolean);
-  if (!bits.length && !rows.length && !week.ivyTasks) return null;
-  return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-        <span className="metric-label">This week with Ivy</span>
-        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Last 7 days</span>
-      </div>
-      {bits.length > 0 && <div style={{ fontSize: 14, fontWeight: 600, marginBottom: rows.length ? 10 : 0 }}>{bits.join(' · ')}</div>}
-      {rows.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {rows.map((text) => (
-            <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-              <Icons.Check size={13} sw={2.4} stroke="var(--ok)"/>
-              <span style={{ flex: 1, minWidth: 0 }}>{text}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {week.ivyTasks > 0 && (
-        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Time saved: {fmtTimeSaved(week.timeSavedMinutes)}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-            Estimate: {week.minutesPerTask} minutes per task Ivy handled, across {week.ivyTasks} {week.ivyTasks === 1 ? 'task' : 'tasks'} (Ivy actions, automations and reminders).
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function relTime(ts) {
-  const d = Date.now() - new Date(ts).getTime();
-  const mins = Math.round(d / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.round(hrs / 24)}d`;
 }
 
 // "Turn on 2-step verification": shown once the owner has used Ivy for a few

@@ -4,16 +4,16 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { visibleNavFor } from '../../lib/nav.js';
+import { CORE_NAV } from '../../lib/nav.js';
+import { useNavGroups } from '../../lib/useNavGroups.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { isNative } from '../../lib/platform.js';
 
-// The sidebar's sections, complete - Run / Money / Grow / Tools - so the
-// phone shows the same map of the product as the desktop. An item that
-// is also on the tab bar (Calendar, Finance) still appears in its section;
-// only the two pinned, section-less tabs (Home, Ivy) are left out.
-const SECTION_ORDER = ['Run', 'Money', 'Grow', 'Tools'];
+// Two short lists instead of the old Run / Grow / Tools map: what this
+// business uses (plus Progress, which Home links to), then every other tool.
+// The five places on the tab bar are not repeated here.
+const PROGRESS = { id: 'progress', to: '/progress', label: 'Progress', icon: 'Trending' };
 
 function initialsOf(user) {
   const src = user?.name || user?.email || '';
@@ -25,16 +25,13 @@ export default function MorePage() {
   const { user, signOut } = useAuth();
   const { ctx } = useUserContext();
   const navigate = useNavigate();
-  const items = visibleNavFor({
-    isSuperAdmin: user?.isSuperAdmin,
-    businessType: ctx?.owns?.businessType || 'both',
-    hiddenNav: user?.ui_prefs?.hiddenNav,
-  }).filter((i) => i.section || i.superAdminOnly);
-
-  const groups = SECTION_ORDER
-    .map((s) => ({ label: s, items: items.filter((i) => i.section === s) }))
-    .filter((g) => g.items.length);
-  const loose = items.filter((i) => !i.section); // Admin, for super-admins
+  const { main, more } = useNavGroups();
+  const inUse = main.filter((i) => !CORE_NAV.includes(i.id) && !i.superAdminOnly);
+  const groups = [
+    { label: 'Your business', items: [PROGRESS, ...inUse] },
+    { label: 'More tools', items: more },
+  ].filter((g) => g.items.length);
+  const loose = main.filter((i) => i.superAdminOnly); // Admin, for super-admins
 
   const doSignOut = async () => {
     await signOut();

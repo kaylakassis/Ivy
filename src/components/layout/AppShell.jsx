@@ -71,8 +71,10 @@ function AppShellInner() {
   // and blasting the Dashboard tutorial on every Account visit).
   const ACCOUNT = { id: 'account', to: '/account' };
   const MORE = { id: 'more', to: '/more' };
+  const PROGRESS = { id: 'progress', to: '/progress' };
   const current = location.pathname === '/account' ? ACCOUNT
     : location.pathname === '/more' ? MORE
+    : location.pathname === '/progress' ? PROGRESS
     : (NAV.find(n => n.to === location.pathname) || NAV[0]);
   const t = TITLES[current.id] || TITLES.dashboard;
   const native = isNative();

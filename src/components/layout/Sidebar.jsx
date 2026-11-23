@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
-import { visibleNavFor } from '../../lib/nav.js';
+import { useNavGroups } from '../../lib/useNavGroups.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { ViewSwitch } from '../ViewToggle.jsx';
@@ -21,15 +21,10 @@ export default function Sidebar({ variant = 'full' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [bugOpen, setBugOpen]   = useState(false);
   const compact = variant === 'compact';
-  // Super-admin-only + product-only-hidden + the owner's own hidden tabs
-  // (Settings -> Navigation). Composed in one place so every nav surface
-  // agrees. Hidden routes still exist in App.jsx so deep links work.
-  const businessType = ctx?.owns?.businessType || 'both';
-  const visibleNav = visibleNavFor({
-    isSuperAdmin: user?.isSuperAdmin,
-    businessType,
-    hiddenNav: user?.ui_prefs?.hiddenNav,
-  });
+  // Five places to start with, plus any tool the business already uses.
+  // The rest waits under "More" (src/lib/useNavGroups.js). Hidden routes
+  // still exist in App.jsx so deep links work.
+  const { main, more, moreOpen, toggleMore } = useNavGroups();
   // Workspace badge values. Real biz_name when the owner finished
   // onboarding, otherwise a CTA. Either way clicking takes them to
   // /calendar where the name + slug live.
@@ -64,21 +59,15 @@ export default function Sidebar({ variant = 'full' }) {
           display: 'flex', flexDirection: 'column', gap: 4,
           flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
         }}>
-          {visibleNav.map((item) => {
-            const Icon = Icons[item.icon] || Icons.Home;
-            return (
-              <NavLink key={item.id} to={item.to} end={item.to === '/'} title={item.label}
-                data-tour={`nav-${item.id}`}
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                style={{ justifyContent: 'center', padding: 10 }}
-              >
-                {({ isActive }) => (
-                  <Icon size={19} sw={isActive ? 1.9 : 1.6}
-                    stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'}/>
-                )}
-              </NavLink>
-            );
-          })}
+          {main.map((item) => <CompactLink key={item.id} item={item}/>)}
+          {more.length > 0 && (
+            <button type="button" className="nav-item" onClick={toggleMore} title={moreOpen ? 'Show less' : 'More'}
+              aria-expanded={moreOpen} aria-label="More" data-nav-more
+              style={{ justifyContent: 'center', padding: 10 }}>
+              <Icons.More size={19} sw={1.6}/>
+            </button>
+          )}
+          {moreOpen && more.map((item) => <CompactLink key={item.id} item={item}/>)}
         </nav>
 
         <button onClick={doSignOut} title="Sign out"
@@ -168,42 +157,16 @@ export default function Sidebar({ variant = 'full' }) {
         display: 'flex', flexDirection: 'column', gap: 2,
         flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
       }}>
-        {visibleNav.map((item, i) => {
-          const IconComp = Icons[item.icon] || Icons.Home;
-          // Section label the first time a new section appears (NAV is ordered
-          // by section). Purely visual grouping; every route stays reachable.
-          const showHeader = item.section && item.section !== visibleNav[i - 1]?.section;
-          return (
-            <React.Fragment key={item.id}>
-              {showHeader && (
-                <div style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                  textTransform: 'uppercase', color: 'var(--muted)',
-                  padding: '12px 12px 4px',
-                }}>{item.section}</div>
-              )}
-            <NavLink
-              to={item.to}
-              end={item.to === '/'}
-              data-tour={`nav-${item.id}`}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              {({ isActive }) => (
-                <>
-                  <IconComp size={17} sw={isActive ? 1.8 : 1.5} stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'} />
-                  <span>{item.label}</span>
-                  {item.accent && !isActive && (
-                    <span style={{
-                      marginLeft: 'auto', fontSize: 10, fontWeight: 700,
-                      color: 'var(--sidebar-fg, var(--fg))', letterSpacing: '0.06em',
-                    }}>NEW</span>
-                  )}
-                </>
-              )}
-            </NavLink>
-            </React.Fragment>
-          );
-        })}
+        {main.map((item) => <FullLink key={item.id} item={item}/>)}
+        {more.length > 0 && (
+          <button type="button" className="nav-item" onClick={toggleMore} aria-expanded={moreOpen} data-nav-more
+            style={{ width: '100%', textAlign: 'left', color: 'var(--muted)' }}>
+            <Icons.More size={17} sw={1.5}/>
+            <span>More</span>
+            <Icons.ArrowDown size={13} sw={1.8} style={{ marginLeft: 'auto', transform: moreOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}/>
+          </button>
+        )}
+        {moreOpen && more.map((item) => <FullLink key={item.id} item={item}/>)}
       </nav>
 
       <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -296,5 +259,46 @@ export default function Sidebar({ variant = 'full' }) {
       </div>
       {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)}/>}
     </aside>
+  );
+}
+
+function CompactLink({ item }) {
+  const Icon = Icons[item.icon] || Icons.Home;
+  return (
+    <NavLink to={item.to} end={item.to === '/'} title={item.label}
+      data-tour={`nav-${item.id}`}
+      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+      style={{ justifyContent: 'center', padding: 10 }}
+    >
+      {({ isActive }) => (
+        <Icon size={19} sw={isActive ? 1.9 : 1.6}
+          stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'}/>
+      )}
+    </NavLink>
+  );
+}
+
+function FullLink({ item }) {
+  const IconComp = Icons[item.icon] || Icons.Home;
+  return (
+    <NavLink
+      to={item.to}
+      end={item.to === '/'}
+      data-tour={`nav-${item.id}`}
+      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+    >
+      {({ isActive }) => (
+        <>
+          <IconComp size={17} sw={isActive ? 1.8 : 1.5} stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'} />
+          <span>{item.label}</span>
+          {item.accent && item.id !== 'ivy' && !isActive && (
+            <span style={{
+              marginLeft: 'auto', fontSize: 10, fontWeight: 700,
+              color: 'var(--sidebar-fg, var(--fg))', letterSpacing: '0.06em',
+            }}>NEW</span>
+          )}
+        </>
+      )}
+    </NavLink>
   );
 }

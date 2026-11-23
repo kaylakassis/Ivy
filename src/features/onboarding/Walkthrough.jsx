@@ -20,7 +20,6 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
-import { FLAGS } from '../../lib/featureFlags.js';
 
 // Each step:
 //   selector?  - query string. If absent, step renders as a centered card.
@@ -35,7 +34,7 @@ const STEPS = [
   {
     id: 'dashboard',
     title: 'Home',
-    body: "This is your at-a-glance home: revenue, upcoming bookings, who's gone quiet, what needs your attention today. Everything important on one screen.",
+    body: "Home is about today: your next appointment, the money that came in, and the few things that need you. Your numbers and goals are one tap away under \"See your progress\".",
     route: '/dashboard',
     selector: '[data-tour="nav-dashboard"]',
     placement: 'right',
@@ -47,14 +46,6 @@ const STEPS = [
     route: '/calendar',
     selector: '[data-tour="nav-calendar"]',
     placement: 'right',
-  },
-  {
-    id: 'finance-packages',
-    title: 'Sell session packages',
-    body: "Bundle multiple sessions into one upfront purchase - '5-pack of massage', 'monthly retainer'. Sell to a client from their drawer; credits get consumed as they book.",
-    route: '/finance?section=packages',
-    selector: '[data-section="packages"]',
-    placement: 'bottom',
   },
   {
     id: 'calendar-share',
@@ -80,36 +71,16 @@ const STEPS = [
     selector: '[data-tour="nav-finance"]',
     placement: 'right',
   },
+  // One step for everything that is not one of the five main places.
+  // (This used to be four more stops: Documents, Messages, Marketing and
+  // Website. The tour is shorter, and the menu shows them when they are
+  // needed.)
   {
-    id: 'docs',
-    title: 'Documents + intake forms',
-    body: "Build reusable form templates (waivers, intakes), then attach them to a service so they auto-send when that service is booked. Clients sign in their portal - you get the completed PDF.",
-    route: '/documents',
-    selector: '[data-tour="nav-docs"]',
-    placement: 'right',
-  },
-  {
-    id: 'comms',
-    title: 'Messages - chat with clients',
-    body: "Native two-way chat per client. Booking confirmations, intake forms, paid invoices, and cancellations all surface as system notes in the thread, so context never goes missing.",
-    route: '/messages',
-    selector: '[data-tour="nav-comms"]',
-    placement: 'right',
-  },
-  {
-    id: 'marketing',
-    title: 'Marketing - workflows and rewards',
-    body: "Automated follow-ups, review requests, and a rewards program that brings repeat clients back." + (FLAGS.referrals ? ' Referrals live on your Account page.' : ''),
-    route: '/marketing?tab=rewards',
-    selector: '[data-tour="nav-marketing"]',
-    placement: 'right',
-  },
-  {
-    id: 'website',
-    title: 'Your public website',
-    body: "A polished, hosted site you can spin up in minutes - services, pricing, gallery, contact. Linked to your booking flow so visitors can book without leaving.",
-    route: '/website',
-    selector: '[data-tour="nav-website"]',
+    id: 'more',
+    title: 'Everything else is under More',
+    body: "Messages, Programs, Marketing, Reviews, Website, Shop and Documents wait under \"More\" so the menu stays short. When you start using one, it moves into your menu by itself.",
+    route: '/dashboard',
+    selector: '[data-nav-more]',
     placement: 'right',
   },
   // Aha-moment step (the video's #5 theme). Centered card right before

@@ -13,6 +13,7 @@
 //
 // Action buttons share the Paywall's plumbing - checkout for new subs,
 // portal for existing customers.
+import { usePromptSlot, PROMPT_RANK } from '../../lib/promptQueue.js';
 import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
@@ -25,15 +26,16 @@ export default function SubscriptionBanner() {
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
 
-  const sub = ctx?.subscription;
-  if (!ctx?.isOwner || !sub) return null;
-
-  const inTrial    = sub.status === 'trialing';
+  const sub = ctx?.isOwner ? ctx?.subscription : null;
+  const inTrial    = sub?.status === 'trialing';
   const trialEndingSoon = inTrial && sub.daysRemaining != null && sub.daysRemaining <= TRIAL_WARN_DAYS;
-  const pastDue    = sub.status === 'past_due';
-  const suspended  = sub.status === 'suspended';
-  const endingSoon = !!sub.cancelAtPeriodEnd && sub.isActive && sub.daysRemaining != null && sub.daysRemaining <= 7;
-  if (!trialEndingSoon && !pastDue && !suspended && !endingSoon) return null;
+  const pastDue    = sub?.status === 'past_due';
+  const suspended  = sub?.status === 'suspended';
+  const endingSoon = !!sub?.cancelAtPeriodEnd && sub.isActive && sub.daysRemaining != null && sub.daysRemaining <= 7;
+  // Billing comes first: while this strip is up, nothing else asks for
+  // attention (src/lib/promptQueue.js).
+  const mine = usePromptSlot('billing', !!sub && (trialEndingSoon || pastDue || suspended || endingSoon), PROMPT_RANK.billing);
+  if (!mine) return null;
 
   const subscribe = async () => {
     setBusy(true); setErr(null);

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Icons } from './Icons.jsx';
 import { useAuth } from '../lib/auth.jsx';
 import { api } from '../lib/api.js';
+import { usePromptSlot, PROMPT_RANK } from '../lib/promptQueue.js';
 
 export default function VerifyEmailBanner() {
   const { user } = useAuth();
@@ -10,7 +11,10 @@ export default function VerifyEmailBanner() {
   const [sent, setSent] = useState(false);
   const [err,  setErr]  = useState(null);
 
-  if (!user || user.email_verified_at) return null;
+  // Waits its turn behind a billing strip, and goes ahead of the set-up
+  // steps on Home (src/lib/promptQueue.js).
+  const mine = usePromptSlot('verifyEmail', !!user && !user.email_verified_at, PROMPT_RANK.verifyEmail);
+  if (!mine) return null;
 
   const resend = async () => {
     setBusy(true);

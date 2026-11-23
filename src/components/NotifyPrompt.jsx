@@ -26,7 +26,7 @@ function snoozed() {
 export default function NotifyPrompt({ onShowChange } = {}) {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { onShowChange?.(show); }, [show, onShowChange]);
+  useEffect(() => { onShowChange?.(show); return () => onShowChange?.(false); }, [show, onShowChange]);
 
   useEffect(() => {
     let live = true;

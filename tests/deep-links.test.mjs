@@ -22,7 +22,7 @@ console.log('\n[1] deep-link params are read by their target page');
 const reads = [
   ['src/features/messages/Messages.jsx',        /get\('group'\)/,                       '/messages?group= opens the Groups tab'],
   ['src/features/messages/GroupChats.jsx',      /initialId/,                             'GroupChats takes the initial group id'],
-  ['src/App.jsx',                               /\/dashboard\$\{q\}#goals/,              '/goals redirect carries its query to /dashboard#goals'],
+  ['src/App.jsx',                               /\/progress\$\{q\}#goals/,               '/goals redirect carries its query to /progress#goals'],
   ['src/features/goals/Goals.jsx',              /get\('task'\)/,                         '/goals?task= highlights the task row'],
   ['src/features/finance/Finance.jsx',          /get\('filter'\)/,                       '/finance?filter= sets the invoice status filter'],
   ['src/features/account/AccountPage.jsx',      /id="billing"/,                          'Billing card has an anchor'],
@@ -57,7 +57,7 @@ const absent = [
 for (const [file, re, label] of absent) assert(!re.test(codeOnly(read(file))), `${label} (${file})`);
 const present = [
   ['src/features/marketing/MarketingShell.jsx', /<a href="\/blog"/,                         'MarketingShell links /blog with a plain anchor'],
-  ['src/features/onboarding/Walkthrough.jsx',   /nav-marketing/,                             'walkthrough targets the Marketing nav item'],
+  ['src/features/onboarding/Walkthrough.jsx',   /data-nav-more/,                             'walkthrough points at "More" for everything outside the five main places'],
   ['src/lib/tutorials.js',                      /to: '\/finance\?section=services'/,         'calendar tutorial CTA opens Finance → Services'],
   ['api/cron/setup-nudge.js',                   /href: '\/finance\?section=services'/,       'setup nudge "add your first service" opens Finance → Services'],
   ['api/_lib/subscriptionNotify.js',            /\/account#referrals/,                       'referral links point at /account#referrals'],

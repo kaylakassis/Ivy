@@ -10,10 +10,9 @@
 // to a candle-maker / retailer. Sidebar.jsx pulls business_type from
 // useUserContext() and drops these. The route still exists in App.jsx
 // so deep links + manual navigation still work.
-// `section` groups items under a small label in the sidebar so the 13-item
-// list reads as a few calm sections instead of a flat wall. Purely visual —
-// every route stays reachable and deep-linkable. Items without a section
-// (Dashboard, Ivy, Admin) render pinned above the groups.
+// `section` is the group a tool is listed under on the iPhone app's More
+// screen. The menu itself is not grouped: it shows the five core places
+// (CORE_NAV), then any tool the business uses, then "More" (splitNav).
 export const NAV = [
   { id: 'dashboard', to: '/dashboard',  label: 'Home',           icon: 'Home' },
   { id: 'ivy',       to: '/ivy',        label: 'Ivy',        icon: 'Spark', accent: true },
@@ -64,8 +63,35 @@ export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hid
   });
 }
 
+// The menu starts with five places: today, the calendar, their people,
+// getting paid, and Ivy. The same five, in the same order, as the bar at the
+// bottom of the phone.
+export const CORE_NAV = ['dashboard', 'calendar', 'clients', 'finance', 'ivy'];
+
+// Splits what an owner may see into the menu itself and what waits under
+// "More". A tool moves up into the menu by itself once the business has
+// something in it (`usedNav`, worked out by the server from the owner's own
+// records: api/_lib/navUsage.js). When that is not known yet, the tool stays
+// under "More", where it is still one tap away. Admin is the operator's and
+// is always in the menu for them.
+export function splitNav(items, usedNav) {
+  const used = new Set(Array.isArray(usedNav) ? usedNav : []);
+  const main = [];
+  for (const id of CORE_NAV) {
+    const hit = items.find((n) => n.id === id);
+    if (hit) main.push(hit);
+  }
+  const more = [];
+  for (const n of items) {
+    if (CORE_NAV.includes(n.id)) continue;
+    if (n.superAdminOnly || used.has(n.id)) main.push(n); else more.push(n);
+  }
+  return { main, more };
+}
+
 export const TITLES = {
-  dashboard: { title: 'Home',          subtitle: 'Today, what needs you, goals and tasks' },
+  dashboard: { title: 'Home',          subtitle: 'Today and what needs you' },
+  progress:  { title: 'Progress',      subtitle: 'Your numbers, this week, goals and tasks' },
   clients:   { title: 'Clients',       subtitle: 'Your people' },
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },

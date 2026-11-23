@@ -8,7 +8,8 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
-export default function InviteFriendCard() {
+// onShowChange (optional) tells Home whether the card is showing.
+export default function InviteFriendCard({ onShowChange } = {}) {
   const [state, setState] = useState(undefined); // undefined=loading · null=unavailable · {code,link}
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -20,8 +21,11 @@ export default function InviteFriendCard() {
       .catch(() => { if (live) setState(null); }); // lapsed / not eligible → hide the card
     return () => { live = false; };
   }, []);
+  const showing = !!state;
+  useEffect(() => { onShowChange?.(showing); return () => onShowChange?.(false); }, [showing, onShowChange]);
 
   if (state === undefined || state === null) return null;
+
 
   const copy = async () => {
     if (!state.link) return;

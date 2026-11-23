@@ -9,6 +9,7 @@ import { userContext, ids } from '../_lib/clientPortal.js';
 import { missingRequiredAnswers } from '../_lib/onboardingAnswers.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { hasPendingCompInvite } from '../_lib/signupPerks.js';
+import { usedNavFor } from '../_lib/navUsage.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -48,15 +49,20 @@ export default async function handler(req, res) {
       ? await hasPendingCompInvite(user)
       : false;
 
+    // Which of the "More" tools this owner has something in, so the menu
+    // can start with five places and grow as the business does. Additive
+    // field: older app builds ignore it.
+    const usedNav = ctx.owns?.id ? await usedNavFor(ctx.owns.id) : [];
+
     if (!ctx.isClient) {
       // Owner-only - return context with empty summary.
-      return ok(res, { ...ctx, onboardingAnswersMissing, pendingCompInvite, summary: emptySummary() });
+      return ok(res, { ...ctx, usedNav, onboardingAnswersMissing, pendingCompInvite, summary: emptySummary() });
     }
 
     const myIds = ids(ctx.memberships);
     // Use ARRAY[$1...] style via sql.query so we can pass an array param.
     const summary = await loadSummary(myIds);
-    return ok(res, { ...ctx, onboardingAnswersMissing, pendingCompInvite, summary });
+    return ok(res, { ...ctx, usedNav, onboardingAnswersMissing, pendingCompInvite, summary });
   } catch (err) {
     return serverError(res, err);
   }
