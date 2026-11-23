@@ -13,6 +13,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { findOrCreateCustomer, createMembershipCheckoutSession } from '../_lib/stripe.js';
+import { buyerIsSignedInAs } from '../_lib/checkoutIdentity.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
@@ -90,7 +91,16 @@ export default async function handler(req, res) {
       `;
       clientId = ins.rows[0].id;
     }
-    if (!stripeCustomerId) {
+    // The client's Stripe customer rides along only when the request
+    // proves it comes from that person's own signed-in account
+    // (api/_lib/checkoutIdentity.js). A typed email proves nothing, and a
+    // checkout opened for an existing customer shows their saved card,
+    // name and address. Everyone else starts clean with the email filled
+    // in; the purchase is tied to the client by the client id in the
+    // checkout's metadata.
+    const trusted = await buyerIsSignedInAs(req, buyerEmail);
+    if (!trusted) stripeCustomerId = null;
+    if (trusted && !stripeCustomerId) {
       const cust = await findOrCreateCustomer({
         secretKey: creds.secretKey,
 
@@ -116,6 +126,7 @@ export default async function handler(req, res) {
       priceId: tier.stripe_price_id,
       amountCents: Number(tier.price_cents) || null,
       customerId: stripeCustomerId,
+      customerEmail: buyerEmail,
       workspaceId,
       membershipId: tier.id,
       clientId,

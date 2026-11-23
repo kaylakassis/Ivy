@@ -177,6 +177,17 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
          WHERE id = ${clientIdFromMd} AND workspace_id = ${workspaceId}
       `).rows[0] : null;
       if (tier && client) {
+        // Remember the Stripe customer this subscription lives on, when the
+        // client has none yet. A public checkout no longer attaches one up
+        // front (api/_lib/checkoutIdentity.js), so Stripe makes it at
+        // payment and this is the first event that names it. Never
+        // overwrites one the client already has.
+        if (customerId) {
+          await sql`
+            UPDATE clients SET stripe_customer_id = ${customerId}
+             WHERE id = ${client.id} AND workspace_id = ${workspaceId} AND stripe_customer_id IS NULL
+          `;
+        }
         await sql`
           INSERT INTO client_memberships (
             workspace_id, client_id, membership_id,

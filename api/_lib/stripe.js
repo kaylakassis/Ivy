@@ -266,6 +266,11 @@ export async function createCheckoutSession({
   // reusable payment method when the session has a customer.
   customerId = null,
   saveCard = false,
+  // Keep the card, but on a brand-new Stripe customer made by this
+  // checkout, never an existing one. For a visitor whose identity is not
+  // proven (api/_lib/checkoutIdentity.js): an existing customer would put
+  // that person's saved card and address on the page.
+  newCustomer = false,
 }) {
   const body = {
     mode: 'payment',
@@ -281,8 +286,11 @@ export async function createCheckoutSession({
   };
   // Stripe rejects customer + customer_email together.
   if (customerId) body.customer = customerId;
-  else if (customerEmail) body.customer_email = customerEmail;
-  if (saveCard && customerId) {
+  else {
+    if (customerEmail) body.customer_email = customerEmail;
+    if (newCustomer) body.customer_creation = 'always';
+  }
+  if (saveCard && (customerId || newCustomer)) {
     body['payment_intent_data[setup_future_usage]'] = 'off_session';
     body['metadata[save_card]'] = '1';
     body['metadata[client_id]'] = invoice.client_id || undefined;
@@ -560,13 +568,17 @@ export async function createSetupIntent({ secretKey, stripeAccount, customerId, 
 
 export async function createSetupCheckoutSession({
   secretKey, stripeAccount, customerId, workspaceId, clientId, successUrl, cancelUrl,
+  // No customerId: the page is for a visitor whose identity is not proven.
+  // Stripe makes a new customer for the card instead of adding it to (and
+  // showing the page for) an existing one.
+  customerEmail = null,
 }) {
-  if (!customerId) throw new Error('customerId is required');
+  if (!customerId && !customerEmail) throw new Error('customerId or customerEmail is required');
   const session = await stripeFetch('/checkout/sessions', {
     method: 'POST', secretKey, stripeAccount,
     body: {
       mode: 'setup',
-      customer: customerId,
+      ...(customerId ? { customer: customerId } : { customer_email: customerEmail, customer_creation: 'always' }),
       success_url: successUrl,
       cancel_url: cancelUrl,
       'payment_method_types[0]': 'card',

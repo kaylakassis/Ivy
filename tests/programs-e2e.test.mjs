@@ -261,13 +261,14 @@ async function run() {
   calls.length = 0;
   r = await call(programCheckout, req({ method: 'POST', body: { programId: oneTime.id, ...buyer } }));
   assert(r.statusCode === 200 && /checkout\.stripe\.com/.test(r.body.url), `checkout returns a Stripe URL (got ${r.statusCode} ${JSON.stringify(r.body)})`);
-  const cust = lastStripe(/POST .*\/v1\/customers$/);
-  assert(!!cust && cust.body.email === buyer.email && cust.headers['Stripe-Account'] === A.acct, 'Stripe customer created on the connected account');
+  // A typed email is not proof of who is paying: no Stripe customer is
+  // looked up, made or attached for a visitor (api/_lib/checkoutIdentity.js).
+  assert(!lastStripe(/\/v1\/customers/), 'no Stripe customer is looked up or made for a visitor who is not signed in');
   const cs = lastStripe(/POST .*\/v1\/checkout\/sessions$/);
   assert(!!cs && cs.headers['Stripe-Account'] === A.acct && cs.headers.Authorization === 'Bearer sk_test_programs', 'checkout session minted as a direct charge on the connected account (platform key + Stripe-Account)');
   assert(cs.body.mode === 'payment' && cs.body['line_items[0][price_data][unit_amount]'] === '4900' && cs.body['line_items[0][price_data][currency]'] === 'usd', 'mode=payment, amount 4900 usd');
   const client = (await sql`SELECT * FROM clients WHERE workspace_id = ${A.wid} AND email = ${buyer.email}`).rows[0];
-  assert(!!client && client.stage === 'lead' && client.source === 'program' && String(client.stripe_customer_id).startsWith('cus_'), 'client row created as a program lead with the Stripe customer id');
+  assert(!!client && client.stage === 'lead' && client.source === 'program' && client.stripe_customer_id === null, 'client row created as a program lead (Stripe makes the customer at payment, not before)');
   assert(cs.body['metadata[purpose]'] === 'program' && cs.body['metadata[program_id]'] === oneTime.id && cs.body['metadata[client_id]'] === client.id && cs.body['metadata[workspace_id]'] === A.wid, 'session metadata: purpose/program_id/client_id/workspace_id');
   assert(cs.body['payment_intent_data[metadata][purpose]'] === 'program' && cs.body['payment_intent_data[metadata][program_id]'] === oneTime.id, 'payment intent metadata mirrors the session');
   assert(cs.body.success_url.includes(`/p/${oneTime.id}?purchased=1`) && cs.body.cancel_url.includes('cancelled=1'), 'success/cancel URLs return to the sales page');

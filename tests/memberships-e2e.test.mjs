@@ -210,7 +210,13 @@ async function run() {
   assert((await sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${A.wid} AND LOWER(email) = ${buyer.email}`).rows[0].n === 1, 'existing client matched case-insensitively (no duplicate)');
   const cs = lastStripe(/POST .*\/v1\/checkout\/sessions$/);
   const client = (await sql`SELECT * FROM clients WHERE id = ${existing}`).rows[0];
-  assert(cs.body.mode === 'subscription' && cs.body['line_items[0][price]'] && cs.body.customer === client.stripe_customer_id && cs.headers['Stripe-Account'] === A.acct, 'subscription-mode session for the tier price on the connected account');
+  assert(cs.body.mode === 'subscription' && cs.body['line_items[0][price]'] && cs.headers['Stripe-Account'] === A.acct, 'subscription-mode session for the tier price on the connected account');
+  // A typed email is not proof of who is paying: the checkout starts clean,
+  // with no existing Stripe customer attached (api/_lib/checkoutIdentity.js).
+  assert(!('customer' in cs.body) && cs.body.customer_email === buyer.email && client.stripe_customer_id === null && !lastStripe(/\/v1\/customers/),
+    'a visitor who is not signed in gets a clean checkout: the email filled in, no Stripe customer looked up or attached');
+  // Stripe makes the customer when the checkout completes; every later event names it.
+  const newCus = `cus_checkout_${STAMP}`;
   assert(cs.body['metadata[purpose]'] === 'membership' && cs.body['metadata[membership_id]'] === monthly.id && cs.body['metadata[client_id]'] === existing && cs.body['metadata[workspace_id]'] === A.wid, 'session metadata');
   assert(cs.body['subscription_data[metadata][purpose]'] === 'membership' && cs.body['subscription_data[metadata][client_id]'] === existing && cs.body['subscription_data[metadata][workspace_id]'] === A.wid, 'subscription metadata for the webhook');
   assert(cs.body.success_url.includes(`/book/${A.slug}?membership=joined`), 'returns to the booking page');
@@ -221,13 +227,13 @@ async function run() {
   const subId = `sub_me_${STAMP}`;
   const md = { workspace_id: A.wid, membership_id: monthly.id, client_id: existing, purpose: 'membership' };
   const cpe1 = Math.floor(Date.now() / 1000) + 30 * 86400;
-  r = await fire('customer.subscription.created', subObj(subId, priceId, { metadata: md, current_period_end: cpe1, customer: client.stripe_customer_id }), A.acct);
+  r = await fire('customer.subscription.created', subObj(subId, priceId, { metadata: md, current_period_end: cpe1, customer: newCus }), A.acct);
   assert(r.statusCode === 200 && r.body.result === 'created', `subscription.created (before anything else) materialises the membership (got ${JSON.stringify(r.body)})`);
   let cm = await cmRow(subId);
   assert(cm && cm.status === 'active' && cm.client_id === existing && cm.membership_id === monthly.id && cm.membership_name === 'Monthly Member' && Number(cm.price_cents) === 4900, 'active row with the tier snapshot');
   r = await fire('customer.subscription.created', subObj(subId, priceId, { metadata: md, current_period_end: cpe1 }), A.acct);
   assert((await sql`SELECT COUNT(*)::int n FROM client_memberships WHERE stripe_subscription_id = ${subId}`).rows[0].n === 1, 'duplicate created event keeps one row');
-  r = await fire('checkout.session.completed', { id: 'cs_sub', mode: 'subscription', payment_status: 'paid', subscription: subId, metadata: md }, A.acct);
+  r = await fire('checkout.session.completed', { id: 'cs_sub', mode: 'subscription', payment_status: 'paid', subscription: subId, customer: newCus, metadata: md }, A.acct);
   assert(r.statusCode === 200 && (await sql`SELECT COUNT(*)::int n FROM client_memberships WHERE client_id = ${existing}`).rows[0].n === 1, 'late checkout.session.completed does not duplicate');
 
   r = await call(membersList, req({ cookie: A.cookie }));
@@ -326,7 +332,8 @@ async function run() {
   assert(r.statusCode === 400 && /cancelled/.test(r.body.error), 'cannot change the plan of a cancelled membership');
 
   // Dashboard-created subscription: no Ivy metadata, matched by customer + price.
-  r = await fire('customer.subscription.created', subObj(`sub_dash_${STAMP}`, annualPrice, { customer: client.stripe_customer_id }), A.acct);
+  assert((await sql`SELECT stripe_customer_id FROM clients WHERE id = ${existing}`).rows[0].stripe_customer_id === newCus, 'the customer Stripe made at checkout is remembered on the client');
+  r = await fire('customer.subscription.created', subObj(`sub_dash_${STAMP}`, annualPrice, { customer: newCus }), A.acct);
   const dash = await cmRow(`sub_dash_${STAMP}`);
   assert(r.body.result === 'created' && dash?.client_id === existing && dash.membership_id === annual.id, 'Dashboard sub (no metadata) resolved via customer + price');
   // ... and for a customer Ivy has never seen, the client is provisioned from Stripe.

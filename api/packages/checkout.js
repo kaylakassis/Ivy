@@ -14,6 +14,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { stripeFetch, findOrCreateCustomer } from '../_lib/stripe.js';
+import { buyerIsSignedInAs } from '../_lib/checkoutIdentity.js';
 import { appUrl } from '../_lib/tokens.js';
 import { fetchFinanceSettings } from '../_lib/finance.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
@@ -94,7 +95,11 @@ export default async function handler(req, res) {
       `;
       clientId = ins.rows[0].id;
     }
-    if (!stripeCustomerId) {
+    // Existing Stripe customer only for the client's own signed-in account;
+    // a typed email gets a clean checkout (api/_lib/checkoutIdentity.js).
+    const trusted = await buyerIsSignedInAs(req, buyerEmail);
+    if (!trusted) stripeCustomerId = null;
+    if (trusted && !stripeCustomerId) {
       const cust = await findOrCreateCustomer({
         secretKey: creds.secretKey,
         stripeAccount: creds.stripeAccount,
@@ -126,7 +131,7 @@ export default async function handler(req, res) {
         mode: 'payment',
         success_url: `${base}/book/${encodeURIComponent(slug)}?package=purchased`,
         cancel_url:  `${base}/book/${encodeURIComponent(slug)}?package=cancel`,
-        customer: stripeCustomerId,
+        ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: buyerEmail }),
         'line_items[0][price_data][currency]': currency,
         'line_items[0][price_data][unit_amount]': unitAmount,
         'line_items[0][price_data][product_data][name]': p.name,
