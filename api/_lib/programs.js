@@ -1,6 +1,6 @@
 // Programs: shared helpers for the owner API, the client portal and checkout.
 import { sql } from './db.js';
-import { withResolvedClientId, resolveMergedClientId } from './clientResolve.js';
+import { withResolvedClientId, resolveMergedClientId, rememberStripeCustomerIfNone } from './clientResolve.js';
 import { myClientIds, ids } from './clientPortal.js';
 import { mapSubStatus } from './memberships.js';
 import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
@@ -243,6 +243,12 @@ export async function applyProgramSubscription({ workspaceId, sub }) {
     programId: p.id, workspaceId, clientId: c.id, source: 'subscription', billing: p.billing, priceCents: p.price_cents,
     stripeSubscriptionId: sub.id, status, currentPeriodEnd: cpe, cancelAtPeriodEnd: !!sub.cancel_at_period_end,
     cohortId, commerce: coupon ? { couponId: coupon.id, discountCents: 0 } : null, trial: { trialing, trialEndsAt },
+  });
+  // A first-time buyer keeps the customer this checkout created; a client
+  // who already has one (a saved card, automatic payments) is left alone.
+  await rememberStripeCustomerIfNone({
+    workspaceId, clientId: c.id,
+    customerId: typeof sub.customer === 'string' ? sub.customer : sub.customer?.id || null,
   });
   const who = (await sql`SELECT name, email FROM clients WHERE id = ${c.id}`).rows[0];
   if (trialing && who?.email) {

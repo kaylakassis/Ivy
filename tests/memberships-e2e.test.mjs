@@ -209,8 +209,12 @@ async function run() {
   assert(r.statusCode === 200 && /checkout\.stripe\.com/.test(r.body.url), `checkout → Stripe URL (got ${r.statusCode} ${JSON.stringify(r.body)})`);
   assert((await sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${A.wid} AND LOWER(email) = ${buyer.email}`).rows[0].n === 1, 'existing client matched case-insensitively (no duplicate)');
   const cs = lastStripe(/POST .*\/v1\/checkout\/sessions$/);
-  const client = (await sql`SELECT * FROM clients WHERE id = ${existing}`).rows[0];
-  assert(cs.body.mode === 'subscription' && cs.body['line_items[0][price]'] && cs.body.customer === client.stripe_customer_id && cs.headers['Stripe-Account'] === A.acct, 'subscription-mode session for the tier price on the connected account');
+  let client = (await sql`SELECT * FROM clients WHERE id = ${existing}`).rows[0];
+  assert(cs.body.mode === 'subscription' && cs.body['line_items[0][price]'] && cs.headers['Stripe-Account'] === A.acct, 'subscription-mode session for the tier price on the connected account');
+  // The buyer is not signed in: the session carries the typed email and
+  // never an existing Stripe customer (whose saved card Checkout would offer).
+  assert(!('customer' in cs.body) && cs.body.customer_email === buyer.email, 'session carries the buyer email, no existing Stripe customer');
+  assert(stripeCalls(/\/v1\/customers/).length === 0 && client.stripe_customer_id == null, 'no Stripe customer looked up or created before payment');
   assert(cs.body['metadata[purpose]'] === 'membership' && cs.body['metadata[membership_id]'] === monthly.id && cs.body['metadata[client_id]'] === existing && cs.body['metadata[workspace_id]'] === A.wid, 'session metadata');
   assert(cs.body['subscription_data[metadata][purpose]'] === 'membership' && cs.body['subscription_data[metadata][client_id]'] === existing && cs.body['subscription_data[metadata][workspace_id]'] === A.wid, 'subscription metadata for the webhook');
   assert(cs.body.success_url.includes(`/book/${A.slug}?membership=joined`), 'returns to the booking page');
@@ -221,8 +225,12 @@ async function run() {
   const subId = `sub_me_${STAMP}`;
   const md = { workspace_id: A.wid, membership_id: monthly.id, client_id: existing, purpose: 'membership' };
   const cpe1 = Math.floor(Date.now() / 1000) + 30 * 86400;
-  r = await fire('customer.subscription.created', subObj(subId, priceId, { metadata: md, current_period_end: cpe1, customer: client.stripe_customer_id }), A.acct);
+  // Stripe made a customer for this checkout; a first-time buyer keeps it.
+  const madeByCheckout = `cus_checkout_${STAMP}`;
+  r = await fire('customer.subscription.created', subObj(subId, priceId, { metadata: md, current_period_end: cpe1, customer: madeByCheckout }), A.acct);
   assert(r.statusCode === 200 && r.body.result === 'created', `subscription.created (before anything else) materialises the membership (got ${JSON.stringify(r.body)})`);
+  client = (await sql`SELECT * FROM clients WHERE id = ${existing}`).rows[0];
+  assert(client.stripe_customer_id === madeByCheckout, 'first-time buyer: the customer the checkout created is remembered on the client');
   let cm = await cmRow(subId);
   assert(cm && cm.status === 'active' && cm.client_id === existing && cm.membership_id === monthly.id && cm.membership_name === 'Monthly Member' && Number(cm.price_cents) === 4900, 'active row with the tier snapshot');
   r = await fire('customer.subscription.created', subObj(subId, priceId, { metadata: md, current_period_end: cpe1 }), A.acct);

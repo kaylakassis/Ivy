@@ -204,7 +204,10 @@ async function run() {
   assert(cs?.body['line_items[0][price_data][unit_amount]'] === '18000' && cs?.body.mode === 'payment', 'amount is the current price, $180.00');
   assert(cs?.body['metadata[purpose]'] === 'package' && cs?.body['metadata[package_id]'] === pkg.id && cs?.body['metadata[workspace_id]'] === A.wid && cs?.body['metadata[client_id]'] === casey.clientId, 'metadata: purpose / package / workspace / existing client matched by email');
   assert(cs?.body['payment_intent_data[metadata][purpose]'] === 'package' && cs?.body['payment_intent_data[metadata][client_id]'] === casey.clientId, 'payment intent metadata mirrors it');
-  assert(!!cs?.body.customer, 'buyer gets a customer on the connected account');
+  // The buyer is not signed in: the session carries the typed email and
+  // never an existing Stripe customer (whose saved card Checkout would offer).
+  assert(!('customer' in cs.body) && cs.body.customer_email === buyer.email, 'session carries the buyer email, no existing Stripe customer');
+  assert(!stripeCalls.some((c) => /\/customers/.test(c.url)), 'no Stripe customer looked up or created');
   r = await buy({ packageId: old.id });
   assert(r.statusCode === 400, 'archived template cannot be bought');
   r = await buy({ packageId: priv.id });
