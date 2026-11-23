@@ -1,51 +1,18 @@
-// /api/campaigns
-//   GET  → list campaigns; or ?previewAudience=<aud> → { count } for the
-//          composer's live recipient count.
-//   POST → create a draft.
-import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
-import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
+// Email campaigns were retired (November 2026). Nothing is sent from here
+// any more and there is no screen for them. These addresses still answer so
+// that an iPhone app from before the removal shows an empty list and a plain
+// sentence instead of an error. Campaigns already written stay in the
+// database (email_campaigns); nothing was deleted.
 import { requireSameOrigin } from '../_lib/security.js';
-import { readBody } from '../_lib/body.js';
-import { serializeCampaign, VALID_AUDIENCE, resolveAudience } from '../_lib/campaigns.js';
-import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { requireUser } from '../_lib/auth.js';
+
+export const RETIRED_MESSAGE = 'Email campaigns are no longer part of Ivy. Nothing was sent.';
 
 export default async function handler(req, res) {
-  if (!requireSameOrigin(req, res)) return;
-  try {
-    const user = await requireUser(req, res);
-    if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
-    if (!workspaceId) return;
-    if (req.method === 'GET') {
-      const previewAudience = req.query.previewAudience;
-      if (previewAudience) {
-        if (!VALID_AUDIENCE(previewAudience)) return badRequest(res, 'Invalid audience');
-        const list = await resolveAudience(workspaceId, previewAudience);
-        return ok(res, { count: list.length });
-      }
-      const { rows } = await sql`
-        SELECT * FROM email_campaigns WHERE workspace_id = ${workspaceId}
-        ORDER BY created_at DESC LIMIT 200
-      `;
-      return ok(res, { campaigns: rows.map(serializeCampaign) });
-    }
-
-    if (req.method === 'POST') {
-      const body = await readBody(req);
-      const subject  = (body.subject || '').toString().slice(0, 300);
-      const text     = (body.body || '').toString().slice(0, 20000);
-      const audience = VALID_AUDIENCE(body.audience) ? body.audience : 'all-clients';
-      const ins = await sql`
-        INSERT INTO email_campaigns (workspace_id, subject, body, audience)
-        VALUES (${workspaceId}, ${subject}, ${text}, ${audience})
-        RETURNING *
-      `;
-      return created(res, { campaign: serializeCampaign(ins.rows[0]) });
-    }
-
-    return methodNotAllowed(res, ['GET', 'POST']);
-  } catch (err) {
-    return serverError(res, err);
-  }
+  if (!requireSameOrigin(req, res)) return undefined;
+  const user = await requireUser(req, res);
+  if (!user) return undefined;
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.method === 'GET') return res.status(200).json({ campaigns: [], retired: true });
+  return res.status(410).json({ error: RETIRED_MESSAGE, code: 'feature-retired' });
 }

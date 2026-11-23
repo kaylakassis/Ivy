@@ -76,7 +76,7 @@ export default function SiteFeatures() {
               <li><b>Ask anything:</b> quiet clients, overdue invoices, this week's bookings, revenue this month</li>
               <li><b>Delegate anything:</b> draft invoices and quotes, book sessions, create tasks, log expenses</li>
               <li><b>Automate in plain English:</b> describe a rule, Ivy builds the workflow</li>
-              <li><b>Approval-gated sends:</b> messages, invoices, contracts, and campaigns preview before they go out</li>
+              <li><b>Approval-gated sends:</b> messages, invoices, and contracts preview before they go out</li>
               <li><b>600 messages a month included</b> - one message can draft, send, book or build; a meter shows where you stand</li>
             </ul>
           </div>
@@ -166,19 +166,18 @@ export default function SiteFeatures() {
           <div>
             <div className="k-label">Presence</div>
             <h2>Look established. Instantly.</h2>
-            <p className="section-sub">A real website, legally binding e-signature, and email campaigns - the pieces that used to cost three separate subscriptions and a weekend of setup.</p>
+            <p className="section-sub">A real website and legally binding e-signature - the pieces that used to cost separate subscriptions and a weekend of setup.</p>
             <ul className="checks">
               <li><b>Website builder + custom domain</b> - drag-and-drop pages, templates, gallery, product store</li>
               <li><b>SEO built in</b> with traffic analytics; site forms turn visitors into leads automatically</li>
               <li><b>Documents + e-signature:</b> waivers, intakes, and agreements from rich text or your own PDFs</li>
-              <li><b>Email campaigns</b> to all clients or tagged segments, with one-click unsubscribe compliance</li>
               <li><b>iPhone app:</b> Face ID lock and push notifications, same account as the web</li>
             </ul>
           </div>
           <div className="visual">
             <div className="row"><span className="l">yourstudio.com<small>published from Ivy, SEO + sitemap automatic</small></span><span className="tag green">live</span></div>
             <div className="row"><span className="l">Intake + waiver<small>auto-sends when a client books</small></span><span className="tag grey">attached</span></div>
-            <div className="row"><span className="l">"Spring openings" campaign<small>to 214 clients, opt-outs honored</small></span><span className="tag green">sent</span></div>
+            <div className="row"><span className="l">Booking page<small>open 24/7 at your own address</small></span><span className="tag green">live</span></div>
             <div className="row"><span className="l">Website form → new lead<small>straight into your CRM</small></span><span className="tag grey">captured</span></div>
           </div>
         </div>

@@ -3,7 +3,7 @@
 //
 //   [1] optional email paths: opted-in gets the email with a working
 //       one-click unsubscribe; opted-out gets nothing
-//       (lead auto-reply, website newsletter campaign, owner prospect
+//       (lead auto-reply, owner prospect
 //       message, owner form-submission notice, a booking email with no
 //       clients row, duplicate client rows, waitlist confirmation)
 //   [2] critical sends: receipts reach an unsubscribed client and carry no
@@ -33,7 +33,6 @@ import unsubscribeHandler from '../api/unsubscribe.js';
 import { mintUnsubscribeToken } from '../api/_lib/unsubscribeToken.js';
 import { sendEmail, sendEmailToClient, sendEmailToClientByAddress, emailShell } from '../api/_lib/email.js';
 import { notifyLeadInstantReply } from '../api/_lib/leadNotify.js';
-import { sendCampaign } from '../api/_lib/campaigns.js';
 import { invalidateBranding } from '../api/_lib/branding.js';
 import { notifyBookingCancellation } from '../api/_lib/bookingNotify.js';
 import { notifyInvoicePaid } from '../api/_lib/invoiceNotify.js';
@@ -136,23 +135,9 @@ async function main() {
   r = await sendEmailToClient({ clientId: leadClient, type: 'messages', to: lead, subject: 'x', html });
   assert(r.sent === false && r.reason === 'muted', 'a clients row created later stays unsubscribed');
 
-  console.log('\n[1b] website newsletter campaign (no clients row) honours one-click');
-  const sub = `ua-news-${S}@example.com`;
+  // A published website for this business (the form checks further down use it).
   const site = (await sql`INSERT INTO websites (workspace_id, handle, business_name, published_at)
     VALUES (${A.ws}, ${`ua-site-${S}`}, 'Alpha Studio', NOW()) RETURNING id`).rows[0];
-  await sql`INSERT INTO website_form_submissions (website_id, form_id, payload) VALUES (${site.id}, 'newsletter', ${JSON.stringify({ email: sub, name: 'Nia' })}::jsonb)`;
-  // A campaign needs the business's mailing address on file (it is printed
-  // at the bottom of the email).
-  await sql`INSERT INTO calendar_settings (workspace_id, biz_mailing_address) VALUES (${A.ws}, '1 Alpha Way, Springfield, IL 62701')
-            ON CONFLICT (workspace_id) DO UPDATE SET biz_mailing_address = EXCLUDED.biz_mailing_address`;
-  invalidateBranding(A.ws);
-  sent.length = 0;
-  let c = await sendCampaign({ workspaceId: A.ws, campaign: { subject: 'Spring news', body: 'Hello', audience: 'newsletter' } });
-  assert(c.sent === 1 && mailsTo(sub).length === 1 && hasOneClick(mailsTo(sub)[0]), 'subscriber gets the campaign with one-click headers');
-  await hit(tokenFrom(mailsTo(sub)[0].html, true), 'POST');
-  sent.length = 0;
-  c = await sendCampaign({ workspaceId: A.ws, campaign: { subject: 'Summer news', body: 'Hello', audience: 'newsletter' } });
-  assert(c.sent === 0 && c.skipped === 1 && mailsTo(sub).length === 0, 'after one-click the next campaign skips them');
 
   console.log('\n[1c] owner prospect-message email follows the owner\'s Messages switch');
   sent.length = 0;
@@ -201,9 +186,6 @@ async function main() {
   await hit(mintUnsubscribeToken({ scope: 'client', id: d1, type: 'marketing' }), 'GET');
   r = await sendEmailToClient({ clientId: d2, type: 'marketing', to: dup, subject: 'Promo', html });
   assert(r.sent === false && r.reason === 'muted', 'sibling row is muted too');
-  sent.length = 0;
-  c = await sendCampaign({ workspaceId: A.ws, campaign: { subject: 'All clients', body: 'Hi', audience: 'all-clients' } });
-  assert(mailsTo(dup).length === 0, 'all-clients campaign skips the unsubscribed address');
 
   console.log('\n[1g] waitlist confirmation carries a working one-click link');
   const wl = `ua-wl-${S}@example.com`;

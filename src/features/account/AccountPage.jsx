@@ -1577,7 +1577,7 @@ function BrandingCard() {
           placeholder="Street or PO box, city, state, ZIP"
           style={fieldStyle}/>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-          Shown at the bottom of your marketing emails (campaigns and win-back messages). Email law requires a postal address on those; a PO box is fine. It is not added to booking confirmations or invoices.
+          Shown at the bottom of the marketing emails Ivy sends for you (such as win-back messages). Email law requires a postal address on those; a PO box is fine. It is not added to booking confirmations or invoices.
         </div>
       </div>
 

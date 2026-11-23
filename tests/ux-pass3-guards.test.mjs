@@ -62,7 +62,6 @@ for (const [f, re, what] of [
   ['src/features/calendar/EventDrawer.jsx', /'Delete this event\?' : 'Delete this blocked time\?'/, 'deleting a calendar event or blocked time'],
   ['src/features/calendar/SyncDrawer.jsx', /title: 'Turn off calendar sync\?'/, 'turning off calendar sync'],
   ['src/features/calendar/WaitlistDrawer.jsx', /off the waitlist\?`/, 'removing someone from the waitlist'],
-  ['src/features/campaigns/Campaigns.jsx', /title: 'Delete this draft\?'/, 'deleting a campaign'],
   ['src/features/documents/DocumentEditor.jsx', /title: 'Void this document\?'/, 'voiding a sent document'],
 ]) assert(re.test(src(f)), `${what} asks first`);
 assert(/if \(reason === null\) return;/.test(src('src/features/client/ClientDms.jsx')), 'cancelling "report this message" no longer sends the report');
@@ -74,8 +73,6 @@ console.log('Unsaved work');
 const inv = src('src/features/finance/InvoiceEditor.jsx');
 assert(/if \(blank\) \{ animateClose\(\{ discardBlank: true \}\); return; \}/.test(inv) && /if \(dirty\) \{[\s\S]{0,300}await onSave\(/.test(inv), 'invoice: closing a draft saves unsaved changes, and a never-filled draft is thrown away');
 assert(/info\?\.discardBlank && inv\?\.status === 'draft'\) remove\(inv\.id\)/.test(src('src/features/finance/Finance.jsx')), 'invoice: the list drops the never-filled draft');
-const camp = src('src/features/campaigns/Campaigns.jsx');
-assert(/onClose\(\{ discardBlank: true \}\)/.test(camp) && /if \(dirty\) \{[\s\S]{0,200}await onSave\(/.test(camp), 'campaign: same save-on-close and no empty drafts left behind');
 assert(/const close = async \(\) => \{[\s\S]{0,700}await onSave\(\{ name: name\.trim\(\) \|\| 'Untitled', contentHtml: body, fields \}\)/.test(src('src/features/documents/DocumentEditor.jsx')), 'document: closing a draft saves it first');
 for (const f of ['finance/Quotes.jsx', 'finance/Recurring.jsx', 'finance/Time.jsx', 'finance/Expenses.jsx', 'finance/Memberships.jsx']) {
   const s = src(`src/features/${f}`);

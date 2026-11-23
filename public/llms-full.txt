@@ -18,7 +18,7 @@ Ivy, the assistant, sees the owner's real numbers (revenue this month, active cl
 - Ask anything: quiet clients, overdue invoices, this week's bookings, revenue this month.
 - Delegate anything: draft invoices and quotes, book sessions, create tasks, log expenses.
 - Automate in plain English: describe a rule and Ivy builds the workflow.
-- Approval-gated sends: messages, invoices, contracts and campaigns are previewed before they go out. Anything that reaches a client waits for the owner's approval.
+- Approval-gated sends: messages, invoices and contracts are previewed before they go out. Anything that reaches a client waits for the owner's approval.
 - 600 assistant messages a month are included and reset on the 1st. One message can draft, send, book or build; a meter shows where you stand. Everything else in Ivy is unlimited.
 - Owners can disable the assistant site-wide from their account page.
 
@@ -56,7 +56,6 @@ Ivy, the assistant, sees the owner's real numbers (revenue this month, active cl
 
 - Website builder with custom domain: drag-and-drop pages, templates, gallery and a product store. SEO built in with traffic analytics; site forms turn visitors into leads automatically.
 - Documents and legally binding e-signature: waivers, intakes and agreements from rich text or the owner's own PDFs, with multi-signer support.
-- Email campaigns to all clients or tagged segments, with one-click unsubscribe compliance.
 - An iPhone and iPad app on the App Store with Face ID lock and push notifications, on the same account as the web: https://apps.apple.com/us/app/ivy-for-solo-businesses/id6808542331. On Android, Ivy installs from the browser with Add to Home Screen.
 
 ## Integrations available today

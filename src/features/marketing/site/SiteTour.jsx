@@ -90,8 +90,8 @@ const STOPS = [
   {
     id: 'marketing', act: 'look', area: 'Marketing',
     title: 'Clients come back on their own.',
-    blurb: 'Campaigns for the big announcements, automations for the follow-ups you used to forget, rewards for the regulars, reviews that ask themselves.',
-    chips: ['Email campaigns to everyone or a tag', 'Test send & unsubscribe compliance', 'Workflows: new lead, new client, quiet client, booking completed', 'Actions: email, SMS, document, task, invoice draft, wait, tag branches', 'Templates: welcome, intake chase, lead nurture, win-back', 'Rewards for visits, spend & referrals', 'Review requests after sessions', 'Reviews publish to your site; respond or appeal'],
+    blurb: 'Automations for the follow-ups you used to forget, rewards for the regulars, reviews that ask themselves.',
+    chips: ['Workflows: new lead, new client, quiet client, booking completed', 'Actions: email, SMS, document, task, invoice draft, wait, tag branches', 'Templates: welcome, intake chase, lead nurture, win-back', 'Rewards for visits, spend & referrals', 'Review requests after sessions', 'Reviews publish to your site; respond or appeal'],
     mock: 'marketing',
   },
   {
@@ -481,7 +481,7 @@ const MOCKS = {
         <div className="step"><i>✓</i><span>Task: call if they haven’t booked<small>for you</small></span></div>
       </div>
       <div className="mk-list" style={{ marginTop: 12 }}>
-        <div className="mk-row st" style={st(4)}><span className="who">“Fall openings” campaign<small>to 214 clients · 3 unsubscribed</small></span><span className="chip g">sent</span></div>
+        <div className="mk-row st" style={st(4)}><span className="who">“We miss you” check-in<small>to Jordan · sent automatically after 60 quiet days</small></span><span className="chip g">sent</span></div>
         <div className="mk-row st" style={st(5)}><span className="who">Maya hit 10 visits<small>Reward: free add-on · client notified</small></span><span className="chip g">earned</span></div>
         <div className="mk-row st" style={st(6)}><span className="who">Review from Sam K. <span className="stars"><b>★★★★★</b></span><small>requested automatically after the session</small></span><span className="chip g">live</span></div>
       </div>

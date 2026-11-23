@@ -98,8 +98,8 @@ const STEPS = [
   },
   {
     id: 'marketing',
-    title: 'Marketing - campaigns, workflows, rewards',
-    body: "Email campaigns, automated follow-ups, review requests, and a rewards program that brings repeat clients back." + (FLAGS.referrals ? ' Referrals live on your Account page.' : ''),
+    title: 'Marketing - workflows and rewards',
+    body: "Automated follow-ups, review requests, and a rewards program that brings repeat clients back." + (FLAGS.referrals ? ' Referrals live on your Account page.' : ''),
     route: '/marketing?tab=rewards',
     selector: '[data-tour="nav-marketing"]',
     placement: 'right',

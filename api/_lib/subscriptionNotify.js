@@ -124,7 +124,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
         <li>Scheduling, reminders, and your booking page</li>
         <li>Ivy, your AI assistant</li>
         <li>Financial tracking, invoicing, and reports</li>
-        <li>Website builder and campaign tools</li>
+        <li>Website builder and automatic client follow-ups</li>
       </ul>
       <p>It picks up right where you left off. Questions? Just reply.</p>`;
     ctaText = `Reactivate ${PLAN_NAME} →`;

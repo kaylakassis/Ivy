@@ -43,9 +43,9 @@ check('every sensitive tool is a real tool', () => {
 check('the new expanded tools are registered', () => {
   const expected = [
     'create_quote', 'create_product', 'create_expense', 'create_goal',
-    'create_time_entry', 'create_recurring_invoice', 'create_campaign',
+    'create_time_entry', 'create_recurring_invoice',
     'create_package',
-    'send_quote', 'send_campaign', 'reschedule_booking',
+    'send_quote', 'reschedule_booking',
     'send_document', 'send_review_request', 'refund_invoice',
   ];
   const missing = expected.filter((n) => !toolNames.includes(n));
@@ -54,7 +54,7 @@ check('the new expanded tools are registered', () => {
 
 check('new sends are confirmation-gated', () => {
   for (const n of [
-    'send_quote', 'send_campaign', 'reschedule_booking',
+    'send_quote', 'reschedule_booking',
     'send_document', 'send_review_request', 'refund_invoice',
   ]) {
     assert.ok(SENSITIVE_TOOLS.has(n), `${n} should be in SENSITIVE_TOOLS`);

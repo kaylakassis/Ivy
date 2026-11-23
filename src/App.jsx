@@ -353,7 +353,7 @@ function NativeOnly({ children }) {
   return isNative() ? children : <Navigate to="/" replace/>;
 }
 
-// /campaigns, /workflows, /rewards → /marketing?tab=… (other params kept)
+// /workflows, /rewards → /marketing?tab=… (other params kept). /campaigns is an old address (email campaigns were retired) and lands on Workflows.
 function MarketingRedirect({ tab }) {
   const p = new URLSearchParams(window.location.search);
   p.set('tab', tab);
@@ -502,7 +502,7 @@ export default function App() {
           <Route path="/referrals"  element={<Navigate to="/account#referrals" replace/>} />
           <Route path="/reviews"    element={<Reviews />} />
           <Route path="/messages"   element={<Messages />} />
-          <Route path="/campaigns"  element={<MarketingRedirect tab="campaigns"/>} />
+          <Route path="/campaigns"  element={<MarketingRedirect tab="workflows"/>} />
           <Route path="/documents"  element={<Documents />} />
           <Route path="/website"    element={<Website />} />
           <Route path="/shops"      element={<ShopsPage />} />

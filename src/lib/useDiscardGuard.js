@@ -7,7 +7,7 @@
 // If nothing changed since the editor opened (or since the last save), it
 // just closes. Otherwise it asks first, with "Keep editing" as the safe
 // choice. Editors that can save a draft quietly on close (invoices,
-// documents, campaigns) do that instead of using this.
+// documents) do that instead of using this.
 import { useCallback, useRef } from 'react';
 import { confirmAction } from './confirm.js';
 

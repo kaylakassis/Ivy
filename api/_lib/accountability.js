@@ -713,7 +713,7 @@ async function quietWeek(ws, tz) {
     title: 'Your next 7 days are quiet',
     phrase: 'fill a few open spots this week',
     detail: `${plural(Number(r.upcoming), 'session', 'sessions')} booked so far`,
-    href: `/ivy?prompt=${encodeURIComponent("Draft a campaign to fill next week's open slots, targeting my quiet clients.")}`,
+    href: `/ivy?prompt=${encodeURIComponent("Who are my quiet clients? Draft a short message to each about next week's open spots.")}`,
     action: 'Fill it', ids: [`u${r.upcoming}`],
   };
 }

@@ -1,20 +1,19 @@
-// Marketing: one tab for everything that brings clients back.
-//   Campaigns  - newsletters and announcements
+// Marketing: one tab for what brings clients back.
 //   Workflows  - automations that run on their own
 //   Rewards    - the client loyalty program
 // Each section is its own page underneath; this hub just picks one via
-// ?tab= so old links (/campaigns, /workflows, /rewards) keep working.
+// ?tab= so old links (/workflows, /rewards) keep working. Email campaigns
+// were retired (November 2026); an old ?tab=campaigns link lands on
+// Workflows.
 import React, { lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 
-const Campaigns = lazy(() => import('../campaigns/Campaigns.jsx'));
 const Workflows = lazy(() => import('../workflows/Workflows.jsx'));
 const Rewards   = lazy(() => import('../rewards/Rewards.jsx'));
 
 export const MARKETING_TABS = [
-  { id: 'campaigns', label: 'Campaigns', icon: 'Mail',  hint: 'Newsletters and announcements' },
   { id: 'workflows', label: 'Workflows', icon: 'Spark', hint: 'Follow-ups that run on their own' },
   { id: 'rewards',   label: 'Rewards',   icon: 'Gift',  hint: 'Loyalty for your clients' },
 ];
@@ -23,13 +22,13 @@ export default function Marketing() {
   const location = useLocation();
   const navigate = useNavigate();
   const params = new URLSearchParams(location.search);
-  const tab = MARKETING_TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'campaigns';
+  const tab = MARKETING_TABS.some((t) => t.id === params.get('tab')) ? params.get('tab') : 'workflows';
   const pick = (id) => {
     const p = new URLSearchParams(location.search);
     p.set('tab', id);
     navigate({ pathname: location.pathname, search: p.toString() }, { replace: true });
   };
-  const Body = tab === 'workflows' ? Workflows : tab === 'rewards' ? Rewards : Campaigns;
+  const Body = tab === 'rewards' ? Rewards : Workflows;
 
   return (
     <div>

@@ -32,7 +32,7 @@ const JSON_LD = {
       operatingSystem: 'Web, iOS, Android',
       installUrl: APP_STORE_URL,
       image: OG_IMAGE,
-      description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, website builder, and an AI assistant that performs real tasks. Payments go directly to the owner's own Stripe account at Stripe's standard rate.",
+      description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, website builder, and an AI assistant that performs real tasks. Payments go directly to the owner's own Stripe account at Stripe's standard rate.",
       offers: [
         { '@type': 'Offer', price: String(IVY_PRICE), priceCurrency: 'USD', description: `$${IVY_PRICE} per week after a ${TRIAL_DAYS}-day free trial ($0 today)` },
         { '@type': 'Offer', price: String(IVY_PRICE_ANNUAL), priceCurrency: 'USD', description: `Annual plan, $${IVY_PRICE_ANNUAL}/year (save about ${ANNUAL_SAVINGS_PCT}%)` },
@@ -463,7 +463,7 @@ export default function SiteHome() {
       <section style={{ padding: '56px 0 0' }}>
         <div className="container">
           <div className="answer">
-            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $374.99/year) with payments going directly to your own Stripe account at Stripe's standard rate.</p>
+            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $374.99/year) with payments going directly to your own Stripe account at Stripe's standard rate.</p>
           </div>
         </div>
       </section>

@@ -89,8 +89,8 @@ export async function detectSuggestions(workspaceId) {
     out.push({
       kind: 'calendar_gap', dedupe_key: `gap:${today}`, icon: 'Calendar',
       title: `Next 7 days are quiet: ${cal.upcoming} session${cal.upcoming === 1 ? '' : 's'} booked`,
-      detail: 'Want Ivy to draft a campaign to fill the gaps with your quiet clients?',
-      prompt: "Draft a campaign to fill next week's open slots, targeting my quiet clients.",
+      detail: 'Want Ivy to draft a message to your quiet clients about the open spots?',
+      prompt: "Who are my quiet clients? Draft a short message to each about next week's open spots.",
     });
   }
 

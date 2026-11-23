@@ -70,7 +70,7 @@ export const TITLES = {
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
   finance:   { title: 'Money',       subtitle: 'Money in, money out' },
-  marketing: { title: 'Marketing',     subtitle: 'Campaigns, automations and rewards' },
+  marketing: { title: 'Marketing',     subtitle: 'Automations and rewards' },
   reviews:   { title: 'Reviews',       subtitle: 'Publish & respond to client reviews' },
   comms:     { title: 'Messages',      subtitle: 'Inbox' },
   docs:      { title: 'Documents',     subtitle: 'Waivers, agreements, signatures' },

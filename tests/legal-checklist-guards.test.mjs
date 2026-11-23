@@ -146,15 +146,10 @@ assert(/href="\/accessibility">Accessibility<\/a>/.test(src('src/features/market
 
 // ---- mailing address on marketing email -----------------------------------
 console.log('\n[mailing address on marketing email]');
-const campaigns = src('api/_lib/campaigns.js');
-assert(/export async function sendCampaign\(\{ workspaceId, campaign \}\) \{\n[^\n]*\n\s*await requireMailingAddress\(workspaceId\);/.test(campaigns), 'every campaign send (the app and Ivy) first requires a business mailing address');
-assert(/showMailingAddress: true/.test(campaigns), 'the campaign email prints it');
-const send = src('api/campaigns/[id]/send.js');
-assert(send.indexOf('requireMailingAddress(workspaceId)') > 0 && send.indexOf('requireMailingAddress(workspaceId)') < send.indexOf("SET status = 'sending'"), 'a refusal happens before the campaign is claimed, so it stays a draft');
-assert(/code: e\.code/.test(send), 'the refusal carries a code the screen can act on');
 assert(/showMailingAddress = false/.test(src('api/_lib/email.js')), 'other emails do not print it unless asked');
 assert(/mailing_address:\s+\{ type: 'string'/.test(src('api/_lib/ivyTools.js')) && /Never invent it/.test(src('api/_lib/ivyTools.js')), 'Ivy can save the address for the owner and is told never to make one up');
-assert(/id="campaign-mailing-address"/.test(src('src/features/campaigns/Campaigns.jsx')) && /id="brand-mailing-address"/.test(src('src/features/account/AccountPage.jsx')), 'the owner can enter it in the campaign editor and in Account');
+assert(/id="brand-mailing-address"/.test(src('src/features/account/AccountPage.jsx')), 'the owner can enter it in Account');
+assert(/showMailingAddress/.test(src('api/_lib/email.js')) && /biz_mailing_address/.test(src('api/_lib/branding.js')), 'marketing emails Ivy sends for a business can still print it');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

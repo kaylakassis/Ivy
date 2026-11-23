@@ -139,12 +139,8 @@ export const TUTORIALS = {
 
   marketing: {
     title: 'Marketing',
-    intro: 'Everything that brings clients back, in one tab: Campaigns (newsletters and announcements), Workflows (follow-ups that run on their own) and Rewards (a loyalty program for your clients).',
+    intro: 'What brings clients back, in one tab: Workflows (follow-ups that run on their own) and Rewards (a loyalty program for your clients).',
     steps: [
-      {
-        title: 'Campaigns',
-        body: 'Write once, send to everyone or just a tag. Preview the recipient count, send yourself a test, then send. Every email carries an unsubscribe link automatically.',
-      },
       {
         title: 'Workflows',
         body: "A trigger plus a few actions: a thank-you when someone signs up, a check-in when a client goes quiet for 60 days, a birthday note. Set it once and it runs while you work.",

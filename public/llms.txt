@@ -1,6 +1,6 @@
 # Ivy
 
-> Ivy is the all-in-one business platform for solopreneurs, with an AI assistant that does your busywork. One plan covers booking, invoicing, a client CRM, two-way messaging, e-signature, a website builder, email campaigns and the Ivy assistant. $8.99 per week after a 14-day free trial, or $374.99 per year. Payments go straight to the owner's own Stripe account at Stripe's standard rate. The client portal is free for clients.
+> Ivy is the all-in-one business platform for solopreneurs, with an AI assistant that does your busywork. One plan covers booking, invoicing, a client CRM, two-way messaging, e-signature, a website builder and the Ivy assistant. $8.99 per week after a 14-day free trial, or $374.99 per year. Payments go straight to the owner's own Stripe account at Stripe's standard rate. The client portal is free for clients.
 
 Ivy is made for solo service businesses: massage therapists, coaches, hair stylists, photographers, personal trainers, contractors, tutors, and every other business of one. The owner is the only one who pays. Clients never pay to use the portal.
 
@@ -10,7 +10,7 @@ Ivy is made for solo service businesses: massage therapists, coaches, hair styli
 - Booking and scheduling: a public booking page at the owner's own link, services, packages and class capacity, per-weekday availability, deposits, intake forms and signatures collected in the booking flow, Google Calendar sync, and automatic reminders by email and SMS before each appointment, at the times the owner chooses.
 - Money: branded invoices and recurring billing, card on file with late-cancel and no-show policies, memberships, packages and gift cards, in-person sales by QR code, overdue reminders on autopilot, and a finance dashboard with a tax export compatible with QuickBooks and Xero. Payments go straight to the owner's Stripe account; Ivy never touches the money.
 - Clients: unlimited clients and a pipeline, CSV import, two-way client messaging with photos and voice memos, automatic review requests and referral rewards, and a free client portal for bookings, invoices, signed forms and messages.
-- Presence: website builder with custom domain and built-in SEO, documents and legally binding e-signature, email campaigns to all clients or tagged segments, and an iPhone app with Face ID and push notifications on the same account as the web.
+- Presence: website builder with custom domain and built-in SEO, documents and legally binding e-signature, and an iPhone app with Face ID and push notifications on the same account as the web.
 
 ## Pricing
 

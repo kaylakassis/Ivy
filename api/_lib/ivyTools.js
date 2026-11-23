@@ -703,19 +703,6 @@ export const IVY_TOOLS = [
     },
   },
   {
-    name: 'create_campaign',
-    description: 'Create a DRAFT email campaign / blast to a segment. Does NOT send - use send_campaign after the owner approves.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        subject:  { type: 'string' },
-        body:     { type: 'string', description: 'Plain text. Newlines become paragraphs.' },
-        audience: { type: 'string', description: "'all-clients', 'newsletter', or 'tag:TagName'." },
-      },
-      required: ['subject', 'body'],
-    },
-  },
-  {
     name: 'send_quote',
     description: 'APPROVAL-GATED. Email a draft quote to the client. The server holds the call for the owner to approve with one tap in the chat; it never runs directly.',
     input_schema: {
@@ -725,17 +712,6 @@ export const IVY_TOOLS = [
         client_id: { type: 'string', description: 'Optional recipient override.' },
       },
       required: ['quote_id'],
-    },
-  },
-  {
-    name: 'send_campaign',
-    description: 'APPROVAL-GATED. Send a draft campaign to its whole audience (mass email). The server holds the call for the owner to approve with one tap in the chat; it never runs directly.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        campaign_id: { type: 'string' },
-      },
-      required: ['campaign_id'],
     },
   },
   {
@@ -820,7 +796,7 @@ export const IVY_TOOLS = [
         accent_color:         { type: 'string', description: 'Hex color, e.g. #2E3168.' },
         logo_url:             { type: 'string', description: 'Public https URL of the logo image.' },
         email_signature:      { type: 'string', description: 'Plain-text signature appended to outbound emails.' },
-        mailing_address:      { type: 'string', description: "The business's postal mailing address, on one line. Printed at the bottom of marketing emails; a campaign cannot be sent without one. Never invent it: ask the owner." },
+        mailing_address:      { type: 'string', description: "The business's postal mailing address, on one line. Printed at the bottom of the marketing emails Ivy sends for the business. Never invent it: ask the owner." },
         lead_instant_reply_enabled: { type: 'boolean' },
         lead_instant_reply_message: { type: 'string' },
       },
@@ -968,10 +944,8 @@ export const HANDLERS = {
   create_goal,
   create_time_entry,
   create_recurring_invoice,
-  create_campaign,
   // Writes - expanded gated sends
   send_quote,
-  send_campaign,
   reschedule_booking,
   create_package,
   send_review_request,
@@ -1021,7 +995,6 @@ export const SENSITIVE_TOOLS = new Set([
   'delete_invoice',
   'archive_invoices',
   'send_quote',
-  'send_campaign',
   'reschedule_booking',
   'send_document',
   'send_review_request',
@@ -1178,7 +1151,7 @@ async function bookingLabel(ctx, id) {
 }
 
 // Async so gated actions can resolve real context for the approval card
-// (names, numbers, amounts, how many clients a campaign will email). Scoped
+// (names, numbers, amounts). Scoped
 // to the workspace via ctx; never trusts caller-supplied workspace ids.
 async function describeSensitiveAction(name, a, ctx = {}) {
   const web = await describeWebsiteAction(name, a || {}, ctx);
@@ -1239,19 +1212,6 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       if (!wf) return `Turn ${a.enabled ? 'on' : 'off'} an automation`;
       const sends = wf.outbound.map((t) => t.replace(/_/g, ' ')).join(' + ');
       return `Turn on the automation "${wf.name}", which will ${sends} to clients automatically whenever "${wf.trigger_type}" fires - this sends outbound to clients on its own, without asking each time.`;
-    }
-    case 'send_campaign': {
-      // Resolve the real audience size so the owner sees exactly how many
-      // people this blast reaches before approving.
-      try {
-        const c = await sql`SELECT subject, audience FROM email_campaigns WHERE id = ${a.campaign_id} AND workspace_id = ${ctx.workspaceId}`;
-        if (c.rows.length) {
-          const { resolveAudience } = await import('./campaigns.js');
-          const aud = await resolveAudience(ctx.workspaceId, c.rows[0].audience);
-          return `Send campaign "${c.rows[0].subject || '(no subject)'}" to ${aud.length} client${aud.length === 1 ? '' : 's'} (${c.rows[0].audience})`;
-        }
-      } catch { /* fall through to the generic summary */ }
-      return 'Send campaign (unknown campaign) to its full audience';
     }
     case 'update_settings': {
       const parts = [];
@@ -1619,8 +1579,7 @@ const ACTION_KINDS = {
   mark_invoice_paid: 'invoice', void_invoice: 'invoice', refund_invoice: 'invoice',
   delete_invoice: 'invoice', archive_invoices: 'invoice',
   create_quote: 'invoice', send_quote: 'invoice',
-  send_message_to_client: 'message', send_campaign: 'message', send_review_request: 'message',
-  create_campaign: 'message',
+  send_message_to_client: 'message', send_review_request: 'message',
   create_booking: 'booking', reschedule_booking: 'booking', cancel_booking: 'booking',
   block_calendar_time: 'booking',
   create_document_from_template: 'document', send_document: 'document',
@@ -1678,13 +1637,11 @@ const DONE_TEXT = {
   create_goal: (a, r) => `Set the goal ${qt(r.goal?.title || a.title)}`,
   create_time_entry: (a, r) => `Logged time: ${qt(r.time_entry?.description || a.description)}`,
   create_recurring_invoice: (a, r) => `Set up the recurring invoice ${qt(r.recurring_invoice?.name || a.name)} as a draft (auto-send is off)`,
-  create_campaign: (a, r) => `Drafted the campaign ${qt(r.campaign?.subject || a.subject)} (not sent)`,
   create_package: (a, r) => `Created the package ${qt(r.package?.name || a.name)}`,
   send_message_to_client: (a, r) => `Sent a message to ${r.client_name || 'the client'}`,
   send_invoice: (a, r) => (r.email_delivered === false ? `Marked the invoice sent (pay link is live) for ${r.sent_to}` : `Emailed the invoice to ${r.sent_to}`),
   send_quote: (a, r) => (r.email_delivered === false ? `Marked the estimate sent for ${r.sent_to}` : `Emailed the estimate to ${r.sent_to}`),
   send_review_request: (a, r) => `Asked ${r.sent_to} for a review`,
-  send_campaign: (a, r) => `Sent the campaign to ${Number(r.sent) || 0} of ${Number(r.recipients) || 0} clients`,
   reschedule_booking: (a, r) => `Moved ${r.booking?.client_name || 'the'} appointment to ${fmtDay(r.booking?.date)} at ${fmtMinAsTime(r.booking?.start_min)}`,
   refund_invoice: (a, r) => {
     const amt = Number(r.refund?.amount);
@@ -3356,21 +3313,6 @@ async function create_recurring_invoice({ workspaceId, args }) {
   return { recurring_invoice: rows[0], note: 'Created as a draft. Turn on auto-send from Recurring invoices when you are ready.' };
 }
 
-async function create_campaign({ workspaceId, args }) {
-  const { VALID_AUDIENCE } = await import('./campaigns.js');
-  const subject = (args?.subject || '').toString().slice(0, 300).trim();
-  const bodyText = (args?.body || '').toString().slice(0, 20000);
-  if (!subject) throw new Error('subject is required');
-  if (!bodyText.trim()) throw new Error('body is required');
-  const audience = VALID_AUDIENCE(args?.audience) ? args.audience : 'all-clients';
-  const { rows } = await sql`
-    INSERT INTO email_campaigns (workspace_id, subject, body, audience)
-    VALUES (${workspaceId}, ${subject}, ${bodyText}, ${audience})
-    RETURNING id, subject, audience, status
-  `;
-  return { campaign: rows[0] };
-}
-
 // ── Expanded gated sends ─────────────────────────────────────────────
 
 async function send_quote({ workspaceId, args }) {
@@ -3441,39 +3383,6 @@ async function send_quote({ workspaceId, args }) {
     };
   }
   return { ok: true, quote_id: id, sent_to: recipientEmail, total: totals.total };
-}
-
-async function send_campaign({ workspaceId, args }) {
-  const id = args.campaign_id ? String(args.campaign_id) : null;
-  if (!id) throw new Error('campaign_id is required');
-  const { sendCampaign, serializeCampaign } = await import('./campaigns.js');
-  const c = await sql`SELECT * FROM email_campaigns WHERE id = ${id} AND workspace_id = ${workspaceId}`;
-  if (c.rows.length === 0) throw new Error('Campaign not found');
-  const row = c.rows[0];
-  if (row.status === 'sent' || row.status === 'sending') throw new Error('Campaign already sent');
-  // Checked first so the refusal reads as an instruction, not a failed send.
-  const { requireMailingAddress } = await import('./branding.js');
-  await requireMailingAddress(workspaceId);
-  const campaign = serializeCampaign(row);
-  const result = await sendCampaign({ workspaceId, campaign });
-  // The emails have gone out. Failing to record that must not read as "the
-  // campaign was not sent" (the owner would send it again).
-  const warnings = [];
-  try {
-    await sql`
-      UPDATE email_campaigns SET
-        status = 'sent', sent_at = NOW(),
-        recipient_count = ${result.recipientCount}, sent_count = ${result.sent}, failed_count = ${result.failed},
-        updated_at = NOW()
-      WHERE id = ${id} AND workspace_id = ${workspaceId}
-    `;
-  } catch (err) {
-    warn(warnings, 'The emails went out, but the campaign could not be marked as sent. Do not send it again.', err);
-  }
-  return {
-    ok: true, campaign_id: id, recipients: result.recipientCount, sent: result.sent, failed: result.failed, skipped: result.skipped,
-    ...(warnings.length ? { warnings } : {}),
-  };
 }
 
 async function reschedule_booking({ workspaceId, args }) {
