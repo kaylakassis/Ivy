@@ -1,6 +1,6 @@
 // Helpers for membership tier templates + per-client subscription state.
 import { sql } from './db.js';
-import { resolveMergedClientId, rememberStripeCustomerIfNone } from './clientResolve.js';
+import { resolveMergedClientId } from './clientResolve.js';
 import { fetchStripeCustomer } from './stripe.js';
 import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
 
@@ -177,6 +177,17 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
          WHERE id = ${clientIdFromMd} AND workspace_id = ${workspaceId}
       `).rows[0] : null;
       if (tier && client) {
+        // Remember the Stripe customer this subscription lives on, when the
+        // client has none yet. A public checkout no longer attaches one up
+        // front (api/_lib/checkoutIdentity.js), so Stripe makes it at
+        // payment and this is the first event that names it. Never
+        // overwrites one the client already has.
+        if (customerId) {
+          await sql`
+            UPDATE clients SET stripe_customer_id = ${customerId}
+             WHERE id = ${client.id} AND workspace_id = ${workspaceId} AND stripe_customer_id IS NULL
+          `;
+        }
         await sql`
           INSERT INTO client_memberships (
             workspace_id, client_id, membership_id,
@@ -196,9 +207,6 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
             cancelled_at = COALESCE(client_memberships.cancelled_at, EXCLUDED.cancelled_at),
             updated_at = NOW()
         `;
-        // A first-time buyer keeps the customer this checkout created; a
-        // client who already has one is left alone.
-        await rememberStripeCustomerIfNone({ workspaceId, clientId: client.id, customerId });
         return 'created';
       }
     }

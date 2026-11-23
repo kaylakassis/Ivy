@@ -655,20 +655,18 @@ export function serviceHasFees(svc) {
 
 // Card on file at booking time, for services with a late-cancel or
 // no-show fee, when the business takes cards through Stripe.
-//   mode 'deposit' → { keepCard: true }: the deposit checkout keeps the card
-//   mode 'setup'   → { url } of a Stripe page that saves a card, no charge
+//   mode 'customer' → { customerId } so the deposit checkout keeps the card
+//   mode 'setup'    → { url } of a Stripe page that saves a card, no charge
 // Only offered while the client has NO card on file: an anonymous booking
 // form must never be able to replace a card the client already saved.
 //
-// The deposit checkout takes a PAYMENT from someone who only typed an email,
-// so it is never given the client's existing Stripe customer: a payment page
-// offers that customer's saved cards ("Pay with .... 4242", one click), and
-// "no card on file" here does not mean none in Stripe (an older card stays
-// behind when a card is replaced and the newer one removed). The caller asks
-// Stripe for a brand-new customer instead (createCheckoutSession newCustomer),
-// and the paid deposit puts that customer and card on the client row.
-// The setup page is different: Stripe shows no saved cards there (checked).
-export async function cardOnFileCheckout({ workspaceId, clientId, service, mode = 'setup', successUrl, cancelUrl }) {
+// `trusted` (api/_lib/checkoutIdentity.js): the request proved it comes
+// from this client's own signed-in account. Only then is the client's
+// existing Stripe customer used. For anyone else the card goes onto a new
+// customer made by the checkout itself ({ newCustomer: true }), because a
+// page opened for an existing customer shows that customer's saved card,
+// name and address to whoever opened it.
+export async function cardOnFileCheckout({ workspaceId, clientId, service, mode = 'setup', successUrl, cancelUrl, trusted = false }) {
   if (!clientId || !serviceHasFees(service)) return null;
   const fs = await fetchFinanceSettings(workspaceId);
   if (!fs || (fs.paymentProvider || 'stripe') !== 'stripe') return null;
@@ -679,10 +677,18 @@ export async function cardOnFileCheckout({ workspaceId, clientId, service, mode 
   `;
   const client = rows[0];
   if (!client?.email || client.payment_method_id) return null;
-  if (mode === 'deposit') return { keepCard: true };
   const creds = await loadStripeCreds(workspaceId);
+  if (!trusted) {
+    if (mode === 'customer') return { newCustomer: true };
+    const fresh = await createSetupCheckoutSession({
+      secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
+      customerId: null, customerEmail: client.email, workspaceId, clientId, successUrl, cancelUrl,
+    });
+    return fresh?.url ? { url: fresh.url } : null;
+  }
   const customerId = await ensureStripeCustomer({ creds, client });
   if (!customerId) return null;
+  if (mode === 'customer') return { customerId };
   const s = await createSetupCheckoutSession({
     secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
     customerId, workspaceId, clientId, successUrl, cancelUrl,

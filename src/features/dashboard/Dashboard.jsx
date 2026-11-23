@@ -539,7 +539,7 @@ function TwoStepCard({ show }) {
       <div style={{ flex: '1 1 220px', minWidth: 0 }}>
         <div style={{ fontSize: 14.5, fontWeight: 600 }}>Turn on 2-step verification</div>
         <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>
-          Ivy asks for a 6-digit code when you sign in, so a stolen password is not enough to get into your business. Email codes need no extra app.
+          Ivy asks for a 6-digit code when you sign in, so a stolen password is not enough to get into your business.
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>

@@ -1,34 +1,25 @@
-// Public checkouts never hand a visitor an existing client's saved card.
+// A purchase from a visitor still lands on the right client, exactly once.
 //
-// The three public checkouts (memberships, packages, programs) take no
-// sign-in: the visitor types an email. They used to pass the matching
-// client's Stripe customer to Checkout. Checked against Stripe in test mode,
-// Checkout then shows that customer's saved card to whoever opened the page
-// ("Pay with .... 4242") and charges it in one click, with no card number or
-// security code: a card saved through Checkout in setup mode (the automatic
-// payments and "save a card" flows) is marked allow_redisplay=always, which
-// is what Checkout offers to a returning customer.
+// A public checkout (memberships, packages, programs) attaches a client's
+// existing Stripe customer only when the request proves who is asking
+// (api/_lib/checkoutIdentity.js, covered in checkout-identity.test.mjs).
+// Everyone else pays as a guest: the session carries the typed email, and a
+// subscription lands on a customer Stripe makes for it. This suite follows
+// that purchase through to the client's record.
 //
-// So a public checkout now carries the typed email only, and the purchase is
-// tied back to the client by the client id in the metadata.
-//
-//   [1] a stranger types an existing client's email: no Stripe customer is
-//       looked up, created or attached on any of the three checkouts, and the
-//       client's saved card and customer are untouched
+//   [1] a visitor types an existing client's email on each checkout: no
+//       Stripe customer is looked up, created or attached; a client stored
+//       with capital letters is matched by every checkout, packages included
 //   [2] a first-time buyer: same, even when Stripe already has a customer
 //       with that email
-//   [3] the webhooks still deliver the purchase to the right client when the
+//   [3] the webhooks deliver the purchase to the right client when the
 //       Stripe customer is one Checkout made (or none at all), exactly once
 //   [4] one Stripe customer per client: a first-time buyer keeps the one
 //       their subscription created; a client who already has one (saved
 //       card, automatic payments) keeps theirs, on both webhooks
-//   [5] the three endpoints cannot quietly go back to attaching a customer
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/public-checkout-saved-card.test.mjs
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 process.env.STRIPE_SECRET_KEY = 'sk_test_public_checkout';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_public_checkout';
@@ -38,7 +29,6 @@ process.env.SECRETS_KEY ||= 'a'.repeat(64);
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 import { encrypt } from '../api/_lib/secrets.js';
-import { publicCheckoutBuyer } from '../api/_lib/stripe.js';
 import { rememberStripeCustomerIfNone } from '../api/_lib/clientResolve.js';
 import membershipCheckout from '../api/memberships/checkout.js';
 import packageCheckout from '../api/packages/checkout.js';
@@ -301,20 +291,6 @@ async function run() {
   const lcm = (await sql`SELECT client_id FROM client_memberships WHERE stripe_subscription_id = ${`sub_pc_lmem_${STAMP}`}`).rows;
   assert(r.statusCode === 200 && lcm.length === 1 && lcm[0].client_id === lVictim, `legacy keys: membership lands on the right client (${JSON.stringify(r.body)})`);
   assert(cardIntact(await clientRow(lVictim), `cus_lvictim_${STAMP}`), 'legacy keys: the client keeps their own customer and saved card');
-
-  // ════════════════════════════════════════════════════════════════════
-  console.log('\n[5] the endpoints cannot quietly go back');
-  assert(JSON.stringify(publicCheckoutBuyer('a@example.com')) === JSON.stringify({ customer_email: 'a@example.com' }), 'publicCheckoutBuyer is the email and nothing else');
-  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-  // Comments explain the old behaviour; only the code is checked.
-  const code = (rel) => fs.readFileSync(path.join(root, rel), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
-  for (const rel of ['api/memberships/checkout.js', 'api/packages/checkout.js', 'api/programs/checkout.js']) {
-    const src = code(rel);
-    assert(!/findOrCreateCustomer|ensureStripeCustomer|fetchStripeCustomer/.test(src), `${rel}: never looks a Stripe customer up`);
-    assert(!/stripe_customer_id/.test(src), `${rel}: never reads or writes a client's Stripe customer id`);
-    assert(!/\bcustomer\s*:|\bcustomerId\b|['"]customer['"]/.test(src), `${rel}: never passes a customer to Checkout`);
-    assert(/publicCheckoutBuyer\(buyerEmail\)|customerEmail:\s*buyerEmail/.test(src), `${rel}: passes the typed email`);
-  }
 
   // ── cleanup ─────────────────────────────────────────────────────────
   await settle();

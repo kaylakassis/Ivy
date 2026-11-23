@@ -247,8 +247,13 @@ export default async function handler(req, res) {
           // told otherwise. This card is only charged from our own buttons.
           await hideCardFromCheckout({ secretKey: platformKey, stripeAccount: acctId, paymentMethodId, paymentMethod: pm });
           const card = pm.card || {};
+          // The card lives on the customer this page was opened for, which
+          // for a visitor who was not signed in is a new one made by the
+          // page. Keep the two together so later charges name the right pair.
+          const setupCustomer = typeof session.customer === 'string' ? session.customer : (session.customer?.id || null);
           await sql`
             UPDATE clients SET
+              stripe_customer_id = COALESCE(${setupCustomer}, stripe_customer_id),
               payment_method_id = ${paymentMethodId},
               payment_method_brand = ${card.brand || null},
               payment_method_last4 = ${card.last4 || null},

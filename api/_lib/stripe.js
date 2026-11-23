@@ -266,11 +266,10 @@ export async function createCheckoutSession({
   // reusable payment method when the session has a customer.
   customerId = null,
   saveCard = false,
-  // Keep the card for a payer who is NOT signed in (the public booking
-  // deposit). An existing customer is never attached there: Checkout
-  // would offer that customer's saved card to whoever typed the email
-  // (see publicCheckoutBuyer). Stripe makes a brand-new customer when the
-  // payment goes through and the card is saved on that one.
+  // Keep the card, but on a brand-new Stripe customer made by this
+  // checkout, never an existing one. For a visitor whose identity is not
+  // proven (api/_lib/checkoutIdentity.js): an existing customer would put
+  // that person's saved card and address on the page.
   newCustomer = false,
 }) {
   const body = {
@@ -287,10 +286,11 @@ export async function createCheckoutSession({
   };
   // Stripe rejects customer + customer_email together.
   if (customerId) body.customer = customerId;
-  else if (customerEmail) body.customer_email = customerEmail;
-  const freshCustomer = saveCard && !customerId && newCustomer;
-  if (freshCustomer) body.customer_creation = 'always';
-  if (saveCard && (customerId || freshCustomer)) {
+  else {
+    if (customerEmail) body.customer_email = customerEmail;
+    if (newCustomer) body.customer_creation = 'always';
+  }
+  if (saveCard && (customerId || newCustomer)) {
     body['payment_intent_data[setup_future_usage]'] = 'off_session';
     body['metadata[save_card]'] = '1';
     body['metadata[client_id]'] = invoice.client_id || undefined;
@@ -527,32 +527,11 @@ export async function applyCustomerCredit({ secretKey, customerId, amountCents, 
 // on file" flow and the off-session charging that powers no-show /
 // late-cancel fees + post-session tips.
 
-// Who the buyer is on a PUBLIC checkout (packages, programs, memberships
-// bought from a business's page with no sign-in): their email, and never
-// an existing Stripe customer.
-//
-// Checked against Stripe in test mode: a Checkout Session created with
-// `customer` shows that customer's saved card to whoever opens the page
-// ("Pay with .... 4242") and charges it in one click with no card number
-// or security code. Stripe shows cards marked allow_redisplay=always, and
-// that is exactly how Checkout in setup mode saves them (the autopay and
-// "save a card" flows). The visitor here only typed an email, so passing a
-// client's customer would hand a stranger that client's card. With
-// `customer_email` Stripe treats the buyer as new: nothing saved is shown.
-// The purchase is still tied to the right client by metadata.client_id.
-// https://docs.stripe.com/payments/existing-customers
-export function publicCheckoutBuyer(email) {
-  return { customer_email: email };
-}
-
 // Find or create a Stripe customer on the connected account for a
-// given client email. The returned id is what we save on
+// given client email. We only ever look up by email + check metadata
+// to confirm it's the right tenant - we never trust a client_id that
+// the browser handed us. The returned id is what we save on
 // clients.stripe_customer_id.
-//
-// SIGNED-IN OR OWNER-STARTED FLOWS ONLY. This returns whichever customer
-// already has the email, saved cards included, so it must never feed a
-// checkout that an anonymous visitor reached by typing an email. Public
-// checkouts use publicCheckoutBuyer() above.
 export async function findOrCreateCustomer({ secretKey, stripeAccount, email, name, workspaceId, clientId }) {
   if (!email) throw new Error('email is required');
   const list = await stripeFetch(
@@ -592,13 +571,17 @@ export async function createSetupIntent({ secretKey, stripeAccount, customerId, 
 
 export async function createSetupCheckoutSession({
   secretKey, stripeAccount, customerId, workspaceId, clientId, successUrl, cancelUrl,
+  // No customerId: the page is for a visitor whose identity is not proven.
+  // Stripe makes a new customer for the card instead of adding it to (and
+  // showing the page for) an existing one.
+  customerEmail = null,
 }) {
-  if (!customerId) throw new Error('customerId is required');
+  if (!customerId && !customerEmail) throw new Error('customerId or customerEmail is required');
   const session = await stripeFetch('/checkout/sessions', {
     method: 'POST', secretKey, stripeAccount,
     body: {
       mode: 'setup',
-      customer: customerId,
+      ...(customerId ? { customer: customerId } : { customer_email: customerEmail, customer_creation: 'always' }),
       success_url: successUrl,
       cancel_url: cancelUrl,
       'payment_method_types[0]': 'card',
@@ -617,9 +600,11 @@ export async function createSetupCheckoutSession({
 // allow_redisplay=always (checked in test mode), and "always" is the one
 // value Checkout offers back on a later payment page: "Pay with .... 4242",
 // one click, to whoever opened a session that has the customer attached.
-// Nothing here relies on that: saved cards are charged off-session from our
-// own buttons, which works the same on a "limited" card. So every card we
-// save is turned to "limited" and never appears on a Checkout page.
+// Who gets a customer attached is decided in api/_lib/checkoutIdentity.js;
+// this is the second lock on the same door. Saved cards are charged
+// off-session from our own buttons, which works the same on a "limited"
+// card, so every card we save is turned to "limited" and never appears on
+// a Checkout page, whoever the page was opened for.
 //
 // Never throws (saving the card must not fail over this). Returns true when
 // the card is limited afterwards, false when Stripe could not be told.

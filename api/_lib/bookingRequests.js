@@ -173,7 +173,7 @@ function bookAgainUrl(ctx) {
 // Checkout in setup mode: nothing is charged). Only when the business takes
 // cards through Stripe and the client has no card on file yet. Returns the
 // page URL or null.
-export async function depositCardSetupForRequest({ workspaceId, clientId, bookingId, successUrl, cancelUrl }) {
+export async function depositCardSetupForRequest({ workspaceId, clientId, bookingId, successUrl, cancelUrl, trusted = false }) {
   if (!workspaceId || !clientId) return null;
   try {
     const fs = await fetchFinanceSettings(workspaceId);
@@ -185,11 +185,14 @@ export async function depositCardSetupForRequest({ workspaceId, clientId, bookin
     const client = rows[0];
     if (!client?.email || client.payment_method_id) return null;
     const creds = await loadStripeCreds(workspaceId);
-    const customerId = await ensureStripeCustomer({ creds, client });
-    if (!customerId) return null;
+    // The client's existing Stripe customer only for their own signed-in
+    // account; anyone else saves the card onto a new one
+    // (api/_lib/checkoutIdentity.js).
+    const customerId = trusted ? await ensureStripeCustomer({ creds, client }) : null;
+    if (trusted && !customerId) return null;
     const s = await createSetupCheckoutSession({
       secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
-      customerId, workspaceId, clientId, successUrl, cancelUrl,
+      customerId, customerEmail: client.email, workspaceId, clientId, successUrl, cancelUrl,
     });
     if (s?.url && bookingId) {
       await sql`UPDATE bookings SET request_card_setup_at = NOW() WHERE id = ${bookingId} AND workspace_id = ${workspaceId}`.catch(() => {});

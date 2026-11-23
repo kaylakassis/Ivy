@@ -108,8 +108,9 @@ async function main() {
   assert(newUser?.terms_version === CURRENT_TERMS_VERSION, 'a new sign-up on the current app accepts the current Terms');
   const auth = read('src/lib/auth.jsx'); const modal = read('src/components/TermsAcceptModal.jsx');
   assert(/&tv=\$\{encodeURIComponent\(CURRENT_TERMS_VERSION\)\}/.test(auth), 'the app tells the server which Terms it carries');
-  assert(/section 8, "Ivy\\'s property"/.test(modal) && /December 3, 2026/.test(modal) && /Nothing else changed/.test(modal) && !/[–—]/.test(modal.slice(modal.indexOf('const intro'), modal.indexOf('return ('))),
-    'the prompt says in plain words what changed and when it takes effect');
+  const intro = modal.slice(modal.indexOf('const intro'), modal.indexOf('return ('));
+  assert(/We updated our Terms of Service\. Please read them, then accept to continue\./.test(intro) && !/section 8|December|property/.test(intro) && /Read Terms/.test(modal) && /Sign out/.test(modal),
+    'the prompt only says the Terms were updated, with links to read them and a choice to accept or sign out');
   const helper = read('api/helper/accept.js');
   assert(/acceptableTermsVersion\(body\.acceptedTermsVersion\)/.test(helper), 'a helper accepting an invite from an older app is handled the same way');
   const privacy = read('src/features/legal/PrivacyPage.jsx').replace(/\s+/g, ' ');

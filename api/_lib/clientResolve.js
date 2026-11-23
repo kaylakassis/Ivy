@@ -42,9 +42,9 @@ export async function resolveMergedClientId(workspaceId, clientId) {
 }
 
 // Remember the Stripe customer a purchase created, for a client that has
-// none yet. Public checkouts (packages, programs, memberships) carry the
-// buyer's email and never an existing customer, so a subscription bought
-// there lands on a customer Stripe made for it. A first-time buyer keeps
+// none yet. A public checkout carries only the buyer's email unless the
+// request proved who is asking (api/_lib/checkoutIdentity.js), so a
+// subscription bought there lands on a customer Stripe made for it. A first-time buyer keeps
 // that one as their customer from then on. A client who ALREADY has a
 // customer keeps it untouched: their saved card and any automatic payment
 // agreement hang off that id, and nothing started by an anonymous visitor

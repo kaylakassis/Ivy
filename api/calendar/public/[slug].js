@@ -16,6 +16,7 @@ import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { publicReviewerName } from '../../_lib/reviews.js';
 import { guardVisit, missKey } from '../../_lib/activityWatch.js';
+import { buyerIsSignedInAs } from '../../_lib/checkoutIdentity.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
@@ -881,14 +882,12 @@ async function createBooking(req, res) {
         // deposit checkout also keeps the card (Stripe shows the client a
         // "saved for future payments" note) so a later fee can be charged.
         const keep = name === 'stripe'
-          ? await cardOnFileCheckout({ workspaceId, clientId, service: svc, mode: 'deposit' }).catch(() => null)
+          ? await cardOnFileCheckout({ workspaceId, clientId, service: svc, mode: 'customer', trusted: await buyerIsSignedInAs(req, clientEmail) }).catch(() => null)
           : null;
         const session = await adapter.createCheckoutSession({
           workspaceId,
           settings,
-          // Not signed in: the card is kept on a NEW Stripe customer, never
-          // the client's existing one (whose saved cards the page would offer).
-          ...(keep?.keepCard ? { saveCard: true, newCustomer: true } : {}),
+          ...(keep?.customerId ? { customerId: keep.customerId, saveCard: true } : keep?.newCustomer ? { newCustomer: true, saveCard: true } : {}),
           amountCents: depositCents,
           currency: (settings?.currency || 'usd').toUpperCase(),
           description: `Deposit · ${b.id.slice(0, 8)}`,
@@ -921,13 +920,13 @@ async function createBooking(req, res) {
       // Request with a deposit: save the card now (nothing charged), charge
       // it only when the owner approves (approveBookingRequest).
       cardSetupUrl = await depositCardSetupForRequest({
-        workspaceId, clientId, bookingId: b.id,
+        workspaceId, clientId, bookingId: b.id, trusted: await buyerIsSignedInAs(req, clientEmail),
         successUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=saved`,
         cancelUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=skipped`,
       });
     } else if (!depositCheckoutUrl && !(pkgRow && packageUseMode !== 'completion')) {
       const setup = await cardOnFileCheckout({
-        workspaceId, clientId, service: svc, mode: 'setup',
+        workspaceId, clientId, service: svc, mode: 'setup', trusted: await buyerIsSignedInAs(req, clientEmail),
         successUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=saved`,
         cancelUrl: `${appUrl()}/book/${encodeURIComponent(slug)}?card=skipped`,
       }).catch(() => null);

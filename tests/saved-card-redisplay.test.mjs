@@ -14,7 +14,8 @@
 //       webhook and the legacy per-business webhook (the automatic payments
 //       return is covered in recurring-autopay.test.mjs)
 //   [3] a deposit checkout for someone who is not signed in keeps the card
-//       on a NEW customer: no existing customer on the session
+//       on a NEW customer (who counts as signed in: checkout-identity.test.mjs);
+//       tax on never breaks a checkout that has no existing customer
 //   [4] the one-off sweep over cards saved before this: a dry run changes
 //       nothing, --apply changes only what needs it, one business at a time
 //   [5] the code paths cannot quietly go back
@@ -207,7 +208,7 @@ async function run() {
   b = await sessionBody({ saveCard: true, newCustomer: true, customerId: 'cus_known' });
   assert(b.customer === 'cus_known' && !('customer_creation' in b) && !('customer_email' in b), 'a signed-in or tokened flow that passes its customer is unchanged');
   b = await sessionBody({ saveCard: false, newCustomer: true });
-  assert(!('customer' in b) && !('customer_creation' in b) && !('payment_intent_data[setup_future_usage]' in b), 'not keeping a card: an ordinary guest checkout');
+  assert(!('customer' in b) && !('payment_intent_data[setup_future_usage]' in b) && !('metadata[save_card]' in b), 'not keeping a card: no existing customer and nothing saved');
   b = await sessionBody({ saveCard: true });
   assert(!('customer' in b) && !('customer_creation' in b) && !('payment_intent_data[setup_future_usage]' in b), 'saveCard without a customer or newCustomer keeps nothing (as before)');
   // Stripe refuses the whole session when customer_update is sent without
@@ -217,20 +218,22 @@ async function run() {
   b = await sessionBody({ automaticTax: true, saveCard: true, customerId: 'cus_known' });
   assert(b['customer_update[address]'] === 'auto', 'tax on, existing customer: customer_update as before');
 
-  // The booking page's helper: a deposit never reaches for a Stripe customer.
+  // The booking page's helper, for a visitor (not signed in): a deposit
+  // never reaches for the client's Stripe customer.
   const svc = { cancellation_fee_amount: 20, no_show_fee_amount: 0 };
   const nocard = await mkClient(A.wid, 'nocard', `cus_leftover_${STAMP}`);
   calls.length = 0;
-  let keep = await cardOnFileCheckout({ workspaceId: A.wid, clientId: nocard, service: svc, mode: 'deposit' });
-  assert(keep?.keepCard === true && !('customerId' in keep) && calls.length === 0, 'deposit mode: keep the card, no customer handed back, Stripe not called');
+  let keep = await cardOnFileCheckout({ workspaceId: A.wid, clientId: nocard, service: svc, mode: 'customer' });
+  assert(keep?.newCustomer === true && !('customerId' in keep) && calls.length === 0, 'deposit for a visitor: keep the card on a new customer, none handed back, Stripe not called');
   assert((await clientRow(nocard)).stripe_customer_id === `cus_leftover_${STAMP}`, 'the client row is not touched');
   const hascard = await mkClient(A.wid, 'hascard', `cus_has_${STAMP}`, 'pm_on_file');
-  assert(await cardOnFileCheckout({ workspaceId: A.wid, clientId: hascard, service: svc, mode: 'deposit' }) === null, 'a client with a card on file is never offered a replacement');
-  assert(await cardOnFileCheckout({ workspaceId: A.wid, clientId: nocard, service: { cancellation_fee_amount: 0 }, mode: 'deposit' }) === null, 'no fees on the service: no card kept');
+  assert(await cardOnFileCheckout({ workspaceId: A.wid, clientId: hascard, service: svc, mode: 'customer' }) === null, 'a client with a card on file is never offered a replacement');
+  assert(await cardOnFileCheckout({ workspaceId: A.wid, clientId: nocard, service: { cancellation_fee_amount: 0 }, mode: 'customer' }) === null, 'no fees on the service: no card kept');
   calls.length = 0;
   keep = await cardOnFileCheckout({ workspaceId: A.wid, clientId: nocard, service: svc, mode: 'setup', successUrl: 'https://x/ok', cancelUrl: 'https://x/no' });
   const setupCall = calls.find((c) => /checkout\/sessions$/.test(c.url));
-  assert(!!keep?.url && setupCall?.body.mode === 'setup' && setupCall.body.customer === `cus_leftover_${STAMP}`, 'setup mode (a page that shows no saved cards) still saves onto the client\'s customer');
+  assert(!!keep?.url && setupCall?.body.mode === 'setup' && !('customer' in setupCall.body) && setupCall.body.customer_creation === 'always' && !JSON.stringify(setupCall.body).includes(`cus_leftover_${STAMP}`),
+    "card page for a visitor: a new customer too, never the client's leftover one");
 
   // ════════════════════════════════════════════════════════════════════
   console.log('\n[4] the sweep over cards saved before this');
@@ -289,7 +292,8 @@ async function run() {
     assert(/hideCardFromCheckout\(/.test(code(rel)), `${rel}: a setup-mode save turns the card to limited`);
   }
   const slug = code('api/calendar/public/[slug].js');
-  assert(/mode: 'deposit'/.test(slug) && /saveCard: true, newCustomer: true/.test(slug) && !/customerId: keep/.test(slug) && !/mode: 'customer'/.test(slug), 'the public booking deposit asks for a new customer and never passes an existing one');
+  assert(/keep\?\.newCustomer \? \{ newCustomer: true, saveCard: true \}/.test(slug) && (slug.match(/trusted: await buyerIsSignedInAs\(req, clientEmail\)/g) || []).length === 3,
+    'the public booking form keeps a visitor\'s card on a new customer, and asks who is really there on all three card paths');
   const script = fs.readFileSync(path.join(root, 'scripts/hide-saved-cards-from-checkout.mjs'), 'utf8');
   assert(/const apply = args\.includes\('--apply'\)/.test(script) && /hideSavedCardsForWorkspace\(\{\s*workspaceId, creds, apply,/.test(script), 'the one-off script changes nothing unless --apply is given');
 

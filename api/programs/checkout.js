@@ -19,7 +19,8 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
-import { stripeFetch, publicCheckoutBuyer } from '../_lib/stripe.js';
+import { stripeFetch, findOrCreateCustomer } from '../_lib/stripe.js';
+import { buyerIsSignedInAs } from '../_lib/checkoutIdentity.js';
 import { appUrl } from '../_lib/tokens.js';
 import { fetchFinanceSettings } from '../_lib/finance.js';
 import { isUuid } from '../_lib/programs.js';
@@ -70,15 +71,20 @@ export default async function handler(req, res) {
     const bundle = await bundleFor(p);
     const addOn = bundle?.mode === 'addon' && body.addOn === true ? bundle : null;
 
-    // The buyer is NOT signed in, so the session carries their email and
-    // never that client's existing Stripe customer: Checkout would offer the
-    // client's saved card to whoever typed their email (publicCheckoutBuyer).
-    // The webhook finds the client by metadata.client_id.
-    let clientId = null;
-    const existing = (await sql`SELECT id FROM clients WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail} LIMIT 1`).rows[0];
-    if (existing) clientId = existing.id;
+    let clientId = null; let stripeCustomerId = null;
+    const existing = (await sql`SELECT id, stripe_customer_id FROM clients WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail} LIMIT 1`).rows[0];
+    if (existing) { clientId = existing.id; stripeCustomerId = existing.stripe_customer_id; }
     else {
       clientId = (await sql`INSERT INTO clients (workspace_id, name, email, stage, source) VALUES (${workspaceId}, ${buyerName}, ${buyerEmail}, 'lead', 'program') RETURNING id`).rows[0].id;
+    }
+    // Existing Stripe customer only for the client's own signed-in account;
+    // a typed email gets a clean checkout (api/_lib/checkoutIdentity.js).
+    const trusted = await buyerIsSignedInAs(req, buyerEmail);
+    if (!trusted) stripeCustomerId = null;
+    if (trusted && !stripeCustomerId) {
+      const cust = await findOrCreateCustomer({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, email: buyerEmail, name: buyerName, workspaceId, clientId });
+      stripeCustomerId = cust.id;
+      await sql`UPDATE clients SET stripe_customer_id = ${stripeCustomerId} WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
     }
 
     const base = appUrl();
@@ -89,7 +95,7 @@ export default async function handler(req, res) {
       mode: recurring ? 'subscription' : 'payment',
       success_url: `${base}/p/${p.id}?purchased=1`,
       cancel_url: `${base}/p/${p.id}?cancelled=1`,
-      ...publicCheckoutBuyer(buyerEmail),
+      ...(stripeCustomerId ? { customer: stripeCustomerId } : { customer_email: buyerEmail }),
       'line_items[0][price_data][currency]': currency,
       'line_items[0][price_data][unit_amount]': Number(p.price_cents),
       'line_items[0][price_data][product_data][name]': p.title,
