@@ -516,11 +516,32 @@ export async function applyCustomerCredit({ secretKey, customerId, amountCents, 
 // on file" flow and the off-session charging that powers no-show /
 // late-cancel fees + post-session tips.
 
+// Who the buyer is on a PUBLIC checkout (packages, programs, memberships
+// bought from a business's page with no sign-in): their email, and never
+// an existing Stripe customer.
+//
+// Checked against Stripe in test mode: a Checkout Session created with
+// `customer` shows that customer's saved card to whoever opens the page
+// ("Pay with .... 4242") and charges it in one click with no card number
+// or security code. Stripe shows cards marked allow_redisplay=always, and
+// that is exactly how Checkout in setup mode saves them (the autopay and
+// "save a card" flows). The visitor here only typed an email, so passing a
+// client's customer would hand a stranger that client's card. With
+// `customer_email` Stripe treats the buyer as new: nothing saved is shown.
+// The purchase is still tied to the right client by metadata.client_id.
+// https://docs.stripe.com/payments/existing-customers
+export function publicCheckoutBuyer(email) {
+  return { customer_email: email };
+}
+
 // Find or create a Stripe customer on the connected account for a
-// given client email. We only ever look up by email + check metadata
-// to confirm it's the right tenant - we never trust a client_id that
-// the browser handed us. The returned id is what we save on
+// given client email. The returned id is what we save on
 // clients.stripe_customer_id.
+//
+// SIGNED-IN OR OWNER-STARTED FLOWS ONLY. This returns whichever customer
+// already has the email, saved cards included, so it must never feed a
+// checkout that an anonymous visitor reached by typing an email. Public
+// checkouts use publicCheckoutBuyer() above.
 export async function findOrCreateCustomer({ secretKey, stripeAccount, email, name, workspaceId, clientId }) {
   if (!email) throw new Error('email is required');
   const list = await stripeFetch(

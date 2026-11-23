@@ -13,7 +13,7 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
-import { stripeFetch, findOrCreateCustomer } from '../_lib/stripe.js';
+import { stripeFetch, publicCheckoutBuyer } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { fetchFinanceSettings } from '../_lib/finance.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
@@ -72,20 +72,22 @@ export default async function handler(req, res) {
         : 'Package checkout is unavailable right now. Please try again later.');
     }
 
-    // Find-or-create a clients row + Stripe customer for the buyer
-    // BEFORE we mint Checkout, so the webhook can provision the
-    // client_packages row against a known client_id without having to
-    // re-query by email (which races with concurrent purchases).
+    // Find-or-create a clients row for the buyer BEFORE we mint Checkout,
+    // so the webhook can provision the client_packages row against a known
+    // client_id (carried in metadata) without having to re-query by email
+    // (which races with concurrent purchases).
+    //
+    // The buyer is NOT signed in, so the session never gets that client's
+    // existing Stripe customer: Checkout would offer the client's saved
+    // card to whoever typed their email (see publicCheckoutBuyer).
     let clientId = null;
-    let stripeCustomerId = null;
     const existing = await sql`
-      SELECT id, stripe_customer_id FROM clients
+      SELECT id FROM clients
        WHERE workspace_id = ${workspaceId} AND email = ${buyerEmail}
        LIMIT 1
     `;
     if (existing.rows.length > 0) {
       clientId = existing.rows[0].id;
-      stripeCustomerId = existing.rows[0].stripe_customer_id;
     } else {
       const ins = await sql`
         INSERT INTO clients (workspace_id, name, email, stage, source)
@@ -93,22 +95,6 @@ export default async function handler(req, res) {
         RETURNING id
       `;
       clientId = ins.rows[0].id;
-    }
-    if (!stripeCustomerId) {
-      const cust = await findOrCreateCustomer({
-        secretKey: creds.secretKey,
-        stripeAccount: creds.stripeAccount,
-        email: buyerEmail, name: buyerName,
-        workspaceId, clientId,
-      });
-      stripeCustomerId = cust.id;
-      // Defense-in-depth: scope the UPDATE to workspace_id so the public
-      // checkout flow can never link a Stripe customer to a clients row
-      // outside its own workspace.
-      await sql`
-        UPDATE clients SET stripe_customer_id = ${stripeCustomerId}
-         WHERE id = ${clientId} AND workspace_id = ${workspaceId}
-      `;
     }
 
     // Workspace currency. Defaults to USD when finance_settings is
@@ -126,7 +112,7 @@ export default async function handler(req, res) {
         mode: 'payment',
         success_url: `${base}/book/${encodeURIComponent(slug)}?package=purchased`,
         cancel_url:  `${base}/book/${encodeURIComponent(slug)}?package=cancel`,
-        customer: stripeCustomerId,
+        ...publicCheckoutBuyer(buyerEmail),
         'line_items[0][price_data][currency]': currency,
         'line_items[0][price_data][unit_amount]': unitAmount,
         'line_items[0][price_data][product_data][name]': p.name,

@@ -1,6 +1,6 @@
 // Helpers for membership tier templates + per-client subscription state.
 import { sql } from './db.js';
-import { resolveMergedClientId } from './clientResolve.js';
+import { resolveMergedClientId, rememberStripeCustomerIfNone } from './clientResolve.js';
 import { fetchStripeCustomer } from './stripe.js';
 import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
 
@@ -196,6 +196,9 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
             cancelled_at = COALESCE(client_memberships.cancelled_at, EXCLUDED.cancelled_at),
             updated_at = NOW()
         `;
+        // A first-time buyer keeps the customer this checkout created; a
+        // client who already has one is left alone.
+        await rememberStripeCustomerIfNone({ workspaceId, clientId: client.id, customerId });
         return 'created';
       }
     }

@@ -12,7 +12,7 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
-import { findOrCreateCustomer, createMembershipCheckoutSession } from '../_lib/stripe.js';
+import { createMembershipCheckoutSession } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
@@ -67,21 +67,26 @@ export default async function handler(req, res) {
         : e.message);
     }
 
-    // Find-or-create a clients-row + Stripe customer for the buyer
-    // BEFORE we mint Checkout, so the webhook can stitch the
-    // resulting subscription back to a known client_id.
+    // Find-or-create a clients row for the buyer BEFORE we mint Checkout,
+    // so the webhook can stitch the resulting subscription back to a known
+    // client_id (carried in the session + subscription metadata).
+    //
+    // The buyer is NOT signed in: anyone can type any email here. So the
+    // session never gets that client's existing Stripe customer. Checkout
+    // offers a customer's saved card ("Pay with .... 4242", one click, no
+    // security code) to whoever opens the page, which would let a stranger
+    // see and charge a client's card by knowing their email. The session
+    // carries the email only (see publicCheckoutBuyer in _lib/stripe.js).
     let clientId = null;
-    let stripeCustomerId = null;
     // Case-insensitive: a client the owner typed in as Jane@Example.com must
-    // not become a second client row (and a second Stripe customer) here.
+    // not become a second client row here.
     const existing = await sql`
-      SELECT id, stripe_customer_id FROM clients
+      SELECT id FROM clients
        WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail}
        LIMIT 1
     `;
     if (existing.rows.length > 0) {
       clientId = existing.rows[0].id;
-      stripeCustomerId = existing.rows[0].stripe_customer_id;
     } else {
       const ins = await sql`
         INSERT INTO clients (workspace_id, name, email, stage, source)
@@ -89,23 +94,6 @@ export default async function handler(req, res) {
         RETURNING id
       `;
       clientId = ins.rows[0].id;
-    }
-    if (!stripeCustomerId) {
-      const cust = await findOrCreateCustomer({
-        secretKey: creds.secretKey,
-
-        stripeAccount: creds.stripeAccount,
-        email: buyerEmail, name: buyerName,
-        workspaceId, clientId,
-      });
-      stripeCustomerId = cust.id;
-      // Defense-in-depth: scope the UPDATE to workspace_id so the
-      // public membership-checkout flow can never link a Stripe
-      // customer to a clients row outside its own workspace.
-      await sql`
-        UPDATE clients SET stripe_customer_id = ${stripeCustomerId}
-         WHERE id = ${clientId} AND workspace_id = ${workspaceId}
-      `;
     }
 
     const base = appUrl();
@@ -115,7 +103,7 @@ export default async function handler(req, res) {
       stripeAccount: creds.stripeAccount,
       priceId: tier.stripe_price_id,
       amountCents: Number(tier.price_cents) || null,
-      customerId: stripeCustomerId,
+      customerEmail: buyerEmail,
       workspaceId,
       membershipId: tier.id,
       clientId,

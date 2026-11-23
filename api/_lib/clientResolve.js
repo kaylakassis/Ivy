@@ -41,6 +41,25 @@ export async function resolveMergedClientId(workspaceId, clientId) {
   return clientId;
 }
 
+// Remember the Stripe customer a purchase created, for a client that has
+// none yet. Public checkouts (packages, programs, memberships) carry the
+// buyer's email and never an existing customer, so a subscription bought
+// there lands on a customer Stripe made for it. A first-time buyer keeps
+// that one as their customer from then on. A client who ALREADY has a
+// customer keeps it untouched: their saved card and any automatic payment
+// agreement hang off that id, and nothing started by an anonymous visitor
+// may repoint it. Workspace-pinned like every other write to this column.
+export async function rememberStripeCustomerIfNone({ workspaceId, clientId, customerId }) {
+  if (!workspaceId || !clientId || !customerId || !/^cus_[A-Za-z0-9_]{1,200}$/.test(String(customerId))) return false;
+  const upd = await sql`
+    UPDATE clients SET stripe_customer_id = ${customerId}
+     WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+       AND stripe_customer_id IS NULL
+    RETURNING id
+  `;
+  return upd.rows.length > 0;
+}
+
 // A copy of provider metadata with client_id resolved (or the same object
 // when there is nothing to resolve).
 export async function withResolvedClientId(workspaceId, metadata) {
