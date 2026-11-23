@@ -79,9 +79,14 @@ export default async function handler(req, res) {
     // re-query by email (which races with concurrent purchases).
     let clientId = null;
     let stripeCustomerId = null;
+    // Case-insensitive, like memberships and programs: a client the owner
+    // typed in as Jane@Example.com must not become a second client row.
+    // Where there is already more than one, the exact spelling wins (the
+    // record this matched before), then the oldest.
     const existing = await sql`
       SELECT id, stripe_customer_id FROM clients
-       WHERE workspace_id = ${workspaceId} AND email = ${buyerEmail}
+       WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail}
+       ORDER BY (email = ${buyerEmail}) DESC, created_at ASC, id ASC
        LIMIT 1
     `;
     if (existing.rows.length > 0) {
