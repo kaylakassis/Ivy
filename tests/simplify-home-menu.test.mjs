@@ -44,7 +44,7 @@ async function main() {
   const owner = visibleNavFor({ isSuperAdmin: false });
   let g = splitNav(owner, []);
   assert(ids(g.main) === 'dashboard,calendar,clients,finance,ivy', 'a new business sees exactly five');
-  assert(ids(g.more) === 'comms,programs,marketing,reviews,website,shops,docs', 'everything else is under More, nothing is lost');
+  assert(ids(g.more) === 'comms,programs,automation,reviews,website,shops,docs', 'everything else is under More, nothing is lost');
   assert(g.main.length + g.more.length === owner.length, 'every screen is in one list or the other');
   g = splitNav(owner, ['website', 'docs']);
   assert(ids(g.main) === 'dashboard,calendar,clients,finance,ivy,website,docs' && !g.more.some((n) => n.id === 'website' || n.id === 'docs'), 'a tool the business uses moves into the menu by itself');
@@ -57,6 +57,8 @@ async function main() {
   assert(!owner.some((n) => n.id === 'admin'), 'and nobody else has it at all');
   g = splitNav(visibleNavFor({ businessType: 'product' }), []);
   assert(ids(g.main) === 'dashboard,clients,finance,ivy', 'a product-only business has no Calendar (four places)');
+  g = splitNav(visibleNavFor({ hiddenNav: ['marketing'] }), ['automation']);
+  assert(!g.main.concat(g.more).some((n) => n.id === 'automation'), 'an owner who hid Marketing before it was renamed still has Automation hidden');
   g = splitNav(visibleNavFor({ hiddenNav: ['clients', 'website'] }), ['website']);
   assert(!g.main.some((n) => n.id === 'clients') && !g.main.concat(g.more).some((n) => n.id === 'website'), 'a tab the owner hid stays hidden, even when in use');
   assert(USAGE_NAV_IDS.every((id) => NAV.some((n) => n.id === id)) && USAGE_NAV_IDS.length === 7, 'the server tracks usage for exactly the seven tools under More');
@@ -97,7 +99,9 @@ async function main() {
   await sql`UPDATE websites SET launched = TRUE WHERE workspace_id = ${a.ws}`;
   assert(JSON.stringify(await usedNavFor(a.ws)) === '["website"]', 'publishing it does');
   await sql`INSERT INTO reward_rules (workspace_id, type, name) VALUES (${a.ws}, 'visit', 'Every 5th visit')`;
-  assert(JSON.stringify(await usedNavFor(a.ws)) === '["marketing","website"]', 'a reward counts as using Marketing');
+  assert(JSON.stringify(await usedNavFor(a.ws)) === '["website"]', 'a reward does not count towards Automation (rewards live in Clients, which is always in the menu)');
+  await sql`INSERT INTO workflows (workspace_id, name, trigger_type) VALUES (${a.ws}, 'A Flow', 'client_created')`;
+  assert(JSON.stringify(await usedNavFor(a.ws)) === '["automation","website"]', 'a workflow does');
   const shopB = (await sql`SELECT id FROM shops WHERE owner_workspace_id = ${b.ws}`).rows[0].id;
   await sql`INSERT INTO shop_members (shop_id, workspace_id, status) VALUES (${shopB}, ${a.ws}, 'invited')`;
   assert(!(await usedNavFor(a.ws)).includes('shops'), 'an invitation to a shop that was not accepted does not count');
@@ -105,7 +109,7 @@ async function main() {
   assert((await usedNavFor(a.ws)).includes('shops'), 'joining one does');
   assert(JSON.stringify(await usedNavFor(null)) === '[]' && (await usedNavFor('not-a-uuid')) === null, 'no business: nothing; a lookup that fails: "not known", never a guess');
   let r = await me(a.userId);
-  assert(r.statusCode === 200 && JSON.stringify(r.body.usedNav) === '["marketing","website","shops"]', 'the app is told which tools are in use when it loads the account');
+  assert(r.statusCode === 200 && JSON.stringify(r.body.usedNav) === '["automation","website","shops"]', 'the app is told which tools are in use when it loads the account');
   r = await me(b.userId);
   assert(r.body.usedNav.length === 7 && r.body.owns?.id === b.ws, 'each owner gets their own list');
   const clientOnly = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, signup_role)

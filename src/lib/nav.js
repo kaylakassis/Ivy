@@ -26,7 +26,9 @@ export const NAV = [
   { id: 'finance',   to: '/finance',    label: 'Money',          icon: 'Dollar',   section: 'Run' },
   // Grow.
   { id: 'programs',  to: '/programs',   label: 'Programs',       icon: 'Gift',     section: 'Grow', accent: true },
-  { id: 'marketing', to: '/marketing',  label: 'Marketing',      icon: 'Mail',     section: 'Grow' },
+  // Automation (it was "Marketing"): what Ivy noticed the owner repeats, and
+  // their workflows. Rewards and the birthday-type reminders are in Clients.
+  { id: 'automation', to: '/automation', label: 'Automation',    icon: 'Repeat',   section: 'Grow' },
   { id: 'reviews',   to: '/reviews',    label: 'Reviews',        icon: 'Heart',    section: 'Grow' },
   { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe',    section: 'Grow' },
   { id: 'shops',     to: '/shops',      label: 'Shop',           icon: 'Store',    section: 'Grow' },
@@ -55,6 +57,8 @@ export function hideableNav() {
 // appears in hiddenNav. Used by Sidebar, MobileDrawer, and CommandPalette.
 export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hiddenNav = [] } = {}) {
   const hidden = new Set(Array.isArray(hiddenNav) ? hiddenNav : []);
+  // An owner who hid "Marketing" before it was renamed keeps it hidden.
+  if (hidden.has('marketing')) hidden.add('automation');
   return NAV.filter((n) => {
     if (n.superAdminOnly && !isSuperAdmin) return false;
     if (n.productOnlyHidden && businessType === 'product') return false;
@@ -92,11 +96,11 @@ export function splitNav(items, usedNav) {
 export const TITLES = {
   dashboard: { title: 'Home',          subtitle: 'Today and what needs you' },
   progress:  { title: 'Progress',      subtitle: 'Your numbers, this week, goals and tasks' },
-  clients:   { title: 'Clients',       subtitle: 'Your people' },
+  clients:   { title: 'Clients',       subtitle: 'Your people, their rewards and reminders' },
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
   finance:   { title: 'Money',       subtitle: 'Money in, money out' },
-  marketing: { title: 'Marketing',     subtitle: 'Automations and rewards' },
+  automation: { title: 'Automation',   subtitle: 'What Ivy noticed, and your workflows' },
   reviews:   { title: 'Reviews',       subtitle: 'Publish & respond to client reviews' },
   comms:     { title: 'Messages',      subtitle: 'Inbox' },
   docs:      { title: 'Documents',     subtitle: 'Waivers, agreements, signatures' },

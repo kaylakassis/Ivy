@@ -5,14 +5,18 @@ import { api } from '../../lib/api.js';
 
 export function useWorkflows() {
   const [workflows, setWorkflows] = useState([]);
+  // What Ivy noticed the owner repeats: { suggestion, evidence } (both null
+  // when there is nothing yet).
+  const [noticed, setNoticed]     = useState(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
 
   const refresh = useCallback(async () => {
     setError(null);
     try {
-      const r = await api.get('/workflows');
+      const r = await api.get('/workflows?noticed=1');
       setWorkflows(r.workflows || []);
+      setNoticed(r.noticed || { suggestion: null, evidence: null });
     } catch (e) {
       setError(e);
     } finally {
@@ -50,5 +54,5 @@ export function useWorkflows() {
     catch (e) { refresh(); throw e; }
   };
 
-  return { workflows, loading, error, refresh, create, update, remove };
+  return { workflows, noticed, loading, error, refresh, create, update, remove };
 }

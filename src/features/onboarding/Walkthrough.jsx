@@ -78,7 +78,7 @@ const STEPS = [
   {
     id: 'more',
     title: 'Everything else is under More',
-    body: "Messages, Programs, Marketing, Reviews, Website, Shop and Documents wait under \"More\" so the menu stays short. When you start using one, it moves into your menu by itself.",
+    body: "Messages, Programs, Automation, Reviews, Website, Shop and Documents wait under \"More\" so the menu stays short. When you start using one, it moves into your menu by itself.",
     route: '/dashboard',
     selector: '[data-nav-more]',
     placement: 'right',
@@ -133,7 +133,7 @@ export default function Walkthrough({ onClose }) {
 
     const run = async () => {
       // Step 1: navigate to the target route if we're not already there.
-      // Routes may carry a query (e.g. /marketing?tab=rewards): compare
+      // Routes may carry a query (e.g. /finance?section=packages): compare
       // the path, and the query when there is one.
       if (step.route) {
         const [routePath, routeQuery = ''] = step.route.split('?');

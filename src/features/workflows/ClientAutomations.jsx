@@ -63,9 +63,10 @@ export default function ClientAutomations() {
 
   if (error) return <div className="card" style={{ padding: 16, color: 'var(--danger)', fontSize: 13 }}>{error}</div>;
   return (
-    <section aria-label="Messages Ivy sends for you" style={{ display: 'grid', gap: 12 }}>
+    <section aria-label="Reminders Ivy sends your clients" style={{ display: 'grid', gap: 12 }}>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 650 }}>Ivy sends these for you</div>
+        <h2 className="page-title" style={{ margin: 0, fontSize: 26 }}>Reminders</h2>
+        <div style={{ fontSize: 15, fontWeight: 650, marginTop: 8 }}>Ivy sends these for you</div>
         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
           Ready-made messages. Turn one on, make the words yours, and Ivy sends it to the right clients at the right time. Clients who turned off these emails or texts never get them.
         </div>

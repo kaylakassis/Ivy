@@ -48,6 +48,10 @@ export const TUTORIALS = {
     intro: 'Your book of business. Every lead, every active client, every paused account - all searchable, taggable, and one tap from a message or invoice.',
     steps: [
       {
+        title: 'Clients, Rewards, Reminders',
+        body: 'Three sections at the top. Clients is your list. Rewards is your loyalty program. Reminders are the messages Ivy sends for you: a birthday note, a check-in when someone goes quiet, and a book-again link after a visit.',
+      },
+      {
         title: 'Add your first client',
         body: 'Tap "Add client" top-right. You only need a name to start; phone and email come highly recommended so you can text and email them through Ivy later.',
       },
@@ -129,17 +133,21 @@ export const TUTORIALS = {
     ],
   },
 
-  marketing: {
-    title: 'Marketing',
-    intro: 'What brings clients back, in one tab: Workflows (follow-ups that run on their own) and Rewards (a loyalty program for your clients).',
+  automation: {
+    title: 'Automation',
+    intro: 'Where the things you do over and over become things that run by themselves.',
     steps: [
       {
-        title: 'Workflows',
-        body: "A trigger plus a few actions: a thank-you when someone signs up, a check-in when a client goes quiet for 60 days, a birthday note. Set it once and it runs while you work.",
+        title: 'Ivy noticed',
+        body: "Ivy watches for what you do the same way most of the time, like sending an invoice or a document to every new client, or messaging someone after each visit. When it sees a pattern it shows you the evidence and offers to take it over.",
       },
       {
-        title: 'Rewards',
-        body: 'Points, punch cards or referral credits for your clients. Turn it on when you are ready; nothing shows to clients until you launch it.',
+        title: 'Your workflows',
+        body: 'A trigger plus a few actions: a thank-you when someone signs up, a check-in when a client goes quiet, a task after a visit. Start from a template or build your own, and switch any of them off whenever you like.',
+      },
+      {
+        title: 'Rewards and reminders are in Clients',
+        body: 'The loyalty program and the messages Ivy sends your clients (birthday, a check-in, a book-again link) live in the Clients tab, under Rewards and Reminders.',
       },
     ],
   },

@@ -1,5 +1,5 @@
 // Full Clients view: header + analytics + tabs + search + table + detail drawer + add modal.
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -72,6 +72,42 @@ export function ClientStatusLine({ client }) {
   }
   const seen = timeAgo(client.lastSeenAt);
   return <div data-client-status="seen" style={{ ...base, color: 'var(--muted)' }}>{seen ? `Last seen ${seen === 'Today' || seen === 'Yesterday' ? seen.toLowerCase() : seen}` : 'No visits yet'}</div>;
+}
+
+// The Clients tab holds three things about the owner's people: the list,
+// their rewards (the loyalty program, which used to be under Marketing), and
+// the reminders Ivy sends them (birthday, a check-in when they go quiet, a
+// book-again link after a visit). ?view=rewards / ?view=reminders opens one.
+const Rewards = lazy(() => import('../rewards/Rewards.jsx'));
+const Reminders = lazy(() => import('../workflows/ClientAutomations.jsx'));
+export const CLIENT_VIEWS = [
+  { id: 'list', label: 'Clients' },
+  { id: 'rewards', label: 'Rewards' },
+  { id: 'reminders', label: 'Reminders' },
+];
+export function clientViewFor(search) {
+  const v = new URLSearchParams(search || '').get('view');
+  return v === 'rewards' || v === 'reminders' ? v : 'list';
+}
+
+function ViewTabs({ view, onPick }) {
+  return (
+    <div role="tablist" aria-label="Clients sections" className="tab-row" style={{ display: 'inline-flex', alignSelf: 'flex-start' }}>
+      {CLIENT_VIEWS.map((t) => {
+        const on = view === t.id;
+        return (
+          <button key={t.id} type="button" role="tab" aria-selected={on} data-client-view={t.id} onClick={() => onPick(t.id)}
+            className="seg-btn" style={{
+              padding: '7px 14px', borderRadius: 8, border: 0, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: on ? 'var(--surface)' : 'transparent',
+              color: on ? 'var(--fg)' : 'var(--muted)',
+              boxShadow: on ? 'var(--shadow-sm)' : 'none',
+              whiteSpace: 'nowrap',
+            }}>{t.label}</button>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function Clients() {
@@ -199,7 +235,8 @@ export default function Clients() {
       params.delete('folder');
       params.delete('view');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-    } else if (params.get('view')) {
+    } else if (params.get('view') && clientViewFor(location.search) === 'list') {
+      // (An old ?view=folders link. Rewards and Reminders keep theirs.)
       params.delete('view');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
@@ -402,12 +439,35 @@ export default function Clients() {
   // live; the ones that were there on load get the list stagger instead.
   const freshIds = useFreshKeys(clients.map((c) => c.id), { ready: !loading });
 
+  const view = clientViewFor(location.search);
+  const pickView = (id) => {
+    const p = new URLSearchParams(location.search);
+    if (id === 'list') p.delete('view'); else p.set('view', id);
+    navigate({ pathname: location.pathname, search: p.toString() }, { replace: true });
+  };
+
   if (offlineView) {
     return <OfflineClients snapshot={offlineSnapshot} openId={openId} onOpen={setOpenId} onClose={() => setOpenId(null)}/>;
   }
 
+  if (view !== 'list') {
+    return (
+      <div data-client-section={view}>
+        <div className="page-pad" style={{ paddingBottom: 0, display: 'flex', flexDirection: 'column' }}>
+          <ViewTabs view={view} onPick={pickView}/>
+        </div>
+        <div key={view} className="panel-enter">
+          <Suspense fallback={<div className="page-pad"><Loader/></div>}>
+            {view === 'rewards' ? <Rewards/> : <div className="page-pad"><Reminders/></div>}
+          </Suspense>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <ViewTabs view={view} onPick={pickView}/>
       {/* The list is the screen: one primary action here, the occasional
           ones (import, custom fields) behind the menu, and no explanation
           text pushing the first client down the page. */}

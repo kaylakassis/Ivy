@@ -30,7 +30,8 @@ function describeAction(a) {
   }
 }
 
-export default function WorkflowSuggestionCard({ suggestion, onChanged }) {
+// hideLink: on the Automation screen itself there is nowhere else to send them.
+export default function WorkflowSuggestionCard({ suggestion, onChanged, hideLink = false }) {
   const [busy, setBusy] = useState(null); // 'automate' | 'dismiss'
   const [done, setDone] = useState(false);
   const [err, setErr] = useState(null);
@@ -96,9 +97,11 @@ export default function WorkflowSuggestionCard({ suggestion, onChanged }) {
           <button type="button" className="btn btn-ghost" onClick={dismiss} disabled={!!busy} style={{ fontSize: 13 }}>
             {busy === 'dismiss' ? '…' : 'Not now'}
           </button>
-          <Link to="/marketing?tab=workflows" style={{ marginLeft: 'auto', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>
-            Edit in Workflows →
-          </Link>
+          {!hideLink && (
+            <Link to="/automation" style={{ marginLeft: 'auto', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>
+              See it in Automation →
+            </Link>
+          )}
         </div>
       </div>
     </div>

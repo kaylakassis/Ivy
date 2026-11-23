@@ -1408,7 +1408,7 @@ async function readAutomationsTool(ws, a) {
         ...(due.rebook.enabled ? {} : { off_note: 'Off: these are the visits from the last few days that would get the link if it were on.' }),
       },
       note: 'Each client gets the birthday message at most once a year, the check-in at most once every 90 days and the book-again link once per visit (never when they have something booked); an automation that is off sends nothing.',
-      manage: '[Automations](/marketing?tab=workflows)',
+      manage: '[Reminders](/marketing?tab=workflows&show=reminders)',
     };
   }
   const all = await readAutomations(ws);
@@ -1421,7 +1421,7 @@ async function readAutomationsTool(ws, a) {
     }
     out[k] = { label: r.label, on: r.enabled, template: r.template, channels: r.channels, ...(k === 'quiet' ? { quiet_days: r.quietDays } : {}), template_saved: !!r.templateApprovedAt, sent_this_month: r.sentThisMonth, once: r.once };
   }
-  return { ...out, merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Automations](/marketing?tab=workflows)' };
+  return { ...out, merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Reminders](/marketing?tab=workflows&show=reminders)' };
 }
 
 const AUTOMATION_NOUNS = { birthday: 'the birthday message', quiet: 'the "We\'d love to see you again" check-in', rebook: 'the book-again link after a visit' };

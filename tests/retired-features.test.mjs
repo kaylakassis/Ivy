@@ -122,9 +122,9 @@ async function main() {
 
   console.log('\n[4] the screens');
   assert(['src/features/campaigns/Campaigns.jsx', 'src/features/campaigns/state.js', 'src/features/finance/Expenses.jsx', 'src/features/finance/Time.jsx', 'src/features/finance/timeState.js', 'api/_lib/campaigns.js'].every(gone), 'the three screens and the campaign sender are gone');
-  const hub = read('src/features/grow/Marketing.jsx'); const fin = read('src/features/finance/Finance.jsx'); const app = read('src/App.jsx');
-  assert(!/id: 'campaigns'/.test(hub) && /id: 'workflows'/.test(hub) && /id: 'rewards'/.test(hub) && /params\.get\('tab'\) : 'workflows'/.test(hub), 'Marketing keeps Workflows and Rewards and opens on Workflows');
-  assert(/path="\/campaigns"\s+element=\{<MarketingRedirect tab="workflows"\/>\}/.test(app), 'an old /campaigns link lands on Workflows');
+  const fin = read('src/features/finance/Finance.jsx'); const app = read('src/App.jsx');
+  assert(gone('src/features/grow/Marketing.jsx') && !/campaign/i.test(read('src/lib/nav.js')), 'the Marketing screen itself is gone too (workflows are Automation; rewards are in Clients)');
+  assert(/path="\/campaigns"\s+element=\{<MarketingRedirect tab="workflows"\/>\}/.test(app), 'an old /campaigns link lands on Automation');
   assert(!/id: 'track'/.test(fin) && !/id: 'expenses'/.test(fin) && !/id: 'time'/.test(fin), 'Money has no Track group');
   assert(/hasPastExpenses && \(/.test(fin) && /Year-end income summary/.test(fin), 'the export menu offers the income summary to everyone, and past expenses only to owners who have some');
   const tips = read('src/lib/tutorials.js') + read('src/features/onboarding/Walkthrough.jsx');

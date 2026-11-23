@@ -59,7 +59,7 @@ const ClientProgram = lazyRoute(() => import('./features/client/ClientPrograms.j
 const ClientLesson = lazyRoute(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientLesson })));
 const Calendar    = lazyRoute(() => import('./features/calendar/Calendar.jsx'));
 const Finance     = lazyRoute(() => import('./features/finance/Finance.jsx'));
-const Marketing   = lazyRoute(() => import('./features/grow/Marketing.jsx'));
+const Automation  = lazyRoute(() => import('./features/workflows/Workflows.jsx'));
 const Reviews     = lazyRoute(() => import('./features/reviews/Reviews.jsx'));
 const Messages    = lazyRoute(() => import('./features/messages/Messages.jsx'));
 const Documents   = lazyRoute(() => import('./features/documents/Documents.jsx'));
@@ -114,7 +114,7 @@ const OnboardingPage     = lazyRoute(() => import('./features/onboarding/Onboard
 // and the calendar at the same time, never one after the other.
 const OWNER_PAGES = {
   '/dashboard': Dashboard, '/clients': Clients, '/programs': ProgramsPage, '/calendar': Calendar,
-  '/finance': Finance, '/marketing': Marketing, '/reviews': Reviews, '/messages': Messages,
+  '/finance': Finance, '/automation': Automation, '/reviews': Reviews, '/messages': Messages,
   '/documents': Documents, '/website': Website, '/ivy': IvyPro, '/account': AccountPage,
   '/more': MorePage, '/admin': AdminPage, '/shops': ShopsPage, '/progress': Progress,
 };
@@ -239,7 +239,7 @@ export function warmApp(pathname) {
 // Client-facing pages (portal, booking, invoices...) get the client set of
 // lines; the marketing site and auth pages keep the quiet spinner.
 const OWNER_PREFIXES = ['/dashboard', '/clients', '/calendar', '/finance', '/messages', '/ivy',
-  '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding', '/shops', '/progress'];
+  '/programs', '/automation', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding', '/shops', '/progress'];
 const CLIENT_PREFIXES = ['/me', '/helper', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/', '/shop/'];
 function RouteFallback({ client = false }) {
   const { pathname } = useLocation();
@@ -354,11 +354,22 @@ function NativeOnly({ children }) {
   return isNative() ? children : <Navigate to="/" replace/>;
 }
 
-// /workflows, /rewards → /marketing?tab=… (other params kept). /campaigns is an old address (email campaigns were retired) and lands on Workflows.
+// Marketing was taken apart: workflows are the Automation screen; Rewards
+// and the reminders Ivy sends (birthday, check-in, book again) are inside
+// Clients. Every old address still lands in the right place:
+//   /marketing, /marketing?tab=workflows, /workflows, /campaigns → /automation
+//   /marketing?tab=rewards, /rewards                             → /clients?view=rewards
+//   /marketing?...&show=reminders (links Ivy gives in chat)       → /clients?view=reminders
 function MarketingRedirect({ tab }) {
   const p = new URLSearchParams(window.location.search);
-  p.set('tab', tab);
-  return <Navigate to={`/marketing?${p.toString()}`} replace/>;
+  const want = p.get('show') === 'reminders' ? 'reminders' : (tab || p.get('tab'));
+  p.delete('tab'); p.delete('show');
+  if (want === 'rewards' || want === 'reminders') {
+    p.set('view', want);
+    return <Navigate to={`/clients?${p.toString()}`} replace/>;
+  }
+  const q = p.toString();
+  return <Navigate to={`/automation${q ? `?${q}` : ''}`} replace/>;
 }
 
 // /goals?task=X → /progress?task=X#goals (the Goals & Tasks block lives on
@@ -498,7 +509,8 @@ export default function App() {
           <Route path="/calendar"   element={<Calendar />} />
           <Route path="/finance"    element={<Finance />} />
           <Route path="/goals"      element={<GoalsRedirect />} />
-          <Route path="/marketing"  element={<Marketing />} />
+          <Route path="/automation" element={<Automation />} />
+          <Route path="/marketing"  element={<MarketingRedirect />} />
           <Route path="/workflows"  element={<MarketingRedirect tab="workflows"/>} />
           <Route path="/rewards"    element={<MarketingRedirect tab="rewards"/>} />
           <Route path="/referrals"  element={<Navigate to="/account#referrals" replace/>} />

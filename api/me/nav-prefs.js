@@ -17,7 +17,10 @@ import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 // admin is super-admin-only, never a personal-hide target.
 const HIDEABLE_NAV_IDS = new Set([
   'clients', 'calendar', 'comms', 'finance',
-  'programs', 'marketing', 'reviews', 'website', 'shops', 'docs',
+  'programs', 'automation', 'reviews', 'website', 'shops', 'docs',
+  // The Automation tab was called Marketing; app builds already on phones
+  // still send that name.
+  'marketing',
 ]);
 
 function readHidden(uiPrefs) {

@@ -1579,7 +1579,7 @@ function TourStep() {
     { tab: 'Money',   icon: 'Dollar',   desc: 'Invoices, quotes, memberships, gift cards. Year-end income export under "Export ▾".' },
     { tab: 'Messages',  icon: 'Chat',     desc: 'Text + email threads with each client. Voice memos auto-transcribe.' },
     { tab: 'Documents', icon: 'Doc',      desc: 'Contracts + intake forms. Send for e-signature, audit trail included.' },
-    { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups - birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },
+    { tab: 'Automation', icon: 'Repeat',  desc: 'Ivy spots what you do the same way every time and offers to do it for you. Build your own workflows too.' },
     { tab: 'Ivy',   icon: 'Spark',    desc: 'Your AI assistant. Ask questions grounded in your real data: "why am I losing clients?"' },
   ];
   return (
