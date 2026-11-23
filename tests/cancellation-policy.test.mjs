@@ -393,7 +393,11 @@ async function run() {
   const deeClient = (await sql`SELECT id FROM clients WHERE workspace_id = ${A.wid} AND email = ${`dee-${STAMP}@example.com`}`).rows[0].id;
   const depCall = stripe.calls.filter((c) => /checkout\/sessions$/.test(c.url)).pop();
   assert(depCall.body['line_items[0][price_data][unit_amount]'] === '2500' && depCall.body['metadata[invoice_id]'] === `bookdep_${depBooking}`, 'deposit checkout is $25.00 for this booking');
-  assert(depCall.body['payment_intent_data[setup_future_usage]'] === 'off_session' && !!depCall.body.customer && depCall.body['payment_intent_data[metadata][client_id]'] === deeClient, 'deposit checkout keeps the card for later fees');
+  assert(depCall.body['payment_intent_data[setup_future_usage]'] === 'off_session' && depCall.body['payment_intent_data[metadata][client_id]'] === deeClient, 'deposit checkout keeps the card for later fees');
+  // The booking form only takes a typed email, so the card goes onto a new
+  // Stripe customer made by this page, never an existing one
+  // (api/_lib/checkoutIdentity.js).
+  assert(!('customer' in depCall.body) && depCall.body.customer_creation === 'always' && depCall.body.customer_email === `dee-${STAMP}@example.com`, 'on a new Stripe customer of its own, since the visitor is not signed in');
   acc = (await sql`SELECT terms FROM cancellation_policy_acceptances WHERE booking_id = ${depBooking}`).rows;
   assert(acc[0]?.terms.deposit === 25 && acc[0].terms.depositRefundedBeforeWindow === true, 'acceptance records the $25 deposit and that it is refundable before the window');
   const piDep = `pi_dep_${STAMP}`;
