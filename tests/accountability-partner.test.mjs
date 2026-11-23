@@ -152,7 +152,7 @@ async function run() {
   assert(!/Doe|Smith|Gonzalez|Owner|divorce|@/.test(allText), 'titles and phrases carry first names only, no message text or emails');
   const msg = composeMessage({ kind: 'digest', items: messageableItems(items, resolvePartnerSettings({}, {})) });
   assert(!/Doe|Smith|Gonzalez|divorce|waiver|accountant|\$/.test(msg.body), `push body: no surnames, document names, task titles or amounts (${msg.body})`);
-  assert(/worth 5 minutes today: reply to Jane/.test(msg.body), 'digest wording');
+  assert(/^Reply to Jane/.test(msg.body) && /needs? you today|Your top 3 for today/.test(msg.title), 'digest wording: the title is the count, the message is the list');
   assert(firstNameOf('jane@x.com') === '' && firstNameOf('  Ana  Lee ') === 'Ana', 'firstNameOf never returns an email');
 
   console.log('\n[2] workspace isolation');
@@ -166,13 +166,13 @@ async function run() {
   await partnerCron(cronReq(), res);
   assert(res.statusCode === 200, 'cron ok');
   let rows = await feed(A.uid, 'accountability-partner');
-  assert(rows.length === 1 && rows[0].type === 'accountability' && rows[0].title === 'Ivy, your accountability partner', 'A got one in-app digest');
+  assert(rows.length === 1 && rows[0].type === 'accountability' && /needs? you today|Your top 3 for today/.test(rows[0].title), 'A got one in-app digest');
   assert(!/Doe|Smith|Gonzalez/.test(rows[0].body), 'bell/push body has first names only');
   let w = await wsRow(A.ws);
   assert(!!w.partner_last_sent_day && w.partner_mentioned.unread_messages?.fp, 'day claimed and mentions recorded');
   assert(mailsTo(A.email).length === 1, 'no device reached → one email');
   const mail = mailsTo(A.email)[0];
-  assert(mail && /worth 5 minutes today/.test(mail.subject) && /Unsubscribe|unsubscribe/.test(JSON.stringify(mail.headers || {})), 'email: subject + List-Unsubscribe');
+  assert(mail && /needs? you today|Your top 3 for today/.test(mail.subject) && /Unsubscribe|unsubscribe/.test(JSON.stringify(mail.headers || {})), 'email: subject + List-Unsubscribe');
   assert(mail && !/divorce/.test(mail.html) && /Medical waiver/.test(mail.html), 'email body: details yes, message text never');
   await again(A.ws);
   await partnerCron(cronReq(), mkRes());

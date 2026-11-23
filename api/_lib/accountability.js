@@ -55,6 +55,11 @@ export const INVOICE_DRAFT_DAYS = 2;
 export const AWAY_FIRST_DAYS = 3;
 export const AWAY_SECOND_DAYS = 7;
 // The partner speaks between 9am and 7pm in the owner's time zone.
+// One-tap chasing from Home: at most this many reminders at a time, and an
+// invoice rests this long after any reminder before it can get another.
+export const CHASE_MAX = 10;
+export const CHASE_REST_HOURS = 24;
+
 export const SEND_FROM_HOUR = 9;
 export const SEND_UNTIL_HOUR = 19;
 // How long before the same, unchanged item is worth mentioning again.
@@ -459,12 +464,27 @@ async function invoicesOverdue(ws) {
   const n = Number(rows[0]?.n || 0);
   if (!n) return null;
   const cur = (await sql`SELECT currency FROM finance_settings WHERE workspace_id = ${ws}`).rows[0]?.currency || 'USD';
+  // The ones a reminder can go to right now, so Home can send them in one
+  // tap: an email address on the invoice, and no reminder (automatic or by
+  // hand) in the last day (CHASE_REST_HOURS), so nobody is chased twice.
+  const can = await sql`
+    SELECT id, client_name FROM invoices
+     WHERE workspace_id = ${ws} AND status = 'overdue' AND archived_at IS NULL
+       AND client_email IS NOT NULL AND payment_processing_at IS NULL
+       AND (last_overdue_reminder_at IS NULL OR last_overdue_reminder_at < NOW() - (${String(CHASE_REST_HOURS)} || ' hours')::interval)
+     ORDER BY due_date ASC NULLS LAST, id
+     LIMIT ${CHASE_MAX}`;
+  const reminded = n - Number((await sql`
+    SELECT COUNT(*)::int AS c FROM invoices
+     WHERE workspace_id = ${ws} AND status = 'overdue' AND archived_at IS NULL
+       AND (last_overdue_reminder_at IS NULL OR last_overdue_reminder_at < NOW() - (${String(CHASE_REST_HOURS)} || ' hours')::interval)`).rows[0]?.c || 0);
   return {
     key: 'invoices_overdue', kind: 'money', priority: 1, count: n,
     title: n === 1 ? 'Chase an overdue invoice' : `Chase ${n} overdue invoices`,
     phrase: n === 1 ? 'chase an overdue invoice' : `chase ${n} overdue invoices`,
-    detail: `${money(rows[0].owed, cur)} outstanding`,
+    detail: `${money(rows[0].owed, cur)} outstanding${reminded > 0 ? `, ${reminded} reminded in the last day` : ''}`,
     href: '/finance?filter=overdue', action: 'Chase', ids: (rows[0].ids || []).slice(0, 50),
+    ...(can.rows.length ? { chase: { invoiceIds: can.rows.map((r) => r.id), to: nameList(can.rows.map((r) => r.client_name), can.rows.length) } } : {}),
   };
 }
 
@@ -872,6 +892,9 @@ export function publicItem(it) {
     // 1.0.6: booking requests carry the rows for the card's inline Approve /
     // Decline buttons (first names only, like every title).
     ...(Array.isArray(it.requests) ? { requests: it.requests } : {}),
+    // Overdue invoices that can be reminded now, for the one-tap "Send
+    // reminders" on Home (the owner's own invoice ids, first names only).
+    ...(it.chase ? { chase: it.chase } : {}),
   };
 }
 
@@ -902,7 +925,6 @@ export function isFresh(it, mentioned, now = Date.now()) {
 
 // ── the message text ───────────────────────────────────────────────────
 export const PARTNER_TITLE = 'Ivy, your accountability partner';
-const COUNT_WORDS = ['No things', 'One thing', 'Two things', 'Three things'];
 function joinPhrases(ps) {
   if (ps.length <= 1) return ps[0] || '';
   return `${ps.slice(0, -1).join(', ')} and ${ps[ps.length - 1]}`;
@@ -915,7 +937,6 @@ export function composeMessage({ kind = 'digest', items = [] }) {
   const top = items.slice(0, 3);
   const phrases = top.map((i) => i.phrase);
   const n = items.length;
-  const countWord = COUNT_WORDS[Math.min(n, 3)];
   const single = n === 1 ? items[0].href : null;
   if (kind === 'away1') {
     return {
@@ -947,7 +968,10 @@ export function composeMessage({ kind = 'digest', items = [] }) {
       outro: "This is the last check-in until you're back. Ivy will pick up where you left off.",
     };
   }
-  const head = n <= 3 ? `${countWord} worth 5 minutes today` : 'A few things worth 5 minutes today';
+  // The notification's title is the reason to open the app: a count the
+  // owner can finish. More than three is shown as the top three.
+  const head = n === 1 ? '1 thing needs you today' : n <= 3 ? `${n} things need you today` : 'Your top 3 for today';
+  const list = joinPhrases(phrases);
   if (n === 0) {
     // Never sent (the cron only writes when something needs the owner);
     // kept sensible for previews.
@@ -957,8 +981,8 @@ export function composeMessage({ kind = 'digest', items = [] }) {
     };
   }
   return {
-    title: PARTNER_TITLE,
-    body: `${head}: ${joinPhrases(phrases)}${n > 3 ? `, plus ${n - 3} more in Ivy` : ''}.`,
+    title: head,
+    body: `${list.charAt(0).toUpperCase()}${list.slice(1)}.${n > 3 ? ` ${n - 3} more ${n - 3 === 1 ? 'is' : 'are'} waiting in Ivy.` : ''}`,
     url: single || '/dashboard',
     subject: head,
     heading: head,

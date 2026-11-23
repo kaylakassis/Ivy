@@ -5638,6 +5638,22 @@ UPDATE users u SET signup_role = 'client'
    AND COALESCE(u.user_type, 'regular') = 'regular'
    AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
    AND NOT EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id OR sm.revoked_user_id = u.id);
+-- Which screens an owner opens, per day (api/_lib/screenVisits.js). Screen
+-- names only, from a fixed list; Admin > First week reads it to show where
+-- new accounts stop. Removed with the account; pruned after 180 days.
+CREATE TABLE IF NOT EXISTS screen_visits (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  screen TEXT NOT NULL,
+  day DATE NOT NULL,
+  visits INTEGER NOT NULL DEFAULT 1,
+  first_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, screen, day)
+);
+CREATE INDEX IF NOT EXISTS idx_screen_visits_user_last ON screen_visits (user_id, last_at DESC);
+CREATE INDEX IF NOT EXISTS idx_screen_visits_day ON screen_visits (day);
+
 -- Unusual-activity watch (api/_lib/activityWatch.js). activity_reads is a
 -- small counter per account (or per hashed network address) per hour:
 -- how many different pages of data it read. activity_flags is one row per

@@ -69,6 +69,9 @@ async function handler(req, res) {
       `bucket < NOW() - INTERVAL '14 days'`);
     results.activityFlags = await prune('activity_flags',
       `first_at < NOW() - INTERVAL '30 days'`);
+    // Which screens owners open (Admin > First week): six months.
+    results.screenVisits = await prune('screen_visits',
+      `day < CURRENT_DATE - INTERVAL '180 days'`);
     results.activityTrust = await prune('activity_trust',
       `until < NOW() - INTERVAL '1 day'`);
     // 2-step email codes live 10 minutes; a day covers the hourly send cap.

@@ -44,6 +44,7 @@ import { useExitAnimation } from '../motion/useExitAnimation.js';
 import { initNative } from '../../lib/native.js';
 import PullToRefresh from '../PullToRefresh.jsx';
 import OfflineBanner from '../OfflineBanner.jsx';
+import { trackScreen } from '../../lib/screenTrack.js';
 import OfflineSync from '../offline/OfflineSync.jsx';
 
 export default function AppShell() {
@@ -205,6 +206,12 @@ function AppShellInner() {
     else document.body.classList.remove('app-walled');
     return () => document.body.classList.remove('app-walled');
   }, [walled]);
+
+  // Which screen was opened (a name only), for Admin > First week. Owners
+  // only, and never while an operator is viewing as this owner.
+  useEffect(() => {
+    if (ctx?.isOwner && !impersonating && !walled) trackScreen(location.pathname, location.search);
+  }, [location.pathname, location.search, ctx?.isOwner, impersonating, walled]);
 
   // Close the drawer on route change so nav-tap-to-page just works.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);

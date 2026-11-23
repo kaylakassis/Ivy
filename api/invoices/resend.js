@@ -63,11 +63,16 @@ export default async function handler(req, res) {
       { ts: new Date().toISOString(), kind: 'sent', text: `Resent to ${inv.client_name || inv.client_email}` },
     ];
 
+    // Re-sending a past-due invoice is a reminder. It is stamped like the
+    // automatic one (last_overdue_reminder_at), so the daily reminder job
+    // does not send a second email on top of this one, and Home knows this
+    // client was just chased.
     const updated = await sql`
       UPDATE invoices SET
         view_token_hash = ${tokenHash},
         status = 'sent',
         sent_at = NOW(),
+        last_overdue_reminder_at = CASE WHEN due_date IS NOT NULL AND due_date < CURRENT_DATE THEN NOW() ELSE last_overdue_reminder_at END,
         activity = ${JSON.stringify(newActivity)}::jsonb,
         updated_at = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
@@ -107,6 +112,9 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[invoices/resend] email failed:', mailErr.message);
+      // The reminder did not go out, so it must not count as one: put the
+      // stamp back, and the automatic reminder stays on its schedule.
+      await sql`UPDATE invoices SET last_overdue_reminder_at = ${inv.last_overdue_reminder_at || null} WHERE id = ${id} AND workspace_id = ${workspaceId}`.catch(() => {});
       emailWarning = `We refreshed the link but the email didn't go through - try again in a moment.`;
     }
 
