@@ -22,7 +22,7 @@ import { resolveMergedClientId } from '../_lib/clientResolve.js';
 import { readRawBody } from '../_lib/body.js';
 import {
   verifyWebhookSignature, platformWebhookSecret, platformStripeSecret,
-  fetchAccountSummary, fetchPaymentMethod, setDefaultPaymentMethod,
+  fetchAccountSummary, fetchPaymentMethod, setDefaultPaymentMethod, hideCardFromCheckout,
 } from '../_lib/stripe.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
 import { applyProgramSubscription, revokeProgramPurchaseForRefund } from '../_lib/programs.js';
@@ -243,6 +243,9 @@ export default async function handler(req, res) {
           const pm = await fetchPaymentMethod({
             secretKey: platformKey, stripeAccount: acctId, paymentMethodId,
           });
+          // Saved in setup mode = offered again on payment pages unless
+          // told otherwise. This card is only charged from our own buttons.
+          await hideCardFromCheckout({ secretKey: platformKey, stripeAccount: acctId, paymentMethodId, paymentMethod: pm });
           const card = pm.card || {};
           await sql`
             UPDATE clients SET

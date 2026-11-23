@@ -465,6 +465,10 @@ async function run() {
   globalThis.__setupMeta = { client_id: clientA, workspace_id: wsA };
   r = await call(meAutopay, { userId: clientUser, body: { action: 'sync-card', agreementId: req6.id, setupSessionId: 'cs_setup_ok' } });
   assert(r.statusCode === 200 && r.body.card.last4 === '1111', 'card stored from the finished setup');
+  // Stripe marks a card saved in setup mode as one to offer again on
+  // payment pages; it is turned to "limited" as it is stored.
+  const hide = stripeCalls.find((c) => c.method === 'POST' && /\/v1\/payment_methods\/pm_ap_2$/.test(c.url));
+  assert(!!hide && new URLSearchParams(hide.body).get('allow_redisplay') === 'limited' && hide.headers['Stripe-Account'] === acct, 'the saved card is taken off payment pages (allow_redisplay limited) on the connected account');
   r = await call(meAutopay, { userId: clientUser, body: { action: 'authorize', agreementId: req6.id, agree: true } });
   assert(r.statusCode === 200 && r.body.agreements.find((a) => a.id === req6.id)?.card?.last4 === '1111', 'approved with the new card');
 

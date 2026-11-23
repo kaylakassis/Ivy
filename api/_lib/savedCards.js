@@ -15,7 +15,7 @@
 import { sql } from './db.js';
 import {
   findOrCreateCustomer, fetchPaymentIntent, fetchPaymentMethod,
-  setDefaultPaymentMethod, chargeOffSession,
+  setDefaultPaymentMethod, chargeOffSession, hideCardFromCheckout, listCustomerCards,
 } from './stripe.js';
 
 // Display fragments only - never Stripe ids.
@@ -150,4 +150,44 @@ export async function chargeInvoiceWithSavedCard({ creds, inv, client, amountCen
     }
     return { outcome: 'declined', message: err.message || 'The saved card was declined.' };
   }
+}
+
+// One business's saved cards, swept: any card Stripe would offer again on a
+// payment page (allow_redisplay "always") is turned to "limited". New cards
+// are limited as they are saved (hideCardFromCheckout); this is for the ones
+// saved before that, and for older cards left on a customer after a
+// replacement. Every Stripe customer on a client row of THIS workspace is
+// looked at, all of its cards, not only the one on the row.
+//
+// apply=false (the default) changes nothing and only counts. Returns
+// { customers, cards, alreadyHidden, toHide, hidden, failed, errors }.
+export async function hideSavedCardsForWorkspace({ workspaceId, creds, apply = false, onCard = null }) {
+  const out = { customers: 0, cards: 0, alreadyHidden: 0, toHide: 0, hidden: 0, failed: 0, errors: [] };
+  if (!workspaceId || !creds) return out;
+  const { rows } = await sql`
+    SELECT DISTINCT stripe_customer_id FROM clients
+     WHERE workspace_id = ${workspaceId} AND stripe_customer_id IS NOT NULL
+     ORDER BY stripe_customer_id
+  `;
+  for (const { stripe_customer_id: customerId } of rows) {
+    out.customers += 1;
+    let cards;
+    try {
+      cards = await listCustomerCards({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, customerId });
+    } catch (err) {
+      // A customer deleted in Stripe has no cards to show anyone.
+      if (err.status !== 404) { out.failed += 1; out.errors.push(`${customerId}: ${err.message}`); }
+      continue;
+    }
+    for (const pm of cards) {
+      out.cards += 1;
+      if (pm.allow_redisplay !== 'always') { out.alreadyHidden += 1; continue; }
+      out.toHide += 1;
+      if (onCard) onCard({ customerId, paymentMethodId: pm.id, brand: pm.card?.brand || null, last4: pm.card?.last4 || null });
+      if (!apply) continue;
+      const done = await hideCardFromCheckout({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, paymentMethodId: pm.id });
+      if (done) out.hidden += 1; else { out.failed += 1; out.errors.push(`${pm.id}: could not be updated`); }
+    }
+  }
+  return out;
 }

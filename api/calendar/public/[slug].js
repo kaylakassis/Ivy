@@ -881,12 +881,14 @@ async function createBooking(req, res) {
         // deposit checkout also keeps the card (Stripe shows the client a
         // "saved for future payments" note) so a later fee can be charged.
         const keep = name === 'stripe'
-          ? await cardOnFileCheckout({ workspaceId, clientId, service: svc, mode: 'customer' }).catch(() => null)
+          ? await cardOnFileCheckout({ workspaceId, clientId, service: svc, mode: 'deposit' }).catch(() => null)
           : null;
         const session = await adapter.createCheckoutSession({
           workspaceId,
           settings,
-          ...(keep?.customerId ? { customerId: keep.customerId, saveCard: true } : {}),
+          // Not signed in: the card is kept on a NEW Stripe customer, never
+          // the client's existing one (whose saved cards the page would offer).
+          ...(keep?.keepCard ? { saveCard: true, newCustomer: true } : {}),
           amountCents: depositCents,
           currency: (settings?.currency || 'usd').toUpperCase(),
           description: `Deposit · ${b.id.slice(0, 8)}`,

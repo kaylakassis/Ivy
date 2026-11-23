@@ -393,7 +393,13 @@ async function run() {
   const deeClient = (await sql`SELECT id FROM clients WHERE workspace_id = ${A.wid} AND email = ${`dee-${STAMP}@example.com`}`).rows[0].id;
   const depCall = stripe.calls.filter((c) => /checkout\/sessions$/.test(c.url)).pop();
   assert(depCall.body['line_items[0][price_data][unit_amount]'] === '2500' && depCall.body['metadata[invoice_id]'] === `bookdep_${depBooking}`, 'deposit checkout is $25.00 for this booking');
-  assert(depCall.body['payment_intent_data[setup_future_usage]'] === 'off_session' && !!depCall.body.customer && depCall.body['payment_intent_data[metadata][client_id]'] === deeClient, 'deposit checkout keeps the card for later fees');
+  assert(depCall.body['payment_intent_data[setup_future_usage]'] === 'off_session' && depCall.body['metadata[save_card]'] === '1' && depCall.body['payment_intent_data[metadata][client_id]'] === deeClient, 'deposit checkout keeps the card for later fees');
+  // The booker is not signed in: the card is kept on a NEW Stripe customer
+  // made when the deposit is paid. An existing customer is never attached,
+  // because a payment page offers that customer's saved cards to whoever
+  // typed the email.
+  assert(!('customer' in depCall.body) && depCall.body.customer_creation === 'always' && depCall.body.customer_email === `dee-${STAMP}@example.com`, 'deposit checkout: email + a new customer, no existing customer attached');
+  assert(!stripe.calls.some((c) => /\/v1\/customers/.test(c.url)), 'deposit checkout: no Stripe customer looked up or created beforehand');
   acc = (await sql`SELECT terms FROM cancellation_policy_acceptances WHERE booking_id = ${depBooking}`).rows;
   assert(acc[0]?.terms.deposit === 25 && acc[0].terms.depositRefundedBeforeWindow === true, 'acceptance records the $25 deposit and that it is refundable before the window');
   const piDep = `pi_dep_${STAMP}`;
@@ -408,6 +414,22 @@ async function run() {
   assert(Number(b.deposit_paid) === 25 && b.deposit_payment_intent === piDep, 'deposit recorded once');
   r = await fire('checkout.session.completed', { id: 'cs_dep_x', mode: 'payment', payment_status: 'paid', payment_intent: piDep, metadata: { invoice_id: `bookdep_${depBooking}`, workspace_id: A.wid } }, A.acct);
   assert(r.body.ignored === 'deposit already recorded', 'webhook replay does not double-apply the deposit');
+  // A client the app shows as having NO card, but whose Stripe customer
+  // still holds one (an older card stays behind when a card is replaced and
+  // the newer one removed). The deposit checkout must not attach that
+  // customer: the page would offer the leftover card to a stranger.
+  const staleEmail = `stale-${STAMP}@example.com`;
+  const staleClient = (await sql`INSERT INTO clients (workspace_id, name, email, stage, stripe_customer_id)
+    VALUES (${A.wid}, 'Stale Card', ${staleEmail}, 'active', ${`cus_stale_${STAMP}`}) RETURNING id`).rows[0].id;
+  stripe.calls.length = 0;
+  r = await call(publicCalendarHandler, req({ method: 'POST', query: { slug: A.slug }, body: {
+    serviceId: A.svc, date, startMin: 1320, endMin: 1380, clientName: 'Not Them', clientEmail: staleEmail,
+    policyAccepted: true, policyVersionId: v2.id } }));
+  const staleCall = stripe.calls.filter((c) => /checkout\/sessions$/.test(c.url)).pop();
+  assert(r.statusCode === 201 && !!staleCall && !('customer' in staleCall.body) && staleCall.body.customer_creation === 'always' && staleCall.body.customer_email === staleEmail,
+    `client with a leftover Stripe customer: deposit checkout never attaches it (${r.statusCode})`);
+  assert(!stripe.calls.some((c) => /\/v1\/customers/.test(c.url)) && staleCall.body['metadata[client_id]'] === staleClient, 'no customer lookup; the booking is still tied to the client');
+  assert((await sql`SELECT stripe_customer_id FROM clients WHERE id = ${staleClient}`).rows[0].stripe_customer_id === `cus_stale_${STAMP}`, 'their customer is untouched until a deposit is actually paid');
   // A known client who already has a card: an anonymous booking form must
   // never be able to replace it.
   stripe.calls.length = 0;

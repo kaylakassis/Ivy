@@ -266,6 +266,12 @@ export async function createCheckoutSession({
   // reusable payment method when the session has a customer.
   customerId = null,
   saveCard = false,
+  // Keep the card for a payer who is NOT signed in (the public booking
+  // deposit). An existing customer is never attached there: Checkout
+  // would offer that customer's saved card to whoever typed the email
+  // (see publicCheckoutBuyer). Stripe makes a brand-new customer when the
+  // payment goes through and the card is saved on that one.
+  newCustomer = false,
 }) {
   const body = {
     mode: 'payment',
@@ -282,7 +288,9 @@ export async function createCheckoutSession({
   // Stripe rejects customer + customer_email together.
   if (customerId) body.customer = customerId;
   else if (customerEmail) body.customer_email = customerEmail;
-  if (saveCard && customerId) {
+  const freshCustomer = saveCard && !customerId && newCustomer;
+  if (freshCustomer) body.customer_creation = 'always';
+  if (saveCard && (customerId || freshCustomer)) {
     body['payment_intent_data[setup_future_usage]'] = 'off_session';
     body['metadata[save_card]'] = '1';
     body['metadata[client_id]'] = invoice.client_id || undefined;
@@ -294,7 +302,10 @@ export async function createCheckoutSession({
     // tax_behavior must be set per-line when automatic_tax is on.
     body['line_items[0][price_data][tax_behavior]'] = taxBehavior || 'exclusive';
     // Collect buyer's address so Stripe can look up the right rate.
-    body['customer_update[address]'] = 'auto';
+    // Stripe only accepts customer_update alongside an existing customer
+    // (it refuses the whole session otherwise); a payer without one gives
+    // their address through billing_address_collection below.
+    if (customerId) body['customer_update[address]'] = 'auto';
     body['billing_address_collection'] = 'required';
     body['tax_id_collection[enabled]'] = 'true';
   }
@@ -600,6 +611,43 @@ export async function createSetupCheckoutSession({
     },
   });
   return { id: session.id, url: session.url };
+}
+
+// A card saved through Checkout in setup mode comes back marked
+// allow_redisplay=always (checked in test mode), and "always" is the one
+// value Checkout offers back on a later payment page: "Pay with .... 4242",
+// one click, to whoever opened a session that has the customer attached.
+// Nothing here relies on that: saved cards are charged off-session from our
+// own buttons, which works the same on a "limited" card. So every card we
+// save is turned to "limited" and never appears on a Checkout page.
+//
+// Never throws (saving the card must not fail over this). Returns true when
+// the card is limited afterwards, false when Stripe could not be told.
+// `paymentMethod` may be the object already fetched, to skip a call that is
+// not needed.
+export async function hideCardFromCheckout({ secretKey, stripeAccount, paymentMethodId, paymentMethod = null }) {
+  const id = paymentMethodId || paymentMethod?.id;
+  if (!id) return false;
+  if (paymentMethod && paymentMethod.allow_redisplay === 'limited') return true;
+  try {
+    const pm = await stripeFetch(`/payment_methods/${encodeURIComponent(id)}`, {
+      method: 'POST', secretKey, stripeAccount, body: { allow_redisplay: 'limited' },
+    });
+    return pm?.allow_redisplay === 'limited';
+  } catch (err) {
+    console.warn('[stripe] could not limit redisplay of a saved card:', err.message);
+    return false;
+  }
+}
+
+// A customer's saved cards (up to 100, which is also the most Checkout shows).
+export async function listCustomerCards({ secretKey, stripeAccount, customerId }) {
+  if (!customerId) throw new Error('customerId is required');
+  const list = await stripeFetch(
+    `/customers/${encodeURIComponent(customerId)}/payment_methods?type=card&limit=100`,
+    { secretKey, stripeAccount },
+  );
+  return Array.isArray(list?.data) ? list.data : [];
 }
 
 export async function fetchPaymentIntent({ secretKey, stripeAccount, paymentIntentId }) {

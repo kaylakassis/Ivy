@@ -655,10 +655,19 @@ export function serviceHasFees(svc) {
 
 // Card on file at booking time, for services with a late-cancel or
 // no-show fee, when the business takes cards through Stripe.
-//   mode 'customer' → { customerId } so the deposit checkout keeps the card
-//   mode 'setup'    → { url } of a Stripe page that saves a card, no charge
+//   mode 'deposit' → { keepCard: true }: the deposit checkout keeps the card
+//   mode 'setup'   → { url } of a Stripe page that saves a card, no charge
 // Only offered while the client has NO card on file: an anonymous booking
 // form must never be able to replace a card the client already saved.
+//
+// The deposit checkout takes a PAYMENT from someone who only typed an email,
+// so it is never given the client's existing Stripe customer: a payment page
+// offers that customer's saved cards ("Pay with .... 4242", one click), and
+// "no card on file" here does not mean none in Stripe (an older card stays
+// behind when a card is replaced and the newer one removed). The caller asks
+// Stripe for a brand-new customer instead (createCheckoutSession newCustomer),
+// and the paid deposit puts that customer and card on the client row.
+// The setup page is different: Stripe shows no saved cards there (checked).
 export async function cardOnFileCheckout({ workspaceId, clientId, service, mode = 'setup', successUrl, cancelUrl }) {
   if (!clientId || !serviceHasFees(service)) return null;
   const fs = await fetchFinanceSettings(workspaceId);
@@ -670,10 +679,10 @@ export async function cardOnFileCheckout({ workspaceId, clientId, service, mode 
   `;
   const client = rows[0];
   if (!client?.email || client.payment_method_id) return null;
+  if (mode === 'deposit') return { keepCard: true };
   const creds = await loadStripeCreds(workspaceId);
   const customerId = await ensureStripeCustomer({ creds, client });
   if (!customerId) return null;
-  if (mode === 'customer') return { customerId };
   const s = await createSetupCheckoutSession({
     secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
     customerId, workspaceId, clientId, successUrl, cancelUrl,

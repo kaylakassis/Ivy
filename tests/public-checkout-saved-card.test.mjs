@@ -198,6 +198,25 @@ async function run() {
   }
   assert((await sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${A.wid} AND LOWER(email) = ${victimEmail}`).rows[0].n === 1, 'no second client row for that email');
 
+  // A client the owner typed in with capitals buys from every checkout with
+  // lowercase: always the same record, never a second one. (Packages used
+  // to match the exact spelling only.)
+  const mixed = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${A.wid}, 'Jamie Caps', ${`PC-Jamie-${STAMP}@Example.com`}, 'active') RETURNING id`).rows[0].id;
+  const jamie = `pc-jamie-${STAMP}@example.com`;
+  for (const [label, handler, ids] of flows) {
+    calls.length = 0;
+    const r = await call(handler, post({ ...ids, name: 'Jamie Caps', email: jamie }));
+    assert(r.statusCode === 200 && lastSession()?.body['metadata[client_id]'] === mixed, `${label}: a client stored with capitals is matched`);
+  }
+  assert((await sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${A.wid} AND LOWER(email) = ${jamie}`).rows[0].n === 1, 'still one client row for them');
+  // Two records already exist for one address: the exact spelling is the
+  // one a package went to before, so it still does.
+  const exact = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${A.wid}, 'Jamie Lower', ${jamie}, 'active') RETURNING id`).rows[0].id;
+  calls.length = 0;
+  let rr = await call(packageCheckout, post({ slug: A.slug, packageId: A.pkg.id, name: 'Jamie', email: jamie }));
+  assert(rr.statusCode === 200 && lastSession()?.body['metadata[client_id]'] === exact, 'package, two records for one address: the exact spelling wins');
+  await sql`DELETE FROM clients WHERE id = ${exact}`;
+
   // ════════════════════════════════════════════════════════════════════
   console.log('\n[2] a first-time buyer');
   const newEmail = `pc-newbie-${STAMP}@example.com`;
