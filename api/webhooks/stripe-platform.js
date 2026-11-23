@@ -22,7 +22,7 @@ import { resolveMergedClientId } from '../_lib/clientResolve.js';
 import { readRawBody } from '../_lib/body.js';
 import {
   verifyWebhookSignature, platformWebhookSecret, platformStripeSecret,
-  fetchAccountSummary, fetchPaymentMethod, setDefaultPaymentMethod,
+  fetchAccountSummary, fetchPaymentMethod, setDefaultPaymentMethod, limitSavedCardRedisplay,
 } from '../_lib/stripe.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
 import { applyProgramSubscription, revokeProgramPurchaseForRefund } from '../_lib/programs.js';
@@ -242,6 +242,11 @@ export default async function handler(req, res) {
           }
           const pm = await fetchPaymentMethod({
             secretKey: platformKey, stripeAccount: acctId, paymentMethodId,
+          });
+          // A saved card is charged through Ivy only; Stripe's payment
+          // pages must never offer it back (SAVED_CARD_REDISPLAY).
+          await limitSavedCardRedisplay({
+            secretKey: platformKey, stripeAccount: acctId, paymentMethodId, paymentMethod: pm,
           });
           const card = pm.card || {};
           await sql`

@@ -38,7 +38,7 @@ import { loadStripeCreds } from './stripeCreds.js';
 import { previewNewBusinessPayment } from './newBusinessLimits.js';
 import {
   chargeOffSession, fetchCheckoutSession, fetchPaymentMethod, stripeFetch,
-  setDefaultPaymentMethod, findOrCreateCustomer, createSetupCheckoutSession,
+  setDefaultPaymentMethod, findOrCreateCustomer, createSetupCheckoutSession, limitSavedCardRedisplay,
 } from './stripe.js';
 import { fulfillInvoicePaymentIntent, markInvoiceProcessing } from './checkoutFulfillment.js';
 import { notifyOwnerSafe, notifyClientSafe } from './push.js';
@@ -539,6 +539,9 @@ export async function syncSetupSession({ myIds, agreementId, sessionId }) {
   if (si.status !== 'succeeded' || !pmId) throw new AutopayError('That card setup did not finish. Please try again.');
   const pm = await fetchPaymentMethod({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, paymentMethodId: pmId });
   if (pm?.type && pm.type !== 'card') throw new AutopayError('Please use a card for automatic payments.');
+  // Automatic payments charge this card off-session; Stripe's payment pages
+  // must never offer it back (see SAVED_CARD_REDISPLAY in stripe.js).
+  await limitSavedCardRedisplay({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, paymentMethodId: pmId, paymentMethod: pm });
   const card = pm.card || {};
   const customer = typeof session.customer === 'string' ? session.customer : session.customer?.id || null;
   await sql`

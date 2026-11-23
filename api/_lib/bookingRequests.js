@@ -51,7 +51,7 @@ import { keepAlive } from './keepAlive.js';
 import { sendClientSms } from './sms.js';
 import { loadStripeCreds } from './stripeCreds.js';
 import { chargeOffSession, createSetupCheckoutSession } from './stripe.js';
-import { ensureStripeCustomer } from './savedCards.js';
+import { ensureOwnStripeCustomer } from './savedCards.js';
 import { fetchFinanceSettings } from './finance.js';
 import { getProvider } from './payments/index.js';
 import { restoreCredit } from './packages.js';
@@ -185,7 +185,9 @@ export async function depositCardSetupForRequest({ workspaceId, clientId, bookin
     const client = rows[0];
     if (!client?.email || client.payment_method_id) return null;
     const creds = await loadStripeCreds(workspaceId);
-    const customerId = await ensureStripeCustomer({ creds, client });
+    // Reached from the public booking form: this client's own Stripe
+    // customer or a new one, never one found by the typed email.
+    const customerId = (await ensureOwnStripeCustomer({ creds, client }))?.customerId;
     if (!customerId) return null;
     const s = await createSetupCheckoutSession({
       secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,

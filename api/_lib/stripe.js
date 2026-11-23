@@ -138,6 +138,8 @@ export async function stripeFetch(path, { method = 'GET', secretKey, stripeAccou
     const err = new Error(msg);
     err.status = res.status;
     err.stripeCode = json?.error?.code;
+    // Which request parameter Stripe refused, when it names one.
+    err.stripeParam = json?.error?.param || null;
     // Card outcomes for off-session charges (autopay): the bank's reason
     // and the PaymentIntent Stripe created, if any.
     err.declineCode = json?.error?.decline_code || null;
@@ -541,7 +543,8 @@ export function publicCheckoutBuyer(email) {
 // SIGNED-IN OR OWNER-STARTED FLOWS ONLY. This returns whichever customer
 // already has the email, saved cards included, so it must never feed a
 // checkout that an anonymous visitor reached by typing an email. Public
-// checkouts use publicCheckoutBuyer() above.
+// checkouts use publicCheckoutBuyer() above; the public booking form uses
+// createCustomer() below (through ensureOwnStripeCustomer in savedCards.js).
 export async function findOrCreateCustomer({ secretKey, stripeAccount, email, name, workspaceId, clientId }) {
   if (!email) throw new Error('email is required');
   const list = await stripeFetch(
@@ -551,6 +554,22 @@ export async function findOrCreateCustomer({ secretKey, stripeAccount, email, na
   if (Array.isArray(list.data) && list.data.length > 0) {
     return list.data[0];
   }
+  return stripeFetch('/customers', {
+    method: 'POST', secretKey, stripeAccount,
+    body: {
+      email,
+      name: name || undefined,
+      'metadata[workspace_id]': workspaceId,
+      'metadata[client_id]': clientId || undefined,
+    },
+  });
+}
+
+// A brand-new Stripe customer on the connected account, with NO lookup by
+// email. For flows an anonymous visitor starts (the public booking form):
+// a new customer holds no cards, so nothing of anyone else's can surface.
+export async function createCustomer({ secretKey, stripeAccount, email, name, workspaceId, clientId }) {
+  if (!email) throw new Error('email is required');
   return stripeFetch('/customers', {
     method: 'POST', secretKey, stripeAccount,
     body: {
@@ -579,27 +598,92 @@ export async function createSetupIntent({ secretKey, stripeAccount, customerId, 
   });
 }
 
+// ─── Saved cards stay off Stripe's payment pages ─────────────────────
+// Every Stripe payment method carries allow_redisplay. Checked against
+// Stripe in test mode (November 2026):
+//   - a Checkout payment page created with `customer` offers that
+//     customer's cards marked "always" to whoever opens the page ("Pay with
+//     .... 4242"), and charges one in a single click with no card number
+//     or security code;
+//   - Checkout in setup mode saves a card as "always" unless told
+//     otherwise;
+//   - a card marked "limited" is NOT offered, and still charges off-session
+//     exactly as before (chargeOffSession below).
+// Ivy never needs Stripe to offer a saved card: saved cards are charged
+// through Ivy's own buttons, off-session. So every card Ivy saves is kept
+// "limited": asked for when the setup page is created, and enforced again
+// when the finished save is read back (limitSavedCardRedisplay).
+// https://docs.stripe.com/payments/existing-customers
+export const SAVED_CARD_REDISPLAY = 'limited';
+
 export async function createSetupCheckoutSession({
   secretKey, stripeAccount, customerId, workspaceId, clientId, successUrl, cancelUrl,
 }) {
   if (!customerId) throw new Error('customerId is required');
-  const session = await stripeFetch('/checkout/sessions', {
-    method: 'POST', secretKey, stripeAccount,
-    body: {
-      mode: 'setup',
-      customer: customerId,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      'payment_method_types[0]': 'card',
-      'metadata[workspace_id]': workspaceId,
-      'metadata[client_id]': clientId,
-      'metadata[purpose]': 'save_card',
-      'setup_intent_data[metadata][workspace_id]': workspaceId,
-      'setup_intent_data[metadata][client_id]': clientId,
-      'setup_intent_data[metadata][purpose]': 'save_card',
-    },
-  });
+  const body = {
+    mode: 'setup',
+    customer: customerId,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    'payment_method_types[0]': 'card',
+    'payment_method_data[allow_redisplay]': SAVED_CARD_REDISPLAY,
+    'metadata[workspace_id]': workspaceId,
+    'metadata[client_id]': clientId,
+    'metadata[purpose]': 'save_card',
+    'setup_intent_data[metadata][workspace_id]': workspaceId,
+    'setup_intent_data[metadata][client_id]': clientId,
+    'setup_intent_data[metadata][purpose]': 'save_card',
+  };
+  let session;
+  try {
+    session = await stripeFetch('/checkout/sessions', { method: 'POST', secretKey, stripeAccount, body });
+  } catch (err) {
+    // A Stripe account pinned to an API version from before this setting
+    // refuses the parameter. Saving a card must keep working there: ask
+    // again without it; the card is still set to "limited" when the
+    // finished save is read back.
+    if (!(err.status === 400 && /payment_method_data/.test(String(err.stripeParam || '')))) throw err;
+    delete body['payment_method_data[allow_redisplay]'];
+    session = await stripeFetch('/checkout/sessions', { method: 'POST', secretKey, stripeAccount, body });
+  }
   return { id: session.id, url: session.url };
+}
+
+// Keep one saved card off Stripe's payment pages. Called wherever Ivy
+// records a card on a client (the setup webhooks, the automatic payments
+// return, a card kept at an invoice or deposit payment). `paymentMethod` is
+// the Stripe object when the caller already has it, which saves the write
+// when the card is "limited" already. Never throws: recording the card
+// must not fail over this. Returns 'already' | 'limited' | 'failed'.
+export async function limitSavedCardRedisplay({ secretKey, stripeAccount, paymentMethodId, paymentMethod = null }) {
+  const id = paymentMethodId || paymentMethod?.id;
+  if (!id || !secretKey) return 'failed';
+  if (paymentMethod?.allow_redisplay === SAVED_CARD_REDISPLAY) return 'already';
+  try {
+    await stripeFetch(`/payment_methods/${encodeURIComponent(id)}`, {
+      method: 'POST', secretKey, stripeAccount,
+      body: { allow_redisplay: SAVED_CARD_REDISPLAY },
+    });
+    return 'limited';
+  } catch (err) {
+    console.error('[saved card] could not limit redisplay:', err.message);
+    return 'failed';
+  }
+}
+
+// True only when Stripe confirms that NONE of this customer's saved payment
+// methods would be offered on a payment page: every one is "limited" (or
+// there are none). Anything else, including more methods than one page
+// lists, answers false. Throws when Stripe cannot be asked; callers treat
+// that as "not safe".
+export async function customerHasNoRedisplayableCard({ secretKey, stripeAccount, customerId }) {
+  if (!customerId) throw new Error('customerId is required');
+  const list = await stripeFetch(
+    `/customers/${encodeURIComponent(customerId)}/payment_methods?limit=100`,
+    { secretKey, stripeAccount },
+  );
+  if (!Array.isArray(list?.data) || list.has_more) return false;
+  return list.data.every((pm) => pm?.allow_redisplay === SAVED_CARD_REDISPLAY);
 }
 
 export async function fetchPaymentIntent({ secretKey, stripeAccount, paymentIntentId }) {

@@ -32,10 +32,10 @@
 import { sql } from './db.js';
 import { slotEpochMs } from './calendar.js';
 import { loadStripeCreds } from './stripeCreds.js';
-import { chargeOffSession, createSetupCheckoutSession } from './stripe.js';
+import { chargeOffSession, createSetupCheckoutSession, customerHasNoRedisplayableCard } from './stripe.js';
 import { refundThroughProvider } from './refunds.js';
 import { createDraftInvoice, fetchFinanceSettings } from './finance.js';
-import { ensureStripeCustomer } from './savedCards.js';
+import { ensureOwnStripeCustomer } from './savedCards.js';
 import { notifyOwnerSafe } from './push.js';
 import { sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
@@ -659,6 +659,15 @@ export function serviceHasFees(svc) {
 //   mode 'setup'    → { url } of a Stripe page that saves a card, no charge
 // Only offered while the client has NO card on file: an anonymous booking
 // form must never be able to replace a card the client already saved.
+//
+// The caller is the public booking form: whoever is booking only TYPED the
+// client's email. So the Stripe customer is this client row's own, or a
+// brand-new one, and never one found by email (ensureOwnStripeCustomer).
+// The deposit page ('customer') is a Stripe payment page, the one kind
+// that offers a customer's saved cards for a one-click charge. A customer
+// this call did not just create is handed to it only after Stripe confirms
+// it holds nothing that page would offer; otherwise the deposit is paid
+// with the email alone and no card is kept (returns null).
 export async function cardOnFileCheckout({ workspaceId, clientId, service, mode = 'setup', successUrl, cancelUrl }) {
   if (!clientId || !serviceHasFees(service)) return null;
   const fs = await fetchFinanceSettings(workspaceId);
@@ -671,9 +680,18 @@ export async function cardOnFileCheckout({ workspaceId, clientId, service, mode 
   const client = rows[0];
   if (!client?.email || client.payment_method_id) return null;
   const creds = await loadStripeCreds(workspaceId);
-  const customerId = await ensureStripeCustomer({ creds, client });
-  if (!customerId) return null;
-  if (mode === 'customer') return { customerId };
+  const own = await ensureOwnStripeCustomer({ creds, client });
+  if (!own?.customerId) return null;
+  const { customerId } = own;
+  if (mode === 'customer') {
+    if (!own.created) {
+      const safe = await customerHasNoRedisplayableCard({
+        secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, customerId,
+      }).catch(() => false);
+      if (!safe) return null;
+    }
+    return { customerId };
+  }
   const s = await createSetupCheckoutSession({
     secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
     customerId, workspaceId, clientId, successUrl, cancelUrl,

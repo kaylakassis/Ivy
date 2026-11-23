@@ -14,8 +14,8 @@
 // pinned to (clients.id, clients.workspace_id).
 import { sql } from './db.js';
 import {
-  findOrCreateCustomer, fetchPaymentIntent, fetchPaymentMethod,
-  setDefaultPaymentMethod, chargeOffSession,
+  findOrCreateCustomer, createCustomer, fetchPaymentIntent, fetchPaymentMethod,
+  setDefaultPaymentMethod, chargeOffSession, limitSavedCardRedisplay,
 } from './stripe.js';
 
 // Display fragments only - never Stripe ids.
@@ -48,6 +48,10 @@ export async function savedCardRowForInvoice(inv) {
 // Find or mint the Stripe Customer (on the connected account) for a client
 // and remember its id. Workspace-pinned UPDATE so a bad client id can never
 // link a customer onto another tenant's row.
+//
+// Falls back to a lookup BY EMAIL, so it is for flows the client themselves
+// reached (their invoice link, their signed-in portal). A flow an anonymous
+// visitor starts by typing an email uses ensureOwnStripeCustomer below.
 export async function ensureStripeCustomer({ creds, client }) {
   if (client.stripe_customer_id) return client.stripe_customer_id;
   if (!client.email) return null;
@@ -61,6 +65,39 @@ export async function ensureStripeCustomer({ creds, client }) {
      WHERE id = ${client.id} AND workspace_id = ${client.workspace_id}
   `;
   return cust.id;
+}
+
+// The Stripe Customer for a client on a flow an ANONYMOUS visitor started
+// (the public booking form): the one already stored on this client row, or
+// a brand-new one. Never a lookup by email. Stripe keeps a customer after
+// its client row is deleted or merged, and a business's Stripe account can
+// hold customers Ivy never made; any of them may hold a saved card, and a
+// stranger who only typed the email must not be handed that customer.
+// Returns { customerId, created } or null (no email to make one with).
+// `created` is true only when this call made the customer, which is the one
+// case where it is certain to hold no cards.
+export async function ensureOwnStripeCustomer({ creds, client }) {
+  if (client.stripe_customer_id) return { customerId: client.stripe_customer_id, created: false };
+  if (!client.email) return null;
+  const cust = await createCustomer({
+    secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
+    email: client.email, name: client.name,
+    workspaceId: client.workspace_id, clientId: client.id,
+  });
+  // Only fill a blank: two requests at once must agree on one customer.
+  const upd = await sql`
+    UPDATE clients SET stripe_customer_id = ${cust.id}, updated_at = NOW()
+     WHERE id = ${client.id} AND workspace_id = ${client.workspace_id}
+       AND stripe_customer_id IS NULL
+    RETURNING id
+  `;
+  if (upd.rows.length > 0) return { customerId: cust.id, created: true };
+  const cur = await sql`
+    SELECT stripe_customer_id FROM clients
+     WHERE id = ${client.id} AND workspace_id = ${client.workspace_id}
+  `;
+  const existing = cur.rows[0]?.stripe_customer_id || null;
+  return existing ? { customerId: existing, created: false } : null;
 }
 
 // After a Checkout payment that asked for setup_future_usage, read the
@@ -81,6 +118,12 @@ export async function storeCardFromPaymentIntent({ creds, workspaceId, clientId,
     ? pi.payment_method
     : await fetchPaymentMethod({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, paymentMethodId: pmId });
   if (pm?.type && pm.type !== 'card') return null;
+  // A card Ivy keeps is never one Stripe's payment pages offer back (see
+  // SAVED_CARD_REDISPLAY in stripe.js). A card kept at payment arrives
+  // "limited" already; this covers the ones that do not.
+  await limitSavedCardRedisplay({
+    secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, paymentMethodId: pmId, paymentMethod: pm,
+  });
   const card = pm?.card || {};
   const cust = customerId || (typeof pi.customer === 'string' ? pi.customer : pi.customer?.id) || null;
   const upd = await sql`

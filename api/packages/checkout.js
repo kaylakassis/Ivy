@@ -80,10 +80,14 @@ export default async function handler(req, res) {
     // The buyer is NOT signed in, so the session never gets that client's
     // existing Stripe customer: Checkout would offer the client's saved
     // card to whoever typed their email (see publicCheckoutBuyer).
+    //
+    // Matched in any letter case, like the membership and program
+    // checkouts: a client the owner typed as "Jane@Example.com" is the
+    // same person, not a second client record.
     let clientId = null;
     const existing = await sql`
       SELECT id FROM clients
-       WHERE workspace_id = ${workspaceId} AND email = ${buyerEmail}
+       WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail}
        LIMIT 1
     `;
     if (existing.rows.length > 0) {

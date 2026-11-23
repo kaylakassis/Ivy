@@ -667,10 +667,13 @@ async function createBooking(req, res) {
     // row so future bookings + reminders pick it up by default. Same
     // for SMS consent - never silently flip to TRUE; only stamp the
     // timestamp if the form explicitly opted in.
+    // Matched in any letter case (clientEmail is lower case already): a
+    // client the owner typed as "Jane@Example.com" is the same person, not
+    // a second client record.
     let clientId = pkgRow ? pkgRow.client_id : null;
     const existing = pkgRow ? { rows: [] } : await sql`
       SELECT id, phone, sms_consent_at FROM clients
-      WHERE workspace_id = ${workspaceId} AND email = ${clientEmail} LIMIT 1
+      WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${clientEmail} LIMIT 1
     `;
     if (pkgRow) {
       // Signed-in package holder: their record already exists; never
@@ -880,6 +883,13 @@ async function createBooking(req, res) {
         // late-cancel or no-show fee and payments run through Stripe, the
         // deposit checkout also keeps the card (Stripe shows the client a
         // "saved for future payments" note) so a later fee can be charged.
+        //
+        // Whoever is booking only typed an email, and a Stripe payment page
+        // given a customer offers that customer's saved cards for a
+        // one-click charge. cardOnFileCheckout therefore never answers with
+        // a customer found by email, only this client's own (checked with
+        // Stripe to hold nothing the page would offer) or a brand-new one;
+        // with no answer the deposit is paid with the email alone.
         const keep = name === 'stripe'
           ? await cardOnFileCheckout({ workspaceId, clientId, service: svc, mode: 'customer' }).catch(() => null)
           : null;
