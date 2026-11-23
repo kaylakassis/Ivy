@@ -121,7 +121,8 @@ export async function computeSetupStatus({ userId, workspaceId, emailVerifiedAt 
       label: 'Connect Stripe',
       done: stripeConnected,
       required: false,
-      href: '/finance',
+      // Money settings. (Older app builds ignore ?settings and land on Money.)
+      href: '/finance?settings=1',
       why: 'Take card payments and deposits without chasing checks. Use your own Stripe account, or create one in a few minutes.',
     },
     {

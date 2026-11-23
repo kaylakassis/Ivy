@@ -33,6 +33,7 @@ import TodayCard, { pickNext } from './TodayCard.jsx';
 import AttentionCard from './AttentionCard.jsx';
 import AskIvyCard from './AskIvyCard.jsx';
 import { fmtTime } from './format.js';
+import { payoffParts } from './payoff.js';
 import { FLAGS } from '../../lib/featureFlags.js';
 import { usePromptSlot, PROMPT_RANK } from '../../lib/promptQueue.js';
 import { usePullRefresh } from '../../lib/pullRefresh.js';
@@ -331,6 +332,7 @@ export default function Dashboard() {
   // A business with no real clients or bookings yet.
   const empty = !!data && Number(data.metrics?.clients || 0) === 0 && Number(data.metrics?.booked || 0) === 0;
   const showReady = !!data?.firstWin?.showReady;
+  const payoff = payoffParts(data?.week, currency);
   // The set-up steps still to do. While any are left, the "finish set-up"
   // row is left out of "Needs your attention" (the prompt above says it).
   const setupOpen = !!setup && Array.isArray(setup.items) && setup.items.length > 0 && !setup.fullyComplete && !showReady;
@@ -393,8 +395,12 @@ export default function Dashboard() {
             <Icons.Trending size={16}/>
           </span>
           <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>See your progress</span>
-            <span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)', marginTop: 1 }}>Your numbers, this week, goals and tasks</span>
+            {/* When money came in this week, the row says so (and how much of
+                it followed a reminder Ivy sent). Otherwise it is a plain link. */}
+            <span data-home-payoff={payoff ? 'on' : 'off'} style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>{payoff ? payoff.headline : 'See your progress'}</span>
+            <span style={{ display: 'block', fontSize: 12.5, color: 'var(--muted)', marginTop: 1 }}>
+              {payoff ? `${payoff.detail ? `${payoff.detail}. ` : ''}See your progress` : 'Your numbers, this week, goals and tasks'}
+            </span>
           </span>
           <Icons.Arrow size={13} stroke="var(--muted)" sw={1.8}/>
         </Link>

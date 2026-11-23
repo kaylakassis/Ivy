@@ -10,7 +10,7 @@ import { isNative, isIos } from '../../lib/platform.js';
 import AccountabilityPartnerRow from './AccountabilityPartnerRow.jsx';
 import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason, iapIdentifyRefusal } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import SavedOnPhoneCard from '../../components/offline/SavedOnPhoneCard.jsx';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
@@ -28,6 +28,22 @@ import {
   subscribePush, unsubscribePush,
 } from '../../lib/push.js';
 
+// The four pages of Account, and which one an address opens.
+export const ACCOUNT_PAGES = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'billing', label: 'Plan' },
+  { id: 'notifications', label: 'Preferences' },
+  { id: 'security', label: 'Security & data' },
+];
+export function accountPageFor(loc) {
+  const params = new URLSearchParams(loc?.search || '');
+  const tab = params.get('tab');
+  if (loc?.hash === '#referrals' || tab === 'billing' || params.get('winback') === '1') return 'billing';
+  if (tab === 'notifications') return 'notifications';
+  if (['security', 'blocked', 'reports'].includes(tab)) return 'security';
+  return 'profile';
+}
+
 export default function AccountPage() {
   const { user, refresh } = useAuth();
   const { ctx } = useUserContext();
@@ -37,23 +53,31 @@ export default function AccountPage() {
   const [busyEmail, setBusyEmail]   = useState(false);
   const [emailedNote, setEmailedNote] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Deep links: /account#referrals, /account?tab=billing (dunning, trial
-  // and win-back emails and pushes; winback=1 just lands on billing too)
-  // /account?tab=security (sign-in alerts), and /account?tab=blocked or
-  // ?tab=reports (messaging moderation). Scroll the card into view once
-  // the page has painted.
+  // Account is four short pages instead of one long one. Existing links
+  // keep working: /account?tab=billing (dunning, trial and win-back emails
+  // and pushes), /account#referrals, /account?tab=security (sign-in
+  // alerts), ?tab=blocked or ?tab=reports (messaging moderation),
+  // ?tab=notifications and ?support=1 each open the page that holds that
+  // card, then scroll to it.
+  const [page, setPage] = useState(() => accountPageFor(window.location));
+  const location = useLocation();
+  useEffect(() => { setPage(accountPageFor(window.location)); }, [location.search, location.hash]);
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
     const target = window.location.hash === '#referrals' ? 'referrals'
-      : tab === 'billing' ? 'billing'
-      : tab === 'security' ? 'security'
-      : tab === 'blocked' ? 'blocked'
-      : tab === 'reports' ? 'reports'
+      : ['billing', 'security', 'blocked', 'reports'].includes(tab) ? tab
       : null;
-    if (!target) return;
+    if (!target) return undefined;
     const t = setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
     return () => clearTimeout(t);
-  }, []);
+  }, [location.search, location.hash]);
+  const openPage = (id) => {
+    // Keeps the address in step so a refresh or the back button returns here.
+    // (viaTabs: the owner is browsing, so long lists start folded. A link
+    // from an email opens the same page with them unfolded.)
+    nav({ pathname: '/account', search: id === 'profile' ? '' : `?tab=${id}` }, { replace: true, state: { viaTabs: true } });
+    setPage(id);
+  };
 
   const downloadExport = async () => {
     setBusyExport(true);
@@ -103,10 +127,25 @@ export default function AccountPage() {
       <div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Account</h2>
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-          Manage your profile, your data, and the rest of your account.
+          Your profile, your plan, your preferences, and your security and data.
         </div>
       </div>
 
+      <div className="tab-row" role="tablist" aria-label="Account">
+        {ACCOUNT_PAGES.map((p) => (
+          <button key={p.id} type="button" role="tab" aria-selected={page === p.id} data-account-page={p.id}
+            onClick={() => openPage(p.id)} className="seg-btn" style={{
+              padding: '8px 16px', borderRadius: 8, border: 0, fontSize: 13.5, fontWeight: 650, cursor: 'pointer',
+              background: page === p.id ? 'var(--surface)' : 'transparent',
+              color: page === p.id ? 'var(--fg)' : 'var(--muted)',
+              boxShadow: page === p.id ? 'var(--shadow-sm)' : 'none',
+              whiteSpace: 'nowrap',
+            }}>{p.label}</button>
+        ))}
+      </div>
+
+      {page === 'profile' && (
+      <>
       {/* Profile */}
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 12 }}>Profile</div>
@@ -118,6 +157,16 @@ export default function AccountPage() {
 
       <BrandingCard/>
 
+      <SupportCard/>
+
+      <WalkthroughCard/>
+
+      <SetupReplayCard/>
+      </>
+      )}
+
+      {page === 'billing' && (
+      <>
       <SubscriptionCard/>
 
       {/* Referrals (was its own tab): refer a friend, get a free week.
@@ -129,15 +178,20 @@ export default function AccountPage() {
         </div>
       )}
 
+      </>
+      )}
+
+      {page === 'notifications' && (
+      <>
       <NotificationsCard/>
 
       <NavigationCard/>
+      </>
+      )}
 
-      <SupportCard/>
-
-      <WalkthroughCard/>
-
-      <SetupReplayCard/>
+      {page === 'security' && (
+      <>
+      <SecurityCard/>
 
       {/* Export */}
       <div className="card" style={{ padding: 22 }}>
@@ -175,8 +229,6 @@ export default function AccountPage() {
       {/* iPhone app: the copy kept on this phone for use without signal. */}
       {isNative() && <SavedOnPhoneCard/>}
 
-      <SecurityCard/>
-
       {/* Messaging moderation: who you've blocked, what you've reported. */}
       <BlockedCard id="blocked"
         hint="Blocked clients cannot message you and you cannot message them. You can unblock any time."
@@ -202,6 +254,8 @@ export default function AccountPage() {
       </div>
 
       {user?.isSuperAdmin && <AdminPanel/>}
+      </>
+      )}
 
       {deleteOpen && (
         <DeleteAccountModal
@@ -896,6 +950,8 @@ const EMAIL_LABELS = {
 };
 
 function NotificationPrefs({ emailOnly = false }) {
+  const arrivedByTabs = !!useLocation().state?.viaTabs;
+  const [emailsOpen, setEmailsOpen] = useState(!arrivedByTabs);
   const [pushPrefs, setPushPrefs] = useState(null);
   const [emailPrefs, setEmailPrefs] = useState(null);
   const [pushTypes, setPushTypes] = useState([]);
@@ -1021,7 +1077,18 @@ function NotificationPrefs({ emailOnly = false }) {
       )}
       {emailPrefs && emailTypes.length > 0 && (
         <>
-          <div className="metric-label" style={{ marginBottom: 8 }}>Email notifications</div>
+          {/* A dozen switches is a lot to scroll past, so the list is folded
+              until asked for. A "manage your emails" link from an email
+              arrives with it open. */}
+          <button type="button" onClick={() => setEmailsOpen((o) => !o)} aria-expanded={emailsOpen} data-email-prefs-toggle
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0', marginBottom: emailsOpen ? 8 : 0, cursor: 'pointer', textAlign: 'left' }}>
+            <span className="metric-label" style={{ flex: 1 }}>Email notifications</span>
+            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+              {emailTypes.filter((t) => (t === 'marketing' ? !!marketingOn : emailPrefs[t] !== false)).length} of {emailTypes.length} on
+            </span>
+            <Icons.ArrowDown size={13} sw={1.8} stroke="var(--muted)" style={{ transform: emailsOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}/>
+          </button>
+          {emailsOpen && (<>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {emailTypes.map((t) => {
               const meta = EMAIL_LABELS[t] || { label: t, hint: '' };
@@ -1048,6 +1115,7 @@ function NotificationPrefs({ emailOnly = false }) {
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.5 }}>
             Account-critical emails (sign-up verification, password reset, payment failure, account deletion) always send.
           </div>
+          </>)}
         </>
       )}
     </div>

@@ -13,6 +13,13 @@ import {
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { withIdempotency } from '../_lib/idempotency.js';
 import { encodeCursor, decodeCursor, cursorPageSize, looksLikeDate, looksLikeTimestamp } from '../_lib/listCursor.js';
+// ?status= takes one invoice status, or "unpaid": everything a client still
+// owes (sent and overdue together), which is what the Money screen opens on.
+function statusFilter(raw) {
+  if (raw === 'unpaid') return 'unpaid';
+  return raw && VALID_STATUS.has(raw) ? raw : null;
+}
+
 // One page of the owner's invoice list, newest first, after the cursor.
 // Same filters as the list below (?status=, ?archived=only|all).
 async function listPage(req, res, workspaceId) {
@@ -23,13 +30,13 @@ async function listPage(req, res, workspaceId) {
     if (!c || !looksLikeDate(c[0]) || !looksLikeTimestamp(c[1])) return badRequest(res, 'That page link is out of date. Reload the list.');
     after = c;
   }
-  const status = req.query.status && VALID_STATUS.has(req.query.status) ? req.query.status : null;
+  const status = statusFilter(req.query.status);
   const archivedMode = ['only', 'all'].includes(String(req.query.archived || '')) ? String(req.query.archived) : 'none';
   const { rows } = await sql.query(
     `SELECT *, issue_date::text AS cursor_issue_date, created_at::text AS cursor_created_at
        FROM invoices
       WHERE workspace_id = $1
-        AND ($2::text IS NULL OR status = $2::text)
+        AND ($2::text IS NULL OR status = $2::text OR ($2::text = 'unpaid' AND status IN ('sent', 'overdue')))
         AND (CASE $3::text WHEN 'only' THEN archived_at IS NOT NULL
                            WHEN 'all'  THEN TRUE
                            ELSE archived_at IS NULL END)
@@ -80,12 +87,12 @@ export default async function handler(req, res) {
         // default, so older app builds show the tidy list too.
         //   ?archived=only → just the archived ones
         //   ?archived=all  → everything (the current Finance page)
-        const status = req.query.status && VALID_STATUS.has(req.query.status) ? req.query.status : null;
+        const status = statusFilter(req.query.status);
         const archivedMode = ['only', 'all'].includes(String(req.query.archived || '')) ? String(req.query.archived) : 'none';
         const { rows } = await sql.query(
           `SELECT * FROM invoices
             WHERE workspace_id = $1
-              AND ($2::text IS NULL OR status = $2::text)
+              AND ($2::text IS NULL OR status = $2::text OR ($2::text = 'unpaid' AND status IN ('sent', 'overdue')))
               AND (CASE $3::text WHEN 'only' THEN archived_at IS NOT NULL
                                  WHEN 'all'  THEN TRUE
                                  ELSE archived_at IS NULL END)

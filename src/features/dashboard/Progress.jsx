@@ -18,6 +18,7 @@ import { usePullRefresh } from '../../lib/pullRefresh.js';
 import KeyNumbers from './KeyNumbers.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
 import { fmtMoney } from './format.js';
+import { payoffParts } from './payoff.js';
 
 export default function Progress() {
   const [data, setData] = useState(() => readCache('dashboard'));
@@ -114,6 +115,7 @@ function ThisWeekCard({ week, currency }) {
     week.revenuePaid > 0 && `${fmtMoney(week.revenuePaid, currency)} collected`,
   ].filter(Boolean);
   if (!bits.length && !rows.length && !week.ivyTasks) return null;
+  const payoff = payoffParts(week, currency);
   return (
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
@@ -121,6 +123,11 @@ function ThisWeekCard({ week, currency }) {
         <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Last 7 days</span>
       </div>
       {bits.length > 0 && <div style={{ fontSize: 14, fontWeight: 600, marginBottom: rows.length ? 10 : 0 }}>{bits.join(' · ')}</div>}
+      {payoff?.detail && (
+        <div data-payoff style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: rows.length ? 10 : 0 }}>
+          {payoff.headline}. {payoff.detail}.
+        </div>
+      )}
       {rows.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map((text) => (

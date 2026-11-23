@@ -8,6 +8,7 @@ import ResendVerifyLink from '../../components/ResendVerifyLink.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useInvoices } from './state.js';
+import { api } from '../../lib/api.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { fmtDateOnly } from '../../lib/dateOnly.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -59,7 +60,8 @@ export const MONEY_GROUPS = [
 export const moneyGroupOf = (section) => MONEY_GROUPS.find((g) => g.sections.some((x) => x.id === section)) || MONEY_GROUPS[0];
 
 export default function Finance() {
-  const [tab, setTab]               = useState('all');
+  // Money opens on who owes you: unpaid invoices, overdue ones first.
+  const [tab, setTab]               = useState('owed');
   // One page (50) of the current tab at a time, from the server; counts
   // and totals are the server's (GET /api/finance).
   const {
@@ -73,6 +75,15 @@ export default function Finance() {
   // Expense tracking was retired; an owner who logged some keeps the exports.
   const hasPastExpenses = (summary?.pastEntries?.expenses || 0) > 0;
   const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | ...
+  // Payment processor, other ways to pay and invoice design live behind the
+  // Settings button now, not on top of the invoice list. Coming back from
+  // connecting a processor (?stripe= / ?square= / ?paypal=) lands there, so
+  // the result is on screen.
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('settings') === '1' || p.get('design') === '1' || ['stripe', 'square', 'paypal'].some((k) => p.has(k));
+  });
+  const cardsReady = useCardPayments();
   const [openId, setOpenId]         = useState(null);
   const [creatingBusy, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
@@ -99,6 +110,8 @@ export default function Finance() {
   // Archived invoices (settled ones the owner hid) only show under the
   // Archived tab; every other tab and count leaves them out.
   const counts = useMemo(() => ({
+    owed:    (summary?.counts?.sent ?? invoices.filter((i) => i.status === 'sent').length)
+           + (summary?.counts?.overdue ?? invoices.filter((i) => i.status === 'overdue').length),
     all:     summary?.counts?.all ?? invoices.filter((i) => !i.archivedAt).length,
     // Fully-optional chain: a summary without counts (defensive against
     // schema drift) falls through to the local recount instead of
@@ -116,6 +129,12 @@ export default function Finance() {
     if (tab === 'archived') return invoices.filter((i) => i.archivedAt);
     const live = invoices.filter((i) => !i.archivedAt);
     if (tab === 'all') return live;
+    if (tab === 'owed') {
+      // Overdue first, then whatever is due soonest.
+      const due = (i) => (i.dueDate ? String(i.dueDate) : '9999');
+      return live.filter((i) => i.status === 'sent' || i.status === 'overdue')
+        .sort((a, b) => (a.status === b.status ? due(a).localeCompare(due(b)) : a.status === 'overdue' ? -1 : 1));
+    }
     return live.filter((i) => i.status === tab);
   }, [invoices, tab]);
 
@@ -188,13 +207,18 @@ export default function Finance() {
     // ?filter=<status> - invoice status filter (weekly recap "Chase them"
     // link uses ?filter=overdue). Only known statuses are honored.
     const filterParam = params.get('filter');
-    const filterOk = filterParam && ['all', 'draft', 'sent', 'overdue', 'paid', 'refunded', 'voided', 'archived'].includes(filterParam);
+    const filterOk = filterParam && ['owed', 'all', 'draft', 'sent', 'overdue', 'paid', 'refunded', 'voided', 'archived'].includes(filterParam);
     if (filterOk) { setTab(filterParam); setSection('invoices'); }
     // An old link to a section that was retired (expenses, time) opens Invoices.
     if (sectionParam && MONEY_GROUPS.some((g) => g.sections.some((x) => x.id === sectionParam))) setSection(sectionParam);
-    if (sectionParam || filterParam) {
+    // ?settings=1 opens Money settings (payment processor, other ways to
+    // pay, invoice design). ?design=1 is the invoice design shortcut, which
+    // lives there too; it is left for the design card to read and strip.
+    if (params.get('settings') === '1' || params.get('design') === '1') setSettingsOpen(true);
+    if (sectionParam || filterParam || params.has('settings')) {
       params.delete('section');
       params.delete('filter');
+      params.delete('settings');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -204,7 +228,7 @@ export default function Finance() {
     return (
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SkelPageHeader/>
-        <SkelStatGrid count={4}/>
+        <SkelStatGrid count={2}/>
         <SkelRowList rows={6}/>
         <Loader/>
       </div>
@@ -232,6 +256,10 @@ export default function Finance() {
             Send invoices, track payments, watch revenue grow.
           </div>
         </div>
+        <button className="btn btn-outline" data-money-settings onClick={() => setSettingsOpen(true)}
+          title="Payment processor, other ways to get paid, invoice design">
+          <Icons.Settings size={13}/> Settings
+        </button>
         <div style={{ position: 'relative' }}>
           <button className="btn btn-outline" onClick={() => setExportMenuOpen((v) => !v)}
             title="Year-end CSV exports - for taxes or accounting software">
@@ -284,7 +312,7 @@ export default function Finance() {
             </>
           )}
         </div>
-        {section === 'invoices' && (
+        {section === 'invoices' && !settingsOpen && (
           // Arrow wraps startNew so the click's SyntheticEvent doesn't
           // land as the clientId arg - `...(clientId ? {clientId} : {})`
           // below would otherwise spread the event into the API payload.
@@ -294,6 +322,22 @@ export default function Finance() {
         )}
       </div>
 
+      {settingsOpen ? (
+        <div data-money-settings-panel className="panel-enter" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <button type="button" className="btn btn-ghost" onClick={() => setSettingsOpen(false)}
+              style={{ padding: '6px 10px', fontSize: 13, color: 'var(--muted)', marginLeft: -10 }}>
+              <Icons.Arrow size={12} sw={1.9} style={{ transform: 'rotate(180deg)' }}/> Back to Money
+            </button>
+            <h3 style={{ margin: '6px 0 0', fontSize: 18, fontWeight: 700 }}>Money settings</h3>
+            <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 3 }}>How you get paid, and how your invoices look.</div>
+          </div>
+          <PaymentProviderCard/>
+          <ManualMethodsCard/>
+          <InvoiceDesignCard/>
+        </div>
+      ) : (
+      <>
       {/* Three groups instead of eleven tabs in a row. Each group shows only
           its own few sections, so the owner picks "what am I here to do"
           first and never scans a wall of labels. The section ids are
@@ -361,11 +405,44 @@ export default function Finance() {
           archive={archive} onOpenRecurring={() => { setOpenId(null); setSection('recurring'); }}
           hasMore={hasMore} loadMore={loadMore} loadingMore={loadingMore}
           listLoading={listLoading} remaining={remaining}
+          cardsReady={cardsReady} onOpenSettings={() => setSettingsOpen(true)} onNew={() => startNew()}
         />
       )}
       </div>
+      </>
+      )}
     </div>
   );
+}
+
+// The invoice lists. Four tabs cover the day-to-day; the rest sit in a short
+// menu beside them. "Owed to you" is sent and overdue together.
+const MAIN_TABS = [
+  { id: 'owed', label: 'Owed to you' },
+  { id: 'draft', label: 'Drafts' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'all', label: 'All' },
+];
+const OTHER_TABS = [
+  { id: 'overdue', label: 'Overdue only' },
+  { id: 'sent', label: 'Sent, not due yet' },
+  { id: 'refunded', label: 'Refunded' },
+  { id: 'voided', label: 'Voided' },
+  { id: 'archived', label: 'Archived' },
+];
+
+// Whether a client can pay this business by card (any processor connected).
+// null while it is not known, so nothing is claimed either way.
+function useCardPayments() {
+  const [ready, setReady] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api.get('/finance/payment-providers')
+      .then((r) => { if (live) setReady(Object.values(r?.providers || {}).some((p) => p?.connected)); })
+      .catch(() => { /* unknown: say nothing */ });
+    return () => { live = false; };
+  }, []);
+  return ready;
 }
 
 function InvoicesSection({
@@ -373,6 +450,7 @@ function InvoicesSection({
   setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund, clearClaim,
   archive, onOpenRecurring,
   hasMore, loadMore, loadingMore, listLoading, remaining,
+  cardsReady, onOpenSettings, onNew,
 }) {
   // On phones the 7-column invoice grid forces sideways scrolling to see
   // status/total. Below this width we render each invoice as a stacked card.
@@ -412,59 +490,68 @@ function InvoicesSection({
     } finally { setBulkBusy(false); }
   };
   const showArchiveExplainer = ['paid', 'refunded', 'voided', 'archived'].includes(tab);
+  const tabLabel = [...MAIN_TABS, ...OTHER_TABS].find((t) => t.id === tab)?.label || '';
   return (
     <>
-      <PaymentProviderCard/>
-      <ManualMethodsCard/>
-      <InvoiceDesignCard/>
-
-      {/* Summary cards: rise in with a 25ms stagger; numbers count up once. */}
-      <div className="grid-auto stagger">
-        <SummaryCard label="Outstanding" value={summary?.totalOutstanding} index={0}
-          sub={`${counts.sent + counts.overdue} unpaid`}
-          icon={<Icons.Clock size={16} sw={1.8}/>}
-          tone={summary?.totalOverdue > 0 ? 'warn' : 'neutral'}/>
-        <SummaryCard label="Overdue" value={summary?.totalOverdue} index={1}
-          sub={`${counts.overdue} past due`}
-          icon={<Icons.Bell size={16} sw={1.8}/>}
-          tone={summary?.totalOverdue > 0 ? 'bad' : 'ok'}/>
-        <SummaryCard label="Paid this month" value={summary?.monthPaid} index={2}
-          sub={`${fmtMoney(summary?.yearPaid)} this year`}
-          icon={<Icons.Trending size={16} sw={1.8}/>}
-          tone="ok"/>
-        <SummaryCard label="Paid (lifetime)" value={summary?.totalPaid} index={3}
-          sub={`${counts.paid} paid invoice${counts.paid === 1 ? '' : 's'}`}
-          icon={<Icons.Dollar size={16} sw={1.8}/>}
-          tone="accent"/>
+      {/* Who owes you, in one box. (This used to be three settings cards
+          and four number tiles before the first invoice.) */}
+      <div className="card" data-money-owed style={{ padding: 18, display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+          <div className="metric-label">Owed to you</div>
+          <div style={{ fontSize: 32, fontWeight: 700, lineHeight: 1.15, marginTop: 4, color: summary?.totalOverdue > 0 ? 'var(--warn)' : 'var(--fg)' }}>
+            <CountUp value={Number(summary?.totalOutstanding || 0)} format={(n) => fmtMoney(n)}/>
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>
+            {counts.owed === 0
+              ? 'Nobody owes you right now.'
+              : `${counts.owed} unpaid ${counts.owed === 1 ? 'invoice' : 'invoices'}${summary?.totalOverdue > 0 ? `, ${fmtMoney(summary.totalOverdue)} of it overdue` : ''}`}
+          </div>
+        </div>
+        <div style={{ flex: '0 1 auto', minWidth: 0 }}>
+          <div className="metric-label">Paid this month</div>
+          <div style={{ fontSize: 20, fontWeight: 650, marginTop: 4 }}>{fmtMoney(summary?.monthPaid)}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>{fmtMoney(summary?.yearPaid)} this year</div>
+        </div>
+        {cardsReady === false && (
+          <div style={{ flexBasis: '100%', fontSize: 13, color: 'var(--fg-2)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            Clients cannot pay you by card yet.{' '}
+            <button type="button" onClick={onOpenSettings} style={{ color: 'var(--accent)', fontWeight: 600, fontSize: 13, textDecoration: 'underline', cursor: 'pointer' }}>
+              Set up payments
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Status tabs */}
-      <div className="tab-row">
-        {[
-          { id: 'all', label: 'All' },
-          { id: 'draft', label: 'Drafts' },
-          { id: 'sent', label: 'Sent' },
-          { id: 'overdue', label: 'Overdue' },
-          { id: 'paid', label: 'Paid' },
-          { id: 'refunded', label: 'Refunded' },
-          { id: 'voided', label: 'Voided' },
-          { id: 'archived', label: 'Archived' },
-        ].map(({ id, label }) => (
-          <button key={id} onClick={() => setTab(id)} data-tab={id} style={{
-            padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
-            background: tab === id ? 'var(--surface)' : 'transparent',
-            color: tab === id ? 'var(--fg)' : 'var(--muted)',
-            boxShadow: tab === id ? 'var(--shadow-sm)' : 'none',
-            display: 'inline-flex', alignItems: 'center', gap: 6,
+      {/* Four tabs, with the rarely used ones in a short menu. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+        <div className="tab-row" style={{ flex: '0 1 auto', minWidth: 0 }}>
+          {MAIN_TABS.map(({ id, label }) => (
+            <button key={id} onClick={() => setTab(id)} data-tab={id} style={{
+              padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
+              background: tab === id ? 'var(--surface)' : 'transparent',
+              color: tab === id ? 'var(--fg)' : 'var(--muted)',
+              boxShadow: tab === id ? 'var(--shadow-sm)' : 'none',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}>
+              {label}
+              <span style={{
+                fontSize: 10.5, padding: '1px 6px', borderRadius: 99,
+                background: tab === id ? 'var(--surface-2)' : 'var(--surface)',
+                color: 'var(--muted)', fontWeight: 600,
+              }}>{counts[id]}</span>
+            </button>
+          ))}
+        </div>
+        <select aria-label="More invoice lists" data-tab-more value={OTHER_TABS.some((t) => t.id === tab) ? tab : ''}
+          onChange={(e) => { if (e.target.value) setTab(e.target.value); }}
+          style={{
+            padding: '7px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
+            border: `1px solid ${OTHER_TABS.some((t) => t.id === tab) ? 'var(--accent)' : 'var(--border-strong)'}`,
+            background: 'var(--surface)', color: 'var(--fg-2)',
           }}>
-            {label}
-            <span style={{
-              fontSize: 10.5, padding: '1px 6px', borderRadius: 99,
-              background: tab === id ? 'var(--surface-2)' : 'var(--surface)',
-              color: 'var(--muted)', fontWeight: 600,
-            }}>{counts[id]}</span>
-          </button>
-        ))}
+          <option value="">More lists</option>
+          {OTHER_TABS.map(({ id, label }) => <option key={id} value={id}>{label} ({counts[id]})</option>)}
+        </select>
       </div>
 
       {(showArchiveExplainer || pickable.length > 0 || bulkNote) && (
@@ -528,13 +615,20 @@ function InvoicesSection({
             <div style={{ padding: 48 }}>
               <EmptyNote
                 icon="Dollar"
-                title={tab === 'all' ? 'No invoices yet' : tab === 'archived' ? 'Nothing archived' : `No ${tab === 'draft' ? 'drafts' : tab} invoices`}
+                title={tab === 'all' ? 'No invoices yet' : tab === 'owed' ? 'Nobody owes you right now' : tab === 'archived' ? 'Nothing archived' : `Nothing under ${tabLabel}`}
                 hint={tab === 'all'
                   ? 'Click "New invoice" to send your first.'
-                  : tab === 'archived'
-                    ? 'Paid, refunded and void invoices you archive show up here. Archiving hides them without deleting anything.'
-                    : 'Try a different tab.'}
+                  : tab === 'owed'
+                    ? (counts.all > 0 ? 'Every invoice you sent has been paid. New ones show up here until they are.' : 'Send an invoice and it shows up here until it is paid.')
+                    : tab === 'archived'
+                      ? 'Paid, refunded and void invoices you archive show up here. Archiving hides them without deleting anything.'
+                      : 'Try a different list.'}
               />
+              {tab === 'owed' && (
+                <div style={{ textAlign: 'center', marginTop: 14 }}>
+                  <button type="button" className="btn btn-primary" onClick={onNew}><Icons.Plus size={13} sw={2}/> New invoice</button>
+                </div>
+              )}
             </div>
           ) : rows.map((i, idx) => (
             <InvoiceRow key={i.id} invoice={i} first={idx === 0} index={idx} isMobile={cardList}
@@ -811,35 +905,6 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid, selec
   );
 }
 
-function SummaryCard({ label, value, sub, icon, tone = 'neutral', index }) {
-  const colors = {
-    ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)',
-    accent: 'var(--accent)', neutral: 'var(--muted)',
-  };
-  return (
-    <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 8, ...stagger(index) }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 28, height: 28, borderRadius: 8, background: 'var(--surface-2)',
-          color: colors[tone], flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>{icon}</div>
-        <div className="metric-label" style={{
-          lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>{label}</div>
-      </div>
-      <div className="metric-value" style={{ fontSize: 28 }}><CountUp value={value} format={(n) => fmtMoney(n)}/></div>
-      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{sub}</div>
-    </div>
-  );
-}
-
-// Owner dashboard formatter. The dashboard summary rolls up multi-
-// currency invoices but the workspace usually has a dominant
-// currency, so for the summary tiles we default to USD (the column
-// default) - invoice rows themselves render with the per-row
-// currency via inv.currency. Cross-currency mixing is an
-// edge case until a workspace genuinely has dual-currency clients.
 function fmtMoney(n, currency = 'USD') {
   if (n == null) return '-';
   return fmtMoneyShared(n, currency);

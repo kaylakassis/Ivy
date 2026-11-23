@@ -89,6 +89,19 @@ export function recapSubject(stats) {
   return parts.length ? `Your week with Ivy: ${parts.slice(0, 2).join(', ')}` : 'Your week with Ivy';
 }
 
+// The payoff, in one sentence: what came in over the window, and how much
+// of it arrived after a reminder Ivy sent. Says nothing when nothing was
+// collected, and leaves the reminder part out when there was none. `money`
+// formats an amount (the app passes its own, with the business's currency).
+export function payoffLine(stats, money = fmtMoney) {
+  const paid = num(stats?.revenuePaid);
+  if (!(paid > 0)) return null;
+  const after = Math.min(num(stats?.revenueAfterReminder), paid);
+  if (!(after > 0)) return `You collected ${money(paid)} in the last 7 days.`;
+  if (after >= paid) return `You collected ${money(paid)} in the last 7 days, all of it after a reminder Ivy sent.`;
+  return `You collected ${money(paid)} in the last 7 days, ${money(after)} of it after a reminder Ivy sent.`;
+}
+
 // Stat tile used in the headline row. One number + one label.
 function statTile(label, value, widthPct) {
   return `<td style="padding:14px 16px;background:#0B4136;border:1px solid #164B3F;border-radius:10px;vertical-align:top;width:${widthPct}%;">
@@ -147,6 +160,11 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
       </table>`
     : '';
 
+  const payoff = num(s.revenueAfterReminder) > 0 ? payoffLine(s) : null;
+  const payoffRow = payoff
+    ? `<p style="margin:14px 0 0;font-size:15px;line-height:1.5;color:#ECF0F1;"><strong>${escapeHtml(payoff)}</strong></p>`
+    : '';
+
   const ivyList = ivyRows.length
     ? `<p style="margin:22px 0 6px;font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#93A3A0;">What Ivy did</p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -181,6 +199,7 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
     body: `<p>Hi ${fn},</p>
       <p>Here is what happened at ${biz} last week${rangeLabel ? ` (${escapeHtml(rangeLabel)})` : ''}, in real numbers.</p>
       ${tileRow}
+      ${payoffRow}
       ${ivyList}
       ${timeSaved}
       ${nextWeek}`,
@@ -207,7 +226,7 @@ export async function buildWeekStats({ workspaceId, from, to }) {
   const [
     bookingsTaken, completed, newClients, revenue, outstanding,
     ivyActions, automations, reminders, documentsSigned,
-    upcoming, overdue,
+    upcoming, overdue, afterReminder,
   ] = await Promise.all([
     // Bookings clients made themselves through the public booking page or
     // a package they hold (bookings.source = 'client'). Owner-made rows
@@ -318,6 +337,20 @@ export async function buildWeekStats({ workspaceId, from, to }) {
          AND due_date IS NOT NULL
          AND due_date < CURRENT_DATE
     `, { rows: [{ n: 0, total: 0 }] }),
+    // The part of "collected" that came in AFTER an automatic reminder went
+    // out for that invoice (the due-soon or the overdue one, both stamped
+    // by the reminder jobs with the time they were sent). Same money rule
+    // and same window as `revenue` above, so it can never exceed it.
+    safeQ(sql`
+      SELECT COALESCE(SUM(invoice_net_revenue(invoices)), 0)::numeric AS total
+        FROM invoices
+       WHERE workspace_id = ${workspaceId}
+         AND status = 'paid'
+         AND paid_at >= ${fromIso}::timestamptz
+         AND paid_at <  ${toIso}::timestamptz
+         AND ((last_overdue_reminder_at IS NOT NULL AND last_overdue_reminder_at < paid_at)
+           OR (due_soon_reminder_sent_at IS NOT NULL AND due_soon_reminder_sent_at < paid_at))
+    `, { rows: [{ total: 0 }] }),
   ]);
 
   const byKind = {};
@@ -328,6 +361,7 @@ export async function buildWeekStats({ workspaceId, from, to }) {
     completedBookings:   n0(completed),
     newClients:          n0(newClients),
     revenuePaid:         Number(revenue.rows[0]?.total || 0),
+    revenueAfterReminder: Math.min(Number(afterReminder.rows[0]?.total || 0), Number(revenue.rows[0]?.total || 0)),
     outstandingCount:    n0(outstanding),
     outstandingTotal:    Number(outstanding.rows[0]?.total || 0),
     ivyInvoices:         byKind.invoice || 0,

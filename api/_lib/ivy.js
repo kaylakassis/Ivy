@@ -1236,7 +1236,8 @@ The Money screen has two groups across the top. Tap the group, then the section 
 - Refund an invoice: open the invoice → "Refund" (full or part; paid invoices, or a part payment on an open one).
 - Cancel an unpaid invoice: open it → "Void" (stays on record, nothing owed; you can email the client). A never-sent draft can be deleted instead.
 - Hide paid, refunded or void invoices: open one → "Archive", or tap "Select to archive" on the list to archive several. The "Archived" filter shows them again. Paid and refunded invoices can't be deleted because money moved.
-- Connect Stripe / Square / PayPal: Money → top-right "Settings" gear → Payment provider card.
+- See who owes you: Money opens on "Owed to you", the unpaid invoices with overdue ones first. Drafts, Paid and All are the tabs beside it; "More lists" has Overdue only, Sent, Refunded, Voided and Archived.
+- Connect Stripe / Square / PayPal, add other ways to get paid (Zelle, Venmo, cash), or change how invoices look: Money → "Settings" button at the top of the screen.
 - Run in-person sale (POS / Tap to Pay): Money → "Get paid" → "Sell in person" → enter amount → choose payment method.
 - Memberships and gift cards: Money → "What I sell" → "Memberships" / "Gift cards".
 - Tax export (Schedule C, accounting CSV): Money → "Export" menu at the top of the screen.
@@ -1273,14 +1274,18 @@ WEBSITE (sidebar → "Website")
 IVY (sidebar → "Ivy")
 - That's me. The chat lives here as a full-page surface; the bubble in the corner is the same conversation in compact form.
 
-ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
-- Logo, brand colors, business name: Account → "Branding" card.
-- Subscription, trial status, manage billing: Account → "Subscription" card → "Manage subscription" opens the Stripe portal.
-- Notification preferences (which push + email categories): Account → "Notifications" card.
-- Help & support chat (talk to Ivy support): Account → "Contact support" card, or sidebar avatar menu → "Help & support".
-- Report a bug (beta): sidebar avatar menu → "Report a bug".
-- Export all your data: Account → "Export everything" card.
-- Delete your account: Account → "Danger zone" card → "Delete account".`;
+ACCOUNT (avatar → "Account settings", bottom-left of the side menu; on a phone, the menu button → "Account settings")
+Account has four pages across the top: "Profile", "Plan", "Preferences" and "Security & data".
+- Logo, brand colors, business name: Account → "Profile" → "Branding" card.
+- Help & support chat (talk to Ivy support): Account → "Profile" → "Contact support" card, or the avatar menu → "Help & support".
+- Replay the tour or the set-up steps: Account → "Profile".
+- Subscription, trial status, manage billing: Account → "Plan" → "Manage subscription" opens the Stripe portal.
+- Notification preferences (which push + email categories), and how often the accountability partner writes: Account → "Preferences" → "Notifications" card.
+- Hide a menu item you never use: Account → "Preferences" → "Navigation" card.
+- 2-step verification and sign-in security: Account → "Security & data".
+- Report a bug (beta): avatar menu → "Report a bug".
+- Export all your data: Account → "Security & data" → "Export everything" card.
+- Delete your account: Account → "Security & data" → "Danger zone" card → "Delete account".`;
 
 // Tool-use loop. Sends messages → if Claude returns tool_use blocks,
 // executes them server-side and sends tool_result blocks back. Repeats

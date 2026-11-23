@@ -162,6 +162,9 @@ export default async function handler(req, res) {
           bookingsTaken: stats.bookingsTaken,
           completedBookings: stats.completedBookings,
           revenuePaid: stats.revenuePaid,
+          // How much of that came in after an automatic reminder (never
+          // more than revenuePaid). The app turns the two into one sentence.
+          revenueAfterReminder: stats.revenueAfterReminder,
           outstandingTotal: stats.outstandingTotal,
           newClients: stats.newClients,
           ivyRows: recapIvyRows(stats),

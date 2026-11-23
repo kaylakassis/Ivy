@@ -27,7 +27,7 @@ const reads = [
   ['src/features/finance/Finance.jsx',          /get\('filter'\)/,                       '/finance?filter= sets the invoice status filter'],
   ['src/features/account/AccountPage.jsx',      /id="billing"/,                          'Billing card has an anchor'],
   ['src/features/account/AccountPage.jsx',      /id="security"/,                         'Security card has an anchor'],
-  ['src/features/account/AccountPage.jsx',      /tab === 'billing'[\s\S]*tab === 'security'/, '/account?tab=billing|security scroll to their card'],
+  ['src/features/account/AccountPage.jsx',      /tab === 'billing'[\s\S]*\['security', 'blocked', 'reports'\]\.includes\(tab\)/, '/account?tab=billing|security open the page that holds their card'],
   ['src/features/admin/AdminPage.jsx',          /TABS\.some\(\(t\) => t\.id === want\)/, '/admin?tab= initialises the tab when it names a real one'],
   ['src/features/website/PublicSite.jsx',       /get\('order'\)/,                        '/site/:handle?order= shows a notice (React)'],
   ['api/site/[handle]/index.js',                /req\.query\.order/,                     '/site/:handle?order= shows a notice (SSR)'],

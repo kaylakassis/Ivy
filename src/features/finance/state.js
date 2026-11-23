@@ -15,6 +15,7 @@ const PAGE = 50;
 // Tab -> server filter. Archived invoices only show under Archived.
 function tabQuery(tab) {
   if (tab === 'archived') return 'archived=only';
+  if (tab === 'owed') return 'status=unpaid';
   if (tab && tab !== 'all') return `status=${encodeURIComponent(tab)}`;
   return '';
 }
