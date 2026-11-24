@@ -87,5 +87,13 @@ assert(/Sent to the client automatically when this service is booked/.test(read(
 assert(/turn that off in Clients, under Reminders/.test(said('reviews')) && /kind: 'review'/.test(read('src/features/workflows/ClientAutomations.jsx')), 'Reviews: it says review requests can be turned off, and where');
 assert(/Nothing opens by itself/.test(said('more')), 'More: it says where help is, and that nothing pops up');
 
+console.log('\n[4] the welcome tour can be watched again from the (i)');
+const tourSteps = ['dashboard', 'more'].map((id) => TUTORIALS[id].steps.find((st) => st.cta?.to === '/dashboard?walkthrough=1'));
+assert(tourSteps.every((st) => st && st.cta.label === 'Watch the welcome tour'), 'Home\'s (i) and More\'s (i) each end with "Watch the welcome tour"');
+assert(/const walkthroughRequested = location\.search\.includes\('walkthrough=1'\);/.test(read('src/components/layout/AppShell.jsx')) && /walkthroughOverride === true \|\| walkthroughRequested/.test(read('src/components/layout/AppShell.jsx')), 'that button is what starts the tour; it never starts by itself');
+assert(!/walkthrough=1/.test(read('src/features/onboarding/OnboardingPage.jsx').replace(/\/\/.*$/gm, '')), 'finishing sign-up does not start it either');
+assert(/onCtaClick\(step\.cta\.to\)/.test(read('src/components/TutorialOverlay.jsx')), 'the button closes the tutorial and opens the tour');
+assert(/Replay the walkthrough/.test(read('src/features/account/AccountPage.jsx')), 'Account, Profile still has it as well');
+
 console.log(`\n${fail ? 'FAIL' : 'PASS'}: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

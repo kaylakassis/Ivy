@@ -21,6 +21,11 @@
 // only what the screen really does (tests/tutorials-on-demand.test.mjs
 // checks the button names against the screens).
 
+// Opens the welcome tour (the spotlight walk through the main screens,
+// src/features/onboarding/Walkthrough.jsx). The tour never starts by itself;
+// it is offered from Home's and More's (i), and from Account, Profile.
+export const WELCOME_TOUR = '/dashboard?walkthrough=1';
+
 export const TUTORIALS = {
   dashboard: {
     title: 'Home',
@@ -35,12 +40,13 @@ export const TUTORIALS = {
         body: "Ivy keeps a short list of what is waiting on you: a message to answer, an invoice to chase, a booking to approve. Each row has one button that opens the exact place to deal with it. For overdue invoices, Chase asks once and then sends the reminders for you.",
       },
       {
-        title: 'Ask Ivy',
-        body: 'Type what you want to do in the box at the top, in your own words. Ivy does it with your approval, or shows you where it is.',
+        title: 'Ask Ivy, and see your progress',
+        body: 'Type what you want to do in the box at the top, in your own words; Ivy does it with your approval, or shows you where it is. Your numbers, goals and tasks are one tap away under "See your progress".',
       },
       {
-        title: 'Progress',
-        body: 'Your numbers, this week with Ivy, and your goals and tasks are one tap away under "See your progress".',
+        title: 'The welcome tour',
+        body: 'Want to be shown around the whole app? The welcome tour takes about a minute, and you can watch it as many times as you like.',
+        cta: { label: 'Watch the welcome tour', to: WELCOME_TOUR },
       },
     ],
   },
@@ -335,7 +341,8 @@ export const TUTORIALS = {
       },
       {
         title: 'Help on every screen',
-        body: 'Every screen has an (i) next to its title. Tap it any time for a short walkthrough of that screen. Nothing opens by itself.',
+        body: 'Every screen has an (i) next to its title. Tap it any time for a short walkthrough of that screen. Nothing opens by itself. The welcome tour of the whole app is here too.',
+        cta: { label: 'Watch the welcome tour', to: WELCOME_TOUR },
       },
     ],
   },
