@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
-import ExitInterviewForm, { EXIT_REASONS } from '../../components/ExitInterviewForm.jsx';
+import ExitInterviewForm, { reasonsFor, EXIT_COPY } from '../../components/ExitInterviewForm.jsx';
 
 export default function ExitPage() {
   const { token } = useParams();
@@ -58,12 +58,12 @@ export default function ExitPage() {
         )}
         {state === 'form' && (
           <>
-            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>What made you cancel?</h1>
+            <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{(EXIT_COPY[info?.kind] || EXIT_COPY.cancel).short}</h1>
             <p style={{ margin: '6px 0 14px', fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.5 }}>
               {info?.business ? `For ${info.business}. ` : ''}Pick anything that fits. It takes a few seconds and it shapes what gets built next.
             </p>
             <ExitInterviewForm reasons={answer.reasons} comment={answer.comment} onChange={setAnswer}
-              options={Array.isArray(info?.reasons) && info.reasons.length ? info.reasons : EXIT_REASONS}/>
+              options={Array.isArray(info?.reasons) && info.reasons.length ? info.reasons : reasonsFor(info?.kind)}/>
             {err && <div role="alert" style={{ marginTop: 10, fontSize: 13, color: 'var(--danger)' }}>{err}</div>}
             <button type="button" className="btn btn-primary" disabled={busy || !canSend} onClick={send} style={{ marginTop: 16 }}>
               {busy ? 'Sending…' : 'Send'}

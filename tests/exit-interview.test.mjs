@@ -131,6 +131,60 @@ async function main() {
   r = await call(linkHandler, null, { method: 'POST', query: { token: lib.makeExitToken(happy.ws) }, body: { reasons: ['other'] } });
   assert(r.statusCode === 400 && (await rowsFor(happy.ws)).length === 0, 'a link for a business whose plan is running records nothing');
 
+  console.log('\n[3b] a free trial that ran out');
+  const mkTrial = async (tag, { endedDaysAgo = 2, comp = false } = {}) => {
+    const o = await mk(tag, { status: 'trialing', periodEnd: null, createdDaysAgo: 16 });
+    await sql`UPDATE workspaces SET trial_ends_at = ${inDays(-endedDaysAgo)}, comp_until = ${comp ? inDays(30) : null} WHERE id = ${o.ws}`;
+    return o;
+  };
+  const lapsed = await mkTrial('lapsed');
+  const stillTrying = await mkTrial('trying', { endedDaysAgo: -5 });
+  const comped = await mkTrial('comped', { comp: true });
+  let st = await lib.exitInterviewState(lapsed.ws);
+  assert(st.kind === 'trial' && st.due === true && st.answered === false, 'an owner whose free trial ended with no plan is asked what stopped them');
+  assert((await lib.exitInterviewState(stillTrying.ws)).kind === null, 'one whose trial is still running is not');
+  assert((await lib.exitInterviewState(comped.ws)).kind === null, 'nor one with complimentary access');
+  assert((await lib.exitInterviewState(leaving.ws)).kind === 'cancel', 'a cancellation is still a cancellation');
+  r = await call(meHandler, lapsed.userId, { method: 'GET' });
+  assert(r.body.exitInterview?.kind === 'trial' && r.body.exitInterview.answered === false, 'the app is told, so the paywall can offer the link');
+  assert(lib.reasonsFor('trial').some((x) => x.id === 'not_enough_time') && lib.reasonsFor('trial').some((x) => x.id === 'still_deciding') && !lib.reasonsFor('trial').some((x) => x.id === 'not_using' || x.id === 'taking_a_break'), 'the reasons fit a trial: "no time to try it" and "still deciding" instead of "was not using it"');
+  r = await call(linkHandler, null, { method: 'GET', query: { token: lib.makeExitToken(lapsed.ws) } });
+  assert(r.statusCode === 200 && r.body.kind === 'trial' && r.body.open === true && r.body.reasons.length === lib.TRIAL_REASONS.length && r.body.reasons.some((x) => x.id === 'still_deciding'), 'the email link asks the trial question, with the trial reasons');
+  r = await call(answerHandler, lapsed.userId, { body: { source: 'cancel', reasons: ['not_enough_time', 'too_expensive'], comment: `Busy season ${S}` } });
+  rows = await rowsFor(lapsed.ws);
+  assert(r.statusCode === 200 && r.body.kind === 'trial' && rows.length === 1 && rows[0].source === 'trial' && rows[0].plan_source === 'trial' && rows[0].cancel_ref.startsWith('trial:'), 'the answer is filed as a trial that ran out, whatever the app claims (the server decides which it is)');
+  assert(JSON.stringify(rows[0].reasons) === '["not_enough_time","too_expensive"]', 'with the reasons picked');
+  st = await lib.exitInterviewState(lapsed.ws);
+  assert(st.answered === true && st.due === false, 'then the link is no longer offered');
+  r = await call(answerHandler, lapsed.userId, { body: { reasons: ['other'] } });
+  assert(r.body.saved === false && (await rowsFor(lapsed.ws)).length === 1, 'and a second answer does not replace the first');
+  r = await call(answerHandler, stillTrying.userId, { body: { reasons: ['other'] } });
+  assert(r.statusCode === 400 && (await rowsFor(stillTrying.ws)).length === 0, 'an owner still inside their trial cannot file one');
+  // subscribing later, then cancelling, is a new question of the other kind
+  await sql`UPDATE workspaces SET subscription_status = 'active', subscription_period_end = ${inDays(25)}, cancel_at_period_end = TRUE WHERE id = ${lapsed.ws}`;
+  st = await lib.exitInterviewState(lapsed.ws);
+  assert(st.kind === 'cancel' && st.due === true, 'if they subscribe after all and cancel later, that is asked as a cancellation, separately');
+  const paywall = read('src/features/billing/Paywall.jsx');
+  assert(/const askWhy = trialExpired && ctx\?\.exitInterview\?\.kind === 'trial' && !ctx\?\.exitInterview\?\.answered && !whyDone;/.test(paywall) && /Not subscribing\? Tell us why/.test(paywall), 'the paywall offers one quiet link, only to an owner whose trial ran out and who has not answered');
+  assert(/\{whyOpen && \(\s*<ExitInterviewSheet due kind="trial" manual/.test(paywall) && !/useEffect\([^)]*setWhyOpen\(true\)/.test(paywall), 'it opens only when tapped: nothing pops up over the subscribe screen');
+  assert(/if \(skipped && manual\) \{ close\(\); return; \}/.test(read('src/components/ExitInterviewSheet.jsx')), 'closing it records nothing');
+  const { renderTrialReminder } = await import('../api/_lib/subscriptionNotify.js');
+  const tUrl = lib.exitLink(lapsed.ws, 'https://www.joinivy.ai');
+  let tm = renderTrialReminder({ stage: 'expired', trialEndsAt: new Date(), firstName: 'Kay', businessName: 'Studio', exitUrl: tUrl });
+  assert(tm.html.includes(tUrl) && /Tell us what stopped you/.test(tm.html), 'the "your trial has ended" email asks, with the link');
+  tm = renderTrialReminder({ stage: 'expired', trialEndsAt: new Date(), firstName: 'Kay', businessName: 'Studio' });
+  assert(!/\/exit\//.test(tm.html), 'with no link it simply does not ask');
+  for (const stage of ['7d', '2d', '1d']) {
+    tm = renderTrialReminder({ stage, trialEndsAt: new Date(Date.now() + 86400e3), firstName: 'Kay', businessName: 'Studio', exitUrl: tUrl });
+    if (/\/exit\//.test(tm.html)) assert(false, `the ${stage} reminder (trial still running) does not ask why they are leaving`);
+  }
+  assert(/exitUrl: stage === 'expired' \? exitLink\(workspaceId, appUrl\(\)\) : null/.test(read('api/_lib/subscriptionNotify.js')), 'only the ended-trial email carries it');
+  const sumT = await lib.exitSummary({ days: 90, source: 'trial' });
+  assert(sumT.source === 'trial' && sumT.answers.some((x) => String(x.comment || '').includes(S)) && sumT.answers.every((x) => x.source === 'trial') && sumT.reasons.some((x) => x.id === 'still_deciding') && !sumT.reasons.some((x) => x.id === 'taking_a_break'), 'the operator can look at trial answers alone, with the trial reasons');
+  const sumC = await lib.exitSummary({ days: 90, source: 'cancel' });
+  assert(sumC.answers.every((x) => x.source === 'cancel') && typeof sumC.bySource.trial === 'number' && sumC.bySource.trial >= 1, 'or cancellations alone, with a count for each group');
+  assert((await lib.exitSummary({ days: 90, source: 'nonsense' })).source === 'all', 'an unknown group shows everyone');
+
   console.log('\n[4] deleting an account');
   const going = await mk('going');
   r = await call(answerHandler, going.userId, { body: { source: 'delete', reasons: ['business_closed'], comment: `Retiring ${S}` } });
@@ -145,7 +199,7 @@ async function main() {
   console.log('\n[5] what the operator sees');
   const sum = await lib.exitSummary({ days: 90 });
   const mine = sum.answers.filter((a) => String(a.comment || '').includes(S));
-  assert(mine.length === 3, 'the three answers above are listed');
+  assert(mine.length === 4, 'the four answers above are listed (three leavers and the trial)');
   assert(mine.find((a) => a.comment.startsWith('Retiring')).business === null && mine.find((a) => a.comment.startsWith('Too busy')).business === 'Studio ended', 'with the business name only while the account still exists');
   assert(mine.find((a) => a.comment.startsWith('I needed')).reasons.join('|') === 'It costs too much|It is missing something I need', 'reasons are shown in plain words');
   assert(sum.reasons.every((x) => x.pct >= 0 && x.pct <= 100) && sum.answered >= 3 && sum.asked >= sum.answered, 'with a count and share for each reason');
@@ -170,12 +224,14 @@ async function main() {
   mail = renderSubscriptionCancelled({ endsAt: null, firstName: 'Kay', businessName: 'Studio', exitUrl: 'javascript:alert(1)' });
   assert(!/javascript:/.test(mail.html), 'and never puts anything but a web address in the button');
   const shell = read('src/components/layout/AppShell.jsx');
-  assert(/<ExitInterviewSheet due=\{!!ctx\?\.isOwner && !!ctx\?\.exitInterview\?\.due && !impersonating && !onHold && !showWalkthrough && !answersOpen\}/.test(shell), 'the app shows the question once, to the owner only, never to an operator viewing as them');
+  assert(/<ExitInterviewSheet kind="cancel"\s+due=\{!!ctx\?\.isOwner && !!ctx\?\.exitInterview\?\.due && ctx\?\.exitInterview\?\.kind === 'cancel' && !impersonating && !onHold && !showWalkthrough && !answersOpen\}/.test(shell), 'the app shows the question once, to the owner only, never to an operator viewing as them, and only for a cancellation');
   const sheet = read('src/components/ExitInterviewSheet.jsx');
-  assert(/Not now/.test(sheet) && /if \(skipped\) close\(\); else setErr/.test(sheet), '"Not now" always closes it, even if saving that failed');
+  assert(/Not now/.test(sheet) && /if \(skipped\) close\(true\); else setErr/.test(sheet), '"Not now" always closes it, even if saving that failed');
   const form = read('src/components/ExitInterviewForm.jsx');
-  const formIds = [...form.slice(form.indexOf('export const EXIT_REASONS'), form.indexOf('export const MAX_COMMENT_CHARS')).matchAll(/id: '(\w+)', label: '([^']+)'/g)].map((m) => `${m[1]}=${m[2]}`);
-  assert(formIds.join('|') === lib.EXIT_REASONS.map((x) => `${x.id}=${x.label}`).join('|'), 'the screen offers exactly the reasons the server accepts, in the same words');
+  const listIn = (src, from, to) => [...src.slice(src.indexOf(from), src.indexOf(to)).matchAll(/id: '(\w+)', label: '([^']+)'/g)].map((m) => `${m[1]}=${m[2]}`).join('|');
+  const same = (list) => list.map((x) => `${x.id}=${x.label}`).join('|');
+  assert(listIn(form, 'export const EXIT_REASONS', 'export const TRIAL_REASONS') === same(lib.EXIT_REASONS), 'the screen offers exactly the reasons the server accepts, in the same words');
+  assert(listIn(form, 'export const TRIAL_REASONS', 'export const reasonsFor') === same(lib.TRIAL_REASONS), 'and the same for the trial question');
   assert(!/[–—]| - /.test(JSON.stringify(lib.EXIT_REASONS) + sheet.replace(/\/\/.*$/gm, '')), 'no dashes in the wording');
   const acct = read('src/features/account/AccountPage.jsx');
   assert(/data-delete-why/.test(acct) && /api\.post\('\/me\/exit-interview', \{ source: 'delete'/.test(acct) && /\.catch\(\(\) => \{\}\);\s*\}\s*const res = await fetch\('\/api\/account\/delete'/.test(acct), 'the delete screen asks (optional), and a failure to save the answer never blocks the delete');

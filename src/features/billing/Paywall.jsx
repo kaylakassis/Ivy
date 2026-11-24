@@ -21,6 +21,7 @@
 // We POST /api/billing/sync to fetch the subscription state directly (so
 // the wall drops even before the webhook has landed) and fall back to
 // polling /api/me if that misses.
+import ExitInterviewSheet from '../../components/ExitInterviewSheet.jsx';
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -64,6 +65,8 @@ function fmtLongDate(d) {
 
 export default function Paywall({ ctx, onRefresh }) {
   const { signOut } = useAuth();
+  const [whyOpen, setWhyOpen] = useState(false);
+  const [whyDone, setWhyDone] = useState(false);
   const sub = ctx?.subscription || null;
   // Phones (and short windows): tighter spacing, no hero icon, and the
   // buy button pinned below the scroll so the card never fills the screen.
@@ -337,6 +340,9 @@ export default function Paywall({ ctx, onRefresh }) {
   // lapsed. (daysRemaining is null - not 0 - for an expired trial, so
   // the old `=== 0` check never fired and this copy was dead.)
   const trialExpired = sub?.status === 'trialing' && !sub?.isActive;
+  // Exit question for a trial that ran out (the server says who: GET /api/me
+  // exitInterview.kind === 'trial', and not yet answered).
+  const askWhy = trialExpired && ctx?.exitInterview?.kind === 'trial' && !ctx?.exitInterview?.answered && !whyDone;
   const everTrialed  = !!sub?.trialEndsAt;
   const wasPaid      = sub?.status === 'cancelled' || sub?.status === 'past_due';
   // The trial CTA only makes sense for owners who've never trialed; for
@@ -373,6 +379,11 @@ export default function Paywall({ ctx, onRefresh }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: compact ? 'calc(env(safe-area-inset-top, 0px) + 10px) 12px calc(env(safe-area-inset-bottom, 0px) + 10px)' : 16,
     }}>
+      {/* Opened from "Not subscribing? Tell us why" below. */}
+      {whyOpen && (
+        <ExitInterviewSheet due kind="trial" manual
+          onDone={() => setWhyDone(true)} onClose={() => setWhyOpen(false)}/>
+      )}
       <div className="card" style={{
         width: '100%', maxWidth: compact ? 400 : 430, maxHeight: compact ? '100%' : '94vh',
         // The whole card scrolls as one when the screen is short. (The body
@@ -726,6 +737,18 @@ export default function Paywall({ ctx, onRefresh }) {
                       className="btn btn-ghost"
                       style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)' }}>
                       {busy === 'redeem' ? 'Opening…' : 'Have a promo code?'}
+                    </button>
+                    <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
+                  </>
+                )}
+                {/* A trial that ran out: one quiet link to say what stopped
+                    them. Never a pop-up here; this screen is for subscribing. */}
+                {askWhy && (
+                  <>
+                    <button type="button" onClick={() => setWhyOpen(true)} disabled={busy != null} data-paywall-why
+                      className="btn btn-ghost"
+                      style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)' }}>
+                      Not subscribing? Tell us why
                     </button>
                     <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
                   </>

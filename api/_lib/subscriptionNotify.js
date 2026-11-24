@@ -69,7 +69,7 @@ function dashboardUrl() { return `${appUrl()}/`; }
 // Pure renderer. Both the notify path and the admin preview endpoint
 // call this — the preview an operator sees is byte-identical to the
 // production send.
-export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, businessName }) {
+export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, businessName, exitUrl = null }) {
   const fnPlain = fnRaw || 'there';
   const fn = escapeHtml(fnPlain);
   const biz = escapeHtml(businessName || 'your business');
@@ -127,7 +127,8 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
         <li>Financial tracking, invoicing, and reports</li>
         <li>Website builder and automatic client follow-ups</li>
       </ul>
-      <p>It picks up right where you left off. Questions? Just reply.</p>`;
+      <p>It picks up right where you left off. Questions? Just reply.</p>
+      ${exitUrl ? whyBlock(exitUrl, 'trial') : ''}`;
     ctaText = `Reactivate ${PLAN_NAME} →`;
   } else {
     return null;
@@ -167,6 +168,8 @@ export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt, ret
     const rendered = renderTrialReminder({
       stage, trialEndsAt,
       firstName: firstName(o.name), businessName: o.biz_name,
+      // Only the "your trial has ended" email asks what stopped them.
+      exitUrl: stage === 'expired' ? exitLink(workspaceId, appUrl()) : null,
     });
     if (!rendered) return { ok: true, sent: false, reason: 'nothing-to-send' };
     const mail = await sendEmailToUser({
@@ -549,11 +552,14 @@ export async function notifyPaymentFailed({ workspaceId, amountCents, currency, 
 // "Would you tell us why?" for the cancelled and plan-ending emails: a link
 // that opens the exit interview without signing in (api/_lib/
 // exitInterview.js). With no link it falls back to "just reply".
-function whyBlock(exitUrl) {
+function whyBlock(exitUrl, kind = 'cancel') {
   const safe = exitUrl && /^https?:\/\//.test(exitUrl) ? escapeHtml(exitUrl) : null;
+  const ask = kind === 'trial'
+    ? ['If Ivy was not for you, would you tell us what stopped you?', 'Tell us what stopped you']
+    : ['would you tell us why?', 'Tell us why you are leaving'];
   return safe
-    ? `<p><strong>One favor:</strong> would you tell us why? It takes a few seconds, and it shapes what gets built for the next person running a business on their own.</p>
-      <p><a href="${safe}" style="color:#5CC98E;font-weight:600;text-decoration:underline;">Tell us why you are leaving</a></p>
+    ? `<p><strong>One favor:</strong> ${ask[0]} It takes a few seconds, and it shapes what gets built for the next person running a business on their own.</p>
+      <p><a href="${safe}" style="color:#5CC98E;font-weight:600;text-decoration:underline;">${ask[1]}</a></p>
       <p style="font-size:13px;color:#93A3A0;">Or just reply to this email. Every reply is read.</p>`
     : `<p>If something was not working (Ivy, a missing feature, pricing), just reply and tell us. Every reply is read, and it shapes what gets built next.</p>`;
 }

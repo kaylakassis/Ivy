@@ -58,8 +58,8 @@ export default async function handler(req, res) {
     // Exit interview: an owner who turned renewal off, or whose paid plan
     // ended, is asked once why (api/_lib/exitInterview.js). Additive.
     const exitInterview = ctx.owns?.id
-      ? await exitInterviewState(ctx.owns.id).then((s) => ({ due: s.due })).catch(() => ({ due: false }))
-      : { due: false };
+      ? await exitInterviewState(ctx.owns.id).then((s) => ({ due: s.due, kind: s.kind, answered: s.answered })).catch(() => ({ due: false, kind: null, answered: false }))
+      : { due: false, kind: null, answered: false };
 
     if (!ctx.isClient) {
       // Owner-only - return context with empty summary.

@@ -358,9 +358,12 @@ function AppShellInner() {
 
       {/* Exit interview: asked once after an owner cancels (the server says
           who is due). Shown over the paywall too, since a plan that has
-          ended is exactly when they are back on this screen. Never to an
+          ended is exactly when they are back on this screen. A free trial
+          that ran out is different: no pop-up over the subscribe screen,
+          just a link on the paywall itself (Paywall.jsx). Never to an
           operator viewing as the owner, and not on top of the tour. */}
-      <ExitInterviewSheet due={!!ctx?.isOwner && !!ctx?.exitInterview?.due && !impersonating && !onHold && !showWalkthrough && !answersOpen}
+      <ExitInterviewSheet kind="cancel"
+        due={!!ctx?.isOwner && !!ctx?.exitInterview?.due && ctx?.exitInterview?.kind === 'cancel' && !impersonating && !onHold && !showWalkthrough && !answersOpen}
         onDone={refresh}/>
 
       <CommandPalette/>

@@ -1,4 +1,4 @@
-// GET /api/admin/exit-answers?days=30|90|365  (operator only)
+// GET /api/admin/exit-answers?days=30|90|365&source=all|cancel|trial|delete  (operator only)
 //
 // Why owners left: how many were asked and answered, each reason's share,
 // and the answers themselves (reasons, comment, how long they were with
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (!(await requireSuperAdmin(req, res))) return;
   try {
     res.setHeader?.('Cache-Control', 'no-store');
-    return ok(res, await exitSummary({ days: Number(req.query?.days) || 90 }));
+    return ok(res, await exitSummary({ days: Number(req.query?.days) || 90, source: String(req.query?.source || 'all') }));
   } catch (err) {
     return serverError(res, err);
   }

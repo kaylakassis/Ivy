@@ -5,22 +5,24 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 
 const WINDOWS = [30, 90, 365];
-const SOURCE = { cancel: 'Cancelled', delete: 'Deleted account' };
+const SOURCE = { cancel: 'Cancelled', trial: 'Trial ran out', delete: 'Deleted account' };
+const GROUPS = [['all', 'Everyone'], ['cancel', 'Cancelled a plan'], ['trial', 'Trial ran out'], ['delete', 'Deleted account']];
 const CHANNEL = { app: 'in the app', email: 'from the email' };
 const PLAN = { stripe: 'paid by card', apple: 'paid through Apple', trial: 'on a trial' };
 
 export default function ExitAnswersTab() {
   const [days, setDays] = useState(90);
+  const [source, setSource] = useState('all');
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
     let live = true;
     setData(null); setErr(null);
-    api.get(`/admin/exit-answers?days=${days}`)
+    api.get(`/admin/exit-answers?days=${days}&source=${source}`)
       .then((r) => { if (live) setData(r); })
       .catch((e) => { if (live) setErr(e.message || 'Could not load'); });
     return () => { live = false; };
-  }, [days]);
+  }, [days, source]);
 
   return (
     <div data-exit-answers style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -28,7 +30,7 @@ export default function ExitAnswersTab() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <div style={{ fontSize: 16, fontWeight: 600 }}>Exit answers</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5, maxWidth: 640 }}>
-            What owners said when they cancelled or deleted their account. Asked in the app, in the cancellation emails, and on the delete screen.
+            What owners said when they cancelled, let a free trial run out, or deleted their account. Asked in the app, in the emails, and on the delete screen.
           </div>
         </div>
         <div className="tab-row" role="tablist" aria-label="Period">
@@ -42,12 +44,22 @@ export default function ExitAnswersTab() {
         </div>
       </div>
 
+      <div className="tab-row" role="tablist" aria-label="Who answered" style={{ alignSelf: 'flex-start' }}>
+        {GROUPS.map(([id, label]) => (
+          <button key={id} type="button" role="tab" aria-selected={source === id} data-exit-group={id} onClick={() => setSource(id)} className="seg-btn" style={{
+            padding: '6px 12px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+            background: source === id ? 'var(--surface)' : 'transparent', color: source === id ? 'var(--fg)' : 'var(--muted)',
+            boxShadow: source === id ? 'var(--shadow-sm)' : 'none', whiteSpace: 'nowrap',
+          }}>{label}{id !== 'all' && data?.bySource ? ` (${data.bySource[id] || 0})` : ''}</button>
+        ))}
+      </div>
+
       {err && <div className="card" style={{ padding: 16, color: 'var(--danger)', fontSize: 13 }}>{err}</div>}
       {!data && !err && <div className="card" style={{ padding: 16, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>}
 
       {data && data.asked === 0 && (
         <div className="card" style={{ padding: 18, fontSize: 13.5, lineHeight: 1.55 }}>
-          <strong>No answers yet.</strong> Owners are asked from the day this was added. Answers appear here as people cancel.
+          <strong>No answers yet{source === 'all' ? '' : ' in this group'}.</strong> Owners are asked from the day this was added. Answers appear here as people leave.
         </div>
       )}
 

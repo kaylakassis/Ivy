@@ -10,7 +10,7 @@ import { sql } from './_lib/db.js';
 import { readBody } from './_lib/body.js';
 import { requireSameOrigin } from './_lib/security.js';
 import { enforce, getClientIp } from './_lib/rate-limit.js';
-import { EXIT_REASONS, MAX_COMMENT_CHARS, readExitToken, exitInterviewState, cleanExitAnswer, recordExitAnswer } from './_lib/exitInterview.js';
+import { reasonsFor, MAX_COMMENT_CHARS, readExitToken, exitInterviewState, cleanExitAnswer, recordExitAnswer } from './_lib/exitInterview.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -31,7 +31,9 @@ export default async function handler(req, res) {
       return ok(res, {
         ok: true,
         business: biz.biz_name || null,
-        reasons: EXIT_REASONS,
+        // 'cancel' or 'trial': the page words the question to match.
+        kind: state.kind,
+        reasons: reasonsFor(state.kind),
         maxCommentChars: MAX_COMMENT_CHARS,
         // Nothing to ask (they came back, or already answered): the page
         // says thank you instead of showing the form.
@@ -43,7 +45,7 @@ export default async function handler(req, res) {
     if (!state.cancelRef) return badRequest(res, 'This plan is active again, so there is nothing to answer. Thank you.');
     let answer;
     try { answer = cleanExitAnswer({ ...(await readBody(req)), skipped: false }); } catch (err) { return badRequest(res, err.message); }
-    const out = await recordExitAnswer({ workspaceId, source: 'cancel', channel: 'email', answer });
+    const out = await recordExitAnswer({ workspaceId, source: 'leaving', channel: 'email', answer });
     return ok(res, { saved: out.saved, already: !!out.already });
   } catch (err) {
     return serverError(res, err);

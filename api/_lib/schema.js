@@ -5645,7 +5645,7 @@ UPDATE users u SET signup_role = 'client'
 CREATE TABLE IF NOT EXISTS exit_answers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL,
-  source TEXT NOT NULL CHECK (source IN ('cancel', 'delete')),
+  source TEXT NOT NULL CHECK (source IN ('cancel', 'trial', 'delete')),
   channel TEXT NOT NULL CHECK (channel IN ('app', 'email')),
   cancel_ref TEXT,
   skipped BOOLEAN NOT NULL DEFAULT FALSE,
@@ -5658,6 +5658,10 @@ CREATE TABLE IF NOT EXISTS exit_answers (
 );
 CREATE INDEX IF NOT EXISTS idx_exit_answers_workspace ON exit_answers (workspace_id, source, cancel_ref);
 CREATE INDEX IF NOT EXISTS idx_exit_answers_created ON exit_answers (created_at DESC);
+-- 'trial' (a free trial that ran out) was added after the table first
+-- shipped with two sources; this brings an existing table in line.
+ALTER TABLE exit_answers DROP CONSTRAINT IF EXISTS exit_answers_source_check;
+ALTER TABLE exit_answers ADD CONSTRAINT exit_answers_source_check CHECK (source IN ('cancel', 'trial', 'delete'));
 
 -- The owner's switch for automatic review requests ("How was it?" after a
 -- completed visit). NULL = on, which is how it always behaved; a time =
