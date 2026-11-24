@@ -48,7 +48,7 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Your data, exportable any time">
-          <p>From your account page, download a complete export of everything you've put into Ivy: client list, booking history, invoices, documents, messages. Standard CSV + JSON formats - usable in any other tool.</p>
+          <p>From your account page, download an export of the records you keep in Ivy: clients, bookings, invoices and payments, documents, messages, programs, products and more, in one JSON file that other tools can read. Files you uploaded are not inside it.</p>
           <p>If you cancel, you keep full access until the end of the period you paid for. After that your data stays available to download for 7 days, then it is permanently deleted. If a free trial ends without a subscription, the workspace is kept for 4 weeks. We email you before anything is deleted, and resubscribing stops it. Backups are overwritten within a further 30 days.</p>
         </Section>
 

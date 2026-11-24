@@ -23,7 +23,7 @@ Ivy is made for solo service businesses: massage therapists, coaches, hair styli
 
 - Every workspace is isolated; the AI assistant can only see that workspace's data.
 - Data is encrypted in transit and at rest. Payment data never touches Ivy's servers; client cards go straight to Stripe.
-- Owners can export everything (clients, bookings, invoices, documents, messages) as CSV and JSON at any time from their account page.
+- Owners can export the records they keep in Ivy (clients, bookings, invoices and payments, documents, messages, programs, products and more) as one JSON file at any time from their account page.
 - Production infrastructure is hosted in the United States.
 
 ## Key pages

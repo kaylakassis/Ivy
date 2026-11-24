@@ -90,7 +90,7 @@ export default function SiteAbout() {
           <div className="sec-grid">
             <div className="sec-card"><div className="icon">🔒</div><h3>Fully isolated workspaces</h3><p>Your numbers, messages, and clients are yours. The AI assistant can only see your data - never anyone else's. Encrypted in transit and at rest.</p></div>
             <div className="sec-card"><div className="icon">💳</div><h3>We never touch your money</h3><p>Payments go straight from your client to your own Stripe account. All card data is handled by Stripe - we never see card numbers.</p></div>
-            <div className="sec-card"><div className="icon">📤</div><h3>Export everything as JSON</h3><p>Download your complete data any time and walk away if it isn't working. No hostage-taking.</p></div>
+            <div className="sec-card"><div className="icon">📤</div><h3>Export your records as JSON</h3><p>Download your business records any time and walk away if it isn't working. No hostage-taking.</p></div>
             <div className="sec-card"><div className="icon">✍️</div><h3>Legally binding signatures</h3><p>Documents are signed, stamped, and stored with a complete record - waivers, intakes, and agreements that hold up.</p></div>
           </div>
         </div>

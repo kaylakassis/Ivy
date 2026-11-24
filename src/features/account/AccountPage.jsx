@@ -199,11 +199,13 @@ export default function AccountPage() {
         <div className="metric-label" style={{ marginBottom: 8 }}>Your data</div>
         <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Export your data</h3>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Download a single JSON file with your workspace records: clients,
-          services, calendar and bookings, invoices, messages, documents,
-          goals, rewards, your website and Ivy chats. Yours to keep, search,
-          or import elsewhere. Files you uploaded are not inside it.
-          Need something that is not in the file? Email support@joinivy.ai.
+          Download a single JSON file with the records you keep in Ivy:
+          clients, services, calendar and bookings, invoices, quotes and
+          payments, messages, documents, programs, products, packages,
+          memberships, gift cards, automations, reviews, goals, rewards,
+          your website and Ivy chats. Yours to keep, search, or import
+          elsewhere. Files you uploaded are not inside it. Need something
+          that is not in the file? Email support@joinivy.ai.
         </p>
         {exportErr && (
           <div style={{
