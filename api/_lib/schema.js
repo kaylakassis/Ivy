@@ -772,6 +772,11 @@ CREATE INDEX IF NOT EXISTS idx_legal_acceptances_doc_version
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
+-- The "we updated our Terms and Privacy Policy" email (api/_lib/legalNotice.js):
+-- which pair of versions this person was last emailed about, and when. It is
+-- what stops anyone being sent the same notice twice.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS legal_notice_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS legal_notice_sent_at TIMESTAMPTZ;
 -- Backfill: any user already past the whole 14-day window when this column
 -- lands gets marked as fully sent so the cron doesn't retroactively spam
 -- pre-existing accounts. Self-correcting via the empty-jsonb check.

@@ -77,6 +77,9 @@ export const CRITICAL_EMAIL_TYPES = new Set([
   // trial with a card on file is about to become a paid plan. The Terms
   // promise these, so the "Subscription billing" switch does not cover them.
   'billing_notice',
+  // Notice that the Terms of Service or Privacy Policy changed. Both
+  // documents promise it, so it is not a marketing email and cannot be muted.
+  'legal_notice',
 ]);
 
 // Read users.notification_prefs, return true if the `email_<type>` key

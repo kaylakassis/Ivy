@@ -153,7 +153,7 @@ export default function AdminPage() {
       {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'reports'    && <ReportsTab onChanged={(n) => setReportsOpen(n)}/>}
       {tab === 'marketing'  && <MarketingTab/>}
-      {tab === 'blast'      && <BlastTab/>}
+      {tab === 'blast'      && <><LegalNoticeCard/><BlastTab/></>}
       {tab === 'waitlist'   && <WaitlistTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
@@ -2528,6 +2528,68 @@ const BLAST_PURPOSES = [
   { id: 'marketing', label: 'Marketing (opted-in people only)' },
   { id: 'service',   label: 'Service notice (whole segment)' },
 ];
+
+// The "we updated our Terms of Service and Privacy Policy" email for
+// existing users. Separate from the blast below on purpose: it goes to
+// everyone who has not yet accepted the current versions, whatever their
+// marketing choices, and never to the same person twice.
+function LegalNoticeCard() {
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null);
+  const [err, setErr] = useState(null);
+  const [preview, setPreview] = useState(false);
+  const load = () => api.get('/admin/legal-notice').then(setInfo).catch((e) => setErr(e.message));
+  useEffect(() => { load(); }, []);
+  const send = async () => {
+    if (!info?.waiting) return;
+    if (!(await confirmAction({
+      title: `Email ${info.waiting} ${info.waiting === 1 ? 'person' : 'people'} about the updated Terms and Privacy Policy?`,
+      body: 'Once it is sent it cannot be called back. Nobody is sent it twice.',
+      confirmLabel: 'Send the notice',
+    }))) return;
+    setBusy(true); setErr(null); setNote(null);
+    try {
+      const r = await api.post('/admin/legal-notice', { confirm: true });
+      setNote(`Sent ${r.sent}${r.failed ? `, ${r.failed} could not be delivered` : ''}. ${r.remaining ? `${r.remaining} still to go: press Send again.` : 'Everyone has been sent it.'}`);
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="card" data-legal-notice style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+      <div className="metric-label">Terms and Privacy Policy update</div>
+      <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Emails everyone who has not yet accepted the current Terms of Service and Privacy Policy, to tell them
+        the documents were updated and take effect on {info?.effective || 'the effective date'}. It goes out whatever
+        their marketing choices, to verified addresses only, and never to the same person twice. It does not say
+        what changed.
+      </div>
+      {info && (
+        <div style={{ fontSize: 13, color: 'var(--fg)' }} data-legal-notice-counts>
+          <strong>{info.waiting}</strong> still to be emailed · <strong>{info.alreadySent}</strong> already sent
+        </div>
+      )}
+      {note && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>{note}</div>}
+      {err && <ErrCard msg={err}/>}
+      {preview && info?.previewLines && (
+        <div data-legal-notice-preview style={{ padding: '14px 16px', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface-2)', fontSize: 13, lineHeight: 1.6, color: 'var(--fg)' }}>
+          <div style={{ fontWeight: 650, marginBottom: 8 }}>Subject: {info.subject}</div>
+          {info.previewLines.map((l, i) => <p key={i} style={{ margin: '0 0 8px' }}>{l}</p>)}
+          <div style={{ color: 'var(--muted)', fontSize: 12 }}>Their own first name replaces "Alex". Ends with a "Read the Terms of Service" button.</div>
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <button className="btn btn-outline" onClick={() => setPreview((v) => !v)} disabled={!info}>
+          {preview ? 'Hide the email' : 'See the email'}
+        </button>
+        <button className="btn btn-primary" onClick={send} disabled={busy || !info?.waiting} data-legal-notice-send>
+          {busy ? 'Sending…' : (info?.waiting ? `Send the notice to ${info.waiting}` : 'Nobody left to email')}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function BlastTab() {
   const [segment, setSegment] = useState('business-active');

@@ -171,6 +171,9 @@
     "api/admin/email-blast.js": {
       "maxDuration": 60
     },
+    "api/admin/legal-notice.js": {
+      "maxDuration": 60
+    },
     "api/sign/[token].js": {
       "maxDuration": 45
     },
