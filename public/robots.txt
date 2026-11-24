@@ -17,6 +17,7 @@ Disallow: /sign/
 Disallow: /invoice/
 Disallow: /quote/
 Disallow: /review/
+Disallow: /exit/
 Disallow: /p/
 
 # AI assistants and AI search: welcome on the public pages, same limits.
@@ -38,6 +39,7 @@ Disallow: /sign/
 Disallow: /invoice/
 Disallow: /quote/
 Disallow: /review/
+Disallow: /exit/
 Disallow: /p/
 
 Sitemap: https://www.joinivy.ai/sitemap.xml

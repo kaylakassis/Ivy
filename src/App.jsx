@@ -156,6 +156,7 @@ const ConnectedPage = lazyRoute(() => import('./features/finance/ConnectedPage.j
 const PublicInvoice = lazyRoute(() => import('./features/finance/PublicInvoice.jsx'));
 const PublicQuote   = lazyRoute(() => import('./features/finance/PublicQuote.jsx'));
 const ReviewPage    = lazyRoute(() => import('./features/reviews/ReviewPage.jsx'));
+const ExitPage      = lazyRoute(() => import('./features/exit/ExitPage.jsx'));
 const WelcomePage   = lazyRoute(() => import('./features/auth/WelcomePage.jsx'));
 const WaitlistPage    = lazyRoute(() => import('./features/auth/WaitlistPage.jsx'));
 
@@ -462,6 +463,8 @@ export default function App() {
         <Route path="/invoice/:token"  element={<PublicInvoice />} />
         <Route path="/quote/:token"    element={<PublicQuote />} />
         <Route path="/review/:token"   element={<ReviewPage />} />
+        {/* "Tell us why you cancelled" link from the cancellation emails. */}
+        <Route path="/exit/:token"     element={<ExitPage />} />
         <Route path="/p/:id" element={<PublicProgram />} />
 
         {/* Embeds - same components rendered inside iframes on the

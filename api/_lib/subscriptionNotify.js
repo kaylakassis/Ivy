@@ -14,6 +14,7 @@
 // (`{{business_name}}`), reminds them what they'll lose, and gives one
 // obvious next step. Merge fields are filled here at send-time (never
 // shipped as literal `{{ ... }}` to the recipient).
+import { exitLink } from './exitInterview.js';
 import { sql } from './db.js';
 import { sendEmailToUser, sendEmail, emailShell } from './email.js';
 import { appUrl } from './tokens.js';
@@ -545,7 +546,19 @@ export async function notifyPaymentFailed({ workspaceId, amountCents, currency, 
 // Subscription cancelled (deletion at period end)
 // ─────────────────────────────────────────────────────────────────────
 
-export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, businessName }) {
+// "Would you tell us why?" for the cancelled and plan-ending emails: a link
+// that opens the exit interview without signing in (api/_lib/
+// exitInterview.js). With no link it falls back to "just reply".
+function whyBlock(exitUrl) {
+  const safe = exitUrl && /^https?:\/\//.test(exitUrl) ? escapeHtml(exitUrl) : null;
+  return safe
+    ? `<p><strong>One favor:</strong> would you tell us why? It takes a few seconds, and it shapes what gets built for the next person running a business on their own.</p>
+      <p><a href="${safe}" style="color:#5CC98E;font-weight:600;text-decoration:underline;">Tell us why you are leaving</a></p>
+      <p style="font-size:13px;color:#93A3A0;">Or just reply to this email. Every reply is read.</p>`
+    : `<p>If something was not working (Ivy, a missing feature, pricing), just reply and tell us. Every reply is read, and it shapes what gets built next.</p>`;
+}
+
+export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, businessName, exitUrl = null }) {
   const fn = escapeHtml(fnRaw || 'there');
   const biz = escapeHtml(businessName || 'your business');
   const accessUntil = endsAt
@@ -563,7 +576,7 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
         <li>Your data is kept for <strong>7 days</strong> after that so you can download it (Account → Your data, or the subscription screen), then it is <strong>permanently deleted</strong></li>
         <li>Resubscribe before then and everything is exactly as you left it</li>
       </ul>
-      <p>If something wasn't working (Ivy, a missing feature, pricing), just reply and tell me. I read every one, and it genuinely shapes what we build next.</p>`,
+      ${whyBlock(exitUrl)}`,
     ctaText: 'Changed your mind? Reactivate →',
     ctaUrl: billingUrl(),
     footer: `The Ivy Team`,
@@ -576,7 +589,7 @@ export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
     const o = await loadOwner(workspaceId);
     if (!o?.email) return;
     const rendered = renderSubscriptionCancelled({
-      endsAt, firstName: firstName(o.name), businessName: o.biz_name,
+      endsAt, firstName: firstName(o.name), businessName: o.biz_name, exitUrl: exitLink(workspaceId, appUrl()),
     });
     await sendEmailToUser({
       userId: o.owner_id, type: 'billing',
@@ -592,7 +605,7 @@ export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
 // Plan ending soon (owner turned auto-renew off; access ends at periodEnd)
 // ─────────────────────────────────────────────────────────────────────
 
-export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, source }) {
+export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, source, exitUrl = null }) {
   const fn = escapeHtml(fnRaw || 'there');
   const biz = escapeHtml(businessName || 'your business');
   const endDate = fmtDate(endsAt);
@@ -605,7 +618,8 @@ export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, sourc
       <p>A heads-up, since you turned off renewal: your Ivy plan ends on <strong>${endDate}</strong>.</p>
       <p>After that, <strong>${biz}</strong> is archived for your clients. Your booking page and website show a notice instead of taking bookings, the client portal closes to new messages and purchases, and your dashboard is locked.</p>
       <p>Your data is kept for <strong>7 days</strong> after that date so you can download it, then it is <strong>permanently deleted</strong>. Resubscribe before then and everything is exactly as you left it.</p>
-      <p>If you meant to keep going, turn renewal back on ${where} before ${endDate} and nothing changes.</p>`,
+      <p>If you meant to keep going, turn renewal back on ${where} before ${endDate} and nothing changes.</p>
+      ${whyBlock(exitUrl)}`,
     ctaText: source === 'apple' ? 'Manage in the App Store →' : 'Keep my plan →',
     ctaUrl: source === 'apple' ? 'https://apps.apple.com/account/subscriptions' : billingUrl(),
     footer: `The Ivy Team`,
@@ -623,7 +637,7 @@ export async function notifyPlanEnding({ workspaceId, endsAt, source, retryable 
   try {
     const o = await loadOwner(workspaceId);
     if (!o?.email) return { ok: true, sent: false, reason: 'no-owner-email' };
-    const rendered = renderPlanEnding({ endsAt, source, firstName: firstName(o.name), businessName: o.biz_name });
+    const rendered = renderPlanEnding({ endsAt, source, firstName: firstName(o.name), businessName: o.biz_name, exitUrl: exitLink(workspaceId, appUrl()) });
     const mail = await sendEmailToUser({ userId: o.owner_id, type: 'billing', to: o.email, subject: rendered.subject, html: rendered.html });
     if (retryable && mail?.ok === false) return mail;
     await notifyOwnerSafe({

@@ -45,6 +45,7 @@ import { initNative } from '../../lib/native.js';
 import PullToRefresh from '../PullToRefresh.jsx';
 import OfflineBanner from '../OfflineBanner.jsx';
 import { trackScreen } from '../../lib/screenTrack.js';
+import ExitInterviewSheet from '../ExitInterviewSheet.jsx';
 import OfflineSync from '../offline/OfflineSync.jsx';
 
 export default function AppShell() {
@@ -354,6 +355,13 @@ function AppShellInner() {
           refresh();
         }}/>
       )}
+
+      {/* Exit interview: asked once after an owner cancels (the server says
+          who is due). Shown over the paywall too, since a plan that has
+          ended is exactly when they are back on this screen. Never to an
+          operator viewing as the owner, and not on top of the tour. */}
+      <ExitInterviewSheet due={!!ctx?.isOwner && !!ctx?.exitInterview?.due && !impersonating && !onHold && !showWalkthrough && !answersOpen}
+        onDone={refresh}/>
 
       <CommandPalette/>
       <TermsAcceptModal/>

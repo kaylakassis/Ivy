@@ -5638,6 +5638,27 @@ UPDATE users u SET signup_role = 'client'
    AND COALESCE(u.user_type, 'regular') = 'regular'
    AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
    AND NOT EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id OR sm.revoked_user_id = u.id);
+-- Exit interview answers (api/_lib/exitInterview.js): why an owner
+-- cancelled or deleted their account. One row per cancellation. No name or
+-- email is stored; workspace_id is cleared when the account is deleted, so
+-- what remains is anonymous feedback.
+CREATE TABLE IF NOT EXISTS exit_answers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL,
+  source TEXT NOT NULL CHECK (source IN ('cancel', 'delete')),
+  channel TEXT NOT NULL CHECK (channel IN ('app', 'email')),
+  cancel_ref TEXT,
+  skipped BOOLEAN NOT NULL DEFAULT FALSE,
+  reasons TEXT[] NOT NULL DEFAULT '{}',
+  comment TEXT,
+  months_with_ivy INTEGER,
+  business_type TEXT,
+  plan_source TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_exit_answers_workspace ON exit_answers (workspace_id, source, cancel_ref);
+CREATE INDEX IF NOT EXISTS idx_exit_answers_created ON exit_answers (created_at DESC);
+
 -- The owner's switch for automatic review requests ("How was it?" after a
 -- completed visit). NULL = on, which is how it always behaved; a time =
 -- when the owner turned it off (api/_lib/reviewRequestSettings.js).

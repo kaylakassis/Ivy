@@ -10,6 +10,7 @@ import { missingRequiredAnswers } from '../_lib/onboardingAnswers.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { hasPendingCompInvite } from '../_lib/signupPerks.js';
 import { usedNavFor } from '../_lib/navUsage.js';
+import { exitInterviewState } from '../_lib/exitInterview.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -54,15 +55,21 @@ export default async function handler(req, res) {
     // field: older app builds ignore it.
     const usedNav = ctx.owns?.id ? await usedNavFor(ctx.owns.id) : [];
 
+    // Exit interview: an owner who turned renewal off, or whose paid plan
+    // ended, is asked once why (api/_lib/exitInterview.js). Additive.
+    const exitInterview = ctx.owns?.id
+      ? await exitInterviewState(ctx.owns.id).then((s) => ({ due: s.due })).catch(() => ({ due: false }))
+      : { due: false };
+
     if (!ctx.isClient) {
       // Owner-only - return context with empty summary.
-      return ok(res, { ...ctx, usedNav, onboardingAnswersMissing, pendingCompInvite, summary: emptySummary() });
+      return ok(res, { ...ctx, usedNav, exitInterview, onboardingAnswersMissing, pendingCompInvite, summary: emptySummary() });
     }
 
     const myIds = ids(ctx.memberships);
     // Use ARRAY[$1...] style via sql.query so we can pass an array param.
     const summary = await loadSummary(myIds);
-    return ok(res, { ...ctx, usedNav, onboardingAnswersMissing, pendingCompInvite, summary });
+    return ok(res, { ...ctx, usedNav, exitInterview, onboardingAnswersMissing, pendingCompInvite, summary });
   } catch (err) {
     return serverError(res, err);
   }

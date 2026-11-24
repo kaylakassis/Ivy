@@ -20,6 +20,7 @@ import TwoFactor from './TwoFactor.jsx';
 import { api } from '../../lib/api.js';
 import { BlockedCard, ReportsCard, ownerModeration } from '../../components/Moderation.jsx';
 import { hideableNav } from '../../lib/nav.js';
+import ExitInterviewForm from '../../components/ExitInterviewForm.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
 import { FLAGS } from '../../lib/featureFlags.js';
@@ -289,6 +290,9 @@ function DeleteAccountModal({ email, onCancel, onConfirmed }) {
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  // Optional: why they are leaving. Sent just before the account goes; it
+  // is kept without their name or email (api/_lib/exitInterview.js).
+  const [why, setWhy] = useState({ reasons: [], comment: '' });
   const matches = confirm.trim().toLowerCase() === (email || '').toLowerCase();
 
   const submit = async (e) => {
@@ -296,6 +300,10 @@ function DeleteAccountModal({ email, onCancel, onConfirmed }) {
     if (!matches) { setErr("Email doesn't match"); return; }
     setBusy(true); setErr(null);
     try {
+      if (why.reasons.length > 0 || why.comment.trim()) {
+        // Never in the way of deleting: a failure here is ignored.
+        await api.post('/me/exit-interview', { source: 'delete', reasons: why.reasons, comment: why.comment }).catch(() => {});
+      }
       const res = await fetch('/api/account/delete', {
         method: 'POST',
         credentials: 'include',
@@ -319,7 +327,7 @@ function DeleteAccountModal({ email, onCancel, onConfirmed }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <form onSubmit={submit} onClick={(e) => e.stopPropagation()}
-        className="card" style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+        className="card" style={{ width: '100%', maxWidth: 460, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 10,
@@ -350,6 +358,16 @@ function DeleteAccountModal({ email, onCancel, onConfirmed }) {
               fontSize: 14, color: 'var(--fg)',
             }}/>
         </label>
+
+        <details data-delete-why style={{ marginBottom: 14 }}>
+          <summary style={{ fontSize: 13, fontWeight: 550, color: 'var(--fg-2)', cursor: 'pointer' }}>
+            Would you tell us why you are leaving? (optional)
+          </summary>
+          <div style={{ marginTop: 10 }}>
+            <ExitInterviewForm compact reasons={why.reasons} comment={why.comment} onChange={setWhy}/>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Kept without your name or email, to help make Ivy better.</div>
+          </div>
+        </details>
 
         {err && (
           <div style={{

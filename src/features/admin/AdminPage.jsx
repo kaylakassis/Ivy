@@ -23,6 +23,7 @@ import UserProfileSheet, { relTime, fmtDateTime } from './UserProfileSheet.jsx';
 import AccountabilityPartnerTab from './AccountabilityPartnerTab.jsx';
 import RiskTab from './RiskTab.jsx';
 import FirstWeekTab from './FirstWeekTab.jsx';
+import ExitAnswersTab from './ExitAnswersTab.jsx';
 import { confirmAction, showNotice } from '../../lib/confirm.js';
 
 import { labelled } from '../../lib/labelled.js';
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'partner',    label: 'Accountability partner', icon: 'Bell' },
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'firstweek',  label: 'First week', icon: 'Trending' },
+  { id: 'exits',      label: 'Exit answers', icon: 'Chat' },
   { id: 'risk',       label: 'Risk',       icon: 'Lock' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'referrals',  label: 'Referrals',  icon: 'Users' },
@@ -143,6 +145,7 @@ export default function AdminPage() {
       {tab === 'users'      && <UsersTab/>}
       {tab === 'risk'       && <RiskTab labels={ONB_LABELS}/>}
       {tab === 'firstweek'  && <FirstWeekTab/>}
+      {tab === 'exits'      && <ExitAnswersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'referrals' && <ReferralsTab/>}
       {tab === 'support'    && <SupportTab/>}
