@@ -86,7 +86,7 @@ Stripe; in-person checkout by QR code; video meetings; Google Calendar (two-way 
 
 ## Who makes Ivy
 
-Ivy is built by a business owner, for business owners, by a small team on purpose. Support emails are answered personally. Contact: support@joinivy.ai (support), hello@joinivy.ai (general and compliance questions such as DPAs or vendor review forms), privacy@joinivy.ai (privacy).
+Ivy is built by a business owner, for business owners, by a small team on purpose. Support emails are answered personally. Contact: support@joinivy.ai (support), hello@joinivy.ai (general and compliance questions such as DPAs or vendor review forms), and privacy questions also go to support@joinivy.ai.
 
 ## Pages
 

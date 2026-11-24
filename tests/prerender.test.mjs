@@ -57,7 +57,7 @@ const EXPECTED_H1 = {
   '/privacy': 'Privacy Policy',
   '/terms': 'Terms of Service',
   '/do-not-sell': 'Do Not Sell or Share My Personal Information',
-  '/accessibility': 'Accessibility',
+  '/accessibility': 'Accessibility Statement',
   '/copyright': 'Reporting copyright infringement',
 };
 for (const [slug, v] of Object.entries(VERTICALS)) EXPECTED_H1[`/for/${slug}`] = v.headline;

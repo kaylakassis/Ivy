@@ -4,6 +4,14 @@
 // with a backdrop they can't click through; the only way out is to
 // accept or sign out.
 //
+// One exception, the notice period: both documents promise at least 14
+// days' notice of a material change. Until the day the new Terms take
+// effect (api/_lib/legal.js LEGAL_EFFECTIVE_AT), someone who agreed to an
+// earlier version also gets "Remind me later", which closes the prompt
+// until they next open Ivy. From that day on it is accept or sign out.
+//
+// The wording never says what changed: people read that in the documents.
+//
 // The legal copy here is a short summary - the full Terms + Privacy
 // open in a new tab via the prominent links. The same explicit
 // language as the signup checkbox is reused so this isn't a softer
@@ -14,8 +22,13 @@ import { Link } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
 import { useAuth } from '../lib/auth.jsx';
 
+const LATER_KEY = 'ivy_terms_later';
+
 export default function TermsAcceptModal() {
-  const { user, mustAcceptTerms, acceptCurrentTerms, signOut, terms } = useAuth();
+  const { user, mustAcceptTerms, privacyAlsoUpdated, acceptCurrentTerms, signOut, terms } = useAuth();
+  const [later, setLater] = useState(() => {
+    try { return sessionStorage.getItem(LATER_KEY) || ''; } catch { return ''; }
+  });
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
@@ -25,6 +38,13 @@ export default function TermsAcceptModal() {
   // so we mount this from AppShell + ClientShell - the modal itself
   // bails when there's nothing to ask.
   if (!user || !mustAcceptTerms) return null;
+  const canDefer = !!terms?.canDefer;
+  if (canDefer && later === terms.currentVersion) return null;
+
+  const remindLater = () => {
+    setLater(terms.currentVersion);
+    try { sessionStorage.setItem(LATER_KEY, terms.currentVersion); } catch { /* private mode */ }
+  };
 
   const accept = async () => {
     if (!checked) return;
@@ -37,12 +57,15 @@ export default function TermsAcceptModal() {
 
   // First-acceptance vs re-acceptance - the framing changes slightly.
   const isFirstTime = !terms?.acceptedVersion;
+  const docs = privacyAlsoUpdated ? 'Terms of Service and Privacy Policy' : 'Terms of Service';
   const heading = isFirstTime
     ? 'Before you continue: confirm a few things.'
-    : 'We updated our Terms.';
+    : (privacyAlsoUpdated ? 'We updated our Terms and Privacy Policy.' : 'We updated our Terms.');
   const intro = isFirstTime
     ? "Your account was created before we tracked acceptance explicitly. Take a minute to confirm the disclaimers below - we want every user to have seen them."
-    : 'We updated our Terms of Service. Please read them, then accept to continue.';
+    : canDefer
+      ? `We updated our ${docs}. They take effect on ${terms.effectiveLabel}. Please read them, then accept.`
+      : `We updated our ${docs}. Please read them, then accept to continue.`;
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="terms-accept-title"
@@ -125,6 +148,11 @@ export default function TermsAcceptModal() {
             Sign out
           </button>
           <div style={{ flex: 1 }}/>
+          {canDefer && (
+            <button onClick={remindLater} disabled={busy} className="btn btn-outline" data-terms-later>
+              Remind me later
+            </button>
+          )}
           <button onClick={accept} disabled={!checked || busy}
             className="btn btn-primary"
             style={{ padding: '10px 18px', opacity: (!checked || busy) ? 0.6 : 1 }}>

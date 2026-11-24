@@ -9,7 +9,7 @@ import { usePageMeta, siteUrl } from '../../lib/pageMeta.js';
 
 // `path` + `description` give the page its own <title>, description and
 // canonical (the legal pages are public and pre-rendered for crawlers).
-export default function LegalPage({ title, lastUpdated, path, description, children }) {
+export default function LegalPage({ title, lastUpdated, effectiveDate, path, description, children }) {
   const [tweaks] = useTweaks();
   usePageMeta({
     title: `${title} | Ivy`,
@@ -30,6 +30,7 @@ export default function LegalPage({ title, lastUpdated, path, description, child
         <h1 className="page-title" style={{ margin: 0, fontSize: 32 }}>{title}</h1>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
           Last updated: {lastUpdated}
+          {effectiveDate && <><br/>Effective date: {effectiveDate}</>}
         </div>
 
         <div style={{
@@ -59,6 +60,14 @@ export function H2({ children }) {
     <h2 style={{
       fontSize: 18, fontWeight: 600, marginTop: 28, marginBottom: 10, color: 'var(--fg)',
     }}>{children}</h2>
+  );
+}
+
+export function H3({ children }) {
+  return (
+    <h3 style={{
+      fontSize: 15, fontWeight: 600, marginTop: 20, marginBottom: 6, color: 'var(--fg)',
+    }}>{children}</h3>
   );
 }
 

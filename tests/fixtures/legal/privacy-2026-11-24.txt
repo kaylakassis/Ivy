@@ -1,0 +1,651 @@
+Ivy AI LLC ("Ivy," "Company," "we," "us," or "our") respects your privacy and is committed to protecting personal information.
+This Privacy Policy explains how we collect, use, process, retain, disclose, and protect information when you access or use Ivy, including our websites, mobile applications, artificial intelligence features, booking pages, client portals, communications, integrations, and related services (collectively, the "Service").
+This Privacy Policy applies to business owners, account holders, authorized workspace users, prospective customers, website visitors, and individuals who interact with businesses using Ivy.
+Questions concerning this Privacy Policy may be directed to support@joinivy.ai.
+1. Our Role in Processing Personal Information
+Ivy provides software tools that help businesses manage their operations, clients, appointments, communications, documents, payments, and other business activities.
+Our responsibilities concerning personal information depend on the circumstances in which that information is processed.
+1.1 Information we process for our own purposes
+Ivy may act as a business or data controller when we independently determine the purposes and means of processing personal information.
+This includes certain processing activities relating to:
+* Account registration and administration.
+* Subscription management and billing.
+* Customer support.
+* Platform security and fraud prevention.
+* Product analytics and improvement.
+* Marketing our own services.
+* Compliance with legal obligations.
+1.2 Information we process on behalf of businesses
+When a business uses Ivy to manage information about its clients, employees, contractors, or other individuals, Ivy generally acts as a service provider or data processor to the extent applicable under relevant privacy laws.
+The business determines the purposes for which that information is collected and processed.
+We process such information according to authorized business instructions, applicable contractual obligations, and applicable law.
+Businesses using Ivy are responsible for providing appropriate privacy notices, obtaining required permissions and consents, establishing lawful processing grounds, and responding to applicable individual privacy rights requests.
+Where applicable, additional processing obligations may be established through a Data Processing Addendum.
+2. Information We Collect
+The information we collect depends on how you interact with the Service, which features you use, and which permissions you provide.
+2.1 Account and registration information
+When you create or manage an Ivy account, we may collect:
+* Your name.
+* Email address.
+* Phone number, if provided.
+* Account credentials in protected or hashed form.
+* Account preferences.
+* Country and approximate geographic location inferred from your IP address.
+* Business location and business profile information.
+* Business development stage.
+* Information about how you discovered Ivy.
+* Subscription status.
+* Notification preferences.
+* Device notification identifiers.
+We use this information to establish, administer, secure, and support your account.
+2.2 Business and workspace information
+When you use Ivy to operate your business, we may process information you create, upload, receive, or otherwise make available through your workspace.
+This may include:
+* Client names and contact information.
+* Appointment and booking information.
+* Calendar information.
+* Services and pricing.
+* Invoices and payment records.
+* Business revenue and financial summaries.
+* Documents, agreements, and uploaded files.
+* Messages and communications.
+* Website and booking page content.
+* Business goals and performance information.
+* Rewards and loyalty program information.
+* Automation settings.
+* Artificial intelligence conversations and related outputs.
+* Other information you choose to provide.
+We refer to information submitted to or generated within your workspace on your behalf as "Customer Data."
+You retain your applicable ownership rights in Customer Data, as described in our Terms of Service.
+2.3 Information about clients of businesses using Ivy
+If you interact with a business through an Ivy-powered website, booking page, invoice, document, or client portal, we may process information such as:
+* Your name.
+* Email address.
+* Phone number.
+* Appointment details.
+* Services requested or purchased.
+* Payment and transaction information.
+* Documents and electronic signatures.
+* Communications with the business.
+* Information you submit through forms or other business-controlled features.
+We generally process this information on behalf of the business with which you interact.
+That business may maintain its own privacy practices and is responsible for its independent use of your information.
+2.4 Payment and subscription information
+When you purchase an Ivy subscription or make a payment through an integrated payment service, we may receive or maintain:
+* Transaction identifiers.
+* Payment amounts.
+* Currency.
+* Payment status.
+* Subscription status.
+* Billing history.
+* Refund and dispute information.
+* Other transaction-related information provided by the applicable payment provider.
+Payment card information is generally collected and processed directly by the applicable payment processor or app store.
+Ivy does not intentionally collect or store complete payment card numbers or card security codes within ordinary workspace records.
+Payment providers may independently collect additional information under their own privacy policies.
+2.5 Technical and operational information
+When you access the Service, we may automatically collect technical and operational information, including:
+* IP addresses.
+* Browser and device information.
+* Operating system information.
+* Authentication and session information.
+* Server logs.
+* Error and diagnostic reports.
+* Access timestamps.
+* Rate-limit records.
+* Security and fraud prevention signals.
+* Unusual or potentially unauthorized activity.
+We use this information to operate, maintain, troubleshoot, secure, and improve the Service.
+2.6 Product analytics and usage information
+We collect information about how the Service is used, including:
+* Account registrations.
+* Active accounts.
+* Feature adoption.
+* Feature usage frequency.
+* Conversion and subscription activity.
+* Customer retention and churn.
+* Platform performance.
+* Broad business activity indicators, such as completed bookings or paid invoices.
+Certain analytics may be associated with individual accounts or workspaces to help us understand product usage, provide support, identify technical issues, and improve the Service.
+We do not use Customer Data to create advertising profiles for unrelated third parties.
+2.7 Business performance totals
+Ivy may calculate business-level summaries from information maintained within your workspace.
+These may include:
+* Total revenue recorded or collected through Ivy.
+* Number of clients.
+* Number of appointments and bookings.
+* Invoice activity.
+* Feature usage.
+* Other business performance indicators.
+Access to identifiable business performance information is restricted to authorized personnel and service providers with a legitimate operational need.
+We may use such information to provide functionality, support customers, maintain the Service, and understand product performance, subject to applicable contractual and legal restrictions.
+We do not publicly disclose identifiable business performance information without appropriate authorization or another lawful basis.
+2.8 Support and communications information
+If you contact Ivy, we may collect:
+* Your contact information.
+* The contents of your communications.
+* Support requests.
+* Feedback and suggestions.
+* Information reasonably necessary to investigate or resolve your request.
+Please avoid including unnecessary sensitive personal information in support communications.
+3. Sources of Personal Information
+We may obtain personal information from:
+* You directly.
+* Businesses and authorized workspace users.
+* Individuals interacting with Ivy-powered business pages.
+* Your devices and interactions with the Service.
+* Connected third-party services.
+* Payment processors and app stores.
+* Service providers supporting our operations.
+* Information generated through authorized use of the Service.
+We collect and process information only for purposes permitted by applicable law and relevant contractual obligations.
+4. How We Use Information
+We may use personal information for the following purposes:
+4.1 Providing the Service
+* Creating and maintaining accounts.
+* Managing workspaces.
+* Providing scheduling, booking, invoicing, and client management functionality.
+* Processing authorized communications.
+* Providing artificial intelligence features.
+* Operating websites and client portals.
+* Maintaining documents and business records.
+* Synchronizing connected services.
+* Processing authorized automations.
+4.2 Account administration and billing
+* Managing subscriptions.
+* Processing or facilitating payments.
+* Providing invoices and receipts.
+* Managing trials and renewals.
+* Communicating billing information.
+* Preventing fraudulent transactions and subscription abuse.
+4.3 Security and fraud prevention
+* Authenticating users.
+* Protecting accounts and workspaces.
+* Detecting unauthorized access.
+* Preventing automated abuse and unauthorized data extraction.
+* Investigating security incidents.
+* Enforcing our Terms of Service.
+* Protecting the rights, property, and safety of Ivy, its users, and others.
+4.4 Customer support
+* Responding to inquiries.
+* Troubleshooting technical problems.
+* Investigating reported issues.
+* Providing account assistance.
+* Communicating relevant service information.
+4.5 Product improvement and analytics
+* Measuring feature usage.
+* Understanding product performance.
+* Identifying technical and usability issues.
+* Evaluating customer retention and subscription activity.
+* Improving existing functionality.
+* Developing new features.
+* Understanding demand for our services.
+Where information is processed on behalf of a business customer, these activities remain subject to applicable processor and service-provider restrictions.
+4.6 Marketing and business development
+We may use appropriate account information and platform-level analytics to understand demand for Ivy, evaluate marketing performance, and promote our own services.
+We may send product updates, educational information, offers, and other marketing communications where you have opted in or otherwise where permitted by applicable law.
+You may unsubscribe from marketing communications at any time.
+We do not sell your client lists or Customer Data to third parties for their own marketing purposes.
+4.7 Legal and regulatory purposes
+We may process information to:
+* Comply with applicable laws and regulations.
+* Respond to lawful governmental requests.
+* Maintain legally required records.
+* Establish, exercise, or defend legal claims.
+* Investigate suspected unlawful activity.
+* Enforce contractual rights and obligations.
+5. Artificial Intelligence and Automated Features
+5.1 AI processing
+Ivy incorporates artificial intelligence features powered by third-party large language model providers.
+When you interact with Ivy's artificial intelligence features, information may be transmitted to an AI service provider to generate responses, analyze information, or perform requested functionality.
+Depending on the feature and your instructions, information processed may include:
+* Your messages and prompts.
+* Relevant conversation history.
+* Information retrieved from your workspace.
+* Client or appointment information.
+* Business and financial summaries.
+* Documents or other content you provide.
+* Tool instructions and tool-generated results.
+* Other contextual information reasonably necessary to provide the requested functionality.
+We seek to limit information transmitted to AI providers to information reasonably necessary for the applicable feature.
+AI features may retrieve relevant workspace information based on your instructions and enabled functionality, even where you do not manually include that information in your message.
+5.2 AI model training
+Ivy does not use your Customer Data or private AI conversations to train general-purpose artificial intelligence models.
+Our AI service arrangements are intended to prohibit providers from using Customer Data submitted through Ivy to train their general-purpose models.
+AI providers may process or temporarily retain information for authorized service delivery, security, abuse prevention, or legally required purposes, subject to applicable contractual arrangements and provider settings.
+A restriction on model training does not necessarily mean that information is never temporarily retained by an AI service provider.
+5.3 AI-assisted actions
+Certain AI features may perform actions within your workspace or connected services when requested or authorized.
+These actions may involve retrieving, creating, modifying, transmitting, or otherwise processing information.
+Examples include:
+* Creating or updating client records.
+* Managing appointments.
+* Preparing or sending communications.
+* Updating invoice information.
+* Generating documents.
+* Retrieving business performance information.
+Your use of these features is subject to the authorization and responsibility provisions of our Terms of Service.
+5.4 Automated decision-making
+Ivy provides informational and administrative tools intended to assist human decision-making.
+Ivy is not intended to independently make legally significant decisions about individuals in areas such as employment, credit eligibility, insurance eligibility, healthcare, housing, or access to essential services.
+Business customers remain responsible for their decisions and for complying with applicable laws governing automated decision-making and profiling.
+Where applicable law provides rights concerning automated decision-making or profiling, individuals may exercise those rights by contacting support@joinivy.ai.
+5.5 Sensitive information in AI features
+You should not submit unnecessary sensitive personal information, confidential third-party information, authentication credentials, or information prohibited by our Terms of Service to artificial intelligence features.
+AI-generated information may be inaccurate or incomplete and should be independently reviewed before use.
+6. Aggregate and De-Identified Information
+We may create aggregated or appropriately de-identified information from permitted data processing activities.
+This may include statistics concerning:
+* Platform usage.
+* Total bookings.
+* Aggregate payment activity.
+* Feature adoption.
+* Business performance trends.
+* Customer retention.
+* Product performance.
+We may use such information for lawful analytics, research, product improvement, business planning, and marketing purposes.
+Where information is represented as de-identified, we take reasonable measures designed to prevent it from being associated with an identifiable individual.
+We maintain and use de-identified information in de-identified form and do not attempt to re-identify it except as permitted by applicable law to evaluate de-identification safeguards.
+Where required, recipients of de-identified information will be subject to appropriate restrictions against re-identification.
+We do not publish aggregate statistics in a manner intended to identify individual customers, their businesses, or their clients without appropriate authorization.
+7. How We Disclose Information
+We may disclose personal information in the circumstances described below.
+7.1 Service providers and subprocessors
+We use third-party providers to support the operation, maintenance, security, and functionality of Ivy.
+These may include the following providers:
+Vercel: Application hosting, infrastructure, and file storage.
+Neon: Database hosting and related infrastructure.
+Resend: Email delivery and related communications services.
+Artificial intelligence providers: Processing AI prompts, contextual information, and responses. Information concerning our current AI provider is available upon request.
+Stripe and Stripe Connect: Subscription billing, payment processing, transaction management, and connected payment accounts.
+Square: Payment processing and related functionality for businesses that enable the integration.
+PayPal: Payment processing and related functionality for businesses that enable the integration.
+Twilio: SMS delivery, receipt, and related communications functionality.
+Apple: App Store purchases, subscription management, application distribution, and device notifications.
+RevenueCat: Mobile subscription management and purchase-related functionality.
+Google: Calendar synchronization and related functionality when authorized.
+Sentry: Error reporting, diagnostics, and application monitoring.
+OpenStreetMap-related services: Address lookup and geographic functionality.
+We may update our providers as the Service evolves.
+Where a provider processes personal information on our behalf, we use appropriate contractual restrictions and safeguards as required by applicable law.
+7.2 Independent third-party services
+Certain providers, including payment processors, app stores, and connected account services, may independently determine how they process information for their own lawful purposes.
+These purposes may include:
+* Fraud prevention.
+* Regulatory compliance.
+* Identity verification.
+* Transaction processing.
+* Account administration.
+* Security.
+* Legal recordkeeping.
+Such processing may be governed by the provider's own privacy policy and contractual terms.
+7.3 Authorized business users
+Information within a workspace may be accessible to the business that controls the workspace and individuals authorized by that business.
+Business customers are responsible for managing access permissions and ensuring that authorized individuals handle information appropriately.
+7.4 Business clients and public-facing content
+When you use Ivy to publish a website, booking page, invoice, document, or other customer-facing material, information may be disclosed to intended recipients or made publicly available according to your settings and instructions.
+You are responsible for reviewing information before publishing it or making it accessible to others.
+7.5 Legal obligations and protection of rights
+We may disclose information where reasonably necessary and legally permitted to:
+* Comply with applicable law.
+* Respond to valid subpoenas, court orders, or governmental requests.
+* Investigate fraud or unlawful conduct.
+* Protect the security and integrity of the Service.
+* Protect the rights, property, or safety of Ivy, its users, or others.
+* Establish, exercise, or defend legal claims.
+7.6 Business transfers
+Information may be disclosed or transferred in connection with an actual or proposed:
+* Merger.
+* Acquisition.
+* Financing.
+* Corporate restructuring.
+* Sale of assets.
+* Bankruptcy.
+* Other lawful business transaction.
+Such disclosures will be subject to appropriate confidentiality protections, applicable law, and applicable contractual data protection obligations.
+If a business transfer results in materially different processing of personal information, we will provide notices or obtain consent where required by applicable law.
+7.7 With your authorization
+We may disclose information to additional parties when you expressly authorize or direct us to do so, subject to applicable law.
+8. Sale of Personal Information and Advertising
+Ivy does not sell personal information or Customer Data.
+We do not rent or trade your client lists, invoices, messages, documents, bookings, or other Customer Data to third parties for their own marketing purposes.
+We do not share personal information for cross-context behavioral advertising as defined under California privacy law.
+We do not use personal information for targeted advertising as defined under applicable state privacy laws.
+We do not operate third-party advertising trackers or session-replay tools as part of our current Service.
+We may use first-party analytics and appropriately aggregated or de-identified statistics to evaluate and market Ivy's own services.
+Additional information is available at:
+https://www.joinivy.ai/do-not-sell
+If our practices materially change, we will update this Privacy Policy and provide applicable notices, choices, and consent mechanisms before engaging in processing that requires them.
+9. Google Calendar and Google User Data
+If you connect your Google account or Google Calendar to Ivy, we may access information permitted by the authorization you grant.
+Depending on the integration's functionality and authorized permissions, this may include calendar identifiers, event information, event times, scheduling information, and other information necessary to provide the enabled calendar functionality.
+We use Google user data to provide and maintain authorized calendar integration features.
+We do not sell Google user data or use it for advertising.
+We do not use Google user data to develop, improve, or train generalized artificial intelligence or machine learning models.
+Our use and transfer of information received from Google APIs will adhere to the Google API Services User Data Policy, including its Limited Use requirements, where applicable.
+Information obtained through Google APIs will not be transferred to third parties except as permitted by applicable Google policies and necessary to provide authorized functionality, maintain security, comply with applicable law, or otherwise as expressly permitted.
+Human access to Google user data is restricted in accordance with applicable Google policies.
+You may revoke Ivy's access through your Google account permissions or available integration settings.
+Revoking access prevents future authorized retrieval of Google user data but does not necessarily immediately remove information previously synchronized or retained in accordance with applicable law and this Privacy Policy.
+10. Email, SMS, and Notifications
+10.1 Service-related communications
+We may send communications necessary to operate and administer the Service, including:
+* Account verification.
+* Password resets.
+* Security alerts.
+* Subscription and billing notices.
+* Data retention and deletion notices.
+* Important service announcements.
+* Responses to support requests.
+* Other necessary administrative communications.
+Certain essential service communications cannot be disabled while maintaining an active account.
+10.2 Marketing communications
+Where applicable, we provide choices concerning marketing emails and other promotional communications.
+You may unsubscribe using the unsubscribe mechanism included in marketing communications or available account settings.
+Opting out of marketing communications does not prevent us from sending necessary service-related communications.
+10.3 Communications from businesses using Ivy
+Businesses may use Ivy to communicate with their clients through email, SMS, and other supported communication channels.
+Those businesses are responsible for obtaining legally required consent and complying with applicable communications laws.
+Where supported, recipients may reply STOP to applicable SMS messages to revoke consent or use available unsubscribe mechanisms.
+We may process communication preferences, consent records, delivery information, and opt-out requests to provide functionality and support compliance.
+If you receive an unauthorized communication through Ivy, you may report it to support@joinivy.ai.
+10.4 Mobile information
+Mobile phone numbers and SMS opt-in information collected for messaging purposes will not be sold or shared with third parties or affiliates for their own marketing or promotional purposes.
+SMS consent information may be disclosed to service providers involved in delivering messages, maintaining messaging functionality, or complying with applicable legal obligations.
+11. Cookies, Local Storage, and Device Information
+Ivy uses cookies and similar technologies necessary to provide and maintain the Service.
+These may include:
+* Authentication and session cookies.
+* Security-related storage.
+* Account and application preferences.
+* First-party analytics.
+* Local device storage.
+* Technical functionality necessary for the Service.
+We use session cookies to maintain authenticated access and apply appropriate security attributes where supported.
+Our first-party analytics help us understand feature usage, platform performance, and customer experience.
+We do not currently use third-party advertising cookies or session-replay technologies.
+The Ivy mobile application may store certain information locally on your device, including portions of your schedule and client information, to support offline functionality.
+Information stored on your device may remain there until removed through application functionality, device settings, application removal, or other applicable mechanisms.
+You are responsible for maintaining appropriate security on devices used to access business and client information.
+You may manage cookies through your browser settings. Disabling necessary cookies may prevent portions of the Service from functioning correctly.
+12. Do Not Track and Global Privacy Control
+Some browsers provide Do Not Track signals or other privacy preference mechanisms.
+Because there is no universally adopted standard for responding to traditional Do Not Track signals, Ivy does not currently respond to those signals in a uniform manner.
+Where required by applicable law, Ivy will recognize and honor legally recognized opt-out preference signals, including Global Privacy Control, for processing activities to which those requirements apply.
+Ivy does not currently sell personal information, share personal information for cross-context behavioral advertising, or process personal information for targeted advertising.
+13. Data Retention
+We retain personal information for periods reasonably necessary to provide the Service, fulfill the purposes described in this Privacy Policy, comply with applicable law, and maintain legitimate security and operational requirements.
+Retention periods depend on the nature of the information and the purposes for which it is processed.
+13.1 Active accounts
+We generally retain workspace information while your subscription or authorized account remains active.
+You may remove individual records using available Service functionality, subject to applicable retention requirements and technical limitations.
+13.2 Expired paid subscriptions
+When your paid subscription ends, including following cancellation or unresolved payment failure, we generally retain your workspace information for seven days following the applicable subscription expiration date.
+During this period, you may export available workspace information or resubscribe.
+Your website, booking page, and client portal may be archived during this period.
+We generally send an email when the seven-day retention period begins and another reminder approximately two days before scheduled deletion.
+Unless you resubscribe before the applicable deadline, workspace information is scheduled for deletion following the retention period, subject to the exceptions described below.
+13.3 Expired free trials
+If your free trial ends without an active paid subscription, we generally retain workspace information for four weeks following trial expiration.
+We provide applicable deletion notices and an opportunity to export available information.
+Following this period, workspace information is scheduled for deletion unless you subscribe or another lawful retention requirement applies.
+13.4 Account deletion
+You may request account deletion through Account Settings or by contacting support@joinivy.ai.
+We generally complete account deletion requests within 30 days, subject to applicable law, identity verification, and permitted retention exceptions.
+Where applicable law establishes a different response or completion deadline, we will comply with that requirement.
+13.5 Backups
+Information removed from active production systems may remain temporarily within restricted backup systems.
+Backups may persist for up to 30 additional days before being overwritten or removed through ordinary backup rotation.
+Backup information remains subject to applicable security and confidentiality safeguards.
+Information retained solely within backups is not ordinarily used for active business operations.
+13.6 Operational logs
+Operational and server logs are generally retained for up to 30 days.
+Certain security-related information may be retained longer where reasonably necessary to investigate fraud, security incidents, abuse, or legal claims.
+13.7 Billing and legal records
+We may retain transaction records, invoices, tax records, subscription history, and other legally relevant information for periods required or permitted by applicable law.
+Retention periods depend on applicable accounting, taxation, regulatory, and legal requirements.
+13.8 Fraud and trial abuse prevention
+To prevent repeated free-trial abuse, we may retain a hashed representation of an email address following account deletion.
+This information is used to recognize previously registered email addresses without retaining the original email address in readable form for that purpose.
+We retain such information only for as long as reasonably necessary for legitimate fraud or abuse prevention purposes, subject to applicable law.
+Hashed information is treated as personal information where applicable law requires.
+13.9 Other retention exceptions
+We may retain limited information where reasonably necessary or legally permitted for:
+* Compliance with legal obligations.
+* Security and fraud prevention.
+* Abuse investigations.
+* Moderation records.
+* Dispute resolution.
+* Enforcement of agreements.
+* Establishing or defending legal claims.
+* Maintaining legally required records.
+* Protecting the rights and safety of users and others.
+Information retained under an exception remains subject to applicable privacy and security obligations.
+13.10 Third-party retention
+Third-party providers acting independently may retain information according to their own legal obligations and privacy practices.
+Deleting information from Ivy does not necessarily delete information independently maintained by a payment processor, connected account provider, recipient of a communication, or other independent third party.
+14. Data Security
+We maintain administrative, technical, and organizational safeguards designed to protect personal information against unauthorized access, disclosure, alteration, loss, and misuse.
+Our safeguards include, as appropriate:
+* Password hashing.
+* Encryption of information in transit using TLS.
+* Authentication and authorization controls.
+* Workspace-level access restrictions.
+* Protected authentication and verification tokens.
+* Restricted access to production information.
+* Security monitoring and abuse prevention measures.
+We use bcrypt for password hashing and SHA-256 hashing for applicable authentication and verification tokens.
+Our systems are designed to restrict access to workspace information to authorized users, personnel, and service providers.
+No method of electronic transmission, storage, or software operation can be guaranteed to be completely secure.
+You are responsible for protecting your account credentials, managing authorized access, and maintaining appropriate device security.
+If you believe your account or personal information has been compromised, contact support@joinivy.ai promptly.
+We will provide security incident notifications to affected individuals, business customers, and governmental authorities where required by applicable law or contractual obligations.
+15. Geographic Location and International Transfers
+Ivy is operated by Ivy AI LLC in the United States.
+Our primary database infrastructure is hosted in the United States. Our email and AI processing arrangements are primarily based in the United States.
+We may use distributed infrastructure and edge computing services in other geographic regions, including Europe and Asia-Pacific, to support application performance and availability.
+Although our primary persistent storage is located in the United States, information may be processed or accessed in other jurisdictions depending on service providers, connected integrations, technical infrastructure, and authorized operational activities.
+Privacy and data protection laws in those jurisdictions may differ from the laws of your jurisdiction.
+Where applicable law requires safeguards for international transfers, we will use appropriate lawful transfer mechanisms, which may include applicable Standard Contractual Clauses or other recognized safeguards.
+Additional information concerning applicable international transfer safeguards may be requested at support@joinivy.ai.
+16. Privacy Rights and Choices
+Depending on your jurisdiction and applicable law, you may have rights concerning your personal information.
+These may include the following:
+16.1 Right to access
+You may request confirmation of whether we process personal information about you and request access to applicable information.
+Available workspace information may also be exported through Account Settings.
+16.2 Right to correction
+You may request correction of inaccurate personal information.
+Certain information may be corrected directly through your account.
+16.3 Right to deletion
+You may request deletion of personal information, subject to applicable legal exceptions.
+16.4 Right to data portability
+Where applicable, you may request a copy of personal information in a reasonably accessible and portable format.
+16.5 Right to opt out
+Depending on applicable law, you may have the right to opt out of:
+* The sale of personal information.
+* Sharing for cross-context behavioral advertising.
+* Targeted advertising.
+* Certain profiling activities in furtherance of decisions producing legal or similarly significant effects.
+Ivy does not currently sell personal information or engage in cross-context behavioral advertising or targeted advertising.
+16.6 Sensitive personal information rights
+Where applicable, you may have rights to limit certain uses or disclosures of sensitive personal information or withdraw consent to its processing.
+16.7 Right to withdraw consent
+Where processing is based on your consent, you may withdraw that consent, subject to applicable law.
+Withdrawal does not affect the lawfulness of processing that occurred before consent was withdrawn.
+16.8 Right to nondiscrimination
+We will not unlawfully discriminate against you for exercising applicable privacy rights.
+Certain information may be necessary to provide specific functionality. If you request deletion or restrict processing of that information, we may be unable to provide the affected functionality.
+16.9 Right to appeal
+Where applicable law provides an appeal right, you may appeal a decision denying your privacy request by contacting support@joinivy.ai with the subject line "Privacy Rights Appeal."
+We will review and respond to appeals within applicable statutory deadlines.
+Where required, we will provide information concerning how to contact the relevant governmental authority if an appeal is denied.
+17. Exercising Your Privacy Rights
+You may submit privacy requests through available Account Settings or by emailing:
+support@joinivy.ai
+Please provide sufficient information to allow us to identify your request and locate relevant information.
+We may take reasonable steps to verify your identity and authority before fulfilling a request.
+Verification may include confirming your account information, email address, or other information reasonably necessary to protect against unauthorized disclosure or deletion.
+We will not require unnecessary information for verification.
+Where applicable law permits an authorized agent to submit a request on your behalf, we may require reasonable evidence of the agent's authority and verification of your identity.
+We will respond within the time required by applicable law.
+We may deny or limit requests where legally permitted, including where information must be retained for legal obligations, security, fraud prevention, or the protection of another person's rights.
+If we deny a request, we will provide applicable explanations and appeal information as required by law.
+18. California Privacy Disclosures
+This section supplements the remainder of this Privacy Policy for California residents.
+Certain rights and obligations described in this section apply where Ivy is subject to the California Consumer Privacy Act, as amended by the California Privacy Rights Act ("CCPA"), or other applicable California privacy laws.
+18.1 Categories of personal information
+Depending on your interaction with the Service, the categories of personal information we collect may include:
+* Identifiers, including names, email addresses, phone numbers, account identifiers, and IP addresses.
+* Customer records information, including contact information and business-related records.
+* Commercial information, including subscriptions, transaction history, purchases, invoices, and payment activity.
+* Internet or electronic network activity, including application usage, interactions, device information, and operational logs.
+* Approximate geographic information derived from IP addresses and business location information.
+* Professional or employment-related information provided through business profiles and workspace records.
+* Electronic communications, documents, and other content submitted to the Service.
+* Inferences concerning product usage, business activity, and service preferences.
+* Sensitive personal information, to the extent collected, including account authentication information and information voluntarily submitted within authorized functionality.
+The categories collected depend on the features used and the information provided.
+18.2 Sources and purposes
+We collect personal information from the sources described in Section 3.
+We use personal information for the business and commercial purposes described in Sections 4 through 6.
+18.3 Disclosures for business purposes
+We may disclose the applicable categories of personal information described above to:
+* Hosting and infrastructure providers.
+* Database providers.
+* AI service providers.
+* Communications providers.
+* Payment processors.
+* App stores and subscription management providers.
+* Security and diagnostic providers.
+* Authorized business customers and workspace users.
+* Connected integration providers.
+* Governmental authorities or other recipients where legally required or permitted.
+* Parties involved in lawful business transfers.
+Disclosures are limited according to the applicable purposes, contractual arrangements, and legal requirements described in this Privacy Policy.
+18.4 Sale and sharing
+Ivy does not sell personal information or share personal information for cross-context behavioral advertising.
+We do not knowingly sell or share personal information of individuals under 16 years of age.
+Information concerning these practices is available at:
+https://www.joinivy.ai/do-not-sell
+18.5 Sensitive personal information
+We use sensitive personal information, where collected, for authorized Service functionality, account security, authentication, fraud prevention, and other purposes permitted by applicable law.
+We do not use sensitive personal information to infer characteristics about individuals for unrelated advertising purposes.
+Where applicable law provides a right to limit the use or disclosure of sensitive personal information, you may exercise that right by contacting us.
+18.6 Retention
+Our retention periods and criteria are described in Section 13.
+We do not retain personal information longer than reasonably necessary for the applicable purposes, subject to legally permitted retention requirements.
+18.7 California privacy rights
+Where applicable, California residents may exercise rights to:
+* Know what personal information we collect, use, and disclose.
+* Access specific pieces and categories of personal information.
+* Request deletion.
+* Request correction.
+* Opt out of sale or sharing.
+* Limit certain uses of sensitive personal information.
+* Receive nondiscriminatory treatment for exercising privacy rights.
+Requests may be submitted using the methods described in Section 17.
+18.8 California direct marketing disclosures
+Ivy does not disclose personal information to third parties for their own direct marketing purposes as contemplated by California Civil Code Section 1798.83.
+California residents may contact support@joinivy.ai with questions concerning these practices.
+19. Additional United States Privacy Rights
+Residents of certain United States jurisdictions may have additional rights under applicable state privacy laws.
+Depending on the jurisdiction, the nature of the information, and whether the applicable law covers Ivy's processing activities, these rights may include:
+* Access to personal information.
+* Confirmation of processing.
+* Correction of inaccurate information.
+* Deletion of personal information.
+* Data portability.
+* Opting out of targeted advertising.
+* Opting out of personal information sales.
+* Opting out of certain profiling activities.
+* Withdrawing consent to certain sensitive information processing.
+* Obtaining information concerning certain third-party disclosures.
+* Appealing denied privacy requests.
+We will honor applicable rights in accordance with the requirements of the relevant law.
+Privacy rights may be subject to statutory exceptions, verification requirements, and limitations.
+Requests and appeals may be submitted to support@joinivy.ai.
+20. European Economic Area, United Kingdom, and Other International Rights
+Where the General Data Protection Regulation ("GDPR"), UK GDPR, or other international privacy laws apply, individuals may have additional rights and protections.
+20.1 Lawful bases for processing
+Where required, we process personal information based on one or more applicable lawful grounds, including:
+* Performance of a contract.
+* Steps requested before entering into a contract.
+* Compliance with legal obligations.
+* Legitimate interests, where not overridden by applicable individual rights.
+* Consent.
+* Other lawful grounds permitted by applicable law.
+Our legitimate interests may include operating, securing, improving, and supporting the Service, preventing fraud, and managing our business.
+20.2 Additional rights
+Where applicable, you may have the right to:
+* Access personal information.
+* Correct inaccurate information.
+* Request erasure.
+* Restrict processing.
+* Object to processing.
+* Receive portable copies of information.
+* Withdraw consent.
+* Exercise applicable rights concerning automated decision-making.
+* Lodge a complaint with a competent data protection authority.
+These rights may be subject to applicable legal limitations and exceptions.
+20.3 Supervisory authorities
+Individuals may have the right to lodge a complaint with the data protection authority responsible for their jurisdiction.
+We encourage you to contact support@joinivy.ai if you have questions or concerns regarding our processing activities.
+21. If You Are a Client of a Business Using Ivy
+If your information was submitted to Ivy by a business, or collected through a business's Ivy-powered website, booking page, invoice, or client portal, that business generally determines how your information is used.
+Requests concerning that business's records should ordinarily be directed to the business.
+This may include requests to:
+* Access client records.
+* Correct contact information.
+* Delete appointment history.
+* Remove communications.
+* Update marketing preferences.
+* Withdraw consent.
+You may also contact support@joinivy.ai.
+Where Ivy acts solely as a processor or service provider, we may refer your request to the relevant business and provide assistance consistent with our contractual and legal obligations.
+Where Ivy independently controls the relevant information, we will handle the request directly as required by applicable law.
+22. Children's Privacy
+Ivy accounts and subscriptions are intended for individuals who are at least 18 years old or the applicable age of majority, if higher.
+The Service is not directed to children under 13 years of age, and we do not knowingly collect personal information directly from children under 13 in circumstances requiring parental consent without obtaining such consent as required by law.
+Businesses using Ivy may independently interact with minors through their own business activities.
+Business customers are responsible for determining whether they may lawfully collect and process information concerning minors, providing required notices, obtaining parental or guardian consent where necessary, and complying with applicable children's privacy laws.
+Business customers must not use Ivy in a manner that violates the Children's Online Privacy Protection Act or other applicable laws protecting minors.
+If we become aware that personal information has been collected unlawfully from a child, we will take appropriate steps to remove or restrict the information as required by applicable law.
+Parents or guardians who believe a child's information has been collected improperly may contact support@joinivy.ai.
+23. Healthcare and Sensitive Information
+Ivy is not a HIPAA-compliant platform and does not offer Business Associate Agreements.
+The Service is not designed or authorized for processing protected health information subject to HIPAA.
+You must not submit information prohibited by our Terms of Service, including unauthorized medical records, clinical treatment notes, highly sensitive consumer health information, or other restricted categories of information.
+Businesses are responsible for determining whether their use of Ivy complies with applicable healthcare, consumer health privacy, professional licensing, and other specialized regulatory requirements.
+Ivy does not intentionally collect consumer health information for independent health profiling, health-related advertising, or the sale of health information.
+If we become aware of information being processed in violation of our Terms of Service or applicable law, we may restrict processing, remove information, suspend affected functionality, or take other appropriate action.
+24. Third-Party Websites and Services
+The Service may contain links to or integrations with websites, applications, payment services, and other services operated by third parties.
+This Privacy Policy does not govern the independent privacy practices of those third parties.
+We encourage you to review the applicable privacy policies before providing information to or authorizing access by third-party services.
+Connecting a third-party account may permit information to be exchanged between Ivy and that service according to your authorization and the applicable integration functionality.
+You may revoke available integration permissions through Ivy or the relevant third-party service.
+25. Changes to This Privacy Policy
+We may update this Privacy Policy as our services, processing activities, technology, and legal obligations evolve.
+The updated policy will identify its revision or effective date.
+For material changes, we will provide appropriate advance notice through email, in-app notifications, or another reasonable communication mechanism.
+We generally provide at least 14 days' advance notice of material changes, except where a shorter period is required by law or reasonably necessary to address urgent legal or security requirements.
+Where applicable law requires consent for new or materially different processing activities, we will obtain that consent before engaging in the relevant processing.
+Your acknowledgment of this Privacy Policy does not constitute blanket consent to all processing activities or waive applicable privacy rights.
+Where continued use of particular functionality requires additional authorization, we may request that authorization separately.
+If you do not agree with changes affecting your use of the Service, you may discontinue use, cancel your subscription, request applicable data exports, or request account deletion.
+26. Contact Information
+Ivy is operated by:
+Ivy AI LLC
+California, United States
+Privacy inquiries and privacy rights requests:
+support@joinivy.ai
+General support:
+support@joinivy.ai
+Website:
+https://joinivy.ai
+Terms of Service:
+https://joinivy.ai/terms
+Do Not Sell or Share:
+https://www.joinivy.ai/do-not-sell
+We will review privacy inquiries and respond in accordance with applicable legal requirements.

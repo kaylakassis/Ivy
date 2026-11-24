@@ -1,0 +1,131 @@
+Our Commitment to Accessibility
+Ivy AI LLC ("Ivy," "we," "us," or "our") is committed to making its digital services accessible to people with disabilities and providing an inclusive experience for individuals with different abilities, needs, and assistive technologies.
+We believe that everyone should have the opportunity to access and use digital tools to manage their business, communicate with clients, and participate in everyday business activities.
+Accessibility is an ongoing part of our product development, maintenance, and improvement efforts.
+Scope of This Statement
+This Accessibility Statement applies to digital services operated by Ivy AI LLC, including:
+* The Ivy website.
+* The Ivy web application.
+* The Ivy mobile application.
+* Account registration and subscription management.
+* Business management tools.
+* Ivy-generated business websites.
+* Online booking pages.
+* Client portals.
+* Invoices and payment interfaces.
+* Digital documents and signing interfaces.
+* Artificial intelligence features.
+* Other user-facing functionality provided by Ivy.
+Certain content and functionality may be provided or controlled by independent businesses or third-party service providers, as described below.
+Accessibility Standards
+We use the Web Content Accessibility Guidelines (WCAG) 2.1, Level AA, as a baseline for our accessibility efforts.
+We also aim to incorporate relevant improvements introduced in WCAG 2.2, Level AA, as we continue developing and improving the Service.
+These guidelines provide recommendations for making digital content more accessible to individuals with a wide range of disabilities, including visual, auditory, physical, cognitive, neurological, and other disabilities.
+We work toward improving accessibility and supporting applicable accessibility requirements, including those arising under the Americans with Disabilities Act (ADA) and other applicable laws.
+Accessibility is an ongoing process. We do not represent that every page, feature, integration, or piece of content currently satisfies every applicable accessibility guideline.
+Accessibility Measures
+As part of our ongoing accessibility efforts, we seek to incorporate appropriate accessibility practices into the design, development, and maintenance of Ivy.
+These efforts include, where applicable:
+* Providing accessible names and labels for buttons, links, form fields, and interactive controls.
+* Supporting keyboard navigation.
+* Providing visible focus indicators.
+* Maintaining appropriate text and interface color contrast.
+* Providing meaningful text alternatives for informative images.
+* Using logical headings and page structures.
+* Supporting responsive layouts across different screen sizes.
+* Providing appropriately sized touch targets.
+* Supporting screen readers and other assistive technologies.
+* Supporting readable text and accessible interface layouts.
+* Providing understandable form instructions and error messages.
+* Identifying and addressing accessibility issues during product development and maintenance.
+We use automated accessibility testing on portions of the Service, including our website, booking pages, account registration, application interfaces, and client portals.
+We also review accessibility findings and work to address identified barriers.
+Automated testing is one component of our accessibility efforts and does not identify every potential accessibility issue.
+Assistive Technologies
+We aim to support access to Ivy through commonly used assistive technologies and accessibility features, including:
+* Screen readers.
+* Keyboard-only navigation.
+* Voice control software.
+* Browser zoom and text enlargement.
+* Operating system accessibility settings.
+* Mobile device accessibility features.
+* Alternative input devices.
+Compatibility may vary depending on the device, operating system, browser, assistive technology, and feature being used.
+If you experience difficulty using Ivy with an assistive technology, we encourage you to contact us so we can investigate the issue and explore available solutions.
+Known Limitations and Ongoing Improvements
+Although we work to improve accessibility, certain areas of the Service may have limitations.
+Known areas requiring continued evaluation or improvement include:
+* Portions of the Service that have not yet undergone comprehensive end-to-end testing with screen readers.
+* Complex interfaces, including calendar views and website-building tools, that may present challenges for keyboard-only navigation.
+* Certain dynamic or interactive features that may behave differently across assistive technologies.
+* Content created or customized by businesses using Ivy.
+* Third-party payment interfaces, embedded media, and other externally provided functionality.
+We continue to evaluate these areas and prioritize improvements based on the nature, severity, and impact of identified accessibility barriers.
+The limitations listed above are not necessarily exhaustive.
+Business-Generated Content
+Ivy provides tools that allow independent businesses to create, customize, and publish websites, booking pages, documents, invoices, and other content.
+We aim to provide accessible templates, components, and functionality. However, businesses may independently control certain aspects of their published content, including:
+* Written content.
+* Images and alternative text.
+* Videos and captions.
+* Brand colors and contrast.
+* Uploaded documents.
+* Custom layouts.
+* External links and embedded content.
+Businesses using Ivy are responsible for ensuring that the content they independently create, upload, customize, or publish complies with applicable accessibility requirements.
+Ivy remains responsible for addressing accessibility issues within the platform functionality and components under its control, consistent with applicable law.
+If you encounter an accessibility issue on a page operated by a business using Ivy, you may contact either the business directly or Ivy.
+We will make reasonable efforts to investigate issues involving our platform and, where appropriate, communicate relevant concerns to the business responsible for the content.
+Third-Party Services and Integrations
+Certain portions of the Service rely on products, services, or content provided by independent third parties.
+These may include:
+* Payment processing interfaces.
+* Embedded videos and media.
+* Connected calendar services.
+* External websites.
+* App store interfaces.
+* Other third-party integrations.
+Ivy may not have direct control over the design, development, or accessibility of independently operated third-party services.
+Where reasonably practicable, we seek to identify and address accessibility barriers involving integrations and third-party functionality within our control.
+If a third-party component prevents you from accessing a feature of Ivy, please contact us so we can investigate and explore reasonable alternatives where available.
+Nothing in this section limits Ivy's obligations under applicable accessibility laws.
+Accessibility Assistance and Alternative Formats
+If you experience difficulty accessing information, completing a transaction, using a feature, or otherwise interacting with Ivy because of a disability or accessibility barrier, please contact us.
+We will make reasonable efforts to provide appropriate assistance, alternative formats, or alternative methods of accessing relevant information or functionality, consistent with applicable law.
+Depending on the circumstances, assistance may include:
+* Providing information in an alternative accessible format.
+* Assisting with navigation or account-related functionality.
+* Helping identify an alternative method of completing a task.
+* Investigating compatibility issues involving assistive technologies.
+* Addressing accessibility barriers within our control.
+Requests will be evaluated based on the circumstances and applicable accessibility requirements.
+You do not need to disclose a medical diagnosis to report an accessibility issue or request assistance.
+Reporting an Accessibility Issue
+We welcome feedback about the accessibility of Ivy.
+If you encounter an accessibility barrier, have difficulty using a feature, or would like to request assistance, please contact:
+Email: support@joinivy.ai
+Suggested subject line: Accessibility Assistance
+If possible, please include:
+* The page, feature, or application where you encountered the issue.
+* A brief description of the problem.
+* The device, browser, or operating system you were using.
+* Any assistive technology you were using, if relevant.
+* The information or functionality you were trying to access.
+* Your preferred method of receiving assistance.
+Providing these details is optional but may help us investigate and address the issue more effectively.
+Please do not include passwords, payment card details, medical records, or other unnecessary sensitive personal information in your report.
+We aim to acknowledge accessibility reports within a reasonable period and investigate reported barriers.
+Resolution times may vary depending on the complexity of the issue, available solutions, and whether third-party services or independently managed content are involved.
+Ongoing Accessibility Commitment
+Ivy continues to develop and improve its products and services.
+Our accessibility efforts may include ongoing testing, reviewing user feedback, identifying barriers, improving interface components, and incorporating accessibility considerations into product updates.
+We recognize that accessibility is not a one-time project and that improvements may be necessary as technology, accessibility standards, and user needs evolve.
+We may update this Accessibility Statement periodically to reflect changes to our Service, accessibility practices, known limitations, and applicable requirements.
+Nothing in this statement is intended to limit or waive any rights or protections available under applicable accessibility or disability rights laws.
+Contact Information
+Ivy AI LLC
+California, United States
+Accessibility inquiries and assistance: support@joinivy.ai
+Website: https://joinivy.ai
+Terms of Service: https://joinivy.ai/terms
+Privacy Policy: https://joinivy.ai/privacy

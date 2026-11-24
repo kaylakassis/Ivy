@@ -2,7 +2,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, readSession, isNativeClient } from '../_lib/auth.js';
 import { emailIsSuperAdmin, ensureSuperAdminPromotion } from '../_lib/admin.js';
-import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, hasAcceptedCurrentTerms, hasAcceptedCurrentPrivacy } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, PRIOR_TERMS_VERSIONS, LEGAL_EFFECTIVE_AT, LEGAL_EFFECTIVE_LABEL, inLegalNoticePeriod, hasAcceptedCurrentTerms, hasAcceptedCurrentPrivacy } from '../_lib/legal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 // Can this copy of the app show the current Privacy Policy? The iPhone app
@@ -60,6 +60,10 @@ export default async function handler(req, res) {
     // (a) user predates the column entirely (terms_version is NULL),
     // (b) we bumped the version and they haven't re-accepted yet.
     const needsTermsAcceptance = !hasAcceptedCurrentTerms(user) && clientCanShowCurrentTerms(req);
+    // The notice period: someone who agreed to an earlier version may put
+    // the question off until the new Terms take effect. Someone with no
+    // acceptance on record at all is asked straight away, as before.
+    const canDeferTerms = needsTermsAcceptance && inLegalNoticePeriod() && PRIOR_TERMS_VERSIONS.includes(user.terms_version);
 
     return ok(res, {
       // Surface isSuperAdmin from either path so the frontend knows
@@ -71,6 +75,9 @@ export default async function handler(req, res) {
         acceptedVersion: user.terms_version || null,
         acceptedAt: user.terms_accepted_at || null,
         needsAcceptance: needsTermsAcceptance,
+        canDefer: canDeferTerms,
+        effectiveAt: LEGAL_EFFECTIVE_AT,
+        effectiveLabel: LEGAL_EFFECTIVE_LABEL,
       },
       // Privacy Policy updates are shown as a notice the person
       // acknowledges (src/components/PrivacyUpdateNotice.jsx), not a gate.

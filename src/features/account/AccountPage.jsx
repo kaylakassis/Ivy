@@ -592,9 +592,9 @@ function AutoRenewalDisclosureModal({ onCancel, onConfirm, busy }) {
           Before you continue to Stripe, here's the plain-English version:
         </p>
         <ul style={{ margin: '0 0 18px 18px', padding: 0, fontSize: 13.5, color: 'var(--fg)', lineHeight: 1.65 }}>
-          <li><strong>Auto-renews.</strong> Your card is charged on the same day each billing period (monthly or annual - Stripe's next page shows which).</li>
+          <li><strong>Auto-renews.</strong> Your plan renews by itself and your card is charged at the start of each billing period (every week or every year; Stripe's next page shows which) until you cancel.</li>
           <li><strong>Price.</strong> The amount you'll be charged is shown on Stripe's checkout page. It doesn't change without notice.</li>
-          <li><strong>Cancel anytime.</strong> From <em>Account → Manage subscription</em> here. You keep access through the end of the current billing period; no partial refunds.</li>
+          <li><strong>Cancel anytime.</strong> From <em>Account, then Plan, then Manage subscription</em> here. You keep access through the end of the current billing period; no partial refunds.</li>
           <li><strong>Receipts</strong> are emailed to you after every successful charge.</li>
         </ul>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

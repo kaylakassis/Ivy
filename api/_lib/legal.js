@@ -10,7 +10,21 @@
 // IMPORTANT: have a real attorney review the actual policy text before
 // charging anyone. The text here is best-effort template language, not
 // legal advice.
-export const CURRENT_TERMS_VERSION = '2026-11-19';
+export const CURRENT_TERMS_VERSION = '2026-11-24';
+
+// When the current Terms and Privacy Policy take effect. Both documents
+// promise at least 14 days' notice of a material change, so between the day
+// they are published and this moment a person who already accepted an
+// earlier version is shown the update and may put off answering ("Remind me
+// later"). From this moment on, accepting is required to keep using Ivy.
+// Midnight in California at the start of December 8, 2026.
+export const LEGAL_EFFECTIVE_AT = '2026-12-08T08:00:00Z';
+export const LEGAL_EFFECTIVE_LABEL = 'December 8, 2026';
+
+// True while the notice period for the current documents is still running.
+export function inLegalNoticePeriod(now = Date.now()) {
+  return now < Date.parse(LEGAL_EFFECTIVE_AT);
+}
 
 // Earlier Terms versions still accepted AT SIGN-UP, for the same reason as
 // PRIOR_PRIVACY_VERSIONS below: an iPhone app already in the App Store
@@ -18,7 +32,7 @@ export const CURRENT_TERMS_VERSION = '2026-11-19';
 // people update. We record exactly the version the person accepted. They
 // are asked to accept the current Terms the first time they open a copy of
 // the app (or the website) that can show them (api/auth/me.js).
-export const PRIOR_TERMS_VERSIONS = ['2026-05-05'];
+export const PRIOR_TERMS_VERSIONS = ['2026-11-19', '2026-05-05'];
 
 // The version to record for a sign-up, or null when it is not one we accept.
 export function acceptableTermsVersion(v) {
@@ -33,7 +47,7 @@ export function acceptableTermsVersion(v) {
 // to re-accept on their next request. legal_acceptances stores both
 // (document='terms', document='privacy') so the audit trail can show
 // exactly which version of each they saw.
-export const CURRENT_PRIVACY_VERSION = '2026-11-19';
+export const CURRENT_PRIVACY_VERSION = '2026-11-24';
 
 // Earlier Privacy Policy versions still accepted AT SIGN-UP. The iPhone
 // app ships its own copy of the policy and its version number, so a build
@@ -42,7 +56,7 @@ export const CURRENT_PRIVACY_VERSION = '2026-11-19';
 // an older version sees the in-app "We updated our Privacy Policy" notice
 // (api/auth/me.js privacy.needsAcknowledgement). Drop an entry once the
 // app builds that ship it are no longer in use.
-export const PRIOR_PRIVACY_VERSIONS = ['2026-11-05', '2026-10-31', '2026-05-25'];
+export const PRIOR_PRIVACY_VERSIONS = ['2026-11-19', '2026-11-05', '2026-10-31', '2026-05-25'];
 
 // The version to record for a sign-up, or null when it is not one we accept.
 export function acceptablePrivacyVersion(v) {

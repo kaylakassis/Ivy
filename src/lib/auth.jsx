@@ -311,8 +311,14 @@ export function AuthProvider({ children }) {
   // mustAcceptTerms flag flips off.
   const acceptCurrentTerms = useCallback(async () => {
     await api.post('/me/accept-terms', { version: CURRENT_TERMS_VERSION });
+    // The prompt's checkbox reads "Terms of Service and Privacy Policy" and
+    // links to both, so when both were updated one answer records both,
+    // instead of asking the same person twice in a row.
+    if (privacy?.needsAcknowledgement) {
+      await api.post('/me/accept-terms', { document: 'privacy', version: CURRENT_PRIVACY_VERSION }).catch(() => {});
+    }
     await refresh();
-  }, [refresh]);
+  }, [refresh, privacy?.needsAcknowledgement]);
 
   // Acknowledges the current Privacy Policy after an update notice.
   const acknowledgePrivacy = useCallback(async () => {
@@ -325,6 +331,7 @@ export function AuthProvider({ children }) {
       user, loading, signIn, mfaChallenge, beginMfa, mfaInfo, mfaSendEmailCode, signUp, signOut, refresh, impersonating,
       terms,
       mustAcceptTerms: !!(user && terms?.needsAcceptance),
+      privacyAlsoUpdated: !!(user && terms?.needsAcceptance && privacy?.needsAcknowledgement),
       privacy,
       privacyUpdatePending: !!(user && privacy?.needsAcknowledgement && !terms?.needsAcceptance),
       acknowledgePrivacy,

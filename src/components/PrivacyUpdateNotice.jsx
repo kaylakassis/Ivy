@@ -94,7 +94,7 @@ export default function PrivacyUpdateNotice() {
           You can read it again and accept whenever you're ready. If you'd rather not, you can {leaveOptions} from your account settings.
         </p>
         <p style={{ margin: 0, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-          Questions? Email <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>.
+          Questions? Email <a href="mailto:support@joinivy.ai" style={{ color: 'var(--accent)' }}>support@joinivy.ai</a>.
         </p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-outline" style={{ padding: '10px 16px' }}

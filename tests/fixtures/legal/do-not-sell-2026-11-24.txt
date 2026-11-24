@@ -1,0 +1,130 @@
+Our Commitment to Your Privacy
+Ivy AI LLC ("Ivy," "we," "us," or "our") respects your privacy and your right to control how your personal information is used.
+The California Consumer Privacy Act, as amended by the California Privacy Rights Act (collectively, the "CCPA"), and other applicable state privacy laws provide individuals with certain rights concerning the sale, sharing, and processing of their personal information.
+This page explains our current practices and how you may exercise applicable privacy rights.
+We Do Not Sell or Share Your Personal Information
+Ivy does not sell your personal information.
+We do not:
+* Sell personal information for monetary or other valuable consideration as defined under applicable privacy laws.
+* Share personal information for cross-context behavioral advertising.
+* Process personal information for targeted advertising as defined under applicable state privacy laws.
+* Sell, rent, or trade customer lists, client records, invoices, documents, messages, bookings, or other Customer Data to third parties for their own marketing purposes.
+* Maintain data-broker relationships for the sale of personal information.
+* Operate third-party advertising trackers or session-replay tools as part of our current Service.
+Our business model is based on providing software and subscription services, not selling personal information or monetizing your clients' information through third-party advertising.
+Because we do not currently engage in the sale or sharing of personal information or targeted advertising, there is no such processing activity from which you need to opt out at this time.
+Nevertheless, you may contact us to confirm our practices or exercise applicable privacy rights.
+How We Use and Disclose Information
+Ivy processes personal information to provide, maintain, secure, support, and improve its services, administer accounts and subscriptions, and fulfill other purposes described in our Privacy Policy.
+We may disclose information to service providers and subprocessors that support our operations, including providers of:
+* Application hosting and infrastructure.
+* Database and file storage.
+* Artificial intelligence functionality.
+* Payment processing.
+* Email and SMS communications.
+* Calendar integrations.
+* Subscription management.
+* Security and error monitoring.
+* Other authorized Service functionality.
+Where these providers process personal information on our behalf, their processing is subject to applicable contractual restrictions and legal requirements.
+Certain third-party services, including payment processors, app stores, and connected account providers, may independently process information for their own lawful purposes, such as transaction processing, fraud prevention, security, and regulatory compliance.
+These disclosures are not intended to constitute a sale or sharing of personal information for cross-context behavioral advertising under applicable privacy laws.
+Additional information about our data collection, processing, disclosure, and retention practices is available in our Privacy Policy.
+Your Privacy Rights
+Depending on your jurisdiction and applicable law, you may have the right to:
+* Opt out of the sale of personal information.
+* Opt out of sharing personal information for cross-context behavioral advertising.
+* Opt out of targeted advertising.
+* Opt out of certain profiling activities that produce legal or similarly significant effects.
+* Know what personal information we collect, use, and disclose.
+* Access personal information we maintain about you.
+* Obtain a portable copy of applicable personal information.
+* Request correction of inaccurate personal information.
+* Request deletion of personal information, subject to applicable legal exceptions.
+* Limit certain uses or disclosures of sensitive personal information.
+* Withdraw consent where processing is based on consent.
+* Appeal a decision denying an applicable privacy rights request.
+* Exercise applicable privacy rights without unlawful discrimination or retaliation.
+The availability and scope of these rights depend on applicable law, the nature of the information, and Ivy's role in processing it.
+How to Submit a Privacy Request
+You may submit a privacy rights request by contacting us at:
+Email: support@joinivy.ai
+Suggested subject line: Privacy Rights Request
+Please describe the right you wish to exercise and provide sufficient information for us to identify and respond to your request.
+If you have an Ivy account, submitting your request from the email address associated with your account may help us locate your information.
+However, you do not need to have an Ivy account to submit a privacy request.
+We may request additional information where reasonably necessary to verify your identity or authority, depending on the nature of your request and applicable law.
+We will not require identity verification for opt-out requests where such verification is prohibited by applicable law.
+We will acknowledge and respond to privacy requests within applicable statutory deadlines.
+Where applicable law permits an extension, we will provide notice of the extension and its reason as required.
+We will not charge a fee for exercising applicable privacy rights except where expressly permitted by law.
+Global Privacy Control and Privacy Preference Signals
+Global Privacy Control ("GPC") and other legally recognized privacy preference signals allow individuals to communicate certain privacy preferences through supported browsers or devices.
+Where required by applicable law, Ivy recognizes and honors legally recognized opt-out preference signals for processing activities to which those requirements apply.
+Because Ivy does not currently sell personal information, share personal information for cross-context behavioral advertising, or engage in targeted advertising, these signals generally do not require changes to our current processing practices.
+If our practices change, we will implement applicable opt-out mechanisms and honor legally recognized privacy preference signals as required by law.
+Managing Your Information Through Ivy
+Account holders may access certain privacy and data management features directly through their Ivy account.
+Access and Data Portability
+You may export available workspace information through the data export functionality in Account Settings.
+Workspace exports are provided in JSON format and include applicable business and workspace records maintained on your behalf.
+You may also contact support@joinivy.ai to request access to applicable personal information that is not included in your workspace export.
+Account Deletion
+You may request account deletion through Account Settings or by contacting support@joinivy.ai.
+Account deletion requests are generally completed within 30 days, subject to applicable law and the retention exceptions described in our Privacy Policy.
+Certain information may be retained where reasonably necessary or legally permitted for:
+* Legal and regulatory compliance.
+* Tax and accounting obligations.
+* Fraud and abuse prevention.
+* Security investigations.
+* Dispute resolution.
+* Enforcement of agreements.
+* Backup retention.
+Information retained within backup systems may persist temporarily until removed through ordinary backup rotation.
+Subscriptions purchased directly through Ivy are subject to Ivy's applicable cancellation procedures.
+Subscriptions purchased through Apple or another third-party billing provider may require separate cancellation through that provider's subscription management settings.
+Please review your subscription status to ensure that any applicable recurring charges have been canceled.
+Additional information about account deletion and retention is available in our Privacy Policy and Terms of Service.
+Sensitive Personal Information
+Ivy uses sensitive personal information, where collected, for authorized Service functionality, authentication, security, fraud prevention, and other purposes permitted by applicable law.
+We do not use sensitive personal information to infer characteristics about individuals for unrelated advertising purposes.
+Where applicable law provides a right to limit the use or disclosure of sensitive personal information, you may exercise that right by contacting support@joinivy.ai.
+If You Are a Client of a Business Using Ivy
+Businesses use Ivy to manage appointments, client records, invoices, communications, documents, and other business activities.
+If your personal information is maintained by a business using Ivy, that business generally determines how your information is collected and used.
+In these circumstances, Ivy generally acts as a service provider or data processor on behalf of that business.
+Requests concerning information controlled by a business should ordinarily be directed to that business.
+You may also contact support@joinivy.ai, and we will provide appropriate assistance or refer your request to the relevant business, consistent with applicable law and our contractual obligations.
+Where Ivy independently controls the relevant personal information, we will handle your request directly as required by applicable law.
+Authorized Agents
+Where permitted by applicable law, you may authorize another person or organization to submit a privacy rights request on your behalf.
+We may request reasonable evidence of the authorized agent's authority, such as written permission or a legally valid power of attorney.
+Depending on the type of request and applicable law, we may also ask you to verify your identity or confirm that you authorized the agent to act on your behalf.
+We will not impose verification or authorization requirements that are prohibited by applicable law.
+Authorized agents may submit requests to support@joinivy.ai.
+Appealing a Privacy Rights Decision
+Where applicable law provides a right to appeal, you may appeal a decision denying your privacy rights request by contacting:
+Email: support@joinivy.ai
+Suggested subject line: Privacy Rights Appeal
+Please identify the original request and explain why you believe the decision should be reconsidered.
+We will review and respond to your appeal within applicable statutory deadlines.
+Where required by law, we will provide information about how to contact the relevant governmental authority if your appeal is denied.
+Nondiscrimination and Non-Retaliation
+Ivy will not unlawfully discriminate or retaliate against you for exercising applicable privacy rights.
+We will not impose unlawful penalties, deny services, charge different prices, or provide a different level or quality of service solely because you exercise an applicable privacy right.
+Certain information may be necessary to provide specific Service functionality. If you request deletion or restriction of information necessary for that functionality, we may be unable to continue providing the affected functionality.
+Any such limitation will be based on the operational requirements of the Service and applicable law, rather than retaliation for exercising privacy rights.
+Changes to Our Practices
+We may update this page as our services, data processing practices, and legal obligations evolve.
+If we materially change our practices concerning the sale or sharing of personal information, targeted advertising, or other regulated processing activities, we will provide applicable notices and implement legally required privacy choices before engaging in processing that requires them.
+Where applicable law requires affirmative consent, we will obtain that consent before proceeding with the relevant processing.
+We will also update our Privacy Policy and applicable privacy rights mechanisms as required.
+Contact Us
+For questions about our privacy practices, personal information, or applicable privacy rights, please contact:
+Ivy AI LLC
+California, United States
+Email: support@joinivy.ai
+Website: https://joinivy.ai
+Privacy Policy: https://www.joinivy.ai/privacy
+Terms of Service: https://www.joinivy.ai/terms
+We will review and respond to privacy inquiries in accordance with applicable legal requirements.

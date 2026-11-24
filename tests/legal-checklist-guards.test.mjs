@@ -76,18 +76,18 @@ assert(!/for 60 days|any point in the last 30 days|only happens when the owner e
 // ---- privacy policy ---------------------------------------------------------
 console.log('\n[privacy policy]');
 const policy = src('src/features/legal/PrivacyPage.jsx');
-const named = ['Vercel', 'Neon', 'Resend', 'Stripe', 'Square and PayPal', 'Twilio', 'Apple and RevenueCat', 'Google', 'Sentry', 'OpenStreetMap'];
-assert(named.every((n) => policy.includes(`<strong>${n}</strong>`)) && /AI model provider/.test(policy), 'it lists every outside service the app sends data to');
-assert(!/We do not share data with anyone else, and we do not sell data/.test(policy) && /unless the law\s+requires us to/.test(policy), 'it no longer says data goes to nobody else');
-assert(!/an optional name/.test(policy) && /the country you signed up from/.test(policy), 'it says what sign-up really collects (name required, sign-up country, set-up questions)');
-assert(/If you are a client of a business that uses Ivy/.test(policy) && /Reply STOP/.test(policy), 'it has a section for the clients of businesses that use Ivy');
-assert(/California residents/.test(policy) && /href="\/do-not-sell"/.test(policy), 'it has a California section');
+const named = ['Vercel', 'Neon', 'Resend', 'Artificial intelligence providers', 'Stripe and Stripe Connect', 'Square', 'PayPal', 'Twilio', 'Apple', 'RevenueCat', 'Google', 'Sentry', 'OpenStreetMap-related services'];
+assert(named.every((n) => policy.includes(`<strong>${n}:</strong>`)), 'it lists every outside service the app sends data to');
+assert(!/We do not share data with anyone else, and we do not sell data/.test(policy) && /Respond to valid subpoenas, court orders, or governmental requests\./.test(policy), 'it does not say data goes to nobody else');
+assert(!/an optional name/.test(policy) && /Country and approximate geographic location inferred from your IP address\./.test(policy) && /Information about how you discovered Ivy\./.test(policy), 'it says what sign-up really collects (name, sign-up country, set-up questions)');
+assert(/If You Are a Client of a Business Using Ivy/.test(policy) && /reply STOP/.test(policy), 'it has a section for the clients of businesses that use Ivy');
+assert(/California Privacy Disclosures/.test(policy) && /to="\/do-not-sell"/.test(policy), 'it has a California section');
 assert(!/Anthropic|Claude|OpenAI|GPT/.test(policy), 'it does not name the AI provider');
 const vApi = /CURRENT_PRIVACY_VERSION = '([^']+)'/.exec(src('api/_lib/legal.js'))[1];
 const vWeb = /CURRENT_PRIVACY_VERSION = '([^']+)'/.exec(src('src/lib/legal.js'))[1];
 const vPage = /PRIVACY_VERSION = '([^']+)'/.exec(policy)[1];
 assert(vApi === vWeb && vWeb === vPage && vApi >= '2026-11-19', `the policy version is the same in the server, the app and the page (${vApi})`);
-assert(new RegExp(`PRIOR_PRIVACY_VERSIONS = \\['2026-11-05'`).test(src('api/_lib/legal.js')), 'the previous version is still accepted at sign-up from app builds that carry it');
+assert(new RegExp(`PRIOR_PRIVACY_VERSIONS = \\['2026-11-19', '2026-11-05'`).test(src('api/_lib/legal.js')), 'the previous version is still accepted at sign-up from app builds that carry it');
 assert(/ME_PATH = `\/auth\/me\?pv=\$\{encodeURIComponent\(CURRENT_PRIVACY_VERSION\)\}&tv=\$\{encodeURIComponent\(CURRENT_TERMS_VERSION\)\}`/.test(src('src/lib/auth.jsx')) && /clientCanShowCurrentPrivacy\(req\)/.test(src('api/auth/me.js')) && /clientCanShowCurrentTerms\(req\)/.test(src('api/auth/me.js')),
   'the app tells the server which policy version it carries, so an older iPhone app is never stuck behind a notice it cannot accept');
 
@@ -137,7 +137,7 @@ assert(/sameOrigin && url\.pathname\.startsWith\('\/fonts\/'\)/.test(src('public
 // ---- accessibility statement ----------------------------------------------
 console.log('\n[accessibility statement]');
 const page = src('src/features/legal/AccessibilityPage.jsx');
-assert(/path="\/accessibility"/.test(page) && /support@joinivy\.ai/.test(page) && /What is not finished/.test(page), 'the page says how to report a barrier and what is not finished');
+assert(/path="\/accessibility"/.test(page) && /support@joinivy\.ai/.test(page) && /Reporting an Accessibility Issue/.test(page) && /Known Limitations and Ongoing Improvements/.test(page), 'the page says how to report a barrier and what is not finished');
 assert(!/fully (compliant|accessible|conform)|100%|certified/i.test(page.replace(/\/\/.*$/gm, '')), 'it makes no claim of full conformance');
 assert(!/[–—]/.test(page.replace(/\/\/.*$/gm, '')), 'no dashes in what people read');
 assert(/path="\/accessibility" element=\{<AccessibilityPage \/>\}/.test(src('src/App.jsx')) && /'\/accessibility': AccessibilityPage/.test(src('src/App.jsx')), 'it is a real route and is pre-rendered');
