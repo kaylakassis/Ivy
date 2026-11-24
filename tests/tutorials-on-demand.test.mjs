@@ -90,8 +90,23 @@ assert(/Nothing opens by itself/.test(said('more')), 'More: it says where help i
 console.log('\n[4] the welcome tour can be watched again from the (i)');
 const tourSteps = ['dashboard', 'more'].map((id) => TUTORIALS[id].steps.find((st) => st.cta?.to === '/dashboard?walkthrough=1'));
 assert(tourSteps.every((st) => st && st.cta.label === 'Watch the welcome tour'), 'Home\'s (i) and More\'s (i) each end with "Watch the welcome tour"');
-assert(/const walkthroughRequested = location\.search\.includes\('walkthrough=1'\);/.test(read('src/components/layout/AppShell.jsx')) && /walkthroughOverride === true \|\| walkthroughRequested/.test(read('src/components/layout/AppShell.jsx')), 'that button is what starts the tour; it never starts by itself');
-assert(!/walkthrough=1/.test(read('src/features/onboarding/OnboardingPage.jsx').replace(/\/\/.*$/gm, '')), 'finishing sign-up does not start it either');
+const shellSrc = read('src/components/layout/AppShell.jsx');
+assert(/const walkthroughRequested = location\.search\.includes\('walkthrough=1'\);/.test(shellSrc) && /walkthroughOverride === true \|\| walkthroughRequested/.test(shellSrc), 'that button starts the tour');
+assert(/if \(walkthroughRequested\) setWalkthroughOverride\(\(o\) => \(o === false \? null : o\)\);/.test(shellSrc) && /navigate\(\{ pathname: window\.location\.pathname, search: q\.toString\(\) \}, \{ replace: true \}\)/.test(shellSrc), 'and it works again after the tour was closed earlier in the same visit');
+
+console.log('\n[5] the welcome tour starts once, by itself, for a new owner');
+const due = shellSrc.slice(shellSrc.indexOf('const tourDue ='), shellSrc.indexOf('const showWalkthrough ='));
+assert(/!!ctx\?\.isOwner && !impersonating/.test(due), 'owners only, never while an operator is viewing as them');
+assert(/!ctx\?\.walkthroughCompletedAt/.test(due), 'only while it has never been finished or closed');
+assert(/isRecent\(ctx\?\.owns\?\.onboardedAt, TOUR_AUTO_DAYS\)/.test(due) && /export const TOUR_AUTO_DAYS = 14;/.test(shellSrc), 'only in the first two weeks after set-up (long-standing accounts are not interrupted)');
+assert(/location\.pathname === '\/dashboard'/.test(due), 'it begins on Home, so a link from an email to an invoice or booking is not taken over');
+assert(/if \(tourDue && walkthroughOverride === null && !walled && !answersOpen && subActive\) setWalkthroughOverride\(true\);/.test(due), 'after the paywall and the required questions, never on top of them; closing it once keeps it closed');
+assert(/api\.post\('\/me\/walkthrough', \{ completed: true \}\)/.test(read('src/features/onboarding/Walkthrough.jsx')) && /UPDATE users SET walkthrough_completed_at = NOW\(\)/.test(read('api/me/walkthrough.js')), 'finishing or closing the tour is remembered on the account, so it does not come back on another device');
+const tour = read('src/features/onboarding/Walkthrough.jsx');
+const tourCopy = [...tour.slice(tour.indexOf('const STEPS = ['), tour.indexOf('const FIND_TIMEOUT_MS')).matchAll(/(?:title|body): (?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g)].map((m) => m[1] || m[2]).join(' ');
+assert(tourCopy.length > 300 && !/ - |[\u2013\u2014]|CRM|SMS|Stripe|Instagram|CSV/.test(tourCopy), 'the tour itself is in plain words: no dashes, no jargon, no brand names');
+assert(/watch it again any time from the \(i\)/.test(tourCopy), 'and its first step says how to watch it again');
+assert(/<NativePushPrompt active=\{!walled && !answersOpen && !showWalkthrough && !tourDue && subActive/.test(shellSrc), 'the iPhone notifications question waits until the tour is over');
 assert(/onCtaClick\(step\.cta\.to\)/.test(read('src/components/TutorialOverlay.jsx')), 'the button closes the tutorial and opens the tour');
 assert(/Replay the walkthrough/.test(read('src/features/account/AccountPage.jsx')), 'Account, Profile still has it as well');
 

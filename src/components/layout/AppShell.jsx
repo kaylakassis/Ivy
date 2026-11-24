@@ -7,7 +7,7 @@
 // the Paywall (which gates the business app when the workspace's
 // subscription isn't active) can read /api/me from a single round-trip.
 import React, { useEffect, useRef, useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../../lib/monitoring.js';
 import { tryStaleChunkRecovery } from '../../lib/staleChunk.js';
 import Sidebar from './Sidebar.jsx';
@@ -59,9 +59,19 @@ export default function AppShell() {
   );
 }
 
+// How long after finishing set-up a new owner is still offered the welcome
+// tour automatically (once). Older accounts open it from the (i) instead.
+export const TOUR_AUTO_DAYS = 14;
+function isRecent(ts, days) {
+  if (!ts) return false;
+  const t = new Date(ts).getTime();
+  return Number.isFinite(t) && Date.now() - t < days * 86400e3 && Date.now() - t > -86400e3;
+}
+
 function AppShellInner() {
   const [tweaks] = useTweaks();
   const location = useLocation();
+  const navigate = useNavigate();
   const viewport = useViewport();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [walkthroughOverride, setWalkthroughOverride] = useState(null);
@@ -144,6 +154,11 @@ function AppShellInner() {
   // ?walkthrough=1 into the URL to override the dismissed state without
   // a full DB refetch round-trip.
   const walkthroughRequested = location.search.includes('walkthrough=1');
+  // Asking for the tour again after closing it once in the same visit: each
+  // new request (the (i) button, Account's replay) clears the "closed" flag.
+  useEffect(() => {
+    if (walkthroughRequested) setWalkthroughOverride((o) => (o === false ? null : o));
+  }, [walkthroughRequested, location.key]);
   // Tight gate: don't auto-launch the walkthrough until we KNOW the
   // workspace is active. Without the explicit isActive check, a brief
   // window while ctx is still loading (or a stale ?walkthrough=1 in the
@@ -151,10 +166,24 @@ function AppShellInner() {
   // on TOP of the paywall, blocking the user from starting their trial.
   // The walkthrough naturally fires the moment they activate.
   const subActive = ctx?.subscription?.isActive === true;
-  // Opt-in only: the 12-step spotlight tour no longer auto-launches after
-  // onboarding (it stacked on top of the new Ivy-led first run and overwhelmed
-  // new users). It fires only on an explicit request — AccountPage's "Replay
-  // tour" button (?walkthrough=1) or a programmatic override.
+  // The welcome tour starts by itself ONCE for a new owner, the first time
+  // they reach Home after set-up, so nobody is dropped into the app with no
+  // direction. "New" means set-up finished in the last TOUR_AUTO_DAYS days
+  // and the tour never finished or closed (closing it stamps
+  // walkthroughCompletedAt, so it does not come back). Never while an
+  // operator is viewing as the owner. It only begins on Home, so a link
+  // from an email to an invoice or a booking is not hijacked; once begun it
+  // is latched (walkthroughOverride) because the tour itself moves between
+  // screens. Anyone can watch it again from the (i) on Home or More, or from
+  // Account (?walkthrough=1). The paywall and the required-answers sheet
+  // still come first, and the iPhone notifications sheet waits for it.
+  const tourDue = !!ctx?.isOwner && !impersonating
+    && !ctx?.walkthroughCompletedAt
+    && isRecent(ctx?.owns?.onboardedAt, TOUR_AUTO_DAYS)
+    && location.pathname === '/dashboard';
+  useEffect(() => {
+    if (tourDue && walkthroughOverride === null && !walled && !answersOpen && subActive) setWalkthroughOverride(true);
+  }, [tourDue, walkthroughOverride, walled, answersOpen, subActive]);
   const showWalkthrough = !walled
     && !answersOpen
     && subActive
@@ -315,10 +344,12 @@ function AppShellInner() {
           setWalkthroughOverride(false);
           // Strip ?walkthrough=1 from the URL so a refresh doesn't
           // re-open the tour after the user dismissed it.
+          // (Through the router, so the app itself knows the flag is gone
+          // and a later "Watch the welcome tour" counts as a new request.)
           if (walkthroughRequested) {
-            const u = new URL(window.location.href);
-            u.searchParams.delete('walkthrough');
-            window.history.replaceState({}, '', u.pathname + (u.search ? u.search : ''));
+            const q = new URLSearchParams(window.location.search);
+            q.delete('walkthrough');
+            navigate({ pathname: window.location.pathname, search: q.toString() }, { replace: true });
           }
           refresh();
         }}/>
@@ -342,7 +373,7 @@ function AppShellInner() {
       {!walled && !answersOpen && <TutorialOverlay/>}
       {/* iOS: ask to turn on notifications once the owner is through the
           paywall and onboarding. Web asks via the dashboard card instead. */}
-      <NativePushPrompt active={!walled && !answersOpen && subActive && !!ctx?.owns?.onboardedAt}/>
+      <NativePushPrompt active={!walled && !answersOpen && !showWalkthrough && !tourDue && subActive && !!ctx?.owns?.onboardedAt}/>
       {!walled && !answersOpen && <ReviewPrompt/>}
     </div>
   );

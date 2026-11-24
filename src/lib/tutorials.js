@@ -22,8 +22,9 @@
 // checks the button names against the screens).
 
 // Opens the welcome tour (the spotlight walk through the main screens,
-// src/features/onboarding/Walkthrough.jsx). The tour never starts by itself;
-// it is offered from Home's and More's (i), and from Account, Profile.
+// src/features/onboarding/Walkthrough.jsx). It starts by itself once for a
+// new owner (AppShell); this is how anyone watches it again: from Home's
+// and More's (i), and from Account, Profile.
 export const WELCOME_TOUR = '/dashboard?walkthrough=1';
 
 export const TUTORIALS = {

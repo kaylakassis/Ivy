@@ -29,7 +29,7 @@ const STEPS = [
   {
     id: 'welcome',
     title: 'Welcome to Ivy',
-    body: "This is your all-in-one business platform - every booking, client, invoice, and document in one place, with Ivy handling the busywork. The tour takes about a minute. You can replay it any time from your Account page.",
+    body: "Ivy keeps your bookings, clients, invoices and documents in one place and handles the busywork. This tour takes about a minute. You can watch it again any time from the (i) next to Home's title.",
   },
   {
     id: 'dashboard',
@@ -42,7 +42,7 @@ const STEPS = [
   {
     id: 'calendar',
     title: 'Calendar',
-    body: "Set your weekly availability and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS reminders. Your services live under Money, in the Services section.",
+    body: "Set the hours you work and share your booking link. When someone books, they are added to your clients and get a confirmation. What you offer lives under Money, in What I sell, Services.",
     route: '/calendar',
     selector: '[data-tour="nav-calendar"]',
     placement: 'right',
@@ -50,23 +50,23 @@ const STEPS = [
   {
     id: 'calendar-share',
     title: 'Your booking link',
-    body: "Drop this in your Instagram bio, your email signature, anywhere a client might see it. They book in two taps; you don't trade texts to find a slot.",
+    body: "Put this in your bio, your email signature, anywhere a client might see it. They pick a time themselves, so you do not trade messages to find one.",
     route: '/calendar',
     selector: '[data-tour="calendar-share"]',
     placement: 'bottom',
   },
   {
     id: 'clients',
-    title: 'Clients - your CRM',
-    body: "Tag clients, take notes, track lifetime value, sell packages, manage SMS consent. Bulk-import from CSV or let them onboard themselves through your booking link.",
+    title: 'Clients',
+    body: "Everyone you work with, with their notes, tags and visits. Add people one at a time or import a list. Rewards and the reminders Ivy sends your clients are here too.",
     route: '/clients',
     selector: '[data-tour="nav-clients"]',
     placement: 'right',
   },
   {
     id: 'finance',
-    title: 'Money - invoices + Stripe',
-    body: "Send invoices, accept card payments through your own Stripe account, refund (full or partial), and export your year's income at tax time.",
+    title: 'Money',
+    body: "Money opens on who owes you. Send an invoice in a few taps, and connect a payment processor under Settings to be paid by card.",
     route: '/finance',
     selector: '[data-tour="nav-finance"]',
     placement: 'right',

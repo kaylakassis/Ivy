@@ -3,8 +3,9 @@
 // Owners (or anyone) can dismiss the in-app walkthrough or replay it
 // from the Account page. Two flags:
 //   completed: true  → stamp walkthrough_completed_at = NOW()
-//   reset: true      → null it back out so AppShell auto-shows on next
-//                       render
+//   reset: true      → null it back out (Account's replay button)
+// AppShell starts the tour by itself once for a new owner while this is
+// empty; closing or finishing the tour stamps it, so it does not return.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
