@@ -72,6 +72,11 @@ export const CRITICAL_EMAIL_TYPES = new Set([
   'account_deletion',
   'security_alert',   // new-device sign-in, password change, 2FA on/off
   'receipts',         // receipts, refunds and the invoice itself
+  // Notices about a charge to the owner's own card for Ivy: the purchase
+  // acknowledgment, the renewal reminder, and the reminders that a free
+  // trial with a card on file is about to become a paid plan. The Terms
+  // promise these, so the "Subscription billing" switch does not cover them.
+  'billing_notice',
 ]);
 
 // Read users.notification_prefs, return true if the `email_<type>` key

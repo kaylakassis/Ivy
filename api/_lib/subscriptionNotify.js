@@ -21,6 +21,7 @@ import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 import { workspaceTimeZone } from './calendar.js';
 import { notifyOwnerSafe } from './push.js';
+import { platformStripeSecret, fetchSubscription } from './stripe.js';
 
 const PLAN_NAME = 'Ivy';
 
@@ -50,7 +51,8 @@ function firstName(name) {
 
 async function loadOwner(workspaceId) {
   const { rows } = await sql`
-    SELECT w.owner_id, u.email, u.name, cs.biz_name
+    SELECT w.owner_id, u.email, u.name, cs.biz_name,
+           w.subscription_source, w.stripe_subscription_id, w.cancel_at_period_end
     FROM workspaces w
     LEFT JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
     LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
@@ -60,6 +62,75 @@ async function loadOwner(workspaceId) {
 }
 
 function billingUrl() { return `${appUrl()}/account?tab=billing`; }
+
+// How to cancel, in the same words everywhere.
+const HOW_TO_CANCEL = 'open Ivy, go to Account, then Plan, then Manage subscription';
+const HOW_TO_CANCEL_APPLE = 'open Settings on your iPhone, tap your name, then Subscriptions, then Ivy';
+const everyLabel = (interval) => (interval === 'year' ? 'every year' : interval === 'week' ? 'every week' : interval === 'month' ? 'every month' : null);
+
+// Is this trial one that turns into a paid plan by itself? A trial started
+// through checkout has a card on file (Stripe) or is an App Store
+// introductory offer (Apple): when it ends, the card is charged unless the
+// owner cancels first. A trial with no card simply ends at the paywall.
+// Returns null for a no-card trial, otherwise what the reminder needs to
+// say. Never throws: if Stripe cannot be asked, the amount is left out and
+// the email still says a charge is coming.
+export async function trialCharge(o) {
+  if (!o) return null;
+  if (o.subscription_source === 'apple') return { via: 'apple', cancelled: !!o.cancel_at_period_end, amountCents: null, currency: 'usd', interval: null };
+  if (!o.stripe_subscription_id) return null;
+  const out = { via: 'stripe', cancelled: !!o.cancel_at_period_end, amountCents: null, currency: 'usd', interval: null };
+  try {
+    const secretKey = platformStripeSecret();
+    if (!secretKey) return out;
+    const sub = await fetchSubscription({ secretKey, subscriptionId: o.stripe_subscription_id });
+    const price = sub?.items?.data?.[0]?.price;
+    out.amountCents = price?.unit_amount ?? null;
+    out.currency = price?.currency || 'usd';
+    out.interval = price?.recurring?.interval || null;
+    if (sub?.cancel_at_period_end != null) out.cancelled = !!sub.cancel_at_period_end;
+  } catch { /* amount left out */ }
+  return out;
+}
+
+// The reminder for a trial with a card on file. It says plainly that a
+// charge is coming, how much, how often, and how to stop it.
+function renderCardTrialReminder({ stage, endDate, fn, biz, charge }) {
+  const when = stage === '7d' ? 'in 7 days' : stage === '2d' ? 'in 2 days' : 'tomorrow';
+  const apple = charge.via === 'apple';
+  const amount = charge.amountCents != null ? fmtMoneyCents(charge.amountCents, charge.currency) : '';
+  const every = everyLabel(charge.interval);
+  const how = apple ? HOW_TO_CANCEL_APPLE : HOW_TO_CANCEL;
+  if (charge.cancelled) {
+    return {
+      subject: `Your Ivy free trial ends ${when}`,
+      preheader: 'You turned renewal off, so you will not be charged.',
+      heading: `Your free trial ends ${when}`,
+      body: `<p>Hi ${fn},</p>
+      <p>Your free trial of Ivy for <strong>${biz}</strong> ends on <strong>${endDate}</strong>.</p>
+      <p>You turned renewal off, so <strong>you will not be charged</strong>. Your business tools switch off when the trial ends.</p>
+      <p>Changed your mind? You can keep your plan any time before then.</p>`,
+      ctaText: 'Open my plan →',
+    };
+  }
+  const chargeLine = apple
+    ? `On that day <strong>Apple will charge your Apple ID</strong> for the plan you chose, and the plan then renews by itself until you cancel.`
+    : `On that day <strong>your card will be charged${amount ? ` ${amount}` : ''}</strong>${amount ? ' (before any discount or tax)' : ''}, and your plan then renews by itself${every ? ` ${every}` : ''} until you cancel.`;
+  const stopLine = apple
+    ? `If Ivy is not for you, cancel at least a day before <strong>${endDate}</strong> and you will not be charged. To cancel, ${how}.`
+    : `If Ivy is not for you, cancel before <strong>${endDate}</strong> and you will not be charged. To cancel, ${how}.`;
+  return {
+    subject: `Your Ivy free trial ends ${when}${amount && !apple ? `: ${amount} will be charged` : ''}`,
+    preheader: `Your ${apple ? 'Apple ID' : 'card'} is charged on ${endDate} unless you cancel first.`,
+    heading: `Your free trial ends ${when}`,
+    body: `<p>Hi ${fn},</p>
+      <p>Your free trial of Ivy for <strong>${biz}</strong> ends on <strong>${endDate}</strong>.</p>
+      <p>${chargeLine}</p>
+      <p>If you want to keep going, there is nothing to do.</p>
+      <p>${stopLine}</p>`,
+    ctaText: 'Open my plan →',
+  };
+}
 function dashboardUrl() { return `${appUrl()}/`; }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -69,11 +140,25 @@ function dashboardUrl() { return `${appUrl()}/`; }
 // Pure renderer. Both the notify path and the admin preview endpoint
 // call this — the preview an operator sees is byte-identical to the
 // production send.
-export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, businessName, exitUrl = null }) {
+export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, businessName, exitUrl = null, charge = null }) {
   const fnPlain = fnRaw || 'there';
   const fn = escapeHtml(fnPlain);
   const biz = escapeHtml(businessName || 'your business');
   const endDate = fmtDate(trialEndsAt);
+
+  // A trial with a card on file becomes a paid plan by itself, so its
+  // reminders are about the charge. It has no "your trial has ended" email:
+  // the trial ending is the plan starting.
+  if (charge) {
+    if (!['7d', '2d', '1d'].includes(stage)) return null;
+    const c = renderCardTrialReminder({ stage, endDate, fn, biz, charge });
+    const html = emailShell({
+      heading: c.heading, body: c.body, preheader: c.preheader,
+      ctaText: c.ctaText, ctaUrl: billingUrl(),
+      footer: 'The Ivy Team',
+    });
+    return { subject: c.subject, html, preheader: c.preheader };
+  }
 
   let subject, preheader, heading, body, ctaText;
   if (stage === '7d') {
@@ -145,7 +230,14 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
 // Short push copy per stage, so a trialing owner who lives in the installed PWA
 // and ignores email still gets the heads-up before their tools switch off.
 // Returns null for a stage with no email (keeps push + email in lockstep).
-function trialPushPayload(stage) {
+function trialPushPayload(stage, charge = null) {
+  if (charge) {
+    const when = { '7d': 'in 7 days', '2d': 'in 2 days', '1d': 'tomorrow' }[stage];
+    if (!when) return null;
+    return charge.cancelled
+      ? { title: `Your free trial ends ${when}`, body: 'You turned renewal off, so you will not be charged.' }
+      : { title: `Your free trial ends ${when}`, body: `Your ${charge.via === 'apple' ? 'Apple ID' : 'card'} is charged when it ends unless you cancel first. See Account, Plan.` };
+  }
   const map = {
     '7d': { title: '7 days left on your trial', body: 'Lock in your plan before the trial ends and keep everything running.' },
     '2d': { title: 'Your trial ends in 2 days', body: 'A couple of days left. Pick a plan to keep your business tools on. No surprise charges.' },
@@ -165,22 +257,26 @@ export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt, ret
   try {
     const o = await loadOwner(workspaceId);
     if (!o?.email) return { ok: true, sent: false, reason: 'no-owner-email' };
+    const charge = await trialCharge(o);
     const rendered = renderTrialReminder({
       stage, trialEndsAt,
       firstName: firstName(o.name), businessName: o.biz_name,
       // Only the "your trial has ended" email asks what stopped them.
       exitUrl: stage === 'expired' ? exitLink(workspaceId, appUrl()) : null,
+      charge,
     });
     if (!rendered) return { ok: true, sent: false, reason: 'nothing-to-send' };
     const mail = await sendEmailToUser({
-      userId: o.owner_id, type: 'billing',
+      // A reminder that a card is about to be charged always sends; the
+      // nudges for a trial with no card stay under the owner's switch.
+      userId: o.owner_id, type: charge ? 'billing_notice' : 'billing',
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
     if (retryable && mail?.ok === false) return mail;
     // Push + bell alongside the email (mirrors subscription-dunning's billing
     // push, type 'payments' so it rides the owner's payments opt-out). Deep-links
     // to billing so one tap goes straight to picking a plan.
-    const push = trialPushPayload(stage);
+    const push = trialPushPayload(stage, charge);
     if (push) {
       await notifyOwnerSafe({
         workspaceId, type: 'payments',
@@ -270,19 +366,43 @@ export async function notifyDormantOwner({ workspaceId, retryable = false }) {
 // Subscription confirmed (first paid)
 // ─────────────────────────────────────────────────────────────────────
 
-export function renderSubscriptionStarted({ periodEnd, amountCents, currency, firstName: fnRaw, businessName }) {
+// `amountCents` is the plan's price; `paidCents` is what was actually charged
+// at checkout (after any discount), when something was. `trialEnd` set means
+// a free trial just started and nothing has been charged yet. The email is
+// also the written record of what was agreed: the price, that it renews by
+// itself, how often, and how to cancel.
+export function renderSubscriptionStarted({ periodEnd, amountCents, paidCents = null, currency, interval = null, trialEnd = null, firstName: fnRaw, businessName }) {
   const fn = escapeHtml(fnRaw || 'there');
   const biz = escapeHtml(businessName || 'your business');
   const amount = amountCents != null ? fmtMoneyCents(amountCents, currency) : '';
-  const renewLine = periodEnd
-    ? `<p>Your next bill is on <strong>${fmtDate(periodEnd)}</strong>${amount ? ` for <strong>${amount}</strong>` : ''}.</p>`
-    : '';
+  const paid = paidCents != null ? fmtMoneyCents(paidCents, currency) : amount;
+  const every = everyLabel(interval);
+  const cancelLine = `<p>To cancel, ${HOW_TO_CANCEL}. You keep access to the end of the period you have paid for.</p>`;
+  if (trialEnd) {
+    const end = fmtDate(trialEnd);
+    const preheader = `Nothing has been charged. Your card is charged on ${end} unless you cancel first.`;
+    const html = emailShell({
+      heading: 'Your free trial has started',
+      preheader,
+      body: `<p>Hi ${fn},</p>
+      <p>Your free trial of <strong>${PLAN_NAME}</strong> for <strong>${biz}</strong> has started. <strong>Nothing has been charged.</strong></p>
+      <p>The trial ends on <strong>${end}</strong>. On that day your card will be charged${amount ? ` <strong>${amount}</strong> (before any discount or tax)` : ''}, and your plan then renews by itself${every ? ` ${every}` : ''} until you cancel.</p>
+      <p>If Ivy is not for you, cancel before <strong>${end}</strong> and you will not be charged. To cancel, ${HOW_TO_CANCEL}.</p>
+      <p>We will remind you by email before the trial ends.</p>
+      <p>Need anything? Reply to this email. A real person reads it.</p>`,
+      ctaText: 'Open my dashboard →',
+      ctaUrl: dashboardUrl(),
+      footer: `The Ivy Team`,
+    });
+    return { subject: 'Your Ivy free trial has started', html, preheader };
+  }
+  const renewLine = `<p>Your plan renews by itself${every ? ` ${every}` : ''}${amount ? ` at <strong>${amount}</strong> (before any discount or tax)` : ''} until you cancel.${periodEnd ? ` Your next bill is on <strong>${fmtDate(periodEnd)}</strong>.` : ''}</p>${cancelLine}`;
   const preheader = `Here's how to get the most out of it this week.`;
   const html = emailShell({
     heading: `You're in. Welcome to ${PLAN_NAME}`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>You're officially on <strong>${PLAN_NAME}</strong>. Thanks for trusting Ivy to run <strong>${biz}</strong>${amount ? `. Here's your receipt for <strong>${amount}</strong>` : ''}, and you're all set.</p>
+      <p>You're officially on <strong>${PLAN_NAME}</strong>. Thanks for trusting Ivy to run <strong>${biz}</strong>${paid ? `. Your payment of <strong>${paid}</strong> went through` : ''}, and you're all set.</p>
       ${renewLine}
       <p>If you want a fast win this week, start here:</p>
       <ol style="padding-left:20px;margin:14px 0;">
@@ -298,16 +418,17 @@ export function renderSubscriptionStarted({ periodEnd, amountCents, currency, fi
   return { subject: `You're in. Welcome to ${PLAN_NAME}`, html, preheader };
 }
 
-export async function notifySubscriptionStarted({ workspaceId, periodEnd, amountCents, currency }) {
+export async function notifySubscriptionStarted({ workspaceId, periodEnd, amountCents, paidCents = null, currency, interval = null, trialEnd = null }) {
   try {
     const o = await loadOwner(workspaceId);
     if (!o?.email) return;
     const rendered = renderSubscriptionStarted({
-      periodEnd, amountCents, currency,
+      periodEnd, amountCents, paidCents, currency, interval, trialEnd,
       firstName: firstName(o.name), businessName: o.biz_name,
     });
     await sendEmailToUser({
-      userId: o.owner_id, type: 'billing',
+      // The written acknowledgment of the purchase: always sent.
+      userId: o.owner_id, type: 'billing_notice',
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
   } catch (err) {
@@ -419,7 +540,7 @@ export function renderUpcomingRenewal({ periodEnd, amountCents, currency, firstN
     body: `<p>Hi ${fn},</p>
       <p>A friendly heads-up: your <strong>${PLAN_NAME}</strong> plan renews on <strong>${renewDate}</strong>${amount ? ` for <strong>${amount}</strong>` : ''}, billed to your card on file. No action needed. This is just so there are no surprises.</p>
       <p>Since your last renewal, <strong>${biz}</strong> has kept its bookings, clients, Ivy automations, and reporting running without a break, and it'll keep going.</p>
-      <p>Need to update your card or change plans? You can do it anytime.</p>`,
+      <p>Your plan renews by itself until you cancel. Need to update your card, change plans or cancel? To do any of these, ${HOW_TO_CANCEL}.</p>`,
     ctaText: 'Manage subscription',
     ctaUrl: billingUrl(),
     footer: `The Ivy Team`,
@@ -436,7 +557,7 @@ export async function notifyUpcomingRenewal({ workspaceId, periodEnd, amountCent
       firstName: firstName(o.name), businessName: o.biz_name,
     });
     await sendEmailToUser({
-      userId: o.owner_id, type: 'billing',
+      userId: o.owner_id, type: 'billing_notice',
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
   } catch (err) {

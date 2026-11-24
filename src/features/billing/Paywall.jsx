@@ -228,7 +228,7 @@ export default function Paywall({ ctx, onRefresh }) {
       // winback is a monthly-only offer (checkout.js scopes the coupon to
       // monthly), so the toggle is hidden while it's showing - `plan`
       // stays 'monthly' in that case.
-      const r = await api.post('/billing/checkout', { plan });
+      const r = await api.post('/billing/checkout', { plan, shown: 'paywall' });
       // Fallback path: Stripe isn't configured yet on the server, so
       // checkout.js granted a no-card trial instead of returning a Stripe
       // URL. Refresh the context so the paywall closes and the user lands
@@ -584,6 +584,10 @@ export default function Paywall({ ctx, onRefresh }) {
                   {isNative() && isIos() ? ' your Apple ID subscriptions' : ' Account'}. By subscribing you agree to the{' '}
                   <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Terms of Use</a> and{' '}
                   <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Privacy Policy</a>.
+                  {/* A free trial with a card: say the day the card is charged. */}
+                  {canTrial && !winback && !(isNative() && isIos()) && (
+                    <span data-first-charge>{' '}Your card is charged on {new Date(Date.now() + TRIAL_DAYS * 864e5).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })} unless you cancel before then.</span>
+                  )}
                   {!(isNative() && isIos()) && ' Have a promo code? You can enter it on the checkout page.'}
                 </div>
               </div>

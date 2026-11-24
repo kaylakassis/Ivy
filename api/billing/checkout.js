@@ -30,6 +30,7 @@ import {
 } from '../_lib/billingGuard.js';
 import { enforce } from '../_lib/rate-limit.js';
 import { appUrl } from '../_lib/tokens.js';
+import { recordRenewalConsent } from '../_lib/renewalConsent.js';
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -245,6 +246,10 @@ export default async function handler(req, res) {
       // Only one checkout per workspace may stay payable.
       await expireCheckoutSession({ secretKey, sessionId: replaced }).catch(() => {});
     }
+
+    // Keep our own record that this person asked for a plan that renews by
+    // itself, from a screen that said so. Never blocks the checkout.
+    await recordRenewalConsent({ userId: user.id, req, plan, trialDays, shown: body?.shown });
 
     return ok(res, { url: session.url });
   } catch (err) {

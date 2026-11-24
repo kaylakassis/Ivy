@@ -180,11 +180,16 @@ async function onCheckoutCompleted(session, secretKey) {
   if (isTrialing || PAYING_STATUSES.has(status)) await recordTrialClaimForWorkspace(workspaceId, 'stripe');
 
   // Fire-and-forget welcome email to the owner.
+  // A trial start charges nothing, so it is told as a trial start (with the
+  // date the card will be charged), never as a receipt.
   notifySubscriptionStarted({
     workspaceId,
     periodEnd,
     amountCents: sub?.items?.data?.[0]?.price?.unit_amount,
+    paidCents:   isTrialing ? null : (typeof session.amount_total === 'number' ? session.amount_total : null),
     currency:    sub?.items?.data?.[0]?.price?.currency || 'usd',
+    interval:    sub?.items?.data?.[0]?.price?.recurring?.interval || null,
+    trialEnd:    isTrialing ? trialEnd : null,
   });
   // Bust the ownsWorkspace hot-cache so the next /api/me sees the
   // newly-active subscription instead of a pre-checkout snapshot.

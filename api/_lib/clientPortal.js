@@ -147,7 +147,7 @@ async function ownsWorkspaceFromDb(userId) {
       SELECT w.id, w.onboarded_at, w.business_type,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until, w.risk_hold_at,
              w.subscription_source, w.cancel_at_period_end, w.data_deletion_at,
-             w.stripe_customer_id,
+             w.stripe_customer_id, w.stripe_subscription_id,
              cs.biz_name, cs.slug
       FROM workspaces w
       LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
@@ -270,6 +270,10 @@ function deriveSubscription(row) {
     // owner has already turned auto-renew off (access runs to periodEndsAt).
     source: row.subscription_source || null,
     cancelAtPeriodEnd: !!row.cancel_at_period_end,
+    // A trial started through checkout (card on file) or the App Store: when
+    // it ends the card is charged, unless renewal was turned off. The app
+    // says so instead of asking the owner to "subscribe".
+    trialHasCard: trialActive ? !!(row.stripe_subscription_id || row.subscription_source === 'apple') : false,
     // Set once a paid subscription has lapsed: the date the workspace's
     // data is permanently deleted unless the owner resubscribes first.
     dataDeletionAt: (!isActive && row.data_deletion_at) ? row.data_deletion_at : null,

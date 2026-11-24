@@ -64,8 +64,13 @@ const STAGES = [
     stage: 'expired',
     stampCol: 'trial_expired_notice_sent_at',
     // Lower-bounded so rollout doesn't notify ancient lapsed trials.
+    // Only a trial with no card on file "ends": one started through checkout
+    // (Stripe) or the App Store becomes a paid plan at that moment, and must
+    // never be told its tools were switched off.
     window: `w.trial_ends_at <= NOW()
-             AND w.trial_ends_at > NOW() - INTERVAL '3 days'`,
+             AND w.trial_ends_at > NOW() - INTERVAL '3 days'
+             AND w.stripe_subscription_id IS NULL
+             AND COALESCE(w.subscription_source, '') <> 'apple'`,
   },
 ];
 

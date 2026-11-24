@@ -164,8 +164,8 @@ async function main() {
   const helper = read('api/helper/accept.js');
   assert(/acceptableTermsVersion\(body\.acceptedTermsVersion\)/.test(helper), 'a helper accepting an invite from an older app is handled the same way');
   const account = read('src/features/account/AccountPage.jsx');
-  assert(/every week or every year/.test(account) && !/monthly or annual/.test(account) && /until you cancel/.test(account) && /Account, then Plan, then Manage subscription/.test(account),
-    'the checkout confirmation describes renewal the way the Terms do: weekly or yearly, until cancelled, and where to cancel');
+  assert(/every week/.test(account) && !/monthly or annual/.test(account) && /until you cancel/.test(account) && /Account, then Plan, then Manage subscription/.test(account),
+    'the checkout confirmation describes renewal the way the Terms do: its period, until cancelled, and where to cancel');
 
   console.log('\n[5] reviewers on public pages');
   assert(publicReviewerName('Jane Doe') === 'Jane D.' && publicReviewerName('Mary Ann O\'Neil') === 'Mary O.' && publicReviewerName('José García-López') === 'José G.', 'first name and last initial');

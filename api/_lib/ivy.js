@@ -1291,7 +1291,7 @@ Account has four pages across the top: "Profile", "Plan", "Preferences" and "Sec
 - Hide a menu item you never use: Account → "Preferences" → "Navigation" card.
 - 2-step verification and sign-in security: Account → "Security & data".
 - Report a bug (beta): avatar menu → "Report a bug".
-- Export all your data: Account → "Security & data" → "Export everything" card.
+- Export your data: Account → "Security & data" → "Export your data" card.
 - Delete your account: Account → "Security & data" → "Danger zone" card → "Delete account".`;
 
 // Tool-use loop. Sends messages → if Claude returns tool_use blocks,

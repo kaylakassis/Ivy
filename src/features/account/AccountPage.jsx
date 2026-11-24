@@ -22,7 +22,7 @@ import { BlockedCard, ReportsCard, ownerModeration } from '../../components/Mode
 import { hideableNav } from '../../lib/nav.js';
 import ExitInterviewForm from '../../components/ExitInterviewForm.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
-import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { TRIAL_DAYS, IVY_PRICE } from '../../lib/pricing.js';
 import { FLAGS } from '../../lib/featureFlags.js';
 import {
   pushSupported, permissionState, getSubscription,
@@ -197,11 +197,13 @@ export default function AccountPage() {
       {/* Export */}
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 8 }}>Your data</div>
-        <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Export everything</h3>
+        <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Export your data</h3>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Download a single JSON file with every row tied to your workspace -
-          clients, invoices, messages, documents, calendar, goals, rewards,
-          and Ivy chats. Yours to keep, search, or import elsewhere.
+          Download a single JSON file with your workspace records: clients,
+          services, calendar and bookings, invoices, messages, documents,
+          goals, rewards, your website and Ivy chats. Yours to keep, search,
+          or import elsewhere. Files you uploaded are not inside it.
+          Need something that is not in the file? Email support@joinivy.ai.
         </p>
         {exportErr && (
           <div style={{
@@ -592,8 +594,9 @@ function AutoRenewalDisclosureModal({ onCancel, onConfirm, busy }) {
           Before you continue to Stripe, here's the plain-English version:
         </p>
         <ul style={{ margin: '0 0 18px 18px', padding: 0, fontSize: 13.5, color: 'var(--fg)', lineHeight: 1.65 }}>
-          <li><strong>Auto-renews.</strong> Your plan renews by itself and your card is charged at the start of each billing period (every week or every year; Stripe's next page shows which) until you cancel.</li>
-          <li><strong>Price.</strong> The amount you'll be charged is shown on Stripe's checkout page. It doesn't change without notice.</li>
+          <li><strong>Auto-renews.</strong> Ivy Weekly is ${IVY_PRICE} every week. Your plan renews by itself and your card is charged at the start of each week until you cancel.</li>
+          <li><strong>Free trial.</strong> If you have not had one yet, Stripe's next page shows your {TRIAL_DAYS} free days and the date of your first charge. Cancel before that date and you are not charged.</li>
+          <li><strong>Price.</strong> The exact amount, with any discount or tax, is shown on Stripe's checkout page. It doesn't change without notice.</li>
           <li><strong>Cancel anytime.</strong> From <em>Account, then Plan, then Manage subscription</em> here. You keep access through the end of the current billing period; no partial refunds.</li>
           <li><strong>Receipts</strong> are emailed to you after every successful charge.</li>
         </ul>
@@ -665,7 +668,7 @@ function SubscriptionCard() {
   const confirmSubscribe = async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await api.post('/billing/checkout', {});
+      const r = await api.post('/billing/checkout', { shown: 'account-confirm' });
       if (!r.url) throw new Error('No checkout URL returned');
       window.location.href = r.url;
     } catch (e) {
@@ -727,6 +730,12 @@ function SubscriptionCard() {
           ? 'Open the Stripe billing portal to update your card, view past invoices, or cancel.'
         : sub.status === 'past_due'
           ? "Stripe couldn't charge your card. Open the billing portal to update it - your access will resume automatically once the next attempt succeeds."
+        : sub.status === 'trialing' && sub.trialHasCard && sub.cancelAtPeriodEnd
+          ? 'You are on the free trial and renewal is off, so you will not be charged. Your business tools switch off when the trial ends.'
+        : sub.status === 'trialing' && sub.trialHasCard
+          ? (sub.source === 'apple'
+              ? `You are on the free trial. When it ends${sub.trialEndsAt ? ` on ${new Date(sub.trialEndsAt).toLocaleDateString()}` : ''}, Apple charges your Apple ID and the plan renews by itself until you cancel. To avoid the charge, cancel at least a day before in the App Store.`
+              : `You are on the free trial. When it ends${sub.trialEndsAt ? ` on ${new Date(sub.trialEndsAt).toLocaleDateString()}` : ''}, your card is charged and the plan renews by itself until you cancel. To avoid the charge, cancel before then with Manage subscription.`)
         : sub.status === 'trialing'
           ? `You're on the free trial. Subscribe any time to keep access after it ends.`
           : 'Subscribe to keep using the business app. The client portal stays free either way.'}
@@ -741,7 +750,7 @@ function SubscriptionCard() {
       )}
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        {sub.stripeCustomerId || sub.status === 'active' || sub.status === 'past_due' || sub.status === 'cancelled' ? (
+        {sub.stripeCustomerId || sub.trialHasCard || sub.status === 'active' || sub.status === 'past_due' || sub.status === 'cancelled' ? (
           <button className="btn btn-outline" onClick={openPortal} disabled={busy}>
             {busy ? 'Opening…' : (sub.source === 'apple' ? 'Manage in the App Store' : 'Manage subscription')} <Icons.Arrow size={12} sw={2}/>
           </button>
@@ -751,8 +760,10 @@ function SubscriptionCard() {
             {busy ? 'Opening…' : 'Redeem a promo code'}
           </button>
         )}
-        {!sub.isActive && (
-          <button className="btn btn-primary" onClick={subscribeNow} disabled={busy}>
+        {/* Also during a trial with no card on file: this is where that owner
+            subscribes (the "trial ends soon" banner sends them here). */}
+        {(!sub.isActive || (sub.status === 'trialing' && !sub.trialHasCard)) && (
+          <button className="btn btn-primary" onClick={subscribeNow} disabled={busy} data-plan-subscribe>
             {busy ? 'Redirecting…' : (sub.status === 'cancelled' ? 'Resubscribe' : 'Subscribe')} <Icons.Arrow size={12} sw={2}/>
           </button>
         )}
@@ -960,7 +971,7 @@ const EMAIL_LABELS = {
   documents: { label: 'Documents', hint: 'Signature requests + reminders when a document is waiting.' },
   messages:  { label: 'Messages',  hint: 'When the other side of a chat thread replies.' },
   marketing: { label: 'Tips, product news and offers from Ivy', hint: 'Optional. The same choice as the box at sign-up. Turn it on or off any time.' },
-  billing:   { label: 'Subscription billing', hint: 'Renewal reminders + cancellation confirmations. Payment failures always send.' },
+  billing:   { label: 'Subscription billing', hint: 'Trial tips, plan-ending notices and cancellation confirmations. Emails about a charge (your purchase, a renewal, a trial about to become a paid plan, a failed payment) always send.' },
   reports:   { label: 'Weekly business recap', hint: 'Your weekly recap of bookings and revenue, plus setup reminders.' },
   client_optouts: { label: 'Client email opt-outs', hint: 'An email when a client unsubscribes from your emails, at most one per client per day. Only the client can turn their emails back on.' },
   signup_reminders: { label: 'Finish sign-up reminders', hint: 'Up to three short emails if you create an account but have not started your trial yet. They stop once you start.' },

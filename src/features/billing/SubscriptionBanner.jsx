@@ -18,6 +18,7 @@ import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { api } from '../../lib/api.js';
+import { useNavigate } from 'react-router-dom';
 
 const TRIAL_WARN_DAYS = 5;
 
@@ -25,6 +26,7 @@ export default function SubscriptionBanner() {
   const { ctx } = useUserContext();
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  const nav = useNavigate();
 
   const sub = ctx?.isOwner ? ctx?.subscription : null;
   const inTrial    = sub?.status === 'trialing';
@@ -37,14 +39,9 @@ export default function SubscriptionBanner() {
   const mine = usePromptSlot('billing', !!sub && (trialEndingSoon || pastDue || suspended || endingSoon), PROMPT_RANK.billing);
   if (!mine) return null;
 
-  const subscribe = async () => {
-    setBusy(true); setErr(null);
-    try {
-      const r = await api.post('/billing/checkout', {});
-      if (!r.url) throw new Error('No checkout URL returned');
-      window.location.href = r.url;
-    } catch (e) { setErr(e.message || 'Could not start checkout'); setBusy(false); }
-  };
+  // Subscribing starts on the Plan page, which spells out what renews, how
+  // often and how to cancel before anything goes to checkout.
+  const subscribe = () => { nav('/account?tab=billing'); };
 
   const openPortal = async () => {
     setBusy(true); setErr(null);
@@ -100,7 +97,29 @@ export default function SubscriptionBanner() {
     );
   }
 
-  // trialEndingSoon
+  // trialEndingSoon, with a card on file: the trial becomes a paid plan by
+  // itself, so say that a charge is coming and where to stop it.
+  if (sub.trialHasCard) {
+    const when = sub.daysRemaining === 0 ? 'today' : sub.daysRemaining === 1 ? 'tomorrow' : `in ${sub.daysRemaining} days`;
+    const apple = sub.source === 'apple';
+    return (
+      <Banner tone="accent" icon="Clock"
+        body={<>
+          <strong>Your free trial ends {when}.</strong>{' '}
+          <span style={{ color: 'var(--fg-2)' }} data-trial-charge>
+            {sub.cancelAtPeriodEnd
+              ? 'Renewal is off, so you will not be charged. Your business tools switch off when the trial ends.'
+              : apple
+                ? 'Apple then charges your Apple ID and your plan renews by itself until you cancel. To avoid the charge, cancel at least a day before.'
+                : 'Your card is then charged and your plan renews by itself until you cancel. To avoid the charge, cancel before then.'}
+          </span>
+        </>}
+        action={<Action busy={busy} err={err} onClick={openPortal} label={apple ? 'Manage in the App Store' : (sub.cancelAtPeriodEnd ? 'Keep my plan' : 'Manage my plan')}/>}
+      />
+    );
+  }
+
+  // trialEndingSoon, no card on file
   return (
     <Banner tone="accent" icon="Clock"
       body={<>

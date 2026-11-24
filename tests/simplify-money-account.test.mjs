@@ -117,8 +117,8 @@ async function main() {
   assert(/<BrandingCard\/>/.test(pageOf('profile')) && /<SupportCard\/>/.test(pageOf('profile')) && /<WalkthroughCard\/>/.test(pageOf('profile')), 'Profile: profile, branding, help and the tours');
   assert(/<SubscriptionCard\/>/.test(pageOf('billing')) && /id="referrals"/.test(pageOf('billing')), 'Plan: subscription and referrals');
   assert(/<NotificationsCard\/>/.test(pageOf('notifications')) && /<NavigationCard\/>/.test(pageOf('notifications')), 'Preferences: notifications and the menu');
-  assert(/<SecurityCard\/>/.test(pageOf('security')) && /Export everything/.test(pageOf('security')) && /<BlockedCard id="blocked"/.test(pageOf('security')) && /Delete your account/.test(pageOf('security')), 'Security & data: sign-in security, export, blocked, reports and delete');
-  for (const card of ['<BrandingCard/>', '<SubscriptionCard/>', '<NotificationsCard/>', '<NavigationCard/>', '<SupportCard/>', '<WalkthroughCard/>', '<SetupReplayCard/>', '<SecurityCard/>', '<ReportsCard ', 'Delete your account</h3>', 'Export everything</h3>']) {
+  assert(/<SecurityCard\/>/.test(pageOf('security')) && /Export your data/.test(pageOf('security')) && /<BlockedCard id="blocked"/.test(pageOf('security')) && /Delete your account/.test(pageOf('security')), 'Security & data: sign-in security, export, blocked, reports and delete');
+  for (const card of ['<BrandingCard/>', '<SubscriptionCard/>', '<NotificationsCard/>', '<NavigationCard/>', '<SupportCard/>', '<WalkthroughCard/>', '<SetupReplayCard/>', '<SecurityCard/>', '<ReportsCard ', 'Delete your account</h3>', 'Export your data</h3>']) {
     assert(body.split(card).length === 2, `${card.replace(/[<>/]/g, '').trim()} is on exactly one page (nothing lost, nothing doubled)`);
   }
   assert(/state: \{ viaTabs: true \}/.test(body) && /useState\(!arrivedByTabs\)/.test(acct) && /data-email-prefs-toggle/.test(acct), 'the dozen email switches are folded while browsing, and open when an email\'s link brings you there');
