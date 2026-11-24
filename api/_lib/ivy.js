@@ -1256,6 +1256,7 @@ Automation is where Ivy turns what the owner already does into something that ru
 
 REMINDERS IVY SENDS CLIENTS (menu → "Clients" → "Reminders")
 - The birthday message, the "we'd love to see you again" check-in for quiet clients, and the book-again link after a visit: Clients → "Reminders". Each has a switch, the wording, and who is due.
+- The review request ("How was it?" a few hours after a visit marked complete): also in Clients → "Reminders", as "Ask for a review after a visit". It is on unless the owner turns it off; it only has a switch.
 
 REWARDS / LOYALTY (menu → "Clients" → "Rewards")
 - Launch your loyalty program: Clients → "Rewards" → "Launch" the first time, then add rules.

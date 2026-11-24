@@ -15,9 +15,11 @@
 //                       closes the modal and routes there)
 //   }
 //
-// Voice: direct, warm, action-oriented. Talks like a coach who knows
-// the owner's job, not like a help doc. Light on jargon, heavy on
-// "here's how this saves you time."
+// These open only when the owner taps the (i) next to a screen's title;
+// nothing opens by itself. Every owner screen has one. Keep each to three
+// or four short steps, name buttons exactly as the screen does, and say
+// only what the screen really does (tests/tutorials-on-demand.test.mjs
+// checks the button names against the screens).
 
 export const TUTORIALS = {
   dashboard: {
@@ -30,7 +32,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Needs your attention',
-        body: "Ivy keeps a short list of what is waiting on you: a message to answer, an invoice to chase, a booking to approve. Each row has one button that opens the exact place to deal with it.",
+        body: "Ivy keeps a short list of what is waiting on you: a message to answer, an invoice to chase, a booking to approve. Each row has one button that opens the exact place to deal with it. For overdue invoices, Chase asks once and then sends the reminders for you.",
       },
       {
         title: 'Ask Ivy',
@@ -43,92 +45,152 @@ export const TUTORIALS = {
     ],
   },
 
+  progress: {
+    title: 'Progress',
+    intro: 'How the business is doing, away from the day-to-day.',
+    steps: [
+      {
+        title: 'Your numbers',
+        body: 'The tiles at the top compare this month with last month, so you can see which way things are heading.',
+      },
+      {
+        title: 'This week with Ivy',
+        body: 'What happened in the last 7 days: sessions completed, bookings taken, money collected, and what Ivy handled for you.',
+      },
+      {
+        title: 'Goals and tasks',
+        body: 'Set a goal and Ivy tracks it from your real numbers. Tasks are your own to-do list; give one a due date and it shows up on Home when it is due.',
+      },
+    ],
+  },
+
   clients: {
     title: 'Clients',
-    intro: 'Your book of business. Every lead, every active client, every paused account - all searchable, taggable, and one tap from a message or invoice.',
+    intro: 'Your people: every lead, active client and paused client, with their rewards and the reminders Ivy sends them.',
     steps: [
       {
         title: 'Clients, Rewards, Reminders',
-        body: 'Three sections at the top. Clients is your list. Rewards is your loyalty program. Reminders are the messages Ivy sends for you: a birthday note, a check-in when someone goes quiet, and a book-again link after a visit.',
+        body: 'Three sections at the top. Clients is your list. Rewards is your loyalty program. Reminders are the messages Ivy sends for you: a birthday note, a check-in when someone goes quiet, a book-again link after a visit, and a request for a review.',
       },
       {
-        title: 'Add your first client',
-        body: 'Tap "Add client" top-right. You only need a name to start; phone and email come highly recommended so you can text and email them through Ivy later.',
+        title: 'Add or import',
+        body: 'Tap "Add client"; a name is enough to start. To bring a list over, open the menu next to it and choose "Import clients". Anyone already in your list (same email or phone) is skipped, so nobody is added twice.',
       },
       {
-        title: 'Stages tell the story',
-        body: 'Every client carries a stage: Lead (interested but not paying), Active (paying / booking), or Paused. Move them through stages as the relationship evolves; reports filter by stage so your numbers stay clean.',
+        title: 'Who needs you',
+        body: 'The "Needs attention" filter lists clients who owe overdue money, sent a message you have not read, are a new lead with no reply, or have gone quiet. Every row says why.',
       },
       {
-        title: 'Tags are your superpower',
-        body: 'Tag clients by anything that matters - "VIP", "weekday-only", "referred-by-Sarah", "intro-pricing". Then filter on those tags to send a targeted message blast or pull a quick list.',
-      },
-      {
-        title: 'The client drawer is the whole picture',
-        body: 'Tap any row → the side drawer shows their bookings, invoices, lifetime value, recent messages, attached documents, and notes - all in one scroll. Edit anything inline.',
-      },
-      {
-        title: 'Import from anywhere',
-        body: "Got 50 clients in a spreadsheet? Tap Import (top-right) and drop a CSV. Ivy de-duplicates against existing emails so you don't double-add.",
-      },
-      {
-        title: 'Any client can become a folder',
-        body: "Tap Make folder on a client's row. Their folder holds everything for them in one place - bookings, invoices, quotes and signed documents - so a year from now you open one folder and see the whole story.",
+        title: 'Open a client',
+        body: 'Tap a row to see their notes, stage, tags, visits, packages, folders and documents, with buttons to message, invoice or book them. "Make folder" on a row keeps everything for that client in one place.',
       },
     ],
   },
 
   calendar: {
     title: 'Calendar',
-    intro: 'Bookings, services, hours, blocks - everything time-related lives here. The public booking link generated from this tab is how new clients book themselves into your schedule.',
+    intro: 'Your bookings, your hours, and the link clients use to book themselves.',
     steps: [
       {
-        title: 'Set your services first',
-        body: 'Services live under Money → Services. Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking - your call. Photos there show on your booking page.',
+        title: 'Set your hours',
+        body: 'Tap "Availability". Switch each day on or off, set its start and end time, and use "+ Add window" for a split day. Clients can only book inside those hours.',
+      },
+      {
+        title: 'Block time off',
+        body: 'Tap an empty slot on the calendar to block it (lunch, an errand, a day off). Choose whether it blocks bookings or is just a reminder for you.',
+      },
+      {
+        title: 'Share your booking link',
+        body: 'Tap "Share" to copy your booking link or show its QR code. Put it in your bio, your email signature and your next text, and clients book without the back and forth.',
+      },
+      {
+        title: 'Your services',
+        body: 'What clients can book (name, length, price, deposit) lives under Money, in What I sell, Services.',
         cta: { label: 'Open Services', to: '/finance?section=services' },
-      },
-      {
-        title: 'Set your weekly hours',
-        body: 'Tap Availability. Drag the bars to mark when you take bookings on each day of the week. Anything outside those bars is closed and unbookable on the public page.',
-      },
-      {
-        title: 'Block off time selectively',
-        body: "Click any slot on the calendar grid → block it out (lunch, dentist, whatever). Recurring blocks too. Clients can't book during those windows.",
-      },
-      {
-        title: 'Your booking link is the lever',
-        body: "Tap Share (top action menu) → copy your /book/{your-handle} URL. Drop it in your Instagram bio, email signature, and on the next text you send. That's how clients self-book without trading messages.",
-      },
-      {
-        title: 'Show up on Discover',
-        body: "Toggle 'List on Discover' inside Share. Clients in the Ivy marketplace can find you by service, price, distance, and rating. Free traffic.",
       },
     ],
   },
 
   finance: {
     title: 'Money',
-    intro: 'Invoices, estimates, recurring billing, what you sell, gift cards, memberships and your payment processor: the money side of the business.',
+    intro: 'Who owes you, what you have been paid, and what you sell.',
     steps: [
       {
-        title: 'Connect a payment processor',
-        body: 'The card up top is where you connect Stripe (or Square). Until one is connected, invoices fall back to manual mark-as-paid. Connecting unlocks one-tap pay links and Tap-to-Pay-style flows.',
+        title: 'Owed to you',
+        body: 'Money opens on your unpaid invoices, overdue ones first, with the total at the top. Drafts, Paid and All are the tabs beside it.',
       },
       {
-        title: 'Send your first invoice',
-        body: '"New invoice" → pick a client → add line items → Send. The client gets a branded email with a "Pay now" button. You see when they open it, when they pay, and the invoice flips to Paid in real time.',
+        title: 'Send an invoice',
+        body: 'Tap "New invoice", pick a client, add what it is for, and send. The client gets an email with a button to view and pay it, and the invoice turns to Paid when they do.',
       },
       {
-        title: 'Collect in person',
-        body: "Open any unpaid invoice → 'Collect in person'. You'll get a QR code + sharable link the customer scans on their phone. They pay through Apple Pay / Google Pay / card right there.",
+        title: 'Get paid in person',
+        body: 'Open an unpaid invoice and tap "Collect in person" to show a QR code or text a pay link. Card payments need a payment processor connected.',
       },
       {
-        title: 'Recurring invoices',
-        body: 'Got a monthly retainer? Set up a recurring invoice once - Ivy auto-generates and sends it every cycle. Includes built-in failure handling and dunning if a card declines.',
+        title: 'Settings',
+        body: 'The "Settings" button at the top is where you connect a payment processor, add other ways to get paid, and change how your invoices look.',
+      },
+    ],
+  },
+
+  ivy: {
+    title: 'Ivy',
+    intro: 'Your assistant. Ask in your own words; Ivy answers from your real bookings, clients and money.',
+    steps: [
+      {
+        title: 'Ask anything',
+        body: 'Ask a question ("who owes me money?") or ask for something to be done ("move Sam to Thursday at 2"). The suggestions on the screen are there if you are not sure where to start.',
       },
       {
-        title: 'Memberships and gift cards',
-        body: 'Each has its own section; use what fits your business. Memberships are recurring access plans. Gift cards are balances clients buy and spend on your services.',
+        title: 'Nothing happens without you',
+        body: 'Looking things up and drafting happen straight away. Anything that sends, charges, or is hard to undo shows a card first, and only goes ahead when you tap "Approve".',
+      },
+      {
+        title: 'Show Ivy a photo',
+        body: 'You can attach photos to a message, for example a screenshot of a client list or a schedule, and ask Ivy to work from it.',
+      },
+      {
+        title: 'Chats and limits',
+        body: '"New chat" starts fresh and your earlier chats stay in the list. The meter shows how many messages you have used this month.',
+      },
+    ],
+  },
+
+  comms: {
+    title: 'Messages',
+    intro: 'Every conversation with every client in one inbox.',
+    steps: [
+      {
+        title: 'One thread per client',
+        body: 'Pick a client to open their thread. When a client writes to you, you get a notification and an email, so nothing slips through.',
+      },
+      {
+        title: 'Talk instead of typing',
+        body: 'In the message box, one button turns your speech into text and the other records a voice message.',
+      },
+      {
+        title: 'Announcements',
+        body: 'Switch a thread from "Two-way" to "Broadcast" when you only need to tell a client something. They can read it but cannot reply there.',
+      },
+    ],
+  },
+
+  programs: {
+    title: 'Programs',
+    intro: 'Courses, plans and paid communities your clients can buy.',
+    steps: [
+      {
+        title: 'Create a program',
+        body: 'Tap "New program", name it and set a price (0 makes it free). It can be a one-time purchase or a monthly or yearly subscription.',
+      },
+      {
+        title: 'Add what is inside',
+        body: 'Build it from lessons: written, video, audio or files to download. You can release lessons over time instead of all at once.',
+      },
+      {
+        title: 'Publish and share',
+        body: 'Nothing is visible to clients until you publish. Then copy the sales page link and share it. "Preview as member" shows you exactly what a buyer sees.',
       },
     ],
   },
@@ -147,102 +209,133 @@ export const TUTORIALS = {
       },
       {
         title: 'Rewards and reminders are in Clients',
-        body: 'The loyalty program and the messages Ivy sends your clients (birthday, a check-in, a book-again link) live in the Clients tab, under Rewards and Reminders.',
+        body: 'The loyalty program and the messages Ivy sends your clients (birthday, a check-in, a book-again link, a review request) live in the Clients tab, under Rewards and Reminders.',
       },
     ],
   },
-  comms: {
-    title: 'Messages',
-    intro: "Every conversation with every client in one inbox. Replaces the 'where did I last text Sarah from?' moment.",
+
+  reviews: {
+    title: 'Reviews',
+    intro: 'What your clients say about you, and your replies.',
     steps: [
       {
-        title: 'One thread per client',
-        body: 'Pick a client from the conversation list to open the thread. New messages from clients land here AND get pushed via email/SMS so nothing slips through.',
+        title: 'How reviews arrive',
+        body: 'A few hours after a visit you mark complete, Ivy emails the client to ask how it went. You can turn that off in Clients, under Reminders.',
       },
       {
-        title: 'Voice memos + dictation',
-        body: 'In the composer: tap the bars icon to dictate (your speech becomes text). Tap the mic to record a voice memo. Both work without typing - great when you\'re between clients.',
+        title: 'They publish by themselves',
+        body: 'Reviews show on your booking page as soon as they are left. You cannot hide one yourself.',
       },
       {
-        title: 'Send invoices and docs without leaving',
-        body: 'In a thread → quick-actions → "Send invoice" or "Send a document." Built right into the conversation so there\'s no app-switching mid-thought.',
-      },
-      {
-        title: 'Broadcast / one-way mode',
-        body: "Some threads are announcements (a class update, a holiday closure). Toggle a thread to one-way and clients can't reply - keeps your inbox clean for actual conversations.",
+        title: 'Respond or appeal',
+        body: 'Tap "Respond" to reply in public. If a review is unfair or not from a real client, "Appeal for removal" sends it to the Ivy team to look at.',
       },
     ],
   },
 
   docs: {
     title: 'Documents',
-    intro: 'Contracts, intake forms, waivers, e-signatures - built in. No DocuSign needed.',
+    intro: 'Waivers, agreements and intake forms, signed on any device.',
     steps: [
       {
-        title: 'Build a template once',
-        body: "Either upload a PDF you already have, or write one from scratch in our editor. Drop signature, initials, date, and text fields wherever they need to go.",
+        title: 'Start a document',
+        body: 'Upload a PDF, pick a template, or start blank. Place the fields where they belong: signature, initials, date, text and more.',
       },
       {
-        title: 'Send for signing',
-        body: 'Pick the template → pick the client → send. They get an email with a magic link, sign on any device, and the signed PDF lands back in their client profile + your archive.',
+        title: 'Send it to be signed',
+        body: 'Choose the client and send. They get an email with a link, sign on their phone or computer, and the signed copy is saved to their record.',
       },
       {
-        title: 'Required-before-booking',
-        body: 'Attach a document template to a service (e.g. waiver for a personal-training session). Clients have to sign it before they can book the next session - the booking flow handles the gating.',
+        title: 'Send forms automatically',
+        body: 'Attach an intake form to a service (Money, What I sell, Services) and it is sent to the client automatically whenever that service is booked.',
       },
       {
-        title: 'Audit trail by default',
-        body: "Every signed document carries a stamped audit page: when it was sent, opened, signed, the IP and device, and a SHA-256 hash. Court-defensible if you ever need it.",
+        title: 'A record of every signature',
+        body: 'Each signed document ends with a certificate page showing when it was sent, opened and signed, and from which device.',
       },
     ],
   },
 
   website: {
     title: 'Website',
-    intro: "A real public-facing mini-site you build in minutes, with your booking page baked in. No domain, no hosting bill, no dev work.",
+    intro: 'Your own site, with your booking page built in.',
     steps: [
       {
-        title: 'Pick a template',
-        body: 'Top toolbar → Template selector. Three starting points (Clean, Warm, Bold). They\'re skeletons - you customize sections + colors after picking.',
+        title: 'Start from a template',
+        body: 'Pick a look to begin with. There are several templates to choose from.',
       },
       {
         title: 'Build with sections',
-        body: 'Left rail = section library. Drag in a Hero, About, Services, Reviews, FAQ, Gallery, Contact, etc. Right rail = inspector for the selected section (text, photos, links).',
+        body: 'Tap "Add section" and choose what you need: about, services, reviews, photos, questions, contact. Tap any section on the page to edit its words and pictures.',
       },
       {
-        title: 'Pick your handle',
-        body: 'Set a handle once (e.g. "kayla") → your site lives at joinivy.ai/site/kayla forever. We reserve it.',
+        title: 'Decide who can see it',
+        body: '"Only me" while you build, "Link only" to show a few people, "Public" when you are ready.',
       },
       {
-        title: 'Visibility gives you a draft mode',
-        body: "Top right has Public / Link only / Only me. Build privately on Only me, share with friends on Link only, then flip to Public when you're ready for traffic.",
+        title: 'Publish',
+        body: 'Nothing changes for visitors until you tap "Publish". The booking section on your site takes people straight to your booking page.',
+      },
+    ],
+  },
+
+  shops: {
+    title: 'Shop',
+    intro: 'One page for everyone who works at your location.',
+    steps: [
+      {
+        title: 'Create your shop page',
+        body: 'Give it a name and a web address. It starts as a draft that only you can see.',
       },
       {
-        title: 'Publish - and the booking link comes free',
-        body: "Hit Publish. Your site is live + indexable. The Book button on every section automatically routes to your booking page. One mini-site, one URL, one place to send everyone.",
+        title: 'Invite the people you work with',
+        body: 'Under Team, use "Invite a pro". Each person keeps their own Ivy account; their clients, money and messages stay private to them.',
+      },
+      {
+        title: 'Publish and share',
+        body: 'Publish when it is ready, then use Share to copy the link or show the QR code.',
       },
     ],
   },
 
   account: {
     title: 'Account',
-    intro: 'Your subscription, branding, team, integrations - everything that\'s about Ivy itself rather than your day-to-day work.',
+    intro: 'Everything about your Ivy account, in four pages.',
     steps: [
       {
-        title: 'Brand the experience',
-        body: 'Upload your logo and pick an accent color. Ivy re-skins every email, invoice, document, and booking page with that branding so clients see your business, not Ivy.',
+        title: 'Profile',
+        body: 'Your details, your logo and brand color (used on your emails, invoices and booking page), and help when you need it.',
       },
       {
-        title: 'Manage your subscription',
-        body: 'See your plan, your next charge, your card on file. Cancel any time - your data stays accessible for 30 days after cancellation in case you change your mind.',
+        title: 'Plan',
+        body: 'Your subscription and billing.',
       },
       {
-        title: 'Notification preferences',
-        body: 'Pick which events email you (new booking, invoice paid, document signed) and which only push. Tune it for the noise level you want.',
+        title: 'Preferences',
+        body: 'Which notifications and emails you get, how often Ivy checks in, and which items show in your menu.',
       },
       {
-        title: 'Replay any tutorial',
-        body: 'See the (i) icon next to every page title? Tap it any time to replay that tab\'s walkthrough. The first visit auto-opens; after that the (i) is your refresh-my-memory button.',
+        title: 'Security & data',
+        body: '2-step verification, a download of all your data, and the people you have blocked or reported.',
+      },
+    ],
+  },
+
+  more: {
+    title: 'More',
+    intro: 'Everything that is not on the bar at the bottom of the screen.',
+    steps: [
+      {
+        title: 'Your business',
+        body: 'Progress, plus any tool you already use, sits at the top.',
+      },
+      {
+        title: 'More tools',
+        body: 'Messages, Programs, Automation, Reviews, Website, Shop and Documents wait here until you start using them. Once you do, they move up by themselves.',
+      },
+      {
+        title: 'Help on every screen',
+        body: 'Every screen has an (i) next to its title. Tap it any time for a short walkthrough of that screen. Nothing opens by itself.',
       },
     ],
   },

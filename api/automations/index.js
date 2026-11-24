@@ -5,6 +5,9 @@
 //           ?due=1 adds who is due (birthdays in the next 7 days, the quiet
 //           clients the next run would write to, the visits that will get
 //           a book-again link and when).
+//           reviewRequests: { enabled, askedLast30Days } is the switch for
+//           the "How was it?" email after a visit.
+//   PATCH → { kind: 'review', enabled } turns review requests on or off.
 //   PATCH → { kind, enabled?, template?, channels?, quietDays?, delay? }
 //           Saving a template approves it; turning on needs an approved
 //           template (the book-again link has Ivy's fixed message, so
@@ -18,6 +21,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { readAutomations, saveAutomation, dueThisWeek, MERGE_FIELD_HELP, MAX_TEMPLATE_CHARS } from '../_lib/clientAutomations.js';
+import { readReviewRequests, setReviewRequests } from '../_lib/reviewRequestSettings.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -41,6 +45,9 @@ export default async function handler(req, res) {
         mergeFields: MERGE_FIELD_HELP,
         maxTemplateChars: MAX_TEMPLATE_CHARS,
       };
+      // The fourth reminder: the review request after a visit. Only a
+      // switch (the wording is Ivy's); additive, so older apps ignore it.
+      out.reviewRequests = await readReviewRequests(workspaceId).catch(() => null);
       if (String(req.query?.due || '') === '1') out.due = await dueThisWeek(workspaceId).catch(() => null);
       return ok(res, out);
     }
@@ -48,6 +55,18 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH') {
       const body = await readBody(req);
       const kind = String(body.kind || '');
+      // { kind: 'review', enabled } turns review requests on or off.
+      if (kind === 'review') {
+        if (typeof body.enabled !== 'boolean') return badRequest(res, 'enabled must be true or false');
+        const out = await setReviewRequests(workspaceId, body.enabled);
+        if (out.changed) {
+          recordWorkspaceAudit(req, {
+            workspaceId, actor: { id: user.id }, action: 'client_automation.update', target: { type: 'client_automation', id: 'review' },
+            meta: { enabled: body.enabled },
+          }).catch(() => {});
+        }
+        return ok(res, { reviewRequests: await readReviewRequests(workspaceId) });
+      }
       let saved;
       try { saved = await saveAutomation(workspaceId, kind, body); }
       catch (err) { return badRequest(res, err.message); }

@@ -19,6 +19,7 @@
 // Ivy can only ASK a client to approve automatic payments; nothing here
 // can approve on the client's behalf (that is authorizeAgreement, which
 // only the client's own portal calls).
+import { readReviewRequests, setReviewRequests, REVIEW_REQUEST_LABEL } from './reviewRequestSettings.js';
 import { sql } from './db.js';
 import { ensureCalendarSettings, saveReminderSettings } from './calendar.js';
 import {
@@ -268,12 +269,12 @@ export const APP_TOOLS = [
   },
   {
     name: 'client_automations',
-    description: "Birthday message, \"we'd love to see you again\" check-in and the book-again link after a visit, which Ivy sends to clients. get: settings and templates. due: who gets one (this week; for rebook, the visits that will get the link and when). update: kind birthday|quiet|rebook with enabled, template (birthday/quiet only, plain text; {first_name} {business} {booking_link}), channels {email, sms}, quiet_days (quiet only), delay (rebook only: 2h, next_morning or 3d).",
+    description: "Birthday message, \"we'd love to see you again\" check-in and the book-again link after a visit, which Ivy sends to clients. get: settings and templates. due: who gets one (this week; for rebook, the visits that will get the link and when). update: kind birthday|quiet|rebook with enabled, template (birthday/quiet only, plain text; {first_name} {business} {booking_link}), channels {email, sms}, quiet_days (quiet only), delay (rebook only: 2h, next_morning or 3d). kind review is the automatic \"How was it?\" review request after a completed visit: it only takes enabled (true/false).",
     input_schema: {
       type: 'object',
       properties: {
         action: { type: 'string', enum: ['get', 'due', 'update'] },
-        kind: { type: 'string', enum: ['birthday', 'quiet', 'rebook'] },
+        kind: { type: 'string', enum: ['birthday', 'quiet', 'rebook', 'review'] },
         enabled: { type: 'boolean' },
         template: { type: 'string' },
         channels: { type: 'object', properties: { email: { type: 'boolean' }, sms: { type: 'boolean' } } },
@@ -1421,7 +1422,12 @@ async function readAutomationsTool(ws, a) {
     }
     out[k] = { label: r.label, on: r.enabled, template: r.template, channels: r.channels, ...(k === 'quiet' ? { quiet_days: r.quietDays } : {}), template_saved: !!r.templateApprovedAt, sent_this_month: r.sentThisMonth, once: r.once };
   }
-  return { ...out, merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Reminders](/marketing?tab=workflows&show=reminders)' };
+  const rr = await readReviewRequests(ws).catch(() => null);
+  return {
+    ...out,
+    ...(rr ? { review: { label: REVIEW_REQUEST_LABEL, on: rr.enabled, asked_last_30_days: rr.askedLast30Days, note: 'A switch only (kind: review, enabled). Goes 2 to 3 hours after a visit marked complete; each client at most once every 30 days.' } } : {}),
+    merge_fields: '{first_name}, {business}, {booking_link}', manage: '[Reminders](/marketing?tab=workflows&show=reminders)',
+  };
 }
 
 const AUTOMATION_NOUNS = { birthday: 'the birthday message', quiet: 'the "We\'d love to see you again" check-in', rebook: 'the book-again link after a visit' };
@@ -1429,6 +1435,24 @@ const AUTOMATION_NOUNS = { birthday: 'the birthday message', quiet: 'the "We\'d 
 async function planAutomations(ws, a) {
   if (a.action !== 'update') throw new Error('action must be get, due or update');
   const kind = String(a.kind || '');
+  // The review request after a visit: a switch only (the wording is Ivy's).
+  if (kind === 'review') {
+    if (typeof a.enabled !== 'boolean') throw new Error('For review requests pass enabled: true or false. Nothing else about them can be changed');
+    const cur = await readReviewRequests(ws);
+    if (cur.enabled === a.enabled) {
+      return { summary: `Keep review requests ${a.enabled ? 'on' : 'off'}. They already are.`, done: `Review requests were already ${a.enabled ? 'on' : 'off'}`, apply: async () => ({ ok: true, review_requests: { on: a.enabled } }) };
+    }
+    return {
+      summary: a.enabled
+        ? 'Turn review requests on. A few hours after a visit you mark complete, Ivy emails the client asking how it went, with a link to leave a review. Each client is asked at most once every 30 days, never after a no-show or a cancellation; clients who turned off these emails never get it.'
+        : 'Turn review requests off. Ivy stops emailing clients to ask for a review after a visit. Reviews you already have stay as they are.',
+      done: `Turned review requests ${a.enabled ? 'on' : 'off'}`,
+      apply: async () => {
+        const out = await setReviewRequests(ws, a.enabled);
+        return { ok: true, review_requests: { on: out.enabled } };
+      },
+    };
+  }
   const patch = {};
   if (a.enabled != null) patch.enabled = a.enabled;
   if (a.template != null) patch.template = a.template;

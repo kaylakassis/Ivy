@@ -6,8 +6,9 @@
 //      shell so an unauthenticated user never triggers a request).
 //   2. Pages call useTutorial() to read their own tab's state and
 //      open / mark-complete / mark-skipped.
-//   3. The Topbar's auto-trigger effect opens the modal when a user
-//      lands on a tab they've never seen and the GET has resolved.
+//   3. Nothing opens by itself. The Topbar's (i) button opens a screen's
+//      tutorial when the owner asks for it; "seen" only decides whether
+//      that (i) is tinted.
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api } from './api.js';
 

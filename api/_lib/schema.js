@@ -5638,6 +5638,11 @@ UPDATE users u SET signup_role = 'client'
    AND COALESCE(u.user_type, 'regular') = 'regular'
    AND NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
    AND NOT EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id OR sm.revoked_user_id = u.id);
+-- The owner's switch for automatic review requests ("How was it?" after a
+-- completed visit). NULL = on, which is how it always behaved; a time =
+-- when the owner turned it off (api/_lib/reviewRequestSettings.js).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS review_requests_off_at TIMESTAMPTZ;
+
 -- Which screens an owner opens, per day (api/_lib/screenVisits.js). Screen
 -- names only, from a fixed list; Admin > First week reads it to show where
 -- new accounts stop. Removed with the account; pruned after 180 days.

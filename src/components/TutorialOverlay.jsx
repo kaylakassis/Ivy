@@ -1,15 +1,14 @@
 // Per-tab tutorial overlay - full-screen modal that walks through the
-// tab's content slide-by-slide. Auto-opens on first visit (driven by
-// the Topbar effect) and re-opens any time the owner taps the (i)
-// button next to the page title.
+// tab's content slide-by-slide. It opens only when the owner taps the (i)
+// button next to the page title, as often as they like; it never opens by
+// itself.
 //
 // Keyboard:
-//   Esc        → trigger Skip flow (with confirmation modal)
+//   Esc        → close
 //   ←  / →     → previous / next step
 //   Enter      → next (or "Got it" on the last step)
 //
-// Skip is gated by a short confirmation that names the cost - owners
-// can always skip but they get one chance to reconsider.
+// The owner opened it, so one tap closes it (no "are you sure").
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -185,7 +184,7 @@ export default function TutorialOverlay() {
               color: 'var(--muted)', cursor: 'pointer',
             }}
             title="You can replay this any time from the (i) icon next to the page title">
-            Skip tutorial
+            Close
           </button>
           <div style={{ display: 'flex', gap: 8 }}>
             {!isFirst && (

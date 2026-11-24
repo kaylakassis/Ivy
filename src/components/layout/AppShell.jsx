@@ -76,7 +76,11 @@ function AppShellInner() {
   const current = location.pathname === '/account' ? ACCOUNT
     : location.pathname === '/more' ? MORE
     : location.pathname === '/progress' ? PROGRESS
-    : (NAV.find(n => n.to === location.pathname) || NAV[0]);
+    // (A page inside a tool, like /programs/<id>, keeps that tool's title
+    // and its (i) tutorial instead of falling back to Home's.)
+    : (NAV.find(n => n.to === location.pathname)
+      || NAV.find(n => location.pathname.startsWith(`${n.to}/`))
+      || NAV[0]);
   const t = TITLES[current.id] || TITLES.dashboard;
   const native = isNative();
 
@@ -251,7 +255,6 @@ function AppShellInner() {
             isMobile={viewport.isMobile}
             isTablet={viewport.isTablet}
             onMenuClick={() => setDrawerOpen(true)}
-            paywalled={walled}
           />
           {/* Bottom padding reserves space for the floating ViewToggle
               pill (sits at bottom: 18, ~50px tall) so it can never

@@ -5,11 +5,9 @@
 // Search input is a button that opens the global CommandPalette via a
 // synthetic Cmd+K keydown - keeps this component dumb.
 //
-// Adds an info (i) button next to the title that opens the tab's
-// tutorial overlay. On a tab's first visit (not in tutorials_completed)
-// the tutorial auto-opens after a brief render delay so the page has
-// a chance to paint behind the modal.
-import React, { useEffect, useRef } from 'react';
+// An info (i) button next to the title opens the screen's tutorial, on the
+// website and in the iPhone app. Tutorials never open by themselves.
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { useTutorial } from '../../lib/tutorialState.jsx';
@@ -26,35 +24,20 @@ function openPalette() {
   }));
 }
 
-export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, tabId, paywalled, children }) {
+export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, tabId, children }) {
   const compact = isMobile || isTablet;
-  // Native app: no hamburger (the tab bar's More tab replaces the drawer),
-  // no tutorial (i), and unboxed icon buttons - the header reads like an
-  // iOS navigation bar instead of an admin panel.
+  // Native app: no hamburger (the tab bar's More tab replaces the drawer)
+  // and unboxed icon buttons - the header reads like an iOS navigation bar
+  // instead of an admin panel. The tutorial (i) is on every screen there too.
   const native = isNative();
   const navigate = useNavigate();
   const tutorial = useTutorial();
   const hasTutorial = tabId && getTutorial(tabId);
-  // Auto-open the tutorial on a tab's first ever visit. Once the GET
-  // /me/tutorials response says we've seen this tab, we never auto-
-  // open again - the (i) button is the manual replay path.
-  const lastAutoTabRef = useRef(null);
-  useEffect(() => {
-    if (!hasTutorial) return;
-    if (!tutorial.ready) return;
-    // Never pop the tutorial on top of the hard paywall - it would cover the
-    // "Start your free trial" screen and block the owner from subscribing.
-    // Left BEFORE lastAutoTabRef is stamped so it re-fires once the wall clears
-    // (paywalled flips false the moment they activate → this effect re-runs).
-    if (paywalled) return;
-    if (tutorial.seen(tabId)) return;
-    if (lastAutoTabRef.current === tabId) return; // don't reopen if user just dismissed
-    lastAutoTabRef.current = tabId;
-    // Slight delay so the page paints first; popping the modal on top
-    // of an empty surface feels jarring.
-    const t = setTimeout(() => tutorial.open(tabId), 350);
-    return () => clearTimeout(t);
-  }, [tabId, tutorial.ready, hasTutorial, paywalled]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tutorials never open by themselves. Every screen has an (i) button next
+  // to its title; tapping it shows that screen's short walkthrough, as many
+  // times as the owner likes. Until they have looked at one, its (i) is
+  // tinted so it is easy to find, and that is the only nudge.
+  const unseen = !!hasTutorial && tutorial.ready && !tutorial.seen(tabId);
 
   return (
     <header className={native ? 'app-topbar native' : 'app-topbar'} style={{
@@ -104,34 +87,28 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
           }}>
             {isMobile ? title : (subtitle || title)}
           </h1>
-          {hasTutorial && !native && (
-            <button type="button"
+          {hasTutorial && (
+            <button type="button" data-tutorial-button data-unseen={unseen ? 'true' : 'false'}
               onClick={() => tutorial.open(tabId)}
-              aria-label={`Replay ${title} tutorial`}
-              title={`Replay ${title} tutorial`}
+              aria-label={`How ${title} works`}
+              title={`How ${title} works`}
+              className="tutorial-i"
               style={{
+                // A full-size tap target around a small round (i).
+                width: compact ? 40 : 30, height: compact ? 40 : 30, margin: compact ? '-7px -6px' : 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                background: 'transparent', cursor: 'pointer', flexShrink: 0, borderRadius: 999,
+              }}>
+              <span aria-hidden="true" style={{
                 width: 26, height: 26, borderRadius: 999,
-                border: '1px solid var(--border)',
-                background: 'var(--surface)',
-                color: 'var(--muted)',
+                border: `1px solid ${unseen ? 'var(--accent)' : 'var(--border)'}`,
+                background: unseen ? 'var(--accent-soft)' : 'var(--surface)',
+                color: unseen ? 'var(--accent)' : 'var(--muted)',
                 fontSize: 13, fontFamily: 'var(--font-display)',
                 fontStyle: 'italic', fontWeight: 600,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', flexShrink: 0,
                 transition: 'background .12s, color .12s, border-color .12s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--accent-soft)';
-                e.currentTarget.style.color = 'var(--accent)';
-                e.currentTarget.style.borderColor = 'var(--accent)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--surface)';
-                e.currentTarget.style.color = 'var(--muted)';
-                e.currentTarget.style.borderColor = 'var(--border)';
-              }}
-            >
-              i
+              }}>i</span>
             </button>
           )}
         </div>

@@ -1,6 +1,6 @@
-// "Ivy sends these for you" (1.0.6): the birthday message, the "we'd love
-// to see you again" check-in and the book-again link after a visit. One
-// card each: the switch, a plain-text message with a live preview (the
+// "Ivy sends these for you": the birthday message, the "we'd love to see
+// you again" check-in, the book-again link after a visit, and the review
+// request after a visit (a switch only). One card each: the switch, a plain-text message with a live preview (the
 // book-again link has Ivy's fixed message, shown as a preview, and a timing
 // instead), email / text, how many quiet days (check-in only), Send me a
 // test, and who is due. Off by default; saving the message counts as
@@ -77,8 +77,54 @@ export default function ClientAutomations() {
             ? <RebookCard key={kind} data={data} onSaved={refresh}/>
             : <AutomationCard key={kind} kind={kind} data={data} onSaved={refresh}/>
         ))}
+        <ReviewRequestCard data={data} onSaved={refresh}/>
       </div>
     </section>
+  );
+}
+
+// The review request after a visit. It always went out and had no switch;
+// now the owner can turn it off (and back on). Only a switch: the wording is
+// Ivy's, and the rules in the note are the ones the sending job applies.
+function ReviewRequestCard({ data, onSaved }) {
+  const r = data?.reviewRequests;
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+  if (!data) return <div className="card" style={{ padding: 16, minHeight: 120, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
+  if (!r) return null;
+  const toggle = async () => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      await api.patch('/automations', { kind: 'review', enabled: !r.enabled });
+      setMsg(r.enabled ? 'Turned off. Ivy will not ask clients for reviews.' : 'Turned on. Ivy asks after each visit you mark complete.');
+      await onSaved();
+    } catch (e) { setErr(e.message || 'Could not change'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }} data-automation="review">
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', flexShrink: 0,
+          background: 'color-mix(in srgb, var(--accent) 12%, var(--surface))', color: 'var(--accent)' }}>
+          <Icons.Star size={17} sw={1.9}/>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Ask for a review after a visit</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+            A few hours after a visit you mark complete, Ivy emails the client to ask how it went, with a link to leave a review.
+          </div>
+        </div>
+        <Toggle checked={r.enabled} disabled={busy} onChange={toggle} label="Review requests on or off"/>
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, padding: '8px 10px', borderRadius: 10, background: 'var(--surface-2)', color: 'var(--fg-2)' }}>
+        Ivy sends this for you. Each client is asked at most once every 30 days, never after a no-show or a cancellation, and only once any invoice for the visit is paid.
+        {r.askedLast30Days > 0 && <> Asked {r.askedLast30Days} {r.askedLast30Days === 1 ? 'client' : 'clients'} in the last 30 days.</>}
+      </div>
+      {!r.enabled && <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Off. Nothing is sent, and the reviews you already have stay as they are.</div>}
+      {msg && <div role="status" style={{ fontSize: 12.5, color: 'var(--ok)' }}>{msg}</div>}
+      {err && <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
+    </div>
   );
 }
 

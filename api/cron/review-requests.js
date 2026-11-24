@@ -16,7 +16,9 @@
 //     client has not opted out of 'marketing' emails;
 //   • the workspace is active (isWorkspaceActive) - archived or lapsed
 //     businesses never email their clients;
-//   • the booking has not been asked already and has no review.
+//   • the booking has not been asked already and has no review;
+//   • the owner has not switched review requests off (Clients > Reminders;
+//     api/_lib/reviewRequestSettings.js). On unless they do.
 //
 // Occurrences older than 7 days drop out of the window (a late ask reads
 // as spam). Submitting the review (or going past the window) nulls the
@@ -86,6 +88,8 @@ export async function selectDueReviewRequests({ now = null } = {}) {
      WHERE b.cancelled_at IS NULL
        AND b.no_show_at IS NULL
        AND b.review_requested_at IS NULL
+       -- the owner has not switched review requests off (Clients > Reminders)
+       AND w.review_requests_off_at IS NULL
        AND b.client_email IS NOT NULL AND b.client_email <> ''
        AND b.completion_log <> '{}'::jsonb
        -- Only bookings with a completion in the window can match below.
